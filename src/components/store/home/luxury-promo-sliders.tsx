@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PROMO_SLIDES } from "@/lib/store/data/home-mock";
-import { StoreButton } from "@/components/store/ui/button";
+import { Button } from "@/components/ui/button";
 
 export function LuxuryPromoSliders() {
   const [index, setIndex] = useState(0);
@@ -56,9 +56,9 @@ export function LuxuryPromoSliders() {
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">Featured</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">{slide.title}</h2>
               <p className="mt-4 text-base text-white/65 sm:text-lg">{slide.subtitle}</p>
-              <StoreButton asChild size="lg" className="mt-8">
+              <Button asChild size="lg" className="mt-8">
                 <Link href={slide.href}>{slide.cta}</Link>
-              </StoreButton>
+              </Button>
             </motion.div>
           </AnimatePresence>
 

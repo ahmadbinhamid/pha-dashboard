@@ -1,17 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV_ITEMS, isNavItemActive } from "@/lib/nav";
+import { Suspense } from "react";
 import { cn } from "@/lib/cn";
 import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useOrgSettings } from "@/components/settings/org-settings-provider";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
-import { erpNavIconClass, erpNavRowClass } from "@/lib/erp-shell-nav";
+import { NavItemsList } from "@/components/shell/nav-items-list";
 
 export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const pathname = usePathname();
   const { settings } = useOrgSettings();
 
   return (
@@ -27,7 +24,7 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
 
       <div
         className={cn(
-          "absolute left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-[min(88vw,300px)] flex-col rounded-r-2xl border-r border-border bg-card shadow-2xl transition-transform duration-200 ease-out",
+          "absolute left-0 top-0 flex h-dvh max-h-dvh w-[min(88vw,300px)] flex-col rounded-r-2xl border-r border-border bg-card shadow-2xl transition-transform duration-200 ease-out",
           "pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0px,env(safe-area-inset-left))]",
           open ? "translate-x-0" : "-translate-x-full",
         )}
@@ -52,25 +49,9 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
           <div className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-fg/40">Menu</div>
-          <ul className="space-y-0.5">
-            {NAV_ITEMS.map((item) => {
-              const active = isNavItemActive(item.href, pathname);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onClose}
-                    className={erpNavRowClass(active, false)}
-                  >
-                    <span className={erpNavIconClass(active)} aria-hidden="true">
-                      {item.icon({ className: "h-[17px] w-[17px]" })}
-                    </span>
-                    <span className="min-w-0 truncate pr-1">{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <Suspense fallback={null}>
+            <NavItemsList onItemClick={onClose} />
+          </Suspense>
         </nav>
       </div>
     </div>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { StoreButton } from "@/components/store/ui/button";
+import { Button } from "@/components/ui/button";
 import { LuxurySelect } from "@/components/store/home/luxury-select";
 import { VEHICLE_SEARCH } from "@/lib/store/data/home-mock";
 
@@ -75,10 +75,10 @@ export function LuxuryHero() {
           </p>
 
           <div className="mt-8 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:max-w-none sm:flex-row sm:items-center sm:justify-center sm:gap-4">
-            <StoreButton asChild size="lg" className="min-h-12 w-full min-w-0 px-6 sm:min-w-[180px] sm:max-w-[280px]">
+            <Button asChild size="lg" className="min-h-12 w-full min-w-0 px-6 sm:min-w-[180px] sm:max-w-[280px]">
               <Link href="/parts">Shop parts</Link>
-            </StoreButton>
-            <StoreButton
+            </Button>
+            <Button
               type="button"
               variant="outline"
               size="lg"
@@ -86,7 +86,7 @@ export function LuxuryHero() {
               onClick={scrollToVehicle}
             >
               Search by vehicle
-            </StoreButton>
+            </Button>
           </div>
         </motion.div>
 
@@ -126,7 +126,7 @@ export function LuxuryHero() {
               />
             </div>
             <div className="mt-4 flex justify-center">
-              <StoreButton
+              <Button
                 type="button"
                 size="lg"
                 className="min-w-[200px]"
@@ -140,7 +140,7 @@ export function LuxuryHero() {
                 }}
               >
                 Search catalogue
-              </StoreButton>
+              </Button>
             </div>
           </div>
         </motion.div>

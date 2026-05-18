@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV_ITEMS, isNavItemActive } from "@/lib/nav";
+import { Suspense } from "react";
 import { cn } from "@/lib/cn";
 import { useOrgSettings } from "@/components/settings/org-settings-provider";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { erpNavIconClass, erpNavRowClass } from "@/lib/erp-shell-nav";
+import { NavItemsList } from "@/components/shell/nav-items-list";
 
 type SidebarProps = {
   collapsed: boolean;
@@ -16,7 +14,6 @@ type SidebarProps = {
 };
 
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
-  const pathname = usePathname();
   const { settings } = useOrgSettings();
 
   return (
@@ -59,25 +56,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         >
           Menu
         </div>
-        <ul className="space-y-0.5">
-          {NAV_ITEMS.map((item) => {
-            const active = isNavItemActive(item.href, pathname);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  title={item.label}
-                  className={erpNavRowClass(active, collapsed)}
-                >
-                  <span className={erpNavIconClass(active)} aria-hidden="true">
-                    {item.icon({ className: "h-[17px] w-[17px]" })}
-                  </span>
-                  {!collapsed ? <span className="min-w-0 truncate pr-1">{item.label}</span> : null}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <Suspense fallback={null}>
+          <NavItemsList collapsed={collapsed} />
+        </Suspense>
       </nav>
 
       <div className="border-t border-border/70 p-2">

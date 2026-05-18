@@ -6,12 +6,12 @@ import { DashboardCounterSearch } from "@/components/counter/dashboard-counter-s
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-section">
       <DashboardCounterSearch />
 
       <KpiCards />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-section lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SalesChartCard />
         </div>

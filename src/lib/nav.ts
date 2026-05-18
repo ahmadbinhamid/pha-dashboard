@@ -13,8 +13,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Listings", href: "/listings", icon: Icons.Tag },
   { label: "Analytics", href: "/analytics", icon: Icons.Chart },
   { label: "Customers", href: "/customers", icon: Icons.Users },
-  { label: "Suppliers", href: "/suppliers", icon: Icons.Users },
-  { label: "Reports", href: "/reports", icon: Icons.File },
+  { label: "Suppliers", href: "/suppliers", icon: Icons.Truck },
+  { label: "Reports", href: "/reports", icon: Icons.Layers },
   { label: "eBay uploader", href: "/tools/ebay-uploader", icon: Icons.Upload },
   { label: "Settings", href: "/settings", icon: Icons.Settings },
 ];

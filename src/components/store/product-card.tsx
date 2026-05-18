@@ -1,20 +1,14 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 export function ProductCard({ product, index = 0 }: { product: StoreProduct; index?: number }) {
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.35, delay: index * 0.04 }}
-      className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:shadow-card"
+    <article
+      className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:shadow-card animate-fade-slide"
+      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
     >
       <Link href={`/parts/${product.slug}`} className="block">
         <div className="relative aspect-[4/3] bg-bg-2">
@@ -45,6 +39,6 @@ export function ProductCard({ product, index = 0 }: { product: StoreProduct; ind
           </div>
         </div>
       </Link>
-    </motion.article>
+    </article>
   );
 }

@@ -2,12 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { formatCurrency } from "@/lib/format";
-import { StoreButton } from "@/components/store/ui/button";
-import { StoreSkeleton } from "@/components/store/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/toast/toast-provider";
 import { cn } from "@/lib/cn";
@@ -19,30 +18,8 @@ function conditionLabel(p: StoreProduct) {
 }
 
 export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] }) {
-  const [ready, setReady] = useState(false);
   const [quickView, setQuickView] = useState<StoreProduct | null>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setReady(true), 280);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  if (!ready) {
-    return (
-      <section className="border-t border-white/5 bg-[#0B0F14] py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <StoreSkeleton className="mx-auto h-8 w-48" />
-          <StoreSkeleton className="mx-auto mt-3 h-4 w-96 max-w-full" />
-          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <StoreSkeleton key={i} className="h-[380px] rounded-2xl" />
-            ))}
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <>
@@ -117,7 +94,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                     <span className="text-[10px] text-fg/40">inc. GST</span>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <StoreButton
+                    <Button
                       type="button"
                       size="sm"
                       className="flex-1"
@@ -130,8 +107,8 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                       }
                     >
                       Add to cart
-                    </StoreButton>
-                    <StoreButton
+                    </Button>
+                    <Button
                       type="button"
                       variant="outline"
                       size="sm"
@@ -139,7 +116,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                       onClick={() => setQuickView(p)}
                     >
                       Quick view
-                    </StoreButton>
+                    </Button>
                   </div>
                 </div>
               </motion.article>
@@ -162,9 +139,9 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
             <p className="font-mono text-xs text-fg/50">{quickView.sku}</p>
             <p className="text-2xl font-bold">{formatCurrency(quickView.priceAud, "AUD")}</p>
             <p className="text-sm text-fg/65 line-clamp-4">{quickView.description}</p>
-            <StoreButton asChild className="w-full">
+            <Button asChild className="w-full">
               <Link href={`/parts/${quickView.slug}`}>View full details</Link>
-            </StoreButton>
+            </Button>
           </div>
         ) : null}
       </Dialog>

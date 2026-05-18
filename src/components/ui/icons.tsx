@@ -287,5 +287,110 @@ export const Icons = {
       />
     </svg>
   ),
+  Truck: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M1 3h13v13H1zM14 8h4l3 3v5h-7V8z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="5.5" cy="18.5" r="2.5" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18.5" cy="18.5" r="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  ),
+  Package: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M21 8.5 12 3 3 8.5V15.5L12 21l9-5.5V8.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M3 8.5l9 5.5 9-5.5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M12 14v7" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M7.5 6 12 8.5 16.5 6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  ),
+  Layers: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  ),
+  Building: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M3 21h18M4 21V7l8-4 8 4v14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M9 21v-4h6v4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <rect x="9" y="9" width="2" height="2" rx="0.5" fill="currentColor" opacity="0.6" />
+      <rect x="13" y="9" width="2" height="2" rx="0.5" fill="currentColor" opacity="0.6" />
+      <rect x="9" y="13" width="2" height="2" rx="0.5" fill="currentColor" opacity="0.6" />
+      <rect x="13" y="13" width="2" height="2" rx="0.5" fill="currentColor" opacity="0.6" />
+    </svg>
+  ),
+  ExternalLink: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M15 3h6v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 14 21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Check: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Warning: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9v4M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  Info: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  Filter: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path
+        d="M22 3H2l8 9.46V19l4 2v-8.54L22 3Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  Grid: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+      <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+      <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+      <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  ),
+  List: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" {...props} className={cn("h-4 w-4", props.className)}>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
 };
 

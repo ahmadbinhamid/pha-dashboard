@@ -5,7 +5,7 @@ import { formatCompactNumber } from "@/lib/format";
 
 export function KpiCards() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-grid sm:grid-cols-2 xl:grid-cols-4">
       {KPIS.map((kpi) => (
         <Card key={kpi.label}>
           <CardContent className="flex items-start justify-between gap-4">

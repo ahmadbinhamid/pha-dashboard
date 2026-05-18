@@ -1,4 +1,4 @@
-import type { EbayCondition, EbayUploaderFormPayload, VehicleFitmentRow } from "@/services/ebay/types";
+import type { EbayCondition, EbayUploaderFormPayload, VehicleFitmentRow } from "@/modules/ebay-uploader/types";
 
 export const EBAY_UPLOADER_DRAFT_KEY = "pha-ebay-uploader-draft-v1";
 export const EBAY_UPLOADER_LAST_KEY = "pha-ebay-uploader-last-v1";

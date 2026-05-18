@@ -3,8 +3,8 @@
 import Link from "next/link";
 import type { StoreTenant } from "@/lib/store/tenant-types";
 import { StoreLogo } from "@/components/store/store-logo";
-import { StoreButton } from "@/components/store/ui/button";
-import { StoreInput } from "@/components/store/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/toast/toast-provider";
 
 export function StoreFooter({ tenant }: { tenant: StoreTenant }) {
@@ -130,15 +130,15 @@ export function StoreFooter({ tenant }: { tenant: StoreTenant }) {
                 toast({ tone: "success", title: "Subscribed (demo)", description: "Wire to your ESP later." });
               }}
             >
-              <StoreInput
+              <Input
                 type="email"
                 required
                 placeholder="Email address"
                 className="border-white/10 bg-surface text-fg placeholder:text-fg/40"
               />
-              <StoreButton type="submit" className="shrink-0">
+              <Button type="submit" className="shrink-0">
                 Join
-              </StoreButton>
+              </Button>
             </form>
             <div className="mt-8 space-y-1 text-sm text-fg/55">
               <p>{tenant.supportEmail}</p>
@@ -148,7 +148,7 @@ export function StoreFooter({ tenant }: { tenant: StoreTenant }) {
           </div>
         </div>
       </div>
-      <div className="border-t border-white/10 py-5 text-center text-[11px] text-fg/45">
+      <div className="border-t border-white/10 py-5 text-center text-[11px] text-fg/45" suppressHydrationWarning>
         © {new Date().getFullYear()} {tenant.companyName}. Prices include GST where applicable ({tenant.currency}).
       </div>
     </footer>

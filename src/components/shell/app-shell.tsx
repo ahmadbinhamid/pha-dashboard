@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar onOpenMobile={() => setMobileOpen(true)} />
           <main
             className={cn(
-              "w-full min-w-0 px-4 py-6 sm:px-6 lg:px-10",
+              "w-full min-w-0 px-4 py-section sm:px-6 lg:px-10",
               "pb-[max(1.5rem,env(safe-area-inset-bottom))]",
             )}
           >

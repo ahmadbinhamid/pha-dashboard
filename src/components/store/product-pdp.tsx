@@ -8,8 +8,8 @@ import type { StoreProduct } from "@/lib/store/data/catalog";
 import { getRelatedProducts } from "@/lib/store/data/catalog";
 import { formatCurrency } from "@/lib/format";
 import { ProductCard } from "@/components/store/product-card";
-import { StoreButton } from "@/components/store/ui/button";
-import { StoreInput } from "@/components/store/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/toast/toast-provider";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
@@ -176,13 +176,13 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                       toast({ tone: "success", title: "Enquiry sent (demo)", description: "Backend email API pending." });
                     }}
                   >
-                    <StoreInput required placeholder="Your name" className="sm:col-span-2" name="name" />
-                    <StoreInput required type="email" placeholder="Email" name="email" />
-                    <StoreInput placeholder="Phone" name="phone" />
-                    <StoreInput required placeholder="Message" className="sm:col-span-2" name="message" />
-                    <StoreButton type="submit" className="sm:col-span-2">
+                    <Input required placeholder="Your name" className="sm:col-span-2" name="name" />
+                    <Input required type="email" placeholder="Email" name="email" />
+                    <Input placeholder="Phone" name="phone" />
+                    <Input required placeholder="Message" className="sm:col-span-2" name="message" />
+                    <Button type="submit" className="sm:col-span-2">
                       Submit enquiry
-                    </StoreButton>
+                    </Button>
                   </form>
                 </div>
               ) : null}
@@ -222,14 +222,14 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                   <div className="flex items-stretch gap-2">
                     <div className="flex w-28 flex-col justify-center rounded-xl border border-border bg-bg px-2 py-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-fg/50">Qty</span>
-                      <StoreInput
+                      <Input
                         value={String(qty)}
                         onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
                         className="mt-0 border-0 bg-transparent p-0 text-center text-lg font-semibold shadow-none focus-visible:ring-0"
                         inputMode="numeric"
                       />
                     </div>
-                    <StoreButton
+                    <Button
                       type="button"
                       className="min-h-[3.25rem] flex-1 text-base font-semibold"
                       disabled={!product.inStock}
@@ -242,11 +242,11 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                       }
                     >
                       Add to cart
-                    </StoreButton>
+                    </Button>
                   </div>
-                  <StoreButton asChild variant="secondary" className="w-full">
+                  <Button asChild variant="secondary" className="w-full">
                     <Link href="/parts">Continue shopping</Link>
-                  </StoreButton>
+                  </Button>
                 </div>
               </div>
             </div>
