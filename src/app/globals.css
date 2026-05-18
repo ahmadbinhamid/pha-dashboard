@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 220 14% 98%;
+  --bg-2: 220 12% 96%;
+  --fg: 222 47% 11%;
+  --fg-2: 215 16% 42%;
+  --card: 0 0% 100%;
+  --border: 220 13% 88%;
+  --ring: 43 68% 56%;
+
+  /* Brand gold — Parts Hub Australia */
+  --accent: 43 68% 56%;
+  --accent-fg: 222 47% 8%;
+
+  --danger: 0 84% 60%;
+  --danger-fg: 0 0% 100%;
+  --warn: 38 92% 50%;
+  --warn-fg: 0 0% 8%;
+  --ok: 142 71% 45%;
+  --ok-fg: 0 0% 100%;
+}
+
+.dark {
+  --bg: 222 22% 8%;
+  --bg-2: 222 20% 11%;
+  --fg: 210 40% 98%;
+  --fg-2: 217 10% 72%;
+  --card: 222 20% 11%;
+  --border: 217 16% 20%;
+  --ring: 43 70% 58%;
+
+  --accent: 43 70% 58%;
+  --accent-fg: 222 47% 8%;
+}
+
+html {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: clip;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+  overflow-x: clip;
+  min-height: 100dvh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Premium storefront — black/gold Parts Hub Australia brand */
+.store-luxury {
+  --bg: 0 0% 3%;
+  --bg-2: 42 28% 7%;
+  --surface: 42 24% 9%;
+  --surface-elevated: 42 22% 12%;
+  --card: 42 20% 10%;
+  --fg: 0 0% 98%;
+  --fg-2: 43 17% 68%;
+  --border: 43 26% 18%;
+  --ring: 43 70% 58%;
+  --accent: 43 70% 58%;
+  --accent-fg: 0 0% 4%;
+  --gold: 43 70% 58%;
+  --gold-muted: 39 42% 42%;
+  --danger: 0 72% 51%;
+  --danger-fg: 0 0% 100%;
+  --warn: 38 92% 50%;
+  --warn-fg: 0 0% 8%;
+  --ok: 152 60% 42%;
+  --ok-fg: 0 0% 100%;
+  font-family: var(--font-store-sans), ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+.noise {
+  background-image: radial-gradient(
+      circle at 1px 1px,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 0
+    ),
+    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.18) 1px, transparent 0);
+  background-size: 18px 18px;
+  background-position:
+    0 0,
+    9px 9px;
+  mix-blend-mode: overlay;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
