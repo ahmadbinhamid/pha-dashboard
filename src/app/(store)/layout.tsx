@@ -27,7 +27,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   return (
     <div
-      className={`store-luxury store-root flex min-h-[100dvh] w-full min-w-0 flex-col overflow-x-clip bg-bg text-fg ${inter.variable}`}
+      className={`store-luxury flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-bg text-fg ${inter.variable}`}
     >
       <StoreHeader tenant={tenant} />
       <main className="flex-1">{children}</main>

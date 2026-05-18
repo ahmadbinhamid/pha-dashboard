@@ -86,33 +86,30 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
 
   const persist = useCallback((next: InventoryState) => {
     _setItems(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
   }, []);
 
   const setItems = useCallback((next: InventoryState) => persist(next), [persist]);
 
-  const updateStock = useCallback(
-    (id: string, nextStock: number) => {
-      persist(items.map((p) => (p.id === id ? { ...p, stock: Math.max(0, nextStock) } : p)));
-    },
-    [items, persist],
-  );
+  const updateStock = useCallback((id: string, nextStock: number) => {
+    _setItems((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, stock: Math.max(0, nextStock) } : p));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
-  const deductStock = useCallback(
-    (lines: Array<{ id: string; qty: number }>) => {
-      const byId = new Map(lines.map((l) => [l.id, l.qty]));
-      persist(
-        items.map((p) => {
-          const qty = byId.get(p.id);
-          if (!qty) return p;
-          return { ...p, stock: Math.max(0, p.stock - qty) };
-        }),
-      );
-    },
-    [items, persist],
-  );
+  const deductStock = useCallback((lines: Array<{ id: string; qty: number }>) => {
+    const byId = new Map(lines.map((l) => [l.id, l.qty]));
+    _setItems((prev) => {
+      const next = prev.map((p) => {
+        const qty = byId.get(p.id);
+        return qty ? { ...p, stock: Math.max(0, p.stock - qty) } : p;
+      });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   const reset = useCallback(() => persist(INVENTORY), [persist]);
 

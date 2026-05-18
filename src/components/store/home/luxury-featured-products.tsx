@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { motion } from "framer-motion";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -25,31 +24,22 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
     <>
       <section className="border-t border-white/5 bg-[#0B0F14] py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center"
-          >
+          <div className="animate-fade-slide text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">Inventory</p>
             <h2 className="mt-3 text-2xl font-bold tracking-tight text-fg sm:text-3xl">Featured parts</h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-fg/55">
               Real-world SKUs — pricing in AUD (inc. GST). ERP sync ready.
             </p>
-          </motion.div>
+          </div>
 
           <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {products.map((p, i) => (
-              <motion.article
+              <article
                 key={p.slug}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-30px" }}
-                transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.24) }}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-white/8 bg-surface-elevated transition duration-300 hover:border-accent/30 hover:shadow-glow"
+                className="animate-fade-slide group flex flex-col overflow-hidden rounded-2xl border border-white/8 bg-surface-elevated transition duration-300 hover:border-accent/30 hover:shadow-glow"
+                style={{ animationDelay: `${Math.min(i * 40, 240)}ms` }}
               >
-                <Link href={`/parts/${p.slug}`} className="relative block aspect-[4/3] overflow-hidden bg-surface">
+                <Link href={`/parts/${p.slug}`} className="relative block aspect-4/3 overflow-hidden bg-surface">
                   <Image
                     src={p.image}
                     alt={p.name}
@@ -99,11 +89,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                       size="sm"
                       className="flex-1"
                       onClick={() =>
-                        toast({
-                          tone: "default",
-                          title: "Added to cart (demo)",
-                          description: p.name,
-                        })
+                        toast({ tone: "default", title: "Added to cart (demo)", description: p.name })
                       }
                     >
                       Add to cart
@@ -119,7 +105,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                     </Button>
                   </div>
                 </div>
-              </motion.article>
+              </article>
             ))}
           </div>
         </div>
@@ -138,7 +124,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
             </div>
             <p className="font-mono text-xs text-fg/50">{quickView.sku}</p>
             <p className="text-2xl font-bold">{formatCurrency(quickView.priceAud, "AUD")}</p>
-            <p className="text-sm text-fg/65 line-clamp-4">{quickView.description}</p>
+            <p className="line-clamp-4 text-sm text-fg/65">{quickView.description}</p>
             <Button asChild className="w-full">
               <Link href={`/parts/${quickView.slug}`}>View full details</Link>
             </Button>

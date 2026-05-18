@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { getRelatedProducts } from "@/lib/store/data/catalog";
 import { formatCurrency } from "@/lib/format";
@@ -83,11 +82,7 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                   </div>
                 ) : null}
 
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="relative min-h-[280px] flex-1 overflow-hidden rounded-xl border border-border/70 bg-bg sm:min-h-[360px] lg:aspect-square lg:min-h-0"
-                >
+                <div className="animate-fade-in relative min-h-70 flex-1 overflow-hidden rounded-xl border border-border/70 bg-bg sm:min-h-90 lg:aspect-square lg:min-h-0">
                   <Image
                     src={activeImg}
                     alt={product.name}
@@ -96,7 +91,7 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                     priority
                     sizes="(max-width: 1024px) 100vw, 640px"
                   />
-                </motion.div>
+                </div>
               </div>
             </div>
 

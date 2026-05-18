@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/cn";
 import { Icons } from "@/components/ui/icons";
 
@@ -27,7 +26,7 @@ export function LuxurySelect({
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("click", onDoc);
+    document.addEventListener("click", onDoc, { passive: true });
     return () => document.removeEventListener("click", onDoc);
   }, []);
 
@@ -44,38 +43,33 @@ export function LuxurySelect({
         <span className={cn("truncate", !selected && "text-fg/45")}>{selected?.label ?? placeholder}</span>
         <Icons.ChevronDown className={cn("shrink-0 text-fg/45 transition", open && "rotate-180")} />
       </button>
-      <AnimatePresence>
-        {open ? (
-          <motion.ul
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.18 }}
-            className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-white/10 bg-surface-elevated py-1 shadow-xl ring-1 ring-black/40"
-            role="listbox"
-          >
-            {options.map((o) => (
-              <li key={o.value}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={value === o.value}
-                  onClick={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "flex w-full px-4 py-2.5 text-left text-sm transition hover:bg-white/5",
-                    value === o.value && "bg-accent/15 text-accent",
-                  )}
-                >
-                  {o.label}
-                </button>
-              </li>
-            ))}
-          </motion.ul>
-        ) : null}
-      </AnimatePresence>
+
+      {open ? (
+        <ul
+          className="animate-fade-slide absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-white/10 bg-surface-elevated py-1 shadow-xl ring-1 ring-black/40"
+          role="listbox"
+        >
+          {options.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === o.value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full px-4 py-2.5 text-left text-sm transition hover:bg-white/5",
+                  value === o.value && "bg-accent/15 text-accent",
+                )}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

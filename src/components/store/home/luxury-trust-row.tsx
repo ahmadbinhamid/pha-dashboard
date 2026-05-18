@@ -1,6 +1,3 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { TRUST_PILLARS } from "@/lib/store/data/home-mock";
 
 const icons = [
@@ -27,20 +24,17 @@ export function LuxuryTrustRow() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
           {TRUST_PILLARS.map((item, i) => (
-            <motion.div
+            <div
               key={item.title}
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-              className="flex flex-col items-center text-center lg:items-start lg:text-left"
+              className="animate-fade-slide flex flex-col items-center text-center lg:items-start lg:text-left"
+              style={{ animationDelay: `${i * 50}ms` }}
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-surface text-accent">
                 {icons[i]}
               </div>
               <h3 className="mt-4 text-sm font-semibold text-fg">{item.title}</h3>
               <p className="mt-1 text-xs text-fg/50">{item.description}</p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>

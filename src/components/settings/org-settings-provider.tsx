@@ -62,21 +62,18 @@ export function OrgSettingsProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
-  const persist = useCallback((next: OrgSettings) => {
-    setSettings(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {}
+  const update = useCallback((patch: Partial<OrgSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch, currency: "AUD" as const };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, []);
 
-  const update = useCallback(
-    (patch: Partial<OrgSettings>) => {
-      persist({ ...settings, ...patch, currency: "AUD" });
-    },
-    [persist, settings],
-  );
-
-  const reset = useCallback(() => persist(DEFAULTS), [persist]);
+  const reset = useCallback(() => {
+    setSettings(DEFAULTS);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS)); } catch {}
+  }, []);
 
   const api = useMemo(() => ({ settings, update, reset }), [settings, update, reset]);
 

@@ -70,15 +70,24 @@ function ProductTileHero({ item }: { item: InventoryItem }) {
   );
 }
 
+type Filters = {
+  query: string;
+  category: string;
+  ebay: EbayFilter;
+  make: string;
+  model: string;
+  year: string;
+  view: InventoryListView;
+};
+
+function filtersFromParams(sp: ReturnType<typeof useSearchParams>): Filters {
+  const f = inventoryFiltersFromSearchParams(sp);
+  return { query: f.q, category: f.category, ebay: f.ebay, make: f.make, model: f.model, year: f.year, view: f.view };
+}
+
 export function InventoryTable() {
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
-  const [ebay, setEbay] = useState<EbayFilter>("all");
-  const [make, setMake] = useState("");
-  const [model, setModel] = useState("");
-  const [year, setYear] = useState("");
-  const [view, setView] = useState<InventoryListView>("table");
+  const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
   const { toast } = useToast();
@@ -86,15 +95,10 @@ export function InventoryTable() {
   const router = useRouter();
   const { addLine } = useCounterCart();
 
+  const { query, category, ebay, make, model, year, view } = filters;
+
   useEffect(() => {
-    const f = inventoryFiltersFromSearchParams(searchParams);
-    setQuery(f.q);
-    setCategory(f.category);
-    setEbay(f.ebay);
-    setMake(f.make);
-    setModel(f.model);
-    setYear(f.year);
-    setView(f.view);
+    setFilters(filtersFromParams(searchParams));
     setPage(1);
   }, [searchParams]);
 
@@ -150,7 +154,7 @@ export function InventoryTable() {
                 size="sm"
                 className="h-8 gap-1.5 px-2.5"
                 onClick={() => {
-                  setView("table");
+                  setFilters(f => ({ ...f, view: "table" }));
                   setPage(1);
                 }}
               >
@@ -163,7 +167,7 @@ export function InventoryTable() {
                 size="sm"
                 className="h-8 gap-1.5 px-2.5"
                 onClick={() => {
-                  setView("tiles");
+                  setFilters(f => ({ ...f, view: "tiles" }));
                   setPage(1);
                 }}
               >
@@ -200,7 +204,7 @@ export function InventoryTable() {
             <Input
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value);
+                setFilters(f => ({ ...f, query: e.target.value }));
                 setPage(1);
               }}
               className="pl-9"
@@ -216,7 +220,7 @@ export function InventoryTable() {
                   className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                   value={category}
                   onChange={(e) => {
-                    setCategory(e.target.value);
+                    setFilters(f => ({ ...f, category: e.target.value }));
                     setPage(1);
                   }}
                 >
@@ -239,7 +243,7 @@ export function InventoryTable() {
                   className="h-10 appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                   value={ebay}
                   onChange={(e) => {
-                    setEbay(e.target.value as EbayFilter);
+                    setFilters(f => ({ ...f, ebay: e.target.value as EbayFilter }));
                     setPage(1);
                   }}
                 >
@@ -264,7 +268,7 @@ export function InventoryTable() {
               className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               value={make}
               onChange={(e) => {
-                setMake(e.target.value);
+                setFilters(f => ({ ...f, make: e.target.value }));
                 setPage(1);
               }}
             >
@@ -281,7 +285,7 @@ export function InventoryTable() {
             <Input
               value={model}
               onChange={(e) => {
-                setModel(e.target.value);
+                setFilters(f => ({ ...f, model: e.target.value }));
                 setPage(1);
               }}
               placeholder="e.g. C-Class W205"
@@ -293,7 +297,7 @@ export function InventoryTable() {
             <Input
               value={year}
               onChange={(e) => {
-                setYear(e.target.value);
+                setFilters(f => ({ ...f, year: e.target.value }));
                 setPage(1);
               }}
               placeholder="Fits this model year"
