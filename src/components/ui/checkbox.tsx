@@ -1,7 +1,6 @@
-"use client";
 
 import * as React from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 export type CheckboxSize = "sm" | "md" | "lg";
 

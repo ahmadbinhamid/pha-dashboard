@@ -1,9 +1,8 @@
-"use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV_ITEMS, isNavItemActive } from "@/lib/nav";
-import { erpNavIconClass, erpNavRowClass } from "@/lib/erp-shell-nav";
+import Link from "@/components/ui/link";
+import { usePathname } from "@/hooks";
+import { NAV_ITEMS, isNavItemActive } from "@/config/nav";
+import { erpNavIconClass, erpNavRowClass } from "@/config/nav-styles";
 
 export function NavItemsList({
   collapsed = false,

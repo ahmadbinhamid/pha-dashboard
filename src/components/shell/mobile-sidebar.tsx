@@ -1,10 +1,9 @@
-"use client";
 
 import { Suspense } from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
+import { useOrgSettings } from "@/context";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
 import { NavItemsList } from "@/components/shell/nav-items-list";
 

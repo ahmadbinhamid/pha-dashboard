@@ -20,7 +20,7 @@ const icons = [
 
 export function LuxuryTrustRow() {
   return (
-    <section className="border-t border-white/5 bg-[#0B0F14] py-14">
+    <section className="border-t border-white/5 bg-luxury-ink py-14">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
           {TRUST_PILLARS.map((item, i) => (

@@ -1,8 +1,8 @@
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import type { StoreProduct } from "@/lib/store/data/catalog";
-import { formatCurrency } from "@/lib/format";
-import { cn } from "@/lib/cn";
+import { formatCurrency } from "@/utils/format";
+import { cn } from "@/utils/cn";
 
 export function ProductCard({ product, index = 0 }: { product: StoreProduct; index?: number }) {
   return (
@@ -16,8 +16,7 @@ export function ProductCard({ product, index = 0 }: { product: StoreProduct; ind
             src={product.image}
             alt={product.name}
             fill
-            className="object-cover transition duration-300 group-hover:scale-[1.03]"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="transition duration-300 group-hover:scale-[1.03]"
           />
           {!product.inStock ? (
             <span className="absolute left-2 top-2 rounded-md bg-fg/90 px-2 py-1 text-xs font-semibold text-bg">

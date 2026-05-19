@@ -1,9 +1,8 @@
-"use client";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useListingQueue } from "@/components/listings/listing-queue-store";
+import { useListingQueue } from "@/context";
 
 function StatusBadge({ status }: { status: "queued" | "published" | "error" }) {
   if (status === "queued") return <Badge variant="warn">Queued</Badge>;

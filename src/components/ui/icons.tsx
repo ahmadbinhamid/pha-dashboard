@@ -1,4 +1,4 @@
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 type IconProps = React.SVGProps<SVGSVGElement> & { className?: string };
 

@@ -1,4 +1,4 @@
-import type { CatalogFilters } from "@/lib/store/api/catalog-mock";
+import type { CatalogFilters } from "@/types";
 
 function first(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0];

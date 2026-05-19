@@ -1,8 +1,8 @@
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ORDERS } from "@/lib/data/orders";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 
 function statusBadge(status: string) {
   switch (status) {

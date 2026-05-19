@@ -1,7 +1,6 @@
-"use client";
 
 import { startTransition, useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 

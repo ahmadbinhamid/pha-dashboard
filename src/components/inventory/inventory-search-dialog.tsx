@@ -1,16 +1,16 @@
-"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "@/hooks";
+import { useSearchParams } from "react-router-dom";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { useInventoryData } from "@/components/inventory/inventory-store";
+import { useInventoryData } from "@/context";
 import {
   buildInventoryListUrl,
   inventoryFiltersFromSearchParams,
   type InventorySearchQuery,
-} from "@/lib/inventory-list-url";
+} from "@/config/inventory-filters";
 import { InventorySearchFields } from "@/components/inventory/inventory-search-fields";
 
 const EMPTY: InventorySearchQuery = {
@@ -25,7 +25,7 @@ const EMPTY: InventorySearchQuery = {
 export function InventorySearchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { items: inventory } = useInventoryData();
   const [form, setForm] = useState<InventorySearchQuery>(EMPTY);
 

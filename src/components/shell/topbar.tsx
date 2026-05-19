@@ -1,13 +1,12 @@
-"use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { Suspense, useMemo, useState } from "react";
 import { Icons } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
-import { cn } from "@/lib/cn";
-import { useCounterCartData } from "@/components/counter/counter-cart-store";
+import { useOrgSettings } from "@/context";
+import { cn } from "@/utils/cn";
+import { useCounterCartData } from "@/context";
 import { CounterCartDrawer } from "@/components/counter/counter-cart-drawer";
 import { InventorySearchDialog } from "@/components/inventory/inventory-search-dialog";
 

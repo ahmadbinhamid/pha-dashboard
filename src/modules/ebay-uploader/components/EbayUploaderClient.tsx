@@ -1,15 +1,15 @@
-"use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useToast } from "@/components/toast/toast-provider";
-import type { EbayUploaderFormPayload, VehicleFitmentRow } from "@/modules/ebay-uploader/types";
+import { Image } from "@/components/ui/image";
+import { useToast } from "@/context";
+import type { EbayUploaderFormPayload, VehicleFitmentRow } from "@/types";
 import {
   DEFAULT_FORM,
   EBAY_UPLOADER_DRAFT_KEY,
@@ -39,7 +39,7 @@ function parseUrlLines(text: string): string[] {
 export function EbayUploaderClient() {
   const formId = useId();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>(1);
@@ -344,8 +344,7 @@ export function EbayUploaderClient() {
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {localImages.map((img, idx) => (
                   <li key={img.id} className="group relative overflow-hidden rounded-xl border border-border bg-bg shadow-sm">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" className="aspect-square w-full object-cover" />
+                    <Image src={img.url} alt="" className="aspect-square w-full object-cover" />
                     <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-black/55 px-1 py-1 opacity-0 transition group-hover:opacity-100">
                       <Button type="button" variant="secondary" size="sm" className="h-7 px-1" onClick={() => moveLocal(img.id, -1)} disabled={idx === 0}>
                         ↑

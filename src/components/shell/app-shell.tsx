@@ -1,7 +1,6 @@
-"use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { MobileSidebar } from "@/components/shell/mobile-sidebar";

@@ -1,22 +1,21 @@
-"use client";
 
-import Link from "next/link";
-import Image from "next/image";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/format";
+import { useRouter } from "@/hooks";
+import { formatCurrency } from "@/utils/format";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useInventoryData } from "@/components/inventory/inventory-store";
+import { useInventoryData } from "@/context";
 import { getProductViewExtras } from "@/lib/data/product-view-dummy";
-import type { InventoryItem } from "@/lib/data/inventory";
-import { cn } from "@/lib/cn";
-import { useCounterCartActions } from "@/components/counter/counter-cart-store";
+import type { InventoryItem } from "@/types";
+import { cn } from "@/utils/cn";
+import { useCounterCartActions } from "@/context";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/toast/toast-provider";
+import { useToast } from "@/context";
 
 function ebayBadgeVariant(status: InventoryItem["ebay"]) {
   if (status === "synced") return "ok" as const;
@@ -157,14 +156,7 @@ export function ProductDetails({ productId }: { productId: string }) {
             <div className="mx-auto w-full max-w-xl shrink-0 lg:mx-0 lg:max-w-md xl:max-w-xl">
               <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-border/80 bg-bg-2 shadow-inner ring-1 ring-inset ring-black/5">
                 {activePhotoSrc ? (
-                  <Image
-                    src={activePhotoSrc}
-                    alt={product.image.alt}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) 100vw, 560px"
-                    priority
-                  />
+                  <Image src={activePhotoSrc} alt={product.image.alt} fill priority />
                 ) : (
                   <div
                     className="absolute inset-0 flex items-center justify-center"
@@ -194,7 +186,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                           : "border-transparent opacity-75 hover:opacity-100",
                       )}
                     >
-                      <Image src={url} alt="" fill className="object-cover" sizes="64px" />
+                      <Image src={url} alt="" fill />
                     </button>
                   ))}
                 </div>

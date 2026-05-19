@@ -1,17 +1,16 @@
-"use client";
 
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { useMemo, useState } from "react";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { getRelatedProducts } from "@/lib/store/data/catalog";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 import { ProductCard } from "@/components/store/product-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/toast/toast-provider";
+import { useToast } from "@/context";
 import { Icons } from "@/components/ui/icons";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 type PdpTab = "overview" | "fitment" | "delivery" | "enquiry";
 
@@ -76,7 +75,7 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                             : "border-border/80 opacity-80 hover:opacity-100",
                         )}
                       >
-                        <Image src={src} alt="" fill className="object-cover" sizes="80px" />
+                        <Image src={src} alt="" fill />
                       </button>
                     ))}
                   </div>
@@ -87,9 +86,9 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                     src={activeImg}
                     alt={product.name}
                     fill
-                    className="object-contain p-4 sm:p-6"
                     priority
-                    sizes="(max-width: 1024px) 100vw, 640px"
+                    objectFit="contain"
+                    className="p-4 sm:p-6"
                   />
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import Link from "next/link";
-import type { StoreTenant } from "@/lib/store/tenant-types";
+import Link from "@/components/ui/link";
+import type { StoreTenant } from "@/types";
 import { StoreHeaderClient } from "@/components/store/store-header-client";
 import { StoreHeaderNav } from "@/components/store/store-header-nav";
 import { StoreHeaderActions } from "@/components/store/store-header-actions";

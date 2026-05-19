@@ -1,14 +1,12 @@
-"use client";
-
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { useState } from "react";
 import type { StoreProduct } from "@/lib/store/data/catalog";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { useToast } from "@/components/toast/toast-provider";
-import { cn } from "@/lib/cn";
+import { useToast } from "@/context";
+import { cn } from "@/utils/cn";
 
 function conditionLabel(p: StoreProduct) {
   if (p.condition === "used") return "Used";
@@ -22,7 +20,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
 
   return (
     <>
-      <section className="border-t border-white/5 bg-[#0B0F14] py-20 sm:py-24">
+      <section className="border-t border-white/5 bg-luxury-ink py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="animate-fade-slide text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">Inventory</p>
@@ -44,8 +42,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                     src={p.image}
                     alt={p.name}
                     fill
-                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                    sizes="(max-width:1024px) 50vw, 25vw"
+                    className="transition duration-500 group-hover:scale-[1.03]"
                   />
                   <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                     <span
@@ -120,7 +117,7 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
         {quickView ? (
           <div className="space-y-4">
             <div className="relative aspect-video overflow-hidden rounded-xl bg-surface">
-              <Image src={quickView.image} alt="" fill className="object-cover" />
+              <Image src={quickView.image} alt="" fill />
             </div>
             <p className="font-mono text-xs text-fg/50">{quickView.sku}</p>
             <p className="text-2xl font-bold">{formatCurrency(quickView.priceAud, "AUD")}</p>

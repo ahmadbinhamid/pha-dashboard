@@ -1,8 +1,7 @@
-"use client";
 
 import { Suspense } from "react";
-import { cn } from "@/lib/cn";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
+import { cn } from "@/utils/cn";
+import { useOrgSettings } from "@/context";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";

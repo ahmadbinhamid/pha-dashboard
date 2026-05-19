@@ -1,11 +1,9 @@
-"use client";
-
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { useEffect, useRef, useState } from "react";
 import { PROMO_SLIDES } from "@/lib/store/data/home-mock";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 export function LuxuryPromoSliders() {
   const [index, setIndex] = useState(0);
@@ -34,8 +32,7 @@ export function LuxuryPromoSliders() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative h-[min(72vh,560px)] min-h-95 overflow-hidden bg-[#0B0F14]">
-      {/* Background images — pre-rendered, toggle opacity via CSS */}
+    <section ref={sectionRef} className="relative h-[min(72vh,560px)] min-h-95 overflow-hidden bg-luxury-ink">
       {PROMO_SLIDES.map((slide, i) => (
         <div
           key={slide.id}
@@ -43,14 +40,13 @@ export function LuxuryPromoSliders() {
           style={{ opacity: i === index ? 1 : 0 }}
           aria-hidden={i !== index}
         >
-          <Image src={slide.image} alt="" fill className="object-cover" sizes="100vw" priority={i === 0} />
-          <div className="absolute inset-0 bg-linear-to-r from-[#0B0F14]/95 via-[#0B0F14]/65 to-[#0B0F14]/35" />
+          <Image src={slide.image} alt="" fill priority={i === 0} />
+          <div className="absolute inset-0 bg-linear-to-r from-luxury-ink/95 via-luxury-ink/65 to-luxury-ink/35" />
         </div>
       ))}
 
       <div className="relative z-10 flex h-full flex-col justify-center">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Slide content — all pre-rendered, inactive slides are absolutely overlaid */}
           <div className="relative min-h-55">
             {PROMO_SLIDES.map((slide, i) => (
               <div

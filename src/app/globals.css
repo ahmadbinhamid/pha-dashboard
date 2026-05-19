@@ -27,6 +27,9 @@
   --color-surface-elevated: hsl(var(--surface-elevated));
   --color-gold: hsl(var(--gold));
   --color-gold-muted: hsl(var(--gold-muted));
+  --color-luxury-ink: hsl(var(--luxury-ink, 222 22% 8%));
+  --color-luxury-panel: hsl(var(--luxury-panel, 220 19% 14%));
+  --color-luxury-card: hsl(var(--luxury-card, 218 31% 12%));
   --color-danger: hsl(var(--danger));
   --color-danger-fg: hsl(var(--danger-fg));
   --color-warn: hsl(var(--warn));
@@ -160,6 +163,13 @@
   --bg-2: 42 28% 7%;
   --surface: 42 24% 9%;
   --surface-elevated: 42 22% 12%;
+  /* Luxury-specific overlay tones used in hero/slider gradients */
+  --luxury-ink: 222 22% 8%;       /* #0B0F14 — deep navy-black overlay */
+  --luxury-panel: 220 19% 14%;    /* #111823 — slightly lifted panel */
+  --luxury-card: 218 31% 12%;     /* #151C28 — card bg */
+  --color-luxury-ink: hsl(var(--luxury-ink));
+  --color-luxury-panel: hsl(var(--luxury-panel));
+  --color-luxury-card: hsl(var(--luxury-card));
   --card: 42 20% 10%;
   --fg: 0 0% 98%;
   --fg-2: 43 17% 68%;
@@ -203,6 +213,27 @@
     @apply bg-bg font-sans text-fg antialiased;
     overflow-x: clip;
     min-height: 100dvh;
+  }
+
+  /* ─── Typography scale ─────────────────────────────────────────────────── */
+  h1 {
+    @apply text-3xl font-bold tracking-tight text-fg;
+  }
+  h2 {
+    @apply text-2xl font-semibold tracking-tight text-fg;
+  }
+  h3 {
+    @apply text-xl font-semibold tracking-tight text-fg;
+  }
+  h4 {
+    @apply text-base font-semibold text-fg;
+  }
+  p {
+    @apply text-sm leading-relaxed text-fg/80;
+  }
+  /* .lead — larger intro paragraph */
+  .lead {
+    @apply text-base leading-relaxed text-fg/70;
   }
 }
 

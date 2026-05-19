@@ -1,25 +1,26 @@
-"use client";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "@/components/ui/link";
+import { useRouter } from "@/hooks";
+import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { InventoryItem } from "@/lib/data/inventory";
-import { formatCurrency } from "@/lib/format";
+import type { InventoryItem } from "@/types";
+import { formatCurrency } from "@/utils/format";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useToast } from "@/components/toast/toast-provider";
-import { useInventoryData } from "@/components/inventory/inventory-store";
-import { useCounterCartActions } from "@/components/counter/counter-cart-store";
+import { useToast } from "@/context";
+import { useInventoryData } from "@/context";
+import { useCounterCartActions } from "@/context";
 import { MAKES } from "@/lib/store/data/catalog";
 import {
   inventoryFiltersFromSearchParams,
   type EbayFilter,
   type InventoryListView,
-} from "@/lib/inventory-list-url";
+} from "@/config/inventory-filters";
 
 function EbayBadge({ status }: { status: InventoryItem["ebay"] }) {
   if (status === "synced") return <Badge variant="ok">Synced</Badge>;
@@ -80,13 +81,13 @@ type Filters = {
   view: InventoryListView;
 };
 
-function filtersFromParams(sp: ReturnType<typeof useSearchParams>): Filters {
+function filtersFromParams(sp: URLSearchParams): Filters {
   const f = inventoryFiltersFromSearchParams(sp);
   return { query: f.q, category: f.category, ebay: f.ebay, make: f.make, model: f.model, year: f.year, view: f.view };
 }
 
 export function InventoryTable() {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
   // Separate display query so typing feels instant; filter computation is debounced
   const [inputQuery, setInputQuery] = useState(() => filtersFromParams(searchParams).query);
@@ -259,42 +260,22 @@ export function InventoryTable() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="text-xs font-semibold text-fg/55">Category</div>
-              <div className="relative min-w-35">
-                <select
-                  className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={category}
-                  onChange={onCategoryChange}
-                >
-                  <option value="">All</option>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                  <Icons.ChevronDown />
-                </span>
-              </div>
+              <Select value={category} onChange={onCategoryChange} className="min-w-35">
+                <option value="">All</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </Select>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-xs font-semibold text-fg/55">eBay</div>
-              <div className="relative">
-                <select
-                  className="h-10 appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={ebay}
-                  onChange={onEbayChange}
-                >
-                  <option value="all">All</option>
-                  <option value="synced">Synced</option>
-                  <option value="pending">Pending</option>
-                  <option value="error">Error</option>
-                  <option value="not_listed">Not listed</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                  <Icons.ChevronDown />
-                </span>
-              </div>
+              <Select value={ebay} onChange={onEbayChange}>
+                <option value="all">All</option>
+                <option value="synced">Synced</option>
+                <option value="pending">Pending</option>
+                <option value="error">Error</option>
+                <option value="not_listed">Not listed</option>
+              </Select>
             </div>
           </div>
         </div>
@@ -302,18 +283,12 @@ export function InventoryTable() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Make</label>
-            <select
-              className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              value={make}
-              onChange={onMakeChange}
-            >
+            <Select value={make} onChange={onMakeChange}>
               <option value="">Any</option>
               {MAKES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m}>{m}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Model</label>

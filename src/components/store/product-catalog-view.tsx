@@ -1,7 +1,7 @@
-"use client";
 
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "@/hooks";
+import { useSearchParams } from "react-router-dom";
 import { MAKES, CATEGORIES, WAREHOUSES } from "@/lib/store/data/catalog";
 import type { CatalogFilters } from "@/lib/store/api/catalog-mock";
 import { filterCatalogSync } from "@/lib/store/api/catalog-mock";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 function filtersToQuery(f: CatalogFilters): string {
   const p = new URLSearchParams();
@@ -228,7 +228,7 @@ const CatalogFiltersFields = memo(function CatalogFiltersFields({
 export function ProductCatalogView({ mode = "products" }: { mode?: "products" | "search" }) {
   const router = useRouter();
   const pathname = usePathname();
-  const sp = useSearchParams();
+  const [sp] = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 

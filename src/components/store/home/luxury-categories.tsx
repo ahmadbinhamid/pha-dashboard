@@ -1,5 +1,5 @@
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { LUXURY_CATEGORY_CARDS } from "@/lib/store/data/home-mock";
 
 export function LuxuryCategories() {
@@ -30,10 +30,9 @@ export function LuxuryCategories() {
                     src={cat.image}
                     alt=""
                     fill
-                    className="object-cover transition duration-700 ease-out group-hover:scale-105"
-                    sizes="(max-width:1024px) 100vw, 33vw"
+                    className="transition duration-700 ease-out group-hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-linear-to-t from-[#0B0F14] via-[#0B0F14]/40 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-luxury-ink via-luxury-ink/40 to-transparent" />
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
                   <div className="mb-1 flex items-center gap-2">

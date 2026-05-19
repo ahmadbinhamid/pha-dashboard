@@ -1,11 +1,10 @@
-"use client";
 
-import Link from "next/link";
-import type { StoreTenant } from "@/lib/store/tenant-types";
+import Link from "@/components/ui/link";
+import type { StoreTenant } from "@/types";
 import { StoreLogo } from "@/components/store/store-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/toast/toast-provider";
+import { useToast } from "@/context";
 
 export function StoreFooter({ tenant }: { tenant: StoreTenant }) {
   const { toast } = useToast();

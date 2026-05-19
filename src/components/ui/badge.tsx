@@ -1,4 +1,4 @@
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 type BadgeVariant = "default" | "ok" | "warn" | "danger" | "muted" | "outline";
 

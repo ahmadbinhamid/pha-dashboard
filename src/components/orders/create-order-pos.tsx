@@ -1,22 +1,22 @@
-"use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/ui/link";
+import { useRouter } from "@/hooks";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
-import { useToast } from "@/components/toast/toast-provider";
-import { useInventoryData, useInventoryActions } from "@/components/inventory/inventory-store";
+import { useToast } from "@/context";
+import { useInventoryData, useInventoryActions } from "@/context";
 import { CUSTOMERS } from "@/lib/data/customers";
-import type { Customer, FulfilmentType, InvoiceDraft, InvoiceLine, PaymentMethod, SaleType } from "@/lib/invoicing/types";
+import type { Customer, FulfilmentType, InvoiceDraft, InvoiceLine, PaymentMethod, SaleType } from "@/types";
 import { InvoicePreview } from "@/components/invoicing/invoice-preview";
 import { splitGstIncluded } from "@/lib/invoicing/math";
-import { formatCurrency } from "@/lib/format";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
-import { useOrders } from "@/components/orders/orders-store";
+import { formatCurrency } from "@/utils/format";
+import { useOrgSettings } from "@/context";
+import { useOrders } from "@/context";
 
 const DRAFT_KEY = "ppg-order-draft";
 
@@ -280,7 +280,7 @@ export function CreateOrderPos() {
       </div>
 
       {/* Print styles: only show invoice preview on print */}
-      <style jsx global>{`
+      <style>{`
         @media print {
           header,
           nav,
@@ -415,26 +415,18 @@ export function CreateOrderPos() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <div className="mb-2 text-xs font-semibold text-fg/70">Sale type</div>
-                    <select
-                      className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                      value={saleType}
-                      onChange={(e) => setSaleType(e.target.value as SaleType)}
-                    >
+                    <Select value={saleType} onChange={(e) => setSaleType(e.target.value as SaleType)}>
                       <option value="walk_in">Walk-in</option>
                       <option value="online">Online</option>
                       <option value="ebay">eBay</option>
-                    </select>
+                    </Select>
                   </div>
                   <div>
                     <div className="mb-2 text-xs font-semibold text-fg/70">Fulfilment</div>
-                    <select
-                      className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                      value={fulfilment}
-                      onChange={(e) => setFulfilment(e.target.value as FulfilmentType)}
-                    >
+                    <Select value={fulfilment} onChange={(e) => setFulfilment(e.target.value as FulfilmentType)}>
                       <option value="pickup">Pickup</option>
                       <option value="delivery">Delivery</option>
-                    </select>
+                    </Select>
                   </div>
                 </div>
 

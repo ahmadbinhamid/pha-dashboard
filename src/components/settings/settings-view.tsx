@@ -1,11 +1,11 @@
-"use client";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Image } from "@/components/ui/image";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
-import { useToast } from "@/components/toast/toast-provider";
+import { useOrgSettings } from "@/context";
+import { useToast } from "@/context";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -197,9 +197,7 @@ export function SettingsView() {
             />
             {settings.logoDataUrl ? (
               <div className="rounded-xl border border-border bg-bg p-3">
-                {/* Data URL preview — next/image adds little value here */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={settings.logoDataUrl} alt="Store logo" className="h-12 w-auto rounded-md" />
+                <Image src={settings.logoDataUrl} alt="Store logo" className="h-12 w-auto rounded-md" />
               </div>
             ) : null}
           </CardContent>

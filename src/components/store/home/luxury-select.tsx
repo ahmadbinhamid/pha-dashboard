@@ -1,7 +1,6 @@
-"use client";
 
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 import { Icons } from "@/components/ui/icons";
 
 type Option = { value: string; label: string };

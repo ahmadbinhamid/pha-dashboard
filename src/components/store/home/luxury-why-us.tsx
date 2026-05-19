@@ -13,7 +13,7 @@ export function LuxuryWhyUs() {
           {WHY_CHOOSE_US.map((item, i) => (
             <div
               key={item.title}
-              className="animate-fade-slide rounded-2xl border border-white/8 bg-[#151C28]/80 p-6 transition hover:border-gold/25 hover:shadow-glow-gold"
+              className="animate-fade-slide rounded-2xl border border-white/8 bg-luxury-card/80 p-6 transition hover:border-gold/25 hover:shadow-glow-gold"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <p className="text-2xl font-bold text-white">{item.title}</p>

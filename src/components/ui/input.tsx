@@ -1,7 +1,6 @@
-"use client";
 
 import * as React from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 export type InputSize = "sm" | "md" | "lg";
 export type InputVariant = "default" | "ghost" | "filled";

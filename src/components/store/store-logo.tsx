@@ -1,16 +1,14 @@
-import Image from "next/image";
-import type { StoreTenant } from "@/lib/store/tenant-types";
+import type { StoreTenant } from "@/types";
+import { Image } from "@/components/ui/image";
 
 type Props = {
   tenant: Pick<StoreTenant, "companyName" | "logoUrl">;
-  /** Header lockup — taller; footer — compact */
   variant?: "header" | "footer";
   priority?: boolean;
 };
 
 export function StoreLogo({ tenant, variant = "header", priority }: Props) {
-  const height = variant === "header" ? 72 : 56;
-  const width = variant === "header" ? 72 : 56;
+  const size = variant === "header" ? 72 : 56;
 
   if (tenant.logoUrl) {
     return (
@@ -18,14 +16,15 @@ export function StoreLogo({ tenant, variant = "header", priority }: Props) {
         <Image
           src={tenant.logoUrl}
           alt={tenant.companyName}
-          width={width}
-          height={height}
+          width={size}
+          height={size}
+          priority={priority}
+          objectFit="contain"
           className={
             variant === "header"
-              ? "h-14 w-14 rounded-lg object-contain object-center sm:h-16 sm:w-16"
-              : "h-12 w-12 rounded-lg object-contain object-center opacity-95"
+              ? "h-14 w-14 rounded-lg object-center sm:h-16 sm:w-16"
+              : "h-12 w-12 rounded-lg object-center opacity-95"
           }
-          priority={priority}
         />
         <span className="sr-only">{tenant.companyName}</span>
       </>

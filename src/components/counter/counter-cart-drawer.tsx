@@ -1,14 +1,14 @@
-"use client";
 
 import { useMemo } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/format";
-import { useCounterCart } from "@/components/counter/counter-cart-store";
-import type { InvoiceDraft, PaymentMethod } from "@/lib/invoicing/types";
+import { formatCurrency } from "@/utils/format";
+import { useCounterCart } from "@/context";
+import type { InvoiceDraft, PaymentMethod } from "@/types";
 
 const POS_DRAFT_KEY = "ppg-order-draft";
 
@@ -50,26 +50,18 @@ export function CounterCartDrawer({ open, onClose }: { open: boolean; onClose: (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <div className="mb-2 text-xs font-semibold text-fg/70">Sale type</div>
-                <select
-                  className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={saleType}
-                  onChange={(e) => setSaleType(e.target.value as typeof saleType)}
-                >
+                <Select value={saleType} onChange={(e) => setSaleType(e.target.value as typeof saleType)}>
                   <option value="walk_in">Walk-in</option>
                   <option value="online">Online</option>
                   <option value="ebay">eBay</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <div className="mb-2 text-xs font-semibold text-fg/70">Fulfilment</div>
-                <select
-                  className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={fulfilment}
-                  onChange={(e) => setFulfilment(e.target.value as typeof fulfilment)}
-                >
+                <Select value={fulfilment} onChange={(e) => setFulfilment(e.target.value as typeof fulfilment)}>
                   <option value="pickup">Pickup</option>
                   <option value="delivery">Delivery</option>
-                </select>
+                </Select>
               </div>
             </div>
 
