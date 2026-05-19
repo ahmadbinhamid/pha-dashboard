@@ -8,11 +8,10 @@
 /* Alpha modifiers (bg-accent/80) work via color-mix() which v4 generates     */
 /* automatically when a theme color contains a var() reference.               */
 @theme {
-  /* Font families — next/font injects --geist-sans / --geist-mono / --font-store-sans
-     at runtime; @theme references them to avoid circular variable definitions. */
-  --font-sans: var(--geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--geist-mono), ui-monospace, SFMono-Regular, monospace;
-  --font-store: var(--font-store-sans), var(--geist-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Font families — using system fonts (no Google Fonts download overhead) */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-store: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Colors */
   --color-bg: hsl(var(--bg));

@@ -10,11 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useInventory } from "@/components/inventory/inventory-store";
+import { useInventoryData } from "@/components/inventory/inventory-store";
 import { getProductViewExtras } from "@/lib/data/product-view-dummy";
 import type { InventoryItem } from "@/lib/data/inventory";
 import { cn } from "@/lib/cn";
-import { useCounterCart } from "@/components/counter/counter-cart-store";
+import { useCounterCartActions } from "@/components/counter/counter-cart-store";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -61,7 +61,7 @@ function DataRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function ProductDetails({ productId }: { productId: string }) {
   const router = useRouter();
-  const { items } = useInventory();
+  const { items } = useInventoryData();
   const product = useMemo(() => items.find((p) => p.id === productId), [items, productId]);
 
   const photos = useMemo(() => {
@@ -83,7 +83,7 @@ export function ProductDetails({ productId }: { productId: string }) {
 
   const [copied, setCopied] = useState(false);
   const [qty, setQty] = useState(1);
-  const { addLine } = useCounterCart();
+  const { addLine } = useCounterCartActions();
   const { toast } = useToast();
 
   if (!product) {

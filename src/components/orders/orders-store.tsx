@@ -44,12 +44,13 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 
   const setOrders = useCallback((next: Order[]) => persist(next), [persist]);
 
-  const appendOrder = useCallback(
-    (o: Order) => {
-      persist([o, ...orders]);
-    },
-    [orders, persist],
-  );
+  const appendOrder = useCallback((o: Order) => {
+    _setOrders((prev) => {
+      const next = [o, ...prev];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   const reset = useCallback(() => persist(ORDERS), [persist]);
 

@@ -1,20 +1,7 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { AppProviders } from "@/components/providers/app-providers";
-
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--geist-sans",
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--geist-mono",
-  display: "swap",
-});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -51,7 +38,7 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-dvh overflow-x-clip font-sans`}
+        className="min-h-dvh overflow-x-clip font-sans"
         suppressHydrationWarning
       >
         <AppProviders>{children}</AppProviders>

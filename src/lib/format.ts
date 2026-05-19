@@ -1,12 +1,16 @@
+// Cached Intl instances — constructing these on every call is expensive (especially on mobile)
+const _currencyFmts = new Map<string, Intl.NumberFormat>();
+const _compactFmt = new Intl.NumberFormat("en-AU", { notation: "compact" });
+
 export function formatCurrency(amount: number, currency: string = "AUD") {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  let fmt = _currencyFmts.get(currency);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("en-AU", { style: "currency", currency, maximumFractionDigits: 2 });
+    _currencyFmts.set(currency, fmt);
+  }
+  return fmt.format(amount);
 }
 
 export function formatCompactNumber(n: number) {
-  return new Intl.NumberFormat("en-AU", { notation: "compact" }).format(n);
+  return _compactFmt.format(n);
 }
-

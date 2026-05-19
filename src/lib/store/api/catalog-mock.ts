@@ -1,8 +1,6 @@
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { CATALOG } from "@/lib/store/data/catalog";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 export type CatalogFilters = {
   q?: string;
   vin?: string;
@@ -57,7 +55,6 @@ export function matchesCatalog(p: StoreProduct, f: CatalogFilters): boolean {
 
 /** Mock API: list products with filters (future: fetch(`/api/v1/catalog`) ). */
 export async function mockFetchCatalog(filters: CatalogFilters = {}): Promise<StoreProduct[]> {
-  await delay(180);
   return CATALOG.filter((p) => matchesCatalog(p, filters));
 }
 
@@ -67,13 +64,11 @@ export function filterCatalogSync(filters: CatalogFilters = {}): StoreProduct[] 
 }
 
 export async function mockFetchProductBySlug(slug: string): Promise<StoreProduct | null> {
-  await delay(120);
   const p = CATALOG.find((x) => x.slug === slug);
   return p ?? null;
 }
 
 export async function mockFetchBrands(): Promise<{ name: string; slug: string; count: number }[]> {
-  await delay(100);
   const map = new Map<string, number>();
   for (const p of CATALOG) {
     map.set(p.brand, (map.get(p.brand) ?? 0) + 1);

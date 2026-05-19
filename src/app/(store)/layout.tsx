@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { getStoreTenant } from "@/lib/store/get-tenant";
 import { StoreHeader } from "@/components/store/store-header";
 import { StoreFooter } from "@/components/store/store-footer";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-store-sans",
-  display: "swap",
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getStoreTenant();
@@ -27,7 +20,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   return (
     <div
-      className={`store-luxury flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-bg text-fg ${inter.variable}`}
+      className="store-luxury flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-bg text-fg"
     >
       <StoreHeader tenant={tenant} />
       <main className="flex-1">{children}</main>

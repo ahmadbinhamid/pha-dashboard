@@ -13,16 +13,24 @@ import { INVENTORY, type InventoryItem } from "@/lib/data/inventory";
 
 type InventoryState = InventoryItem[];
 
-type InventoryApi = {
+export type InventoryData = {
   items: InventoryState;
+};
+
+export type InventoryActions = {
   setItems: (items: InventoryState) => void;
   updateStock: (id: string, nextStock: number) => void;
   deductStock: (lines: Array<{ id: string; qty: number }>) => void;
   reset: () => void;
 };
 
+// Kept for backward compat
+export type InventoryApi = InventoryData & InventoryActions;
+
 const STORAGE_KEY = "ppg-inventory";
-const InventoryContext = createContext<InventoryApi | null>(null);
+
+const DataCtx = createContext<InventoryData | null>(null);
+const ActionsCtx = createContext<InventoryActions | null>(null);
 
 function mergeStoredRow(row: unknown): InventoryItem | null {
   if (!row || typeof row !== "object") return null;
@@ -84,12 +92,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const persist = useCallback((next: InventoryState) => {
+  // All actions are stable — functional setState reads latest value without capturing it
+  const setItems = useCallback((next: InventoryState) => {
     _setItems(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
   }, []);
-
-  const setItems = useCallback((next: InventoryState) => persist(next), [persist]);
 
   const updateStock = useCallback((id: string, nextStock: number) => {
     _setItems((prev) => {
@@ -111,19 +118,43 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const reset = useCallback(() => persist(INVENTORY), [persist]);
+  const reset = useCallback(() => {
+    _setItems(INVENTORY);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(INVENTORY)); } catch {}
+  }, []);
 
-  const api = useMemo(
-    () => ({ items, setItems, updateStock, deductStock, reset }),
-    [items, setItems, updateStock, deductStock, reset],
+  // Actions object is stable — created once, never changes
+  const actions = useMemo<InventoryActions>(
+    () => ({ setItems, updateStock, deductStock, reset }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
-  return <InventoryContext.Provider value={api}>{children}</InventoryContext.Provider>;
+  // Data only changes when items changes
+  const data = useMemo<InventoryData>(() => ({ items }), [items]);
+
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <DataCtx.Provider value={data}>
+        {children}
+      </DataCtx.Provider>
+    </ActionsCtx.Provider>
+  );
 }
 
-export function useInventory() {
-  const ctx = useContext(InventoryContext);
-  if (!ctx) throw new Error("useInventory must be used within InventoryProvider");
+export function useInventoryData(): InventoryData {
+  const ctx = useContext(DataCtx);
+  if (!ctx) throw new Error("useInventoryData must be used within InventoryProvider");
   return ctx;
 }
 
+export function useInventoryActions(): InventoryActions {
+  const ctx = useContext(ActionsCtx);
+  if (!ctx) throw new Error("useInventoryActions must be used within InventoryProvider");
+  return ctx;
+}
+
+// Backward-compat — prefer useInventoryData() / useInventoryActions() for better perf
+export function useInventory(): InventoryApi {
+  return { ...useInventoryData(), ...useInventoryActions() };
+}

@@ -55,28 +55,35 @@ export function ListingQueueProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const enqueue = useCallback(
-    (item: Omit<ListingQueueItem, "id" | "createdAt" | "status">) => {
-      const next: ListingQueueItem = {
-        ...item,
-        id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-        status: "queued",
-        createdAt: new Date().toISOString(),
-      };
-      persist([next, ...items]);
-    },
-    [items, persist],
-  );
+  const enqueue = useCallback((item: Omit<ListingQueueItem, "id" | "createdAt" | "status">) => {
+    const newItem: ListingQueueItem = {
+      ...item,
+      id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    };
+    setItems((prev) => {
+      const next = [newItem, ...prev];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
-  const markPublished = useCallback(
-    (id: string) => persist(items.map((i) => (i.id === id ? { ...i, status: "published" } : i))),
-    [items, persist],
-  );
+  const markPublished = useCallback((id: string) => {
+    setItems((prev) => {
+      const next = prev.map((i) => (i.id === id ? { ...i, status: "published" as const } : i));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
-  const markError = useCallback(
-    (id: string) => persist(items.map((i) => (i.id === id ? { ...i, status: "error" } : i))),
-    [items, persist],
-  );
+  const markError = useCallback((id: string) => {
+    setItems((prev) => {
+      const next = prev.map((i) => (i.id === id ? { ...i, status: "error" as const } : i));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   const reset = useCallback(() => persist([]), [persist]);
 

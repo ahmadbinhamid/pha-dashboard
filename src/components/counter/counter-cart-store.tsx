@@ -20,29 +20,29 @@ export type CounterCartLine = {
 export type CounterSaleType = "walk_in" | "online" | "ebay";
 export type CounterFulfilment = "pickup" | "delivery";
 
-type CounterCartApi = {
+export type CounterCartData = {
   customer: CounterCustomer;
-  setCustomer: (c: CounterCustomer) => void;
   saleType: CounterSaleType;
-  setSaleType: (t: CounterSaleType) => void;
   fulfilment: CounterFulfilment;
-  setFulfilment: (f: CounterFulfilment) => void;
   lines: CounterCartLine[];
+};
+
+export type CounterCartActions = {
+  setCustomer: (c: CounterCustomer) => void;
+  setSaleType: (t: CounterSaleType) => void;
+  setFulfilment: (f: CounterFulfilment) => void;
   addLine: (line: Omit<CounterCartLine, "qty">, qty?: number) => void;
   setQty: (productId: string, qty: number) => void;
   removeLine: (productId: string) => void;
   clear: () => void;
 };
 
-const STORAGE_KEY = "pha-counter-cart";
-const Ctx = createContext<CounterCartApi | null>(null);
+// Kept for backward compat — components that need both can still use useCounterCart()
+export type CounterCartApi = CounterCartData & CounterCartActions;
 
-type Stored = {
-  customer: CounterCustomer;
-  saleType: CounterSaleType;
-  fulfilment: CounterFulfilment;
-  lines: CounterCartLine[];
-};
+const STORAGE_KEY = "pha-counter-cart";
+
+type Stored = CounterCartData;
 
 const DEFAULTS: Stored = {
   customer: { name: "" },
@@ -73,6 +73,9 @@ function readStored(): Stored {
   }
 }
 
+const DataCtx = createContext<CounterCartData | null>(null);
+const ActionsCtx = createContext<CounterCartActions | null>(null);
+
 export function CounterCartProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Stored>(DEFAULTS);
 
@@ -80,72 +83,102 @@ export function CounterCartProvider({ children }: { children: React.ReactNode })
     startTransition(() => setState(readStored()));
   }, []);
 
-  const persist = useCallback((next: Stored) => {
-    setState(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
+  // All callbacks are stable — empty deps, use functional setState to read latest value
+  const setCustomer = useCallback((c: CounterCustomer) => {
+    setState((prev) => {
+      const next = { ...prev, customer: c };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, []);
 
-  const setCustomer = useCallback((c: CounterCustomer) => persist({ ...state, customer: c }), [persist, state]);
-  const setSaleType = useCallback((t: CounterSaleType) => persist({ ...state, saleType: t }), [persist, state]);
-  const setFulfilment = useCallback(
-    (f: CounterFulfilment) => persist({ ...state, fulfilment: f }),
-    [persist, state],
-  );
+  const setSaleType = useCallback((t: CounterSaleType) => {
+    setState((prev) => {
+      const next = { ...prev, saleType: t };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
-  const addLine = useCallback(
-    (line: Omit<CounterCartLine, "qty">, qty = 1) => {
-      const q = clampQty(qty);
-      const existing = state.lines.find((l) => l.productId === line.productId);
+  const setFulfilment = useCallback((f: CounterFulfilment) => {
+    setState((prev) => {
+      const next = { ...prev, fulfilment: f };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const addLine = useCallback((line: Omit<CounterCartLine, "qty">, qty = 1) => {
+    const q = clampQty(qty);
+    setState((prev) => {
+      const existing = prev.lines.find((l) => l.productId === line.productId);
       const lines = existing
-        ? state.lines.map((l) => (l.productId === line.productId ? { ...l, qty: l.qty + q } : l))
-        : [...state.lines, { ...line, qty: q }];
-      persist({ ...state, lines });
-    },
-    [persist, state],
+        ? prev.lines.map((l) => (l.productId === line.productId ? { ...l, qty: l.qty + q } : l))
+        : [...prev.lines, { ...line, qty: q }];
+      const next = { ...prev, lines };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const setQty = useCallback((productId: string, qty: number) => {
+    const q = clampQty(qty);
+    setState((prev) => {
+      const next = { ...prev, lines: prev.lines.map((l) => (l.productId === productId ? { ...l, qty: q } : l)) };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const removeLine = useCallback((productId: string) => {
+    setState((prev) => {
+      const next = { ...prev, lines: prev.lines.filter((l) => l.productId !== productId) };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const clear = useCallback(() => {
+    setState(DEFAULTS);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS)); } catch {}
+  }, []);
+
+  // Actions object is stable — created once, never changes (all callbacks have empty deps)
+  const actions = useMemo<CounterCartActions>(
+    () => ({ setCustomer, setSaleType, setFulfilment, addLine, setQty, removeLine, clear }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
-  const setQty = useCallback(
-    (productId: string, qty: number) => {
-      const q = clampQty(qty);
-      persist({ ...state, lines: state.lines.map((l) => (l.productId === productId ? { ...l, qty: q } : l)) });
-    },
-    [persist, state],
+  // Data object only changes when state changes
+  const data = useMemo<CounterCartData>(
+    () => ({ customer: state.customer, saleType: state.saleType, fulfilment: state.fulfilment, lines: state.lines }),
+    [state],
   );
 
-  const removeLine = useCallback(
-    (productId: string) => persist({ ...state, lines: state.lines.filter((l) => l.productId !== productId) }),
-    [persist, state],
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <DataCtx.Provider value={data}>
+        {children}
+      </DataCtx.Provider>
+    </ActionsCtx.Provider>
   );
-
-  const clear = useCallback(() => persist(DEFAULTS), [persist]);
-
-  const api = useMemo(
-    () => ({
-      customer: state.customer,
-      setCustomer,
-      saleType: state.saleType,
-      setSaleType,
-      fulfilment: state.fulfilment,
-      setFulfilment,
-      lines: state.lines,
-      addLine,
-      setQty,
-      removeLine,
-      clear,
-    }),
-    [state, setCustomer, setSaleType, setFulfilment, addLine, setQty, removeLine, clear],
-  );
-
-  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 
-export function useCounterCart() {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useCounterCart must be used within CounterCartProvider");
+export function useCounterCartData(): CounterCartData {
+  const ctx = useContext(DataCtx);
+  if (!ctx) throw new Error("useCounterCartData must be used within CounterCartProvider");
   return ctx;
 }
 
+export function useCounterCartActions(): CounterCartActions {
+  const ctx = useContext(ActionsCtx);
+  if (!ctx) throw new Error("useCounterCartActions must be used within CounterCartProvider");
+  return ctx;
+}
+
+// Backward-compat — re-renders when either data or actions change
+// Prefer useCounterCartData() / useCounterCartActions() for better perf
+export function useCounterCart(): CounterCartApi {
+  return { ...useCounterCartData(), ...useCounterCartActions() };
+}

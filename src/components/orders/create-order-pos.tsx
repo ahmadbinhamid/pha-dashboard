@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { useToast } from "@/components/toast/toast-provider";
-import { useInventory } from "@/components/inventory/inventory-store";
+import { useInventoryData, useInventoryActions } from "@/components/inventory/inventory-store";
 import { CUSTOMERS } from "@/lib/data/customers";
 import type { Customer, FulfilmentType, InvoiceDraft, InvoiceLine, PaymentMethod, SaleType } from "@/lib/invoicing/types";
 import { InvoicePreview } from "@/components/invoicing/invoice-preview";
@@ -36,7 +36,8 @@ function nextInvoiceNumber(prefix: string, n: number) {
 export function CreateOrderPos() {
   const router = useRouter();
   const { toast } = useToast();
-  const { items: inventory, deductStock } = useInventory();
+  const { items: inventory } = useInventoryData();
+  const { deductStock } = useInventoryActions();
   const { settings, update } = useOrgSettings();
   const { appendOrder } = useOrders();
 

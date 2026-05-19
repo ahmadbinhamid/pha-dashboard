@@ -72,14 +72,21 @@ export function BundlesProvider({ children }: { children: React.ReactNode }) {
 
   const setBundles = useCallback((next: Bundle[]) => persist(next), [persist]);
 
-  const upsertBundle = useCallback(
-    (b: Bundle) => {
-      persist([b, ...bundles.filter((x) => x.id !== b.id)]);
-    },
-    [bundles, persist],
-  );
+  const upsertBundle = useCallback((b: Bundle) => {
+    _setBundles((prev) => {
+      const next = [b, ...prev.filter((x) => x.id !== b.id)];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
-  const deleteBundle = useCallback((id: string) => persist(bundles.filter((b) => b.id !== id)), [bundles, persist]);
+  const deleteBundle = useCallback((id: string) => {
+    _setBundles((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   const reset = useCallback(() => persist(SEED), [persist]);
 

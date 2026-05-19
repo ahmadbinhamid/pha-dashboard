@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { useInventory } from "@/components/inventory/inventory-store";
+import { useInventoryData } from "@/components/inventory/inventory-store";
 import {
   buildInventoryListUrl,
   inventoryFiltersFromSearchParams,
@@ -26,7 +26,7 @@ export function InventorySearchDialog({ open, onClose }: { open: boolean; onClos
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { items: inventory } = useInventory();
+  const { items: inventory } = useInventoryData();
   const [form, setForm] = useState<InventorySearchQuery>(EMPTY);
 
   const categories = useMemo(

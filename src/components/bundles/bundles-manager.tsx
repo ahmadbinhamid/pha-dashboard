@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { Icons } from "@/components/ui/icons";
 import { useToast } from "@/components/toast/toast-provider";
-import { useInventory } from "@/components/inventory/inventory-store";
+import { useInventoryData } from "@/components/inventory/inventory-store";
 import { useBundles, type Bundle, type BundleItem } from "@/components/bundles/bundles-store";
 import { useListingQueue } from "@/components/listings/listing-queue-store";
 
@@ -29,7 +29,7 @@ function clampQty(n: number) {
 
 export function BundlesManager() {
   const { toast } = useToast();
-  const { items: inventory } = useInventory();
+  const { items: inventory } = useInventoryData();
   const { bundles, upsertBundle, deleteBundle } = useBundles();
   const { enqueue } = useListingQueue();
   const [open, setOpen] = useState(false);
