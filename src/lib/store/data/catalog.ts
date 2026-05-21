@@ -1,30 +1,9 @@
-export type StoreProduct = {
-  slug: string;
-  sku: string;
-  name: string;
-  brand: string;
-  category: string;
-  make: string;
-  model: string;
-  yearFrom: number;
-  yearTo: number;
-  engine: string;
-  condition: "new" | "used";
-  genuineType: "genuine" | "aftermarket";
-  inStock: boolean;
-  warehouse: string;
-  priceAud: number;
-  image: string;
-  images: string[];
-  description: string;
-  compatibility: string[];
-  shippingNote: string;
-};
+import type { StoreProduct } from "@/types";
+
+export { type StoreProduct };
 
 export const WAREHOUSES = ["Campbellfield, VIC", "Dandenong, VIC", "Brisbane, QLD"] as const;
-
 export const MAKES = ["Mercedes-Benz", "BMW", "Audi", "Toyota", "Volkswagen", "Porsche"] as const;
-
 export const CATEGORIES = [
   "Brakes",
   "Engine",
@@ -52,14 +31,12 @@ export const CATALOG: StoreProduct[] = [
     inStock: true,
     warehouse: "Campbellfield, VIC",
     priceAud: 289,
-    image:
-      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80",
     images: [
       "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80",
       "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800&q=80",
     ],
-    description:
-      "Genuine Mercedes-Benz front brake pads for W205 chassis. Low dust compound, factory fitment.",
+    description: "Genuine Mercedes-Benz front brake pads for W205 chassis. Low dust compound, factory fitment.",
     compatibility: ["W205 C200", "W205 C250", "W205 C300"],
     shippingNote: "Same-day dispatch from Campbellfield when ordered before 2pm AEST.",
   },

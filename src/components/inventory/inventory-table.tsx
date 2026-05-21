@@ -1,25 +1,26 @@
-"use client";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import type { InventoryItem } from "@/lib/data/inventory";
-import { formatCurrency } from "@/lib/format";
+import Link from "@/components/ui/link";
+import { useRouter } from "@/hooks";
+import { useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { InventoryItem } from "@/types";
+import { formatCurrency } from "@/utils/format";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useToast } from "@/components/toast/toast-provider";
-import { useInventory } from "@/components/inventory/inventory-store";
-import { useCounterCart } from "@/components/counter/counter-cart-store";
+import { useToast } from "@/context";
+import { useInventoryData } from "@/context";
+import { useCounterCartActions } from "@/context";
 import { MAKES } from "@/lib/store/data/catalog";
 import {
   inventoryFiltersFromSearchParams,
   type EbayFilter,
   type InventoryListView,
-} from "@/lib/inventory-list-url";
+} from "@/config/inventory-filters";
 
 function EbayBadge({ status }: { status: InventoryItem["ebay"] }) {
   if (status === "synced") return <Badge variant="ok">Synced</Badge>;
@@ -52,7 +53,7 @@ function ProductTileHero({ item }: { item: InventoryItem }) {
   const g2 = `hsl(${item.image.hue} 55% 18% / 0.75)`;
   return (
     <div
-      className="relative aspect-[5/4] overflow-hidden bg-bg-2"
+      className="relative aspect-5/4 overflow-hidden bg-bg-2"
       style={{ backgroundImage: `linear-gradient(155deg, ${g1}, ${g2})` }}
     >
       <div
@@ -70,33 +71,54 @@ function ProductTileHero({ item }: { item: InventoryItem }) {
   );
 }
 
+type Filters = {
+  query: string;
+  category: string;
+  ebay: EbayFilter;
+  make: string;
+  model: string;
+  year: string;
+  view: InventoryListView;
+};
+
+function filtersFromParams(sp: URLSearchParams): Filters {
+  const f = inventoryFiltersFromSearchParams(sp);
+  return { query: f.q, category: f.category, ebay: f.ebay, make: f.make, model: f.model, year: f.year, view: f.view };
+}
+
 export function InventoryTable() {
-  const searchParams = useSearchParams();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
-  const [ebay, setEbay] = useState<EbayFilter>("all");
-  const [make, setMake] = useState("");
-  const [model, setModel] = useState("");
-  const [year, setYear] = useState("");
-  const [view, setView] = useState<InventoryListView>("table");
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
+  // Separate display query so typing feels instant; filter computation is debounced
+  const [inputQuery, setInputQuery] = useState(() => filtersFromParams(searchParams).query);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
   const { toast } = useToast();
-  const { items: inventory } = useInventory();
+  const { items: inventory } = useInventoryData();
+  const { addLine } = useCounterCartActions();
   const router = useRouter();
-  const { addLine } = useCounterCart();
 
+  const { category, ebay, make, model, year, view } = filters;
+
+  // Sync filters and input when URL changes (e.g. navigating back/forward)
   useEffect(() => {
-    const f = inventoryFiltersFromSearchParams(searchParams);
-    setQuery(f.q);
-    setCategory(f.category);
-    setEbay(f.ebay);
-    setMake(f.make);
-    setModel(f.model);
-    setYear(f.year);
-    setView(f.view);
+    const f = filtersFromParams(searchParams);
+    setFilters(f);
+    setInputQuery(f.query);
     setPage(1);
   }, [searchParams]);
+
+  // Debounce: apply text search to the filter 200ms after typing stops
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setFilters((f) => {
+        if (f.query === inputQuery) return f;
+        return { ...f, query: inputQuery };
+      });
+      setPage(1);
+    }, 200);
+    return () => clearTimeout(id);
+  }, [inputQuery]);
 
   const categories = useMemo(
     () => [...new Set(inventory.map((p) => p.category))].sort((a, b) => a.localeCompare(b)),
@@ -109,6 +131,7 @@ export function InventoryTable() {
   }, [year]);
   const hasYear = !Number.isNaN(yearNum);
 
+  const { query } = filters;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const m = make.trim().toLowerCase();
@@ -128,13 +151,48 @@ export function InventoryTable() {
   const pageSize = view === "tiles" ? 9 : 6;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(pageCount, Math.max(1, page));
-  const items = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const items = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
 
-  const selectedIds = Object.entries(selected)
-    .filter(([, v]) => v)
-    .map(([id]) => id);
+  const selectedIds = useMemo(
+    () => Object.entries(selected).filter(([, v]) => v).map(([id]) => id),
+    [selected],
+  );
 
   const allOnPageSelected = items.length > 0 && items.every((p) => selected[p.id]);
+
+  const onCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilters((f) => ({ ...f, category: e.target.value }));
+    setPage(1);
+  }, []);
+
+  const onEbayChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilters((f) => ({ ...f, ebay: e.target.value as EbayFilter }));
+    setPage(1);
+  }, []);
+
+  const onMakeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilters((f) => ({ ...f, make: e.target.value }));
+    setPage(1);
+  }, []);
+
+  const onModelChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters((f) => ({ ...f, model: e.target.value }));
+    setPage(1);
+  }, []);
+
+  const onYearChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters((f) => ({ ...f, year: e.target.value }));
+    setPage(1);
+  }, []);
+
+  const onSelectAllPage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = { ...selected };
+    items.forEach((row) => (next[row.id] = e.target.checked));
+    setSelected(next);
+  }, [selected, items]);
 
   return (
     <Card>
@@ -149,10 +207,7 @@ export function InventoryTable() {
                 variant={view === "table" ? "secondary" : "ghost"}
                 size="sm"
                 className="h-8 gap-1.5 px-2.5"
-                onClick={() => {
-                  setView("table");
-                  setPage(1);
-                }}
+                onClick={() => { setFilters((f) => ({ ...f, view: "table" })); setPage(1); }}
               >
                 <Icons.Bars className="h-3.5 w-3.5 opacity-70" aria-hidden />
                 Table
@@ -162,10 +217,7 @@ export function InventoryTable() {
                 variant={view === "tiles" ? "secondary" : "ghost"}
                 size="sm"
                 className="h-8 gap-1.5 px-2.5"
-                onClick={() => {
-                  setView("tiles");
-                  setPage(1);
-                }}
+                onClick={() => { setFilters((f) => ({ ...f, view: "tiles" })); setPage(1); }}
               >
                 <Icons.Box className="h-3.5 w-3.5 opacity-70" aria-hidden />
                 Tiles
@@ -198,11 +250,8 @@ export function InventoryTable() {
               <Icons.Search />
             </span>
             <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
+              value={inputQuery}
+              onChange={(e) => setInputQuery(e.target.value)}
               className="pl-9"
               placeholder="Search title, SKU, category, ID, make, model…"
             />
@@ -211,48 +260,22 @@ export function InventoryTable() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="text-xs font-semibold text-fg/55">Category</div>
-              <div className="relative min-w-[140px]">
-                <select
-                  className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={category}
-                  onChange={(e) => {
-                    setCategory(e.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <option value="">All</option>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                  <Icons.ChevronDown />
-                </span>
-              </div>
+              <Select value={category} onChange={onCategoryChange} className="min-w-35">
+                <option value="">All</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </Select>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-xs font-semibold text-fg/55">eBay</div>
-              <div className="relative">
-                <select
-                  className="h-10 appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                  value={ebay}
-                  onChange={(e) => {
-                    setEbay(e.target.value as EbayFilter);
-                    setPage(1);
-                  }}
-                >
-                  <option value="all">All</option>
-                  <option value="synced">Synced</option>
-                  <option value="pending">Pending</option>
-                  <option value="error">Error</option>
-                  <option value="not_listed">Not listed</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                  <Icons.ChevronDown />
-                </span>
-              </div>
+              <Select value={ebay} onChange={onEbayChange}>
+                <option value="all">All</option>
+                <option value="synced">Synced</option>
+                <option value="pending">Pending</option>
+                <option value="error">Error</option>
+                <option value="not_listed">Not listed</option>
+              </Select>
             </div>
           </div>
         </div>
@@ -260,30 +283,18 @@ export function InventoryTable() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Make</label>
-            <select
-              className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              value={make}
-              onChange={(e) => {
-                setMake(e.target.value);
-                setPage(1);
-              }}
-            >
+            <Select value={make} onChange={onMakeChange}>
               <option value="">Any</option>
               {MAKES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m}>{m}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Model</label>
             <Input
               value={model}
-              onChange={(e) => {
-                setModel(e.target.value);
-                setPage(1);
-              }}
+              onChange={onModelChange}
               placeholder="e.g. C-Class W205"
               className="h-10"
             />
@@ -292,10 +303,7 @@ export function InventoryTable() {
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Year</label>
             <Input
               value={year}
-              onChange={(e) => {
-                setYear(e.target.value);
-                setPage(1);
-              }}
+              onChange={onYearChange}
               placeholder="Fits this model year"
               inputMode="numeric"
               className="h-10"
@@ -369,7 +377,7 @@ export function InventoryTable() {
                         type="button"
                         variant="primary"
                         size="sm"
-                        className="min-w-[5.5rem]"
+                        className="min-w-22"
                         onClick={() => {
                           addLine(
                             { productId: p.id, sku: p.sku, title: p.title, unitPriceInclGst: p.price },
@@ -407,11 +415,7 @@ export function InventoryTable() {
                       <input
                         type="checkbox"
                         checked={allOnPageSelected}
-                        onChange={(e) => {
-                          const next = { ...selected };
-                          items.forEach((row) => (next[row.id] = e.target.checked));
-                          setSelected(next);
-                        }}
+                        onChange={onSelectAllPage}
                       />
                       Product
                     </label>

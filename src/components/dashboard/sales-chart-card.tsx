@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SALES_SERIES } from "@/lib/data/dashboard";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 
 function SparkArea({
   values,

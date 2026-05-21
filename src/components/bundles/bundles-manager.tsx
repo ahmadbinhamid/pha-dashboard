@@ -1,17 +1,18 @@
-"use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { Icons } from "@/components/ui/icons";
-import { useToast } from "@/components/toast/toast-provider";
-import { useInventory } from "@/components/inventory/inventory-store";
-import { useBundles, type Bundle, type BundleItem } from "@/components/bundles/bundles-store";
-import { useListingQueue } from "@/components/listings/listing-queue-store";
+import { useToast } from "@/context";
+import { useInventoryData } from "@/context";
+import { useBundles } from "@/context";
+import type { Bundle, BundleItem } from "@/types";
+import { useListingQueue } from "@/context";
 
 function newId(name: string) {
   const base = name
@@ -29,7 +30,7 @@ function clampQty(n: number) {
 
 export function BundlesManager() {
   const { toast } = useToast();
-  const { items: inventory } = useInventory();
+  const { items: inventory } = useInventoryData();
   const { bundles, upsertBundle, deleteBundle } = useBundles();
   const { enqueue } = useListingQueue();
   const [open, setOpen] = useState(false);
@@ -192,19 +193,16 @@ export function BundlesManager() {
             <div className="mt-3 space-y-3">
               {items.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px_44px] sm:items-center">
-                  <select
-                    className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                  <Select
                     value={row.sku}
                     onChange={(e) =>
                       setItems((prev) => prev.map((r, i) => (i === idx ? { ...r, sku: e.target.value } : r)))
                     }
                   >
                     {skuOptions.map((o) => (
-                      <option key={o.sku} value={o.sku}>
-                        {o.sku} · {o.title}
-                      </option>
+                      <option key={o.sku} value={o.sku}>{o.sku} · {o.title}</option>
                     ))}
-                  </select>
+                  </Select>
                   <Input
                     value={String(row.qty)}
                     onChange={(e) =>

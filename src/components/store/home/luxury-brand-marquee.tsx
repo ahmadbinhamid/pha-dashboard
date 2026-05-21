@@ -1,5 +1,3 @@
-"use client";
-
 import { MARQUEE_BRANDS } from "@/lib/store/data/home-mock";
 
 export function LuxuryBrandMarquee() {
@@ -11,8 +9,8 @@ export function LuxuryBrandMarquee() {
         Authorised supply partners
       </p>
       <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-surface to-transparent" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-surface to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-linear-to-r from-surface to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-linear-to-l from-surface to-transparent" />
         <div className="flex w-max animate-marquee items-center">
           {row.map((brand, i) => (
             <span

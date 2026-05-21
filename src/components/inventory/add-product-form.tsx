@@ -1,18 +1,15 @@
-"use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/toast/toast-provider";
+import { useToast } from "@/context";
 import { Icons } from "@/components/ui/icons";
-import {
-  PhFieldGroup,
-  PhHint,
-  PhInput,
-  PhSelect,
-  PhSwitch,
-  PhTextarea,
-} from "@/components/inventory/product-form-primitives";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@/components/ui/form-field";
+import { Switch } from "@/components/ui/switch";
+import { Image } from "@/components/ui/image";
 
 const DRAFT_KEY = "pha-inventory-add-product-draft";
 const LEGACY_DRAFT_KEY = "parts-hub-add-product-draft";
@@ -292,14 +289,16 @@ export function AddProductForm() {
         aria-label="Form sections"
       >
         {FORM_STEPS.map((step) => (
-          <button
+          <Button
             key={step.id}
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => scrollToSection(step.id)}
-            className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-fg/60 transition hover:bg-bg-2 hover:text-fg"
+            className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-fg/60 hover:bg-bg-2 hover:text-fg"
           >
             {step.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -325,54 +324,54 @@ export function AddProductForm() {
             </div>
           </div>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <PhFieldGroup label="Product name" htmlFor={`${formId}-name`}>
-              <PhInput
+            <FormField label="Product name" htmlFor={`${formId}-name`}>
+              <Input
                 id={`${formId}-name`}
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
                 placeholder="e.g. OEM front brake pad set"
                 required
               />
-            </PhFieldGroup>
-            <PhFieldGroup label="SKU" hint="Generated automatically. Saved with your product and draft.">
+            </FormField>
+            <FormField label="SKU" hint="Generated automatically. Saved with your product and draft.">
               <div
                 className="flex h-10 items-center rounded-lg border border-border bg-bg-2 px-3 font-mono text-sm font-medium text-fg"
                 aria-live="polite"
               >
                 {sku}
               </div>
-            </PhFieldGroup>
-            <PhFieldGroup label="Inventory category" htmlFor={`${formId}-cat`} hint="Used in ERP reports and filters.">
-              <PhSelect id={`${formId}-cat`} value={category} onChange={(e) => setCategory(e.target.value)}>
+            </FormField>
+            <FormField label="Inventory category" htmlFor={`${formId}-cat`} hint="Used in ERP reports and filters.">
+              <Select id={`${formId}-cat`} value={category} onChange={(e) => setCategory(e.target.value)}>
                 {INVENTORY_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
-              </PhSelect>
-            </PhFieldGroup>
-            <PhFieldGroup label="Brand" htmlFor={`${formId}-brand`}>
-              <PhInput id={`${formId}-brand`} value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes-Benz" />
-            </PhFieldGroup>
-            <PhFieldGroup label="OEM part number" htmlFor={`${formId}-oem`}>
-              <PhInput id={`${formId}-oem`} value={oem} onChange={(e) => setOem(e.target.value)} placeholder="A0004211010" />
-            </PhFieldGroup>
-            <PhFieldGroup label="Condition" htmlFor={`${formId}-cond`}>
-              <PhSelect id={`${formId}-cond`} value={condition} onChange={(e) => setCondition(e.target.value)}>
+              </Select>
+            </FormField>
+            <FormField label="Brand" htmlFor={`${formId}-brand`}>
+              <Input id={`${formId}-brand`} value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes-Benz" />
+            </FormField>
+            <FormField label="OEM part number" htmlFor={`${formId}-oem`}>
+              <Input id={`${formId}-oem`} value={oem} onChange={(e) => setOem(e.target.value)} placeholder="A0004211010" />
+            </FormField>
+            <FormField label="Condition" htmlFor={`${formId}-cond`}>
+              <Select id={`${formId}-cond`} value={condition} onChange={(e) => setCondition(e.target.value)}>
                 <option value="new">New</option>
                 <option value="used">Used</option>
-              </PhSelect>
-            </PhFieldGroup>
+              </Select>
+            </FormField>
             <div className="sm:col-span-2">
-              <PhFieldGroup label="Description" htmlFor={`${formId}-desc`} hint="Fitment notes, warranty, shipping — keep it clear for customers.">
-                <PhTextarea
+              <FormField label="Description" htmlFor={`${formId}-desc`} hint="Fitment notes, warranty, shipping — keep it clear for customers.">
+                <Textarea
                   id={`${formId}-desc`}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the part, inclusions, and any important notes…"
                   rows={4}
                 />
-              </PhFieldGroup>
+              </FormField>
             </div>
           </div>
         </section>
@@ -412,7 +411,7 @@ export function AddProductForm() {
                 {vehicles.map((row) => (
                   <tr key={row.id} className="align-middle">
                     <td className="p-2 pl-3">
-                      <PhInput
+                      <Input
                         aria-label="Make"
                         value={row.make}
                         onChange={(e) => updateVehicle(row.id, { make: e.target.value })}
@@ -421,7 +420,7 @@ export function AddProductForm() {
                       />
                     </td>
                     <td className="p-2">
-                      <PhInput
+                      <Input
                         aria-label="Model"
                         value={row.model}
                         onChange={(e) => updateVehicle(row.id, { model: e.target.value })}
@@ -430,7 +429,7 @@ export function AddProductForm() {
                       />
                     </td>
                     <td className="p-2">
-                      <PhInput
+                      <Input
                         aria-label="Year"
                         value={row.year}
                         onChange={(e) => updateVehicle(row.id, { year: e.target.value })}
@@ -439,7 +438,7 @@ export function AddProductForm() {
                       />
                     </td>
                     <td className="p-2">
-                      <PhInput
+                      <Input
                         aria-label="Engine"
                         value={row.engine}
                         onChange={(e) => updateVehicle(row.id, { engine: e.target.value })}
@@ -448,22 +447,24 @@ export function AddProductForm() {
                       />
                     </td>
                     <td className="p-2 pr-3 text-right">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => removeVehicle(row.id)}
                         disabled={vehicles.length <= 1}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg/45 transition hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-30"
+                        className="h-9 w-9 rounded-lg p-0 text-fg/45 hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-30"
                         aria-label="Remove vehicle row"
                       >
                         <Icons.Trash className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <PhHint className="mt-3">Tip: one row per distinct fitment (e.g. different engine codes).</PhHint>
+          <p className="mt-3 text-xs text-fg/55">Tip: one row per distinct fitment (e.g. different engine codes).</p>
         </section>
 
         <section
@@ -480,8 +481,8 @@ export function AddProductForm() {
             </div>
           </div>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <PhFieldGroup label="Cost price (AUD)" htmlFor={`${formId}-cost`}>
-              <PhInput
+            <FormField label="Cost price (AUD)" htmlFor={`${formId}-cost`}>
+              <Input
                 id={`${formId}-cost`}
                 type="number"
                 min={0}
@@ -491,9 +492,9 @@ export function AddProductForm() {
                 onChange={(e) => setCostPrice(e.target.value)}
                 placeholder="0.00"
               />
-            </PhFieldGroup>
-            <PhFieldGroup label="Selling price (AUD, inc. GST if applicable)" htmlFor={`${formId}-sell`}>
-              <PhInput
+            </FormField>
+            <FormField label="Selling price (AUD, inc. GST if applicable)" htmlFor={`${formId}-sell`}>
+              <Input
                 id={`${formId}-sell`}
                 type="number"
                 min={0}
@@ -503,9 +504,9 @@ export function AddProductForm() {
                 onChange={(e) => setSellingPrice(e.target.value)}
                 placeholder="0.00"
               />
-            </PhFieldGroup>
-            <PhFieldGroup label="Quantity on hand" htmlFor={`${formId}-qty`}>
-              <PhInput
+            </FormField>
+            <FormField label="Quantity on hand" htmlFor={`${formId}-qty`}>
+              <Input
                 id={`${formId}-qty`}
                 type="number"
                 min={0}
@@ -515,7 +516,7 @@ export function AddProductForm() {
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="0"
               />
-            </PhFieldGroup>
+            </FormField>
           </div>
         </section>
 
@@ -576,22 +577,23 @@ export function AddProductForm() {
                   key={img.id}
                   className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-bg-2 shadow-sm"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
+                  <Image src={img.url} alt="" fill />
                   <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                     {index === 0 ? "Main" : `Photo ${index + 1}`}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       removeImage(img.id);
                     }}
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg bg-card/95 text-fg/70 opacity-0 shadow ring-1 ring-border transition hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+                    className="absolute right-2 top-2 h-8 w-8 rounded-lg bg-card/95 p-0 text-fg/70 opacity-0 shadow ring-1 ring-border hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
                     aria-label="Remove image"
                   >
                     <Icons.Trash className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -612,17 +614,17 @@ export function AddProductForm() {
             </div>
           </div>
           <div className="mt-6 space-y-5">
-            <PhFieldGroup label="eBay category" htmlFor={`${formId}-ebay-cat`} hint="Choose the closest Motors category for your part.">
-              <PhSelect id={`${formId}-ebay-cat`} value={ebayCategory} onChange={(e) => setEbayCategory(e.target.value)}>
+            <FormField label="eBay category" htmlFor={`${formId}-ebay-cat`} hint="Choose the closest Motors category for your part.">
+              <Select id={`${formId}-ebay-cat`} value={ebayCategory} onChange={(e) => setEbayCategory(e.target.value)}>
                 {EBAY_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
-              </PhSelect>
-            </PhFieldGroup>
-            <PhFieldGroup label="eBay listing title" htmlFor={`${formId}-ebay-title`} hint="Front-load year, make, model, and part type (eBay best practice).">
-              <PhInput
+              </Select>
+            </FormField>
+            <FormField label="eBay listing title" htmlFor={`${formId}-ebay-title`} hint="Front-load year, make, model, and part type (eBay best practice).">
+              <Input
                 id={`${formId}-ebay-title`}
                 value={ebayTitle}
                 onChange={(e) => setEbayTitle(e.target.value)}
@@ -630,8 +632,8 @@ export function AddProductForm() {
                 maxLength={80}
               />
               <p className="text-right text-xs text-fg/45">{ebayTitle.length}/80</p>
-            </PhFieldGroup>
-            <PhSwitch
+            </FormField>
+            <Switch
               id={`${formId}-sync`}
               checked={syncEbay}
               onCheckedChange={setSyncEbay}

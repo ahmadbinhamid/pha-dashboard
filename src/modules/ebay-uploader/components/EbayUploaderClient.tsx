@@ -1,15 +1,15 @@
-"use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { buttonClassName } from "@/components/ui/button-styles";
-import { useToast } from "@/components/toast/toast-provider";
-import type { EbayUploaderFormPayload, VehicleFitmentRow } from "@/services/ebay/types";
+import { Image } from "@/components/ui/image";
+import { useToast } from "@/context";
+import type { EbayUploaderFormPayload, VehicleFitmentRow } from "@/types";
 import {
   DEFAULT_FORM,
   EBAY_UPLOADER_DRAFT_KEY,
@@ -39,7 +39,7 @@ function parseUrlLines(text: string): string[] {
 export function EbayUploaderClient() {
   const formId = useId();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>(1);
@@ -52,15 +52,10 @@ export function EbayUploaderClient() {
 
   const refreshStatus = useCallback(async () => {
     setLoadingStatus(true);
-    try {
-      const res = await fetch("/api/tools/ebay/status", { cache: "no-store" });
-      const j = (await res.json()) as ApiStatus;
-      setApiStatus(j);
-    } catch {
-      setApiStatus(null);
-    } finally {
-      setLoadingStatus(false);
-    }
+    // API will be served by the Node.js backend — placeholder until integration.
+    await Promise.resolve();
+    setApiStatus({ oauthConfigured: false, livePublishConfigured: false, dryRun: true, connected: false });
+    setLoadingStatus(false);
   }, []);
 
   useEffect(() => {
@@ -221,69 +216,21 @@ export function EbayUploaderClient() {
   };
 
   const publish = async () => {
-    if (!apiStatus?.connected) {
-      toast({ tone: "warning", title: "Connect eBay", description: "Use Connect eBay before publishing." });
-      return;
-    }
     if (!validateStep2()) return;
-    if (!apiStatus.dryRun && imageUrlsMerged.length === 0) {
-      toast({
-        tone: "warning",
-        title: "Public image URLs required",
-        description:
-          "Live listings need HTTPS image URLs eBay can fetch. Add them in step 1, or run a dry-run (default) without URLs.",
-      });
-      return;
-    }
-
-    setPublishing(true);
+    // Publish will be wired to the Node.js backend API — placeholder until integration.
+    toast({
+      tone: "default",
+      title: "Backend not yet connected",
+      description: "eBay publish will be wired to the Node.js backend. Form data saved as draft.",
+    });
     try {
-      const res = await fetch("/api/tools/ebay/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ form, imageUrls: imageUrlsMerged }),
-      });
-      const data = (await res.json()) as
-        | { ok: true; dryRun?: boolean; sku?: string; warnings?: string[] }
-        | { ok: false; message?: string; code?: string }
-        | { error?: string; message?: string };
-      if (!res.ok) {
-        toast({
-          tone: "danger",
-          title: "Publish failed",
-          description: "message" in data ? data.message : `HTTP ${res.status}`,
-        });
-        return;
-      }
-      if ("ok" in data && data.ok) {
-        toast({
-          tone: "success",
-          title: data.dryRun ? "Dry run OK" : "Published to eBay",
-          description: data.dryRun
-            ? (data.warnings?.[0] ?? "No live API calls were made (EBAY_PUBLISH_DRY_RUN).")
-            : `SKU ${data.sku ?? form.sku} — check your eBay seller hub.`,
-        });
-        try {
-          localStorage.setItem(EBAY_UPLOADER_LAST_KEY, JSON.stringify({ form, imageUrlsText }));
-        } catch {
-          /* ignore */
-        }
-      } else if ("ok" in data && data.ok === false) {
-        toast({ tone: "danger", title: data.code ?? "eBay error", description: data.message ?? "Listing was not created." });
-      } else {
-        toast({ tone: "danger", title: "Unexpected response", description: "Try again." });
-      }
-    } catch (e) {
-      toast({ tone: "danger", title: "Network error", description: e instanceof Error ? e.message : "Try again." });
-    } finally {
-      setPublishing(false);
-    }
+      localStorage.setItem(EBAY_UPLOADER_LAST_KEY, JSON.stringify({ form, imageUrlsText }));
+    } catch { /* ignore */ }
   };
 
   const disconnect = async () => {
-    await fetch("/api/tools/ebay/disconnect", { method: "POST" });
-    await refreshStatus();
-    toast({ tone: "default", title: "Disconnected", description: "eBay tokens cleared in this browser session." });
+    await Promise.resolve();
+    toast({ tone: "default", title: "Backend not connected", description: "eBay disconnect will be handled by the Node.js backend." });
   };
 
   return (
@@ -332,11 +279,7 @@ export function EbayUploaderClient() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {apiStatus?.oauthConfigured ? (
-              <a href="/api/tools/ebay/connect" className={buttonClassName({ variant: "primary", size: "sm", className: "inline-flex" })}>
-                Connect eBay
-              </a>
-            ) : null}
+            <span className="text-xs text-fg/50 italic">eBay OAuth will be handled by the Node.js backend.</span>
             {apiStatus?.connected ? (
               <Button type="button" variant="secondary" size="sm" onClick={() => void disconnect()}>
                 Disconnect
@@ -401,8 +344,7 @@ export function EbayUploaderClient() {
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {localImages.map((img, idx) => (
                   <li key={img.id} className="group relative overflow-hidden rounded-xl border border-border bg-bg shadow-sm">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" className="aspect-square w-full object-cover" />
+                    <Image src={img.url} alt="" className="aspect-square w-full object-cover" />
                     <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-black/55 px-1 py-1 opacity-0 transition group-hover:opacity-100">
                       <Button type="button" variant="secondary" size="sm" className="h-7 px-1" onClick={() => moveLocal(img.id, -1)} disabled={idx === 0}>
                         ↑

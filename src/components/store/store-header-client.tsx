@@ -1,9 +1,8 @@
-"use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/hooks";
 import { useState } from "react";
-import { StoreInput } from "@/components/store/ui/input";
-import { StoreButton } from "@/components/store/ui/button";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function StoreHeaderClient() {
   const router = useRouter();
@@ -19,16 +18,16 @@ export function StoreHeaderClient() {
         router.push(`/search?${params.toString()}`);
       }}
     >
-      <StoreInput
+      <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search by part name, SKU, vehicle, VIN…"
         className="h-10 flex-1 border-white/10 bg-surface/90 text-fg placeholder:text-fg/40 focus-visible:ring-accent"
         aria-label="Search catalog"
       />
-      <StoreButton type="submit" size="sm" className="h-10 w-full shrink-0 sm:h-10 sm:w-auto">
+      <Button type="submit" size="sm" className="h-10 w-full shrink-0 sm:h-10 sm:w-auto">
         Search
-      </StoreButton>
+      </Button>
     </form>
   );
 }

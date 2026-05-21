@@ -1,0 +1,153 @@
+import {
+  createContext,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { InventoryItem } from "@/types";
+import { INVENTORY } from "@/lib/data/inventory";
+
+type InventoryState = InventoryItem[];
+
+export type InventoryData = {
+  items: InventoryState;
+};
+
+export type InventoryActions = {
+  setItems: (items: InventoryState) => void;
+  updateStock: (id: string, nextStock: number) => void;
+  deductStock: (lines: Array<{ id: string; qty: number }>) => void;
+  reset: () => void;
+};
+
+export type InventoryApi = InventoryData & InventoryActions;
+
+const STORAGE_KEY = "ppg-inventory";
+
+const DataCtx = createContext<InventoryData | null>(null);
+const ActionsCtx = createContext<InventoryActions | null>(null);
+
+function mergeStoredRow(row: unknown): InventoryItem | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<InventoryItem> & { id?: unknown };
+  if (typeof r.id !== "string") return null;
+  const base = INVENTORY.find((i) => i.id === r.id);
+  if (base) {
+    return {
+      ...base,
+      ...r,
+      make: typeof r.make === "string" ? r.make : base.make,
+      model: typeof r.model === "string" ? r.model : base.model,
+      yearFrom: typeof r.yearFrom === "number" ? r.yearFrom : base.yearFrom,
+      yearTo: typeof r.yearTo === "number" ? r.yearTo : base.yearTo,
+      stock: typeof r.stock === "number" ? r.stock : base.stock,
+      price: typeof r.price === "number" ? r.price : base.price,
+      cost: typeof r.cost === "number" ? r.cost : base.cost,
+      category: typeof r.category === "string" ? r.category : base.category,
+      title: typeof r.title === "string" ? r.title : base.title,
+      sku: typeof r.sku === "string" ? r.sku : base.sku,
+      ebay: r.ebay ?? base.ebay,
+      image: r.image && typeof r.image === "object" ? r.image : base.image,
+      imageUrl: typeof r.imageUrl === "string" && r.imageUrl.trim() ? r.imageUrl : base.imageUrl,
+      galleryUrls: Array.isArray(r.galleryUrls) && r.galleryUrls.length
+        ? (r.galleryUrls as unknown[]).filter((u): u is string => typeof u === "string" && Boolean(u.trim()))
+        : base.galleryUrls,
+    };
+  }
+  if (typeof r.sku !== "string" || typeof r.title !== "string") return null;
+  return {
+    ...(r as InventoryItem),
+    make: typeof r.make === "string" ? r.make : "",
+    model: typeof r.model === "string" ? r.model : "",
+    yearFrom: typeof r.yearFrom === "number" ? r.yearFrom : 1900,
+    yearTo: typeof r.yearTo === "number" ? r.yearTo : 2100,
+  };
+}
+
+function readStored(): InventoryState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return INVENTORY;
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) return INVENTORY;
+    const merged = parsed.map(mergeStoredRow).filter((x): x is InventoryItem => x !== null);
+    return merged.length ? merged : INVENTORY;
+  } catch {
+    return INVENTORY;
+  }
+}
+
+export function InventoryProvider({ children }: { children: React.ReactNode }) {
+  const [items, _setItems] = useState<InventoryState>(INVENTORY);
+
+  useEffect(() => {
+    startTransition(() => {
+      _setItems(readStored());
+    });
+  }, []);
+
+  const setItems = useCallback((next: InventoryState) => {
+    _setItems(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  }, []);
+
+  const updateStock = useCallback((id: string, nextStock: number) => {
+    _setItems((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, stock: Math.max(0, nextStock) } : p));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const deductStock = useCallback((lines: Array<{ id: string; qty: number }>) => {
+    const byId = new Map(lines.map((l) => [l.id, l.qty]));
+    _setItems((prev) => {
+      const next = prev.map((p) => {
+        const qty = byId.get(p.id);
+        return qty ? { ...p, stock: Math.max(0, p.stock - qty) } : p;
+      });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    _setItems(INVENTORY);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(INVENTORY)); } catch {}
+  }, []);
+
+  const actions = useMemo<InventoryActions>(
+    () => ({ setItems, updateStock, deductStock, reset }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const data = useMemo<InventoryData>(() => ({ items }), [items]);
+
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <DataCtx.Provider value={data}>
+        {children}
+      </DataCtx.Provider>
+    </ActionsCtx.Provider>
+  );
+}
+
+export function useInventoryData(): InventoryData {
+  const ctx = useContext(DataCtx);
+  if (!ctx) throw new Error("useInventoryData must be used within InventoryProvider");
+  return ctx;
+}
+
+export function useInventoryActions(): InventoryActions {
+  const ctx = useContext(ActionsCtx);
+  if (!ctx) throw new Error("useInventoryActions must be used within InventoryProvider");
+  return ctx;
+}
+
+export function useInventory(): InventoryApi {
+  return { ...useInventoryData(), ...useInventoryActions() };
+}

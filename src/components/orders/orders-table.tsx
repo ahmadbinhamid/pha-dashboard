@@ -1,18 +1,18 @@
-"use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import type { Order, OrderChannel, PaymentStatus } from "@/lib/data/orders";
+import Link from "@/components/ui/link";
+import type { Order, OrderChannel, PaymentStatus } from "@/types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 import { Dialog } from "@/components/ui/dialog";
-import { useToast } from "@/components/toast/toast-provider";
+import { useToast } from "@/context";
 import { InvoiceDrawer } from "@/components/orders/invoice-drawer";
-import { useOrders } from "@/components/orders/orders-store";
+import { useOrders } from "@/context";
 
 function Status({ status }: { status: Order["status"] }) {
   switch (status) {
@@ -86,37 +86,27 @@ export function OrdersTable() {
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <select
-                    className="h-9 appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                    value={payment}
-                    onChange={(e) => setPayment(e.target.value as "" | PaymentStatus)}
-                    aria-label="Filter by payment status"
-                  >
-                    <option value="">All payments</option>
-                    <option value="paid">Paid</option>
-                    <option value="unpaid">Unpaid</option>
-                  </select>
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                    <Icons.ChevronDown />
-                  </span>
-                </div>
-                <div className="relative">
-                  <select
-                    className="h-9 appearance-none rounded-lg border border-border bg-bg px-3 pr-9 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                    value={channel}
-                    onChange={(e) => setChannel(e.target.value as "" | OrderChannel)}
-                    aria-label="Filter by channel"
-                  >
-                    <option value="">All channels</option>
-                    <option value="counter">Counter</option>
-                    <option value="web">Website</option>
-                    <option value="ebay">eBay</option>
-                  </select>
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg/50">
-                    <Icons.ChevronDown />
-                  </span>
-                </div>
+                <Select
+                  value={payment}
+                  onChange={(e) => setPayment(e.target.value as "" | PaymentStatus)}
+                  aria-label="Filter by payment status"
+                  size="sm"
+                >
+                  <option value="">All payments</option>
+                  <option value="paid">Paid</option>
+                  <option value="unpaid">Unpaid</option>
+                </Select>
+                <Select
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value as "" | OrderChannel)}
+                  aria-label="Filter by channel"
+                  size="sm"
+                >
+                  <option value="">All channels</option>
+                  <option value="counter">Counter</option>
+                  <option value="web">Website</option>
+                  <option value="ebay">eBay</option>
+                </Select>
               </div>
             <Link href="/orders/new">
               <Button size="sm">Create order</Button>

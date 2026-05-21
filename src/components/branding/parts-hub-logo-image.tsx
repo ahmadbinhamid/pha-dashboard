@@ -1,19 +1,15 @@
-"use client";
-
-import Image from "next/image";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
+import { Image } from "@/components/ui/image";
 
 export const PARTS_HUB_LOGO_PATH = "/branding/parts-hub-australia-logo.png";
 
 type Props = {
   className?: string;
-  /** Tailwind height cap, e.g. h-9, h-10, h-14 */
   sizeClass?: string;
   maxWidthClass?: string;
   priority?: boolean;
 };
 
-/** Parts Hub Australia lockup — dashboard shell, mobile nav, login. */
 export function PartsHubLogoImage({
   className,
   sizeClass = "h-12",
@@ -27,7 +23,8 @@ export function PartsHubLogoImage({
       width={1024}
       height={1024}
       priority={priority}
-      className={cn("w-auto object-contain object-center", sizeClass, maxWidthClass, className)}
+      objectFit="contain"
+      className={cn("w-auto object-center", sizeClass, maxWidthClass, className)}
     />
   );
 }

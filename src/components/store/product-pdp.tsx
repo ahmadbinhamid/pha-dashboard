@@ -1,18 +1,16 @@
-"use client";
 
-import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { getRelatedProducts } from "@/lib/store/data/catalog";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 import { ProductCard } from "@/components/store/product-card";
-import { StoreButton } from "@/components/store/ui/button";
-import { StoreInput } from "@/components/store/ui/input";
-import { useToast } from "@/components/toast/toast-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/context";
 import { Icons } from "@/components/ui/icons";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 
 type PdpTab = "overview" | "fitment" | "delivery" | "enquiry";
 
@@ -77,26 +75,22 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                             : "border-border/80 opacity-80 hover:opacity-100",
                         )}
                       >
-                        <Image src={src} alt="" fill className="object-cover" sizes="80px" />
+                        <Image src={src} alt="" fill />
                       </button>
                     ))}
                   </div>
                 ) : null}
 
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="relative min-h-[280px] flex-1 overflow-hidden rounded-xl border border-border/70 bg-bg sm:min-h-[360px] lg:aspect-square lg:min-h-0"
-                >
+                <div className="animate-fade-in relative min-h-70 flex-1 overflow-hidden rounded-xl border border-border/70 bg-bg sm:min-h-90 lg:aspect-square lg:min-h-0">
                   <Image
                     src={activeImg}
                     alt={product.name}
                     fill
-                    className="object-contain p-4 sm:p-6"
                     priority
-                    sizes="(max-width: 1024px) 100vw, 640px"
+                    objectFit="contain"
+                    className="p-4 sm:p-6"
                   />
-                </motion.div>
+                </div>
               </div>
             </div>
 
@@ -176,13 +170,13 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                       toast({ tone: "success", title: "Enquiry sent (demo)", description: "Backend email API pending." });
                     }}
                   >
-                    <StoreInput required placeholder="Your name" className="sm:col-span-2" name="name" />
-                    <StoreInput required type="email" placeholder="Email" name="email" />
-                    <StoreInput placeholder="Phone" name="phone" />
-                    <StoreInput required placeholder="Message" className="sm:col-span-2" name="message" />
-                    <StoreButton type="submit" className="sm:col-span-2">
+                    <Input required placeholder="Your name" className="sm:col-span-2" name="name" />
+                    <Input required type="email" placeholder="Email" name="email" />
+                    <Input placeholder="Phone" name="phone" />
+                    <Input required placeholder="Message" className="sm:col-span-2" name="message" />
+                    <Button type="submit" className="sm:col-span-2">
                       Submit enquiry
-                    </StoreButton>
+                    </Button>
                   </form>
                 </div>
               ) : null}
@@ -222,14 +216,14 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                   <div className="flex items-stretch gap-2">
                     <div className="flex w-28 flex-col justify-center rounded-xl border border-border bg-bg px-2 py-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-fg/50">Qty</span>
-                      <StoreInput
+                      <Input
                         value={String(qty)}
                         onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
                         className="mt-0 border-0 bg-transparent p-0 text-center text-lg font-semibold shadow-none focus-visible:ring-0"
                         inputMode="numeric"
                       />
                     </div>
-                    <StoreButton
+                    <Button
                       type="button"
                       className="min-h-[3.25rem] flex-1 text-base font-semibold"
                       disabled={!product.inStock}
@@ -242,11 +236,11 @@ export function ProductPdp({ product }: { product: StoreProduct }) {
                       }
                     >
                       Add to cart
-                    </StoreButton>
+                    </Button>
                   </div>
-                  <StoreButton asChild variant="secondary" className="w-full">
+                  <Button asChild variant="secondary" className="w-full">
                     <Link href="/parts">Continue shopping</Link>
-                  </StoreButton>
+                  </Button>
                 </div>
               </div>
             </div>

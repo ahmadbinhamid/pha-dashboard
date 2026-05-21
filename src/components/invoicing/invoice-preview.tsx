@@ -1,11 +1,11 @@
-"use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Image } from "@/components/ui/image";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
-import type { InvoiceDraft } from "@/lib/invoicing/types";
+import { formatCurrency } from "@/utils/format";
+import type { InvoiceDraft } from "@/types";
 import { splitGstIncluded } from "@/lib/invoicing/math";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
+import { useOrgSettings } from "@/context";
 
 function StatusBadge({ status }: { status: InvoiceDraft["status"] }) {
   switch (status) {
@@ -50,8 +50,7 @@ export function InvoicePreview({ draft, mode }: { draft: InvoiceDraft; mode?: "p
             {settings.abn ? <div className="mt-1 text-xs text-fg/60">ABN {settings.abn}</div> : null}
           </div>
           {settings.logoDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={settings.logoDataUrl} alt="Store logo" className="h-10 w-auto rounded-md" />
+            <Image src={settings.logoDataUrl} alt="Store logo" className="h-10 w-auto rounded-md" />
           ) : (
             <Badge variant="outline">AUD</Badge>
           )}

@@ -1,10 +1,9 @@
-"use client";
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/utils/format";
 
 const REVENUE = [
   { label: "Jan", value: 81200 },

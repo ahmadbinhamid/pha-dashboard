@@ -1,14 +1,13 @@
-"use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { useState } from "react";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
 import { Icons } from "@/components/ui/icons";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
+import { cn } from "@/utils/cn";
+import { useOrgSettings } from "@/context";
 
 function Checkbox({
   checked,

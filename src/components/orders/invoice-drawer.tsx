@@ -1,11 +1,10 @@
-"use client";
 
 import { Dialog } from "@/components/ui/dialog";
-import type { Order } from "@/lib/data/orders";
+import type { Order } from "@/types";
 import { Button } from "@/components/ui/button";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
-import { useToast } from "@/components/toast/toast-provider";
-import type { InvoiceDraft } from "@/lib/invoicing/types";
+import { useOrgSettings } from "@/context";
+import { useToast } from "@/context";
+import type { InvoiceDraft } from "@/types";
 import { InvoicePreview } from "@/components/invoicing/invoice-preview";
 
 export function InvoiceDrawer({

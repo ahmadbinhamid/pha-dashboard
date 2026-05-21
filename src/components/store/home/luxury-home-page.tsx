@@ -1,5 +1,3 @@
-"use client";
-
 import type { StoreProduct } from "@/lib/store/data/catalog";
 import { LuxuryHero } from "@/components/store/home/luxury-hero";
 import { LuxuryCategories } from "@/components/store/home/luxury-categories";

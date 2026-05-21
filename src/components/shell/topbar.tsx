@@ -1,13 +1,12 @@
-"use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/link";
 import { Suspense, useMemo, useState } from "react";
 import { Icons } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { useOrgSettings } from "@/components/settings/org-settings-provider";
-import { cn } from "@/lib/cn";
-import { useCounterCart } from "@/components/counter/counter-cart-store";
+import { useOrgSettings } from "@/context";
+import { cn } from "@/utils/cn";
+import { useCounterCartData } from "@/context";
 import { CounterCartDrawer } from "@/components/counter/counter-cart-drawer";
 import { InventorySearchDialog } from "@/components/inventory/inventory-search-dialog";
 
@@ -23,12 +22,12 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
   const initials = profileInitials(settings.displayName);
   const [cartOpen, setCartOpen] = useState(false);
   const [inventorySearchOpen, setInventorySearchOpen] = useState(false);
-  const { lines } = useCounterCart();
+  const { lines } = useCounterCartData();
   const cartCount = useMemo(() => lines.reduce((a, l) => a + l.qty, 0), [lines]);
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-border/80 bg-bg/80 backdrop-blur-xl supports-[backdrop-filter]:bg-bg/70">
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-bg/80 backdrop-blur-xl supports-backdrop-filter:bg-bg/70">
         <div
           className={cn(
             "flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-2.5",

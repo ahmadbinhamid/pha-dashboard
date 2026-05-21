@@ -1,16 +1,12 @@
-"use client";
-
-import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
+import { useState } from "react";
 import type { StoreProduct } from "@/lib/store/data/catalog";
-import { formatCurrency } from "@/lib/format";
-import { StoreButton } from "@/components/store/ui/button";
-import { StoreSkeleton } from "@/components/store/ui/skeleton";
+import { formatCurrency } from "@/utils/format";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { useToast } from "@/components/toast/toast-provider";
-import { cn } from "@/lib/cn";
+import { useToast } from "@/context";
+import { cn } from "@/utils/cn";
 
 function conditionLabel(p: StoreProduct) {
   if (p.condition === "used") return "Used";
@@ -19,66 +15,34 @@ function conditionLabel(p: StoreProduct) {
 }
 
 export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] }) {
-  const [ready, setReady] = useState(false);
   const [quickView, setQuickView] = useState<StoreProduct | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setReady(true), 280);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  if (!ready) {
-    return (
-      <section className="border-t border-white/5 bg-[#0B0F14] py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <StoreSkeleton className="mx-auto h-8 w-48" />
-          <StoreSkeleton className="mx-auto mt-3 h-4 w-96 max-w-full" />
-          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <StoreSkeleton key={i} className="h-[380px] rounded-2xl" />
-            ))}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <>
-      <section className="border-t border-white/5 bg-[#0B0F14] py-20 sm:py-24">
+      <section className="border-t border-white/5 bg-luxury-ink py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center"
-          >
+          <div className="animate-fade-slide text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">Inventory</p>
             <h2 className="mt-3 text-2xl font-bold tracking-tight text-fg sm:text-3xl">Featured parts</h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-fg/55">
               Real-world SKUs — pricing in AUD (inc. GST). ERP sync ready.
             </p>
-          </motion.div>
+          </div>
 
           <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {products.map((p, i) => (
-              <motion.article
+              <article
                 key={p.slug}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-30px" }}
-                transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.24) }}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-white/8 bg-surface-elevated transition duration-300 hover:border-accent/30 hover:shadow-glow"
+                className="animate-fade-slide group flex flex-col overflow-hidden rounded-2xl border border-white/8 bg-surface-elevated transition duration-300 hover:border-accent/30 hover:shadow-glow"
+                style={{ animationDelay: `${Math.min(i * 40, 240)}ms` }}
               >
-                <Link href={`/parts/${p.slug}`} className="relative block aspect-[4/3] overflow-hidden bg-surface">
+                <Link href={`/parts/${p.slug}`} className="relative block aspect-4/3 overflow-hidden bg-surface">
                   <Image
                     src={p.image}
                     alt={p.name}
                     fill
-                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                    sizes="(max-width:1024px) 50vw, 25vw"
+                    className="transition duration-500 group-hover:scale-[1.03]"
                   />
                   <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                     <span
@@ -117,21 +81,17 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                     <span className="text-[10px] text-fg/40">inc. GST</span>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <StoreButton
+                    <Button
                       type="button"
                       size="sm"
                       className="flex-1"
                       onClick={() =>
-                        toast({
-                          tone: "default",
-                          title: "Added to cart (demo)",
-                          description: p.name,
-                        })
+                        toast({ tone: "default", title: "Added to cart (demo)", description: p.name })
                       }
                     >
                       Add to cart
-                    </StoreButton>
-                    <StoreButton
+                    </Button>
+                    <Button
                       type="button"
                       variant="outline"
                       size="sm"
@@ -139,10 +99,10 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
                       onClick={() => setQuickView(p)}
                     >
                       Quick view
-                    </StoreButton>
+                    </Button>
                   </div>
                 </div>
-              </motion.article>
+              </article>
             ))}
           </div>
         </div>
@@ -157,14 +117,14 @@ export function LuxuryFeaturedProducts({ products }: { products: StoreProduct[] 
         {quickView ? (
           <div className="space-y-4">
             <div className="relative aspect-video overflow-hidden rounded-xl bg-surface">
-              <Image src={quickView.image} alt="" fill className="object-cover" />
+              <Image src={quickView.image} alt="" fill />
             </div>
             <p className="font-mono text-xs text-fg/50">{quickView.sku}</p>
             <p className="text-2xl font-bold">{formatCurrency(quickView.priceAud, "AUD")}</p>
-            <p className="text-sm text-fg/65 line-clamp-4">{quickView.description}</p>
-            <StoreButton asChild className="w-full">
+            <p className="line-clamp-4 text-sm text-fg/65">{quickView.description}</p>
+            <Button asChild className="w-full">
               <Link href={`/parts/${quickView.slug}`}>View full details</Link>
-            </StoreButton>
+            </Button>
           </div>
         ) : null}
       </Dialog>

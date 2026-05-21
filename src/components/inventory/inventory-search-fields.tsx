@@ -1,9 +1,9 @@
-"use client";
 
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Icons } from "@/components/ui/icons";
 import { MAKES } from "@/lib/store/data/catalog";
-import type { EbayFilter, InventorySearchQuery } from "@/lib/inventory-list-url";
+import type { EbayFilter, InventorySearchQuery } from "@/config/inventory-filters";
 
 type Props = {
   value: InventorySearchQuery;
@@ -42,18 +42,12 @@ export function InventorySearchFields({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Make</label>
-          <select
-            className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            value={value.make}
-            onChange={(e) => onChange({ make: e.target.value })}
-          >
+          <Select value={value.make} onChange={(e) => onChange({ make: e.target.value })}>
             <option value="">Any make</option>
             {MAKES.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
+              <option key={m} value={m}>{m}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Model</label>
@@ -76,32 +70,22 @@ export function InventorySearchFields({
         </div>
         <div>
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">Category</label>
-          <select
-            className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            value={value.category}
-            onChange={(e) => onChange({ category: e.target.value })}
-          >
+          <Select value={value.category} onChange={(e) => onChange({ category: e.target.value })}>
             <option value="">All categories</option>
             {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg/50">eBay status</label>
-          <select
-            className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            value={value.ebay}
-            onChange={(e) => onChange({ ebay: e.target.value as EbayFilter })}
-          >
+          <Select value={value.ebay} onChange={(e) => onChange({ ebay: e.target.value as EbayFilter })}>
             <option value="all">All</option>
             <option value="synced">Synced</option>
             <option value="pending">Pending</option>
             <option value="error">Error</option>
             <option value="not_listed">Not listed</option>
-          </select>
+          </Select>
         </div>
       </div>
     </div>

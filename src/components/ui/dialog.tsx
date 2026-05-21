@@ -1,7 +1,6 @@
-"use client";
 
 import { useEffect } from "react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/utils/cn";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 

@@ -1,13 +1,12 @@
-"use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/hooks";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { useInventory } from "@/components/inventory/inventory-store";
-import { buildInventoryListUrl, type InventorySearchQuery } from "@/lib/inventory-list-url";
+import { useInventoryData } from "@/context";
+import { buildInventoryListUrl, type InventorySearchQuery } from "@/config/inventory-filters";
 import { InventorySearchFields } from "@/components/inventory/inventory-search-fields";
 
 const EMPTY: InventorySearchQuery = {
@@ -21,7 +20,7 @@ const EMPTY: InventorySearchQuery = {
 
 export function DashboardCounterSearch() {
   const router = useRouter();
-  const { items: inventory } = useInventory();
+  const { items: inventory } = useInventoryData();
 
   const [form, setForm] = useState<InventorySearchQuery>(EMPTY);
 

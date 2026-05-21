@@ -1,11 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KPIS } from "@/lib/data/dashboard";
-import { formatCompactNumber } from "@/lib/format";
+import { formatCompactNumber } from "@/utils/format";
 
 export function KpiCards() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-grid sm:grid-cols-2 xl:grid-cols-4">
       {KPIS.map((kpi) => (
         <Card key={kpi.label}>
           <CardContent className="flex items-start justify-between gap-4">

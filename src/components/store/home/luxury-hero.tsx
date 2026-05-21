@@ -1,11 +1,9 @@
-"use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/ui/link";
+import { Image } from "@/components/ui/image";
+import { useRouter } from "@/hooks";
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { StoreButton } from "@/components/store/ui/button";
+import { Button } from "@/components/ui/button";
 import { LuxurySelect } from "@/components/store/home/luxury-select";
 import { VEHICLE_SEARCH } from "@/lib/store/data/home-mock";
 
@@ -47,22 +45,16 @@ export function LuxuryHero() {
         alt=""
         fill
         priority
-        className="object-cover object-center"
-        sizes="100vw"
+        className="object-center"
       />
       <div
-        className="absolute inset-0 bg-gradient-to-t from-[#0B0F14] via-[#0B0F14]/85 to-[#0B0F14]/55"
+        className="absolute inset-0 bg-linear-to-t from-luxury-ink via-luxury-ink/85 to-luxury-ink/55"
         aria-hidden
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0B0F14]/90 via-transparent to-[#0B0F14]/70" aria-hidden />
+      <div className="absolute inset-0 bg-linear-to-r from-luxury-ink/90 via-transparent to-luxury-ink/70" aria-hidden />
 
       <div className="relative z-10 mx-auto flex min-h-[85svh] max-w-6xl flex-col justify-center px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-[max(6.5rem,env(safe-area-inset-top))] sm:min-h-[88svh] sm:px-6 sm:pb-20 sm:pt-28 lg:px-8 lg:pb-28 lg:pt-32">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto max-w-4xl text-center"
-        >
+        <div className="mx-auto max-w-4xl animate-fade-slide text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-gold">
             Parts Hub Australia
           </p>
@@ -75,10 +67,10 @@ export function LuxuryHero() {
           </p>
 
           <div className="mt-8 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:max-w-none sm:flex-row sm:items-center sm:justify-center sm:gap-4">
-            <StoreButton asChild size="lg" className="min-h-12 w-full min-w-0 px-6 sm:min-w-[180px] sm:max-w-[280px]">
+            <Button asChild size="lg" className="min-h-12 w-full min-w-0 px-6 sm:min-w-[180px] sm:max-w-[280px]">
               <Link href="/parts">Shop parts</Link>
-            </StoreButton>
-            <StoreButton
+            </Button>
+            <Button
               type="button"
               variant="outline"
               size="lg"
@@ -86,18 +78,16 @@ export function LuxuryHero() {
               onClick={scrollToVehicle}
             >
               Search by vehicle
-            </StoreButton>
+            </Button>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
+        <div
           id="vehicle-search"
-          initial={{ opacity: 0, y: 28 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.65, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto mt-14 w-full max-w-5xl"
+          className="mx-auto mt-14 w-full max-w-5xl animate-fade-slide"
+          style={{ animationDelay: "120ms" }}
         >
-          <div className="rounded-2xl border border-white/10 bg-[#111823]/85 p-4 shadow-glow backdrop-blur-xl sm:p-6">
+          <div className="rounded-2xl border border-white/10 bg-luxury-panel/85 p-4 shadow-glow backdrop-blur-xl sm:p-6">
             <p className="mb-4 text-center text-xs font-medium uppercase tracking-widest text-fg/50">
               Find parts for your vehicle
             </p>
@@ -126,7 +116,7 @@ export function LuxuryHero() {
               />
             </div>
             <div className="mt-4 flex justify-center">
-              <StoreButton
+              <Button
                 type="button"
                 size="lg"
                 className="min-w-[200px]"
@@ -140,10 +130,10 @@ export function LuxuryHero() {
                 }}
               >
                 Search catalogue
-              </StoreButton>
+              </Button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
