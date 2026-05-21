@@ -1,0 +1,60 @@
+// middlewares/auth.js
+
+const { unauthorized, forbidden } = require("../utils/response");
+const { verifyJwt } = require("../utils/jwt");
+const User = require("../models/User");
+const { userRole } = require("../config/textConstants");
+
+// extract token from Authorization: Bearer <token> or 'auth-token'
+function extractToken(req) {
+  const h = req.headers.authorization || "";
+  if (h.startsWith("Bearer ")) return h.slice(7).trim();
+  const t = req.header("auth-token");
+  if (t) return t.trim();
+  return null;
+}
+
+// Authenticate: verifies token, loads user, attaches to req.user and req.auth
+const auth =
+  (required = true) =>
+  async (req, res, next) => {
+    try {
+      const token = extractToken(req);
+      if (!token)
+        return required ? unauthorized(res, "Missing Bearer token") : next();
+
+      let decoded;
+      try {
+        decoded = verifyJwt(token); // { sub, role, iat, exp, ... }
+      } catch {
+        return unauthorized(res, "Invalid or expired token");
+      }
+
+      // soft-delete plugin hides deleted users by default
+      const user = await User.findById(decoded.sub).select("-password");
+      if (!user) return forbidden(res, "Account not found or disabled");
+
+      req.auth = decoded;
+      req.user = user;
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+
+// Role guard: allow if req.user.role is in allowed
+const requireRoles =
+  (...allowed) =>
+  (req, res, next) => {
+    const role = req.user?.role;
+    if (!role) return unauthorized(res, "Unauthorized");
+    if (!allowed.includes(role)) return forbidden(res, "Forbidden");
+    return next();
+  };
+
+// Shorthands
+const superadmin = requireRoles(userRole.superadmin);
+const admin = requireRoles(userRole.admin, userRole.superadmin);
+const user = requireRoles(userRole.user, userRole.admin, userRole.superadmin);
+
+module.exports = { auth, requireRoles, superadmin, admin, user };
