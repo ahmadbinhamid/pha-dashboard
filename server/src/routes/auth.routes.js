@@ -6,7 +6,7 @@ const upload = multer();
 
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
-const { auth } = require("../middlewares/auth");
+const { auth, superadmin } = require("../middlewares/auth");
 const V = require("../validators/auth.validation");
 const ctrl = require("../controllers/auth.controller");
 
@@ -65,6 +65,7 @@ router.use(auth());
 router.post(
   "/verify-account",
   upload.none(),
+  superadmin,
   validate(V.verifyAccount),
   asyncHandler(ctrl.verifyAccount)
 );

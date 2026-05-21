@@ -20,11 +20,20 @@ const app = express();
 // Core middlewares
 app.use(requestId);
 app.use(helmet());
+const allowedOrigins = config.cors.allowedOrigins;
 app.use(
   cors({
-    origin: "*", // allow everything
+    origin:
+      allowedOrigins.length > 0
+        ? (origin, cb) => {
+            // Allow requests with no origin (curl, mobile apps, server-to-server)
+            if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+            cb(new Error(`CORS: origin ${origin} not allowed`));
+          }
+        : true, // dev fallback: allow all
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 app.use(express.json({ limit: "1mb" }));
@@ -38,7 +47,7 @@ app.use(requestLogger);
 app.use("/api/v1", routes);
 
 const spec = YAML.parse(
-  fs.readFileSync(path.join(__dirname, "openapi.yaml"), "utf8")
+  fs.readFileSync(path.join(__dirname, "../docs/openapi.yaml"), "utf8")
 );
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(spec));

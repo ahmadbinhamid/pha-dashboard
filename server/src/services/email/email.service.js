@@ -1,27 +1,8 @@
 const { enqueueEmailJob } = require("../../queues/email.queue");
 const config = require("../../config");
 
-// Utility to build the default FROM string
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
-
-/**
-
-/**
- * Forgot Password
- */
-async function forgotPassword({ to, name, resetURL }) {
-  return enqueueEmailJob({
-    from: defaultFrom(),
-    to,
-    subject: `Reset your password - ${config.emailBrand.appName}`,
-    template: "forgotPassword",
-    variables: {
-      name,
-      reset_url: resetURL, // signed link you generate elsewhere
-    },
-  });
-}
 
 /**
  * Send OTP for Login Verification
@@ -73,9 +54,4 @@ async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   });
 }
 
-module.exports = {
-  forgotPassword,
-  sendOTP,
-  accountVerified,
-  sendPasswordReset,
-};
+module.exports = { sendOTP, accountVerified, sendPasswordReset };

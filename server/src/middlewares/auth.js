@@ -3,7 +3,8 @@
 const { unauthorized, forbidden } = require("../utils/response");
 const { verifyJwt } = require("../utils/jwt");
 const User = require("../models/User");
-const { userRole } = require("../config/textConstants");
+
+const ROLES = { superadmin: "superadmin", admin: "admin", user: "user" };
 
 // extract token from Authorization: Bearer <token> or 'auth-token'
 function extractToken(req) {
@@ -53,8 +54,8 @@ const requireRoles =
   };
 
 // Shorthands
-const superadmin = requireRoles(userRole.superadmin);
-const admin = requireRoles(userRole.admin, userRole.superadmin);
-const user = requireRoles(userRole.user, userRole.admin, userRole.superadmin);
+const superadmin = requireRoles(ROLES.superadmin);
+const admin = requireRoles(ROLES.admin, ROLES.superadmin);
+const user = requireRoles(ROLES.user, ROLES.admin, ROLES.superadmin);
 
 module.exports = { auth, requireRoles, superadmin, admin, user };

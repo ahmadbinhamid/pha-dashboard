@@ -9,11 +9,10 @@ const userSchema = buildSchema({
   last_name: { type: String, required: true, trim: true },
   email: {
     type: String,
-    index: true,
     required: true,
     lowercase: true,
     trim: true,
-  }, // unique via partial index below
+  }, // uniqueness enforced via partial index below (soft-delete compatible)
 
   phone: {
     type: String,
@@ -30,17 +29,18 @@ const userSchema = buildSchema({
   },
   status: {
     type: Number,
-    default: false,
+    default: 0,
   },
   verified_at: {
     type: Date,
     default: null,
   },
-  OTP: {
+  otp: {
     type: String,
     default: null,
+    select: false,
   },
-  OTP_expiry: {
+  otp_expiry: {
     type: Date,
     default: null,
   },

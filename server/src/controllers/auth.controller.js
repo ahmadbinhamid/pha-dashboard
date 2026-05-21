@@ -12,6 +12,7 @@ const {
   generateOTP,
   generateOTPExpiry,
   isOTPExpired,
+  hashOTP,
 } = require("../utils/otp");
 const {
   generateResetToken,
@@ -34,8 +35,7 @@ const {
 // register
 exports.register = async (req, res) => {
   try {
-    const { first_name, last_name, email, password, phone, role } =
-      req.body || {};
+    const { first_name, last_name, email, password, role } = req.body || {};
 
     // Check if user with this email already exists
     const existingUserByEmail = await User.findOne({ email });
@@ -52,8 +52,6 @@ exports.register = async (req, res) => {
       role: role || "user",
       status: 0,
       verified_at: null,
-      OTP: null,
-      OTP_expiry: null,
     });
 
     await user.save();
@@ -96,18 +94,12 @@ exports.login = async (req, res) => {
     const otp = generateOTP();
     const otpExpiry = generateOTPExpiry();
 
-    // Save OTP and expiry to user
-    user.OTP = otp;
-    user.OTP_expiry = otpExpiry;
+    user.otp = hashOTP(otp);
+    user.otp_expiry = otpExpiry;
     await user.save();
 
-    // Send OTP via email
     const fullName = `${user.first_name} ${user.last_name}`.trim();
-    await sendOTP({
-      to: user.email,
-      name: fullName,
-      otp: otp,
-    });
+    await sendOTP({ to: user.email, name: fullName, otp });
 
     return success(
       res,
@@ -124,31 +116,26 @@ exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body || {};
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+otp +otp_expiry");
     if (!user) return unauthorized(res, "Invalid email");
 
-    // Check if OTP exists
-    if (!user.OTP) {
+    if (!user.otp) {
       return unauthorized(res, "No OTP found. Please request a new OTP.");
     }
 
-    // Check if OTP has expired
-    if (isOTPExpired(user.OTP_expiry)) {
-      // Clear expired OTP
-      user.OTP = null;
-      user.OTP_expiry = null;
+    if (isOTPExpired(user.otp_expiry)) {
+      user.otp = null;
+      user.otp_expiry = null;
       await user.save();
       return unauthorized(res, "OTP has expired. Please request a new OTP.");
     }
 
-    // Check if OTP matches
-    if (user.OTP !== otp) {
+    if (hashOTP(otp) !== user.otp) {
       return unauthorized(res, "Invalid OTP");
     }
 
-    // Clear OTP after successful verification
-    user.OTP = null;
-    user.OTP_expiry = null;
+    user.otp = null;
+    user.otp_expiry = null;
     await user.save();
 
     const fullName = `${user.first_name} ${user.last_name}`.trim();
@@ -172,12 +159,6 @@ exports.verifyOTP = async (req, res) => {
 exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
-    const currentUser = req.user;
-
-    // Only superadmin can perform this action
-    if (!currentUser || currentUser.role !== "superadmin") {
-      return unauthorized(res, "Only superadmins can verify accounts");
-    }
 
     const user = await User.findOne({ email });
     if (!user) return unauthorized(res, "Invalid email");
@@ -352,7 +333,7 @@ exports.changePassword = async (req, res) => {
 // resend OTP for login
 exports.resendOTP = async (req, res) => {
   try {
-    const { email, status } = req.body || {};
+    const { email } = req.body || {};
 
     const user = await User.findOne({ email });
     if (!user) return unauthorized(res, "Invalid email");
@@ -368,16 +349,12 @@ exports.resendOTP = async (req, res) => {
     const otp = generateOTP();
     const otpExpiry = generateOTPExpiry();
 
-    user.OTP = otp;
-    user.OTP_expiry = otpExpiry;
+    user.otp = hashOTP(otp);
+    user.otp_expiry = otpExpiry;
     await user.save();
 
     const fullName = `${user.first_name} ${user.last_name}`.trim();
-    await sendOTP({
-      to: user.email,
-      name: fullName,
-      otp: otp,
-    });
+    await sendOTP({ to: user.email, name: fullName, otp });
 
     return success(
       res,

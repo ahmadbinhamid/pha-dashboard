@@ -1,13 +1,7 @@
 // controllers/user.controller.js
 
 const User = require("../models/User");
-const {
-  success,
-  notFound,
-  unauthorized,
-  systemfailure,
-  badRequest,
-} = require("../utils/response");
+const { success, notFound, unauthorized, systemfailure } = require("../utils/response");
 
 // READ (active only)
 exports.getUsers = async (req, res) => {
@@ -56,9 +50,6 @@ exports.updateUser = async (req, res) => {
     const id = req.user?._id || req.user?.sub;
 
     const { first_name, last_name } = req.body;
-    if (!first_name || !last_name) {
-      return badRequest(res, "First name and last name are required");
-    }
 
     const user = await User.findByIdAndUpdate(
       id,
@@ -66,25 +57,8 @@ exports.updateUser = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    if (!user) {
-      return notFound(res, "User not found");
-    }
+    if (!user) return notFound(res, "User not found");
 
-    // res.json({
-    //   status: "success",
-    //   message: "User name updated successfully",
-    //   data: {
-    //     id: user._id,
-    //     first_name: user.first_name,
-    //     last_name: user.last_name,
-    //     email: user.email
-    //   }
-    // });
-
-    // if (!doc) return notFound(res, "User not found");
-    // await doc.softDelete();
-    // const out = doc.toObject();
-    // delete out.password;
     return success(res, user, "User name updated successfully");
   } catch (err) {
     return systemfailure(res, err);

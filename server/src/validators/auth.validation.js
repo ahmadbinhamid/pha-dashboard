@@ -26,7 +26,7 @@ const register = {
     last_name: Joi.string().trim().min(1).max(50).required(),
     email: Joi.string().trim().lowercase().email().required(),
     password: Joi.string().min(6).max(128).required(),
-    role: Joi.string().valid("user", "admin", "superadmin").default("user"),
+    role: Joi.string().valid("user", "admin").default("user"),
   }),
 };
 
@@ -49,7 +49,7 @@ const resendOTP = {
 const verifyAccount = {
   body: Joi.object({
     email: Joi.string().trim().lowercase().email().required(),
-    status: Joi.number().valid(0, 1, 2).optional(),
+    status: Joi.number().valid(0, 1).required(),
   }),
 };
 

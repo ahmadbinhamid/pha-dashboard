@@ -6,12 +6,12 @@ const upload = multer(); // parses multipart/form-data (no files) into req.body
 
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
-const { auth, admin } = require("../middlewares/auth");
+const { auth } = require("../middlewares/auth");
 const pagination = require("../middlewares/pagination");
 const V = require("../validators/user.validation");
 const ctrl = require("../controllers/user.controller");
 
-// auth middleware(for protected routes)
+// All routes below require authentication
 router.use(auth());
 
 // get all users
@@ -22,13 +22,13 @@ router.get(
   asyncHandler(ctrl.getUsers)
 );
 
-// current user's profile
-router.put("/", upload.none(), auth(), asyncHandler(ctrl.updateUser));
+// update current user's profile
+router.put("/", upload.none(), validate(V.updateUser), asyncHandler(ctrl.updateUser));
 
-// current user's profile
-router.get("/profile", auth(), asyncHandler(ctrl.getProfile));
+// get current user's profile
+router.get("/profile", asyncHandler(ctrl.getProfile));
 
-// delete user
+// delete user (soft)
 router.delete("/:id", validate(V.byIdParam), asyncHandler(ctrl.deleteUser));
 
 module.exports = router;

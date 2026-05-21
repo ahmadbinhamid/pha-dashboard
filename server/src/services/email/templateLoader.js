@@ -9,7 +9,7 @@ function loadTemplates() {
   if (compiled) return compiled;
 
   // register partials
-  const partialsDir = path.join(__dirname, "../../emailTemplates/partials");
+  const partialsDir = path.join(__dirname, "templates/partials");
   const partialFiles = fs.readdirSync(partialsDir);
   partialFiles.forEach((file) => {
     if (!file.endsWith(".hbs")) return;
@@ -19,7 +19,7 @@ function loadTemplates() {
   });
 
   // compile templates
-  const templatesDir = path.join(__dirname, "../../emailTemplates");
+  const templatesDir = path.join(__dirname, "templates");
   const map = {};
   fs.readdirSync(templatesDir).forEach((file) => {
     if (!file.endsWith(".hbs")) return;

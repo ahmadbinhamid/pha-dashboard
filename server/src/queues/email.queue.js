@@ -7,7 +7,11 @@ const redisUrl =
   config.redis.url || `redis://${config.redis.host}:${config.redis.port}`;
 const emailQueue = new Queue("email", redisUrl);
 
-emailQueue.on("error", (err) => console.error("[emailQueue] error", err));
+// Suppress noisy Redis connection errors in dev — the queue retries automatically
+emailQueue.on("error", (err) => {
+  if (err.code === "ECONNREFUSED") return; // Redis not running; silenced in dev
+  console.error("[emailQueue] error", err);
+});
 
 async function enqueueEmailJob(payload, opts = {}) {
   // Don’t block the route forever waiting for Redis
