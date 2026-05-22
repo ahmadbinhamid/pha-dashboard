@@ -3,31 +3,35 @@
 const Queue = require("bull");
 const config = require("../config");
 
-const redisUrl =
-  config.redis.url || `redis://${config.redis.host}:${config.redis.port}`;
-const emailQueue = new Queue("email", redisUrl);
+const redisOpts = {
+  ...(config.redis.url
+    ? { url: config.redis.url }
+    : { host: config.redis.host, port: config.redis.port }),
+  maxRetriesPerRequest: 1,
+  connectTimeout: 3000,
+};
 
-// Suppress noisy Redis connection errors in dev — the queue retries automatically
+const emailQueue = new Queue("email", { redis: redisOpts });
+
 emailQueue.on("error", (err) => {
-  if (err.code === "ECONNREFUSED") return; // Redis not running; silenced in dev
+  if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") return;
   console.error("[emailQueue] error", err);
 });
 
 async function enqueueEmailJob(payload, opts = {}) {
-  // Don’t block the route forever waiting for Redis
-  const ready = emailQueue.isReady();
-  const timeout = new Promise((_, rej) =>
-    setTimeout(() => rej(new Error("emailQueue not ready (timeout)")), 2000)
-  );
-  await Promise.race([ready, timeout]);
-
-  return emailQueue.add("send", payload, {
+  const job = emailQueue.add("send", payload, {
     attempts: 5,
     backoff: { type: "exponential", delay: 1000 },
     removeOnComplete: true,
     timeout: 30000,
     ...opts,
   });
+
+  // Fail fast if Redis is unreachable — don't block the request for 97s
+  const deadline = new Promise((_, rej) =>
+    setTimeout(() => rej(new Error("Email queue unavailable: Redis not reachable")), 4000)
+  );
+  return Promise.race([job, deadline]);
 }
 
 module.exports = { emailQueue, enqueueEmailJob };
