@@ -1,6 +1,6 @@
-
 import Link from "@/components/ui/link";
 import { Suspense, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icons } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { cn } from "@/utils/cn";
 import { useCounterCartData } from "@/context";
 import { CounterCartDrawer } from "@/components/counter/counter-cart-drawer";
 import { InventorySearchDialog } from "@/components/inventory/inventory-search-dialog";
+import { useAuth } from "@/context/auth";
 
 function profileInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -23,7 +24,17 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [inventorySearchOpen, setInventorySearchOpen] = useState(false);
   const { lines } = useCounterCartData();
-  const cartCount = useMemo(() => lines.reduce((a, l) => a + l.qty, 0), [lines]);
+  const cartCount = useMemo(
+    () => lines.reduce((a, l) => a + l.qty, 0),
+    [lines],
+  );
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleSignOut() {
+    logout();
+    navigate("/login", { replace: true });
+  }
 
   return (
     <>
@@ -56,7 +67,9 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               onClick={() => setInventorySearchOpen(true)}
             >
               <Icons.Search className="h-4 w-4 shrink-0 text-fg/50" />
-              <span className="truncate text-left text-sm">Search inventory, make, model, year…</span>
+              <span className="truncate text-left text-sm">
+                Search inventory, make, model, year…
+              </span>
             </Button>
           </div>
 
@@ -99,23 +112,28 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
                   {initials}
                 </span>
               </Link>
-              <span className="mx-0.5 hidden h-6 w-px bg-border/70 sm:block" aria-hidden />
+              <span
+                className="mx-0.5 hidden h-6 w-px bg-border/70 sm:block"
+                aria-hidden
+              />
               <div className="flex items-center pr-0.5">
                 <ThemeToggle />
               </div>
             </div>
-            <Link href="/login" className="ml-1 flex shrink-0" aria-label="Sign out" title="Sign out">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-9 w-9 rounded-lg p-0 sm:w-auto sm:px-3 sm:text-xs sm:font-semibold"
-              >
-                <span className="sm:hidden" aria-hidden>
-                  <Icons.ArrowRight className="h-4 w-4 rotate-180" />
-                </span>
-                <span className="hidden sm:inline">Sign out</span>
-              </Button>
-            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="ml-1 h-9 w-9 shrink-0 rounded-lg p-0 sm:w-auto sm:px-3 sm:text-xs sm:font-semibold"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <span className="sm:hidden" aria-hidden>
+                <Icons.ArrowRight className="h-4 w-4 rotate-180" />
+              </span>
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
           </div>
         </div>
       </header>
@@ -123,7 +141,10 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
       <CounterCartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
 
       <Suspense fallback={null}>
-        <InventorySearchDialog open={inventorySearchOpen} onClose={() => setInventorySearchOpen(false)} />
+        <InventorySearchDialog
+          open={inventorySearchOpen}
+          onClose={() => setInventorySearchOpen(false)}
+        />
       </Suspense>
     </>
   );
