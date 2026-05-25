@@ -1,7 +1,7 @@
 // middlewares/auth.js
 
-const { unauthorized, forbidden } = require("../utils/response");
-const { verifyJwt } = require("../utils/jwt");
+const { unauthorized, forbidden } = require("../utils/http/response");
+const { verifyJwt } = require("../utils/auth/jwt");
 const User = require("../models/User");
 
 const ROLES = { superadmin: "superadmin", admin: "admin", user: "user" };

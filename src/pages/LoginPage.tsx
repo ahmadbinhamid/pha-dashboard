@@ -2,7 +2,7 @@ import { LoginCard } from "@/components/auth/login-card";
 
 export default function LoginPage() {
   return (
-    <main className="relative min-h-[100dvh] overflow-x-clip overflow-y-auto bg-bg">
+    <main className="relative min-h-dvh overflow-x-clip overflow-y-auto bg-bg">
       <div
         className="pointer-events-none absolute inset-0 opacity-80"
         aria-hidden="true"

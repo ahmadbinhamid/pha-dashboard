@@ -1,7 +1,7 @@
 // middlewares/validate.js
 
 const Joi = require("joi");
-const { badRequest } = require("../utils/response");
+const { badRequest } = require("../utils/http/response");
 
 // Usage: validate({ body: Joi.object(...), params: Joi.object(...), query: Joi.object(...) })
 module.exports = (schemas = {}, options = {}) => {

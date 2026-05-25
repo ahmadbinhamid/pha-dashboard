@@ -5,7 +5,7 @@ const {
   badRequest,
   requestConflict,
   requestfailure,
-} = require("../utils/response");
+} = require("../utils/http/response");
 
 module.exports = (err, req, res, _next) => {
   // Mongoose / Mongo error mapping

@@ -1,19 +1,7 @@
-// controllers/auth.controller.js
-
 const User = require("../models/User");
-const { comparePassword } = require("../utils/crypto");
-const { signJwt } = require("../utils/jwt");
-const {
-  sendOTP,
-  accountVerified,
-  sendPasswordReset,
-} = require("../services/email/email.service");
-const {
-  generateOTP,
-  generateOTPExpiry,
-  isOTPExpired,
-  hashOTP,
-} = require("../utils/otp");
+const { comparePassword } = require("../utils/auth/crypto");
+const { signJwt } = require("../utils/auth/jwt");
+const { generateOTP, generateOTPExpiry, isOTPExpired, hashOTP } = require("../utils/auth/otp");
 const {
   generateResetToken,
   generateResetTokenExpiry,
@@ -22,28 +10,20 @@ const {
   createResetUrl,
   hashResetToken,
   verifyResetToken,
-} = require("../utils/passwordReset");
+} = require("../utils/auth/passwordReset");
+const { success, badRequest, unauthorized, systemfailure, requestConflict } = require("../utils/http/response");
+const { sendOTP, accountVerified, sendPasswordReset } = require("../services/email/email.service");
+const { toPublicUser } = require("../utils/user");
 const config = require("../config");
-const {
-  success,
-  badRequest,
-  unauthorized,
-  systemfailure,
-  requestConflict,
-} = require("../utils/response");
 
-// register
 exports.register = async (req, res) => {
   try {
     const { first_name, last_name, email, password, role } = req.body || {};
 
-    // Check if user with this email already exists
-    const existingUserByEmail = await User.findOne({ email });
-    if (existingUserByEmail) {
+    const existing = await User.findOne({ email });
+    if (existing)
       return requestConflict(res, "User with this email already exists");
-    }
 
-    // Create new user
     const user = new User({
       first_name,
       last_name,
@@ -56,62 +36,54 @@ exports.register = async (req, res) => {
 
     await user.save();
 
-    // Return user data without password
-    const userData = user.toObject();
-    delete userData.password;
-
     return success(
       res,
-      userData,
-      "Registration successful. Your account requires admin verification before you can log in."
+      toPublicUser(user),
+      "Registration successful. Your account requires admin verification before you can log in.",
     );
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
-// login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
-    // password has select:false in schema -> include it explicitly
     const user = await User.findOne({ email }).select("+password");
     if (!user) return unauthorized(res, "Invalid email or password");
 
     const ok = await comparePassword(password, user.password);
     if (!ok) return unauthorized(res, "Invalid email or password");
 
-    // Check if user is verified
-    if (user.status != 1) {
+    if (user.status !== 1) {
       return unauthorized(
         res,
-        "Account not verified. Please verify your account first."
+        "Account not verified. Please contact your administrator.",
       );
     }
 
-    // Generate OTP for login verification
     const otp = generateOTP();
-    const otpExpiry = generateOTPExpiry();
-
     user.otp = hashOTP(otp);
-    user.otp_expiry = otpExpiry;
+    user.otp_expiry = generateOTPExpiry();
     await user.save();
 
-    const fullName = `${user.first_name} ${user.last_name}`.trim();
-    await sendOTP({ to: user.email, name: fullName, otp });
+    await sendOTP({
+      to: user.email,
+      name: `${user.first_name} ${user.last_name}`.trim(),
+      otp,
+    });
 
     return success(
       res,
       { email: user.email },
-      "OTP sent to your email. Please verify to complete login."
+      "OTP sent to your email. Please verify to complete login.",
     );
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
-// verify OTP for login
 exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body || {};
@@ -138,24 +110,19 @@ exports.verifyOTP = async (req, res) => {
     user.otp_expiry = null;
     await user.save();
 
-    const fullName = `${user.first_name} ${user.last_name}`.trim();
-
     const token = signJwt({
       sub: user._id.toString(),
       role: user.role,
       email: user.email,
-      name: fullName,
+      name: `${user.first_name} ${user.last_name}`.trim(),
     });
-    const out = user.toObject();
-    delete out.password;
 
-    return success(res, out, "Login successful", token);
+    return success(res, toPublicUser(user), "Login successful", token);
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
-// verify account (for initial account verification) - Superadmin only
 exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
@@ -163,19 +130,14 @@ exports.verifyAccount = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return unauthorized(res, "Invalid email");
 
-    // Update fields
     user.status = status;
     user.verified_at = status === 1 ? new Date() : null;
-
     await user.save();
-
-    // Send notification email
-    const fullName = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
 
     if (status === 1) {
       await accountVerified({
         to: user.email,
-        name: fullName,
+        name: `${user.first_name} ${user.last_name}`.trim(),
         verifiedDate: user.verified_at.toLocaleDateString("en-US", {
           year: "numeric",
           month: "long",
@@ -186,84 +148,66 @@ exports.verifyAccount = async (req, res) => {
       });
     }
 
-    const out = user.toObject();
-    delete out.password;
-
     const msg =
       status === 1
         ? "Account verified successfully"
         : "Account marked as not verified";
-    return success(res, out, msg);
+    return success(res, toPublicUser(user), msg);
   } catch (err) {
     return systemfailure(res, err);
   }
 };
-// forgot password
+
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body || {};
 
     const user = await User.findOne({ email });
     if (!user) {
-      // Don't reveal if email exists or not for security
       return success(
         res,
         null,
-        "If an account with that email exists, a password reset link has been sent."
+        "If an account with that email exists, a password reset link has been sent.",
       );
     }
 
-    // Check if user is verified
-    if (user.status != 1) {
+    if (user.status !== 1) {
       return badRequest(
         res,
-        "Account not verified. Please verify your account first."
+        "Account not verified. Please contact your administrator.",
       );
     }
 
-    // Generate reset token and expiry
     const resetToken = generateResetToken();
-    const tokenExpiry = generateResetTokenExpiry();
-    const hashedToken = hashResetToken(resetToken);
-
-    // Save reset token to user (include password_reset_token explicitly)
-    user.password_reset_token = hashedToken;
-    user.password_reset_expiry = tokenExpiry;
+    user.password_reset_token = hashResetToken(resetToken);
+    user.password_reset_expiry = generateResetTokenExpiry();
     await user.save();
 
-    // Create reset URL
-    const resetUrl = createResetUrl(resetToken);
-
-    // Send password reset email
-    const fullName = `${user.first_name} ${user.last_name}`.trim();
     await sendPasswordReset({
       to: user.email,
-      name: fullName,
-      resetUrl: resetUrl,
+      name: `${user.first_name} ${user.last_name}`.trim(),
+      resetUrl: createResetUrl(resetToken),
       expiryMinutes: config.passwordReset.expiryMinutes,
     });
 
     return success(
       res,
       null,
-      "If an account with that email exists, a password reset link has been sent."
+      "If an account with that email exists, a password reset link has been sent.",
     );
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
-// reset password
 exports.resetPassword = async (req, res) => {
   try {
     const { token, new_password } = req.body || {};
 
-    // Validate token format
     if (!isValidResetTokenFormat(token)) {
       return badRequest(res, "Invalid or expired reset token.");
     }
 
-    // Find user with reset token (include password_reset_token explicitly)
     const user = await User.findOne({
       password_reset_token: hashResetToken(token),
     }).select("+password_reset_token");
@@ -272,57 +216,50 @@ exports.resetPassword = async (req, res) => {
       return badRequest(res, "Invalid or expired reset token.");
     }
 
-    // Check if token has expired
     if (isResetTokenExpired(user.password_reset_expiry)) {
-      // Clear expired token
       user.password_reset_token = null;
       user.password_reset_expiry = null;
       await user.save();
       return badRequest(
         res,
-        "Reset token has expired. Please request a new password reset."
+        "Reset token has expired. Please request a new password reset.",
       );
     }
 
-    // Verify token matches
     if (!verifyResetToken(token, user.password_reset_token)) {
       return badRequest(res, "Invalid or expired reset token.");
     }
 
-    // Update password and clear reset token
     user.password = new_password;
     user.password_reset_token = null;
     user.password_reset_expiry = null;
-    await user.save(); // This will trigger password hashing via pre('save') hook
+    await user.save();
 
     return success(
       res,
       null,
-      "Password reset successfully. You can now login with your new password."
+      "Password reset successfully. You can now log in with your new password.",
     );
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
-// POST /auth/change-password (self)
 exports.changePassword = async (req, res) => {
   try {
     const { current_password, new_password } = req.body || {};
-    const userId = req.user?._id; // set by auth()
+    const userId = req.user?._id;
 
     if (!userId) return unauthorized(res, "Unauthorized");
 
-    // need the hash -> include password explicitly
     const user = await User.findById(userId).select("+password");
     if (!user) return unauthorized(res, "Unauthorized");
 
     const ok = await comparePassword(current_password, user.password);
     if (!ok) return unauthorized(res, "Current password is incorrect");
 
-    // <<< IMPORTANT: use save() to trigger pre('save') hashing
     user.password = new_password;
-    await user.save(); // will hash via your pre('save') hook
+    await user.save();
 
     return success(res, null, "Password changed");
   } catch (err) {
@@ -330,7 +267,6 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-// resend OTP for login
 exports.resendOTP = async (req, res) => {
   try {
     const { email } = req.body || {};
@@ -338,29 +274,25 @@ exports.resendOTP = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return unauthorized(res, "Invalid email");
 
-    // Only allow resend for verified accounts (login OTP flow)
-    if (user.status != 1) {
+    if (user.status !== 1) {
       return unauthorized(
         res,
-        "Account not verified. Please verify your account first."
+        "Account not verified. Please contact your administrator.",
       );
     }
 
     const otp = generateOTP();
-    const otpExpiry = generateOTPExpiry();
-
     user.otp = hashOTP(otp);
-    user.otp_expiry = otpExpiry;
+    user.otp_expiry = generateOTPExpiry();
     await user.save();
 
-    const fullName = `${user.first_name} ${user.last_name}`.trim();
-    await sendOTP({ to: user.email, name: fullName, otp });
+    await sendOTP({
+      to: user.email,
+      name: `${user.first_name} ${user.last_name}`.trim(),
+      otp,
+    });
 
-    return success(
-      res,
-      { email: user.email },
-      "OTP resent to your email. Please verify to complete login."
-    );
+    return success(res, { email: user.email }, "OTP resent to your email.");
   } catch (err) {
     return systemfailure(res, err);
   }

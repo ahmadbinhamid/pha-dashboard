@@ -2,7 +2,7 @@
 
 const { Server } = require("socket.io");
 const { logger } = require("../loaders/logging");
-const { verifyJwt } = require("../utils/jwt");
+const { verifyJwt } = require("../utils/auth/jwt");
 
 let io = null;
 

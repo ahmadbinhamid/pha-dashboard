@@ -2,7 +2,7 @@
 const { model } = require("mongoose");
 const { buildSchema } = require("./base.model");
 const passwordHashingPlugin = require("./plugins/passwordHashing.plugin");
-const { hashPassword } = require("../utils/crypto");
+const { hashPassword } = require("../utils/auth/crypto");
 
 const userSchema = buildSchema({
   first_name: { type: String, required: true, trim: true },
