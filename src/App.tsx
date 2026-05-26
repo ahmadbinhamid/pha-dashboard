@@ -13,7 +13,11 @@ import LoginPage from "@/pages/LoginPage";
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
+import InventorySettingsPage from "@/pages/erp/InventorySettingsPage";
 import InventoryNewPage from "@/pages/erp/InventoryNewPage";
+import ProductsPage from "@/pages/erp/ProductsPage";
+import ProductCreatePage from "@/pages/erp/ProductCreatePage";
+import ProductEditPage from "@/pages/erp/ProductEditPage";
 import InventoryBundlesPage from "@/pages/erp/InventoryBundlesPage";
 import ProductPage from "@/pages/erp/ProductPage";
 import OrdersPage from "@/pages/erp/OrdersPage";
@@ -62,11 +66,15 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/inventory/settings" element={<InventorySettingsPage />} />
             <Route path="/inventory/new" element={<InventoryNewPage />} />
             <Route
               path="/inventory/bundles"
               element={<InventoryBundlesPage />}
             />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/products/new" element={<ProductCreatePage />} />
+            <Route path="/products/:slug/edit" element={<ProductEditPage />} />
             <Route path="/products/:id" element={<ProductPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/new" element={<OrdersNewPage />} />
