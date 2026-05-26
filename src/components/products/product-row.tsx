@@ -61,13 +61,13 @@ export function ProductRow({ product, onClick }: ProductRowProps) {
         </div>
       </td>
       <td className="px-4 py-3">
-        <Badge variant={product.status === 1 ? "ok" : "muted"}>
-          {product.status === 1 ? "Active" : "Draft"}
+        <Badge variant={product.status === "active" ? "ok" : "muted"}>
+          {product.status === "active" ? "Active" : "Draft"}
         </Badge>
       </td>
       <td className="px-4 py-3">
         <Badge variant="default">
-          {product.type === 2 ? "Digital" : "Physical"}
+          {product.type === "digital" ? "Digital" : "Physical"}
         </Badge>
       </td>
       <td className="px-4 py-3 text-right font-medium tabular-nums">

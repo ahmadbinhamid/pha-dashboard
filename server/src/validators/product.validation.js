@@ -13,10 +13,10 @@ const createProduct = {
       "any.required": "Title is required",
     }),
     description: Joi.string().allow("").default(""),
-    type: Joi.number()
+    type: Joi.string()
       .valid(...Object.values(PRODUCT_TYPE))
       .default(PRODUCT_TYPE.PHYSICAL),
-    status: Joi.number()
+    status: Joi.string()
       .valid(...Object.values(PRODUCT_STATUS))
       .default(PRODUCT_STATUS.DRAFT),
     is_published_online: Joi.boolean().default(false),
@@ -51,8 +51,8 @@ const updateProduct = {
   body: Joi.object({
     title: Joi.string().trim().min(1),
     description: Joi.string().allow(""),
-    type: Joi.number().valid(...Object.values(PRODUCT_TYPE)),
-    status: Joi.number().valid(...Object.values(PRODUCT_STATUS)),
+    type: Joi.string().valid(...Object.values(PRODUCT_TYPE)),
+    status: Joi.string().valid(...Object.values(PRODUCT_STATUS)),
     is_published_online: Joi.boolean(),
     price: Joi.number().min(0),
     compare_price: Joi.number().min(0).allow(null),
@@ -104,11 +104,11 @@ const listProducts = {
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().allow("").default(""),
     status: Joi.string()
-      .valid(...Object.values(PRODUCT_STATUS).map(String), "")
+      .valid(...Object.values(PRODUCT_STATUS), "")
       .default(""),
     categories: Joi.string().allow("").default(""),
     type: Joi.string()
-      .valid(...Object.values(PRODUCT_TYPE).map(String), "")
+      .valid(...Object.values(PRODUCT_TYPE), "")
       .default(""),
   }),
 };

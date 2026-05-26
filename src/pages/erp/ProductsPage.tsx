@@ -11,8 +11,8 @@ import { Plus, Search, Package, ChevronLeft, ChevronRight } from "lucide-react";
 
 const STATUS_FILTERS = [
   { label: "All", value: "" },
-  { label: "Active", value: "1" },
-  { label: "Draft", value: "0" },
+  { label: "Active", value: "active" },
+  { label: "Draft", value: "draft" },
 ];
 
 export default function ProductsPage() {

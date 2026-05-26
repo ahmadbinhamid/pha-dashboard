@@ -1,5 +1,5 @@
-export type ProductType = 1 | 2; // 1=physical, 2=digital
-export type ProductStatus = 0 | 1; // 0=draft, 1=active
+export type ProductType = "physical" | "digital";
+export type ProductStatus = "draft" | "active";
 export type EbaySyncStatus = "not_listed" | "pending" | "synced" | "error";
 
 export interface Attachment {
@@ -95,8 +95,8 @@ export interface ProductCreateFormState {
   cost_price: string;
   is_taxable: boolean;
   vat_rate: string;
-  type: "1" | "2";
-  status: "0" | "1";
+  type: ProductType;
+  status: ProductStatus;
   is_published_online: boolean;
   categories: string[];
   tags: string;
@@ -115,8 +115,8 @@ export interface ProductEditFormState {
   sku: string;
   barcode: string;
   brand: string;
-  type: "1" | "2";
-  status: "0" | "1";
+  type: ProductType;
+  status: ProductStatus;
   is_published_online: boolean;
   stock_control: boolean;
   has_variants: boolean;

@@ -14,9 +14,11 @@ const listInventory = {
 
 const adjustStock = {
   body: Joi.object({
-    adjustment: Joi.number().required().messages({
+    adjustment: Joi.number().integer().not(0).required().messages({
       "any.required": "Adjustment value is required",
       "number.base": "Adjustment must be a number",
+      "number.integer": "Adjustment must be a whole number",
+      "any.invalid": "Adjustment cannot be zero",
     }),
     reason: Joi.string().allow("", null).default(null),
     type: Joi.string()

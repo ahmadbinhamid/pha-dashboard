@@ -26,9 +26,30 @@ const inventoryHistorySchema = buildSchema(
       ref: "Location",
       required: true,
     },
-    adjustment: { type: Number, required: true },
-    stock_before: { type: Number, required: true },
-    stock_after: { type: Number, required: true },
+    adjustment: {
+      type: Number,
+      required: true,
+      validate: {
+        validator: Number.isInteger,
+        message: "adjustment must be a whole number",
+      },
+    },
+    stock_before: {
+      type: Number,
+      required: true,
+      validate: {
+        validator: Number.isInteger,
+        message: "stock_before must be a whole number",
+      },
+    },
+    stock_after: {
+      type: Number,
+      required: true,
+      validate: {
+        validator: Number.isInteger,
+        message: "stock_after must be a whole number",
+      },
+    },
     reason: { type: String, default: null },
     type: {
       type: String,

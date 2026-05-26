@@ -5,6 +5,9 @@ const { buildSchema } = require("./base.model");
 
 const inventorySettingsSchema = buildSchema(
   {
+    // Singleton sentinel — DB-level unique index prevents a second document
+    key: { type: String, default: "global", immutable: true },
+
     low_stock_threshold: { type: Number, default: 10 },
     email_notifications: { type: Boolean, default: false },
     notification_email: { type: String, default: null },
@@ -13,12 +16,16 @@ const inventorySettingsSchema = buildSchema(
   { softDelete: false },
 );
 
+// Unique index on `key` — DB refuses a second document at the storage layer
+inventorySettingsSchema.index({ key: 1 }, { unique: true });
+
 inventorySettingsSchema.statics.getOrCreate = async function () {
-  let settings = await this.findOne({});
-  if (!settings) {
-    settings = await this.create({});
-  }
-  return settings;
+  // findOneAndUpdate with upsert is atomic — no race condition
+  return this.findOneAndUpdate(
+    { key: "global" },
+    { $setOnInsert: { key: "global" } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
 };
 
 module.exports = model("InventorySettings", inventorySettingsSchema);

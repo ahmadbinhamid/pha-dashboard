@@ -52,6 +52,9 @@ const productSchema = buildSchema({
     ref: "Attachment",
     default: null,
   },
+  // TODO(marketplace): these eBay fields should move to a separate
+  // MarketplaceListing collection when adding Amazon/Shopify/Daraz etc.
+  // Schema: { product, variant, platform, listing_id, sync_status, synced_at }
   ebay_listing_id: { type: String, default: null },
   ebay_sync_status: {
     type: String,

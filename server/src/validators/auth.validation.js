@@ -1,6 +1,7 @@
 // validators/auth.validation.js
 
 const Joi = require("joi");
+const { USER_STATUS } = require("../constants/user.constants");
 
 const login = {
   body: Joi.object({
@@ -49,7 +50,7 @@ const resendOTP = {
 const verifyAccount = {
   body: Joi.object({
     email: Joi.string().trim().lowercase().email().required(),
-    status: Joi.number().valid(0, 1).required(),
+    status: Joi.string().valid(...Object.values(USER_STATUS)).required(),
   }),
 };
 

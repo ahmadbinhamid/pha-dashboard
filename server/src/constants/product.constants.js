@@ -1,13 +1,13 @@
 // constants/product.constants.js
 
 const PRODUCT_TYPE = Object.freeze({
-  PHYSICAL: 1,
-  DIGITAL: 2,
+  PHYSICAL: "physical",
+  DIGITAL: "digital",
 });
 
 const PRODUCT_STATUS = Object.freeze({
-  DRAFT: 0,
-  ACTIVE: 1,
+  DRAFT: "draft",
+  ACTIVE: "active",
 });
 
 const EBAY_SYNC_STATUS = Object.freeze({

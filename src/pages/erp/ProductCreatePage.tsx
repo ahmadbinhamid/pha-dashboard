@@ -8,7 +8,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ProductImages } from "@/components/media/product-images";
 import { useToast } from "@/context";
 import { createProduct, getCategories } from "@/lib/api/products";
-import type { Category, ProductCreateFormState } from "@/types/product";
+import type { Category, ProductCreateFormState, ProductType, ProductStatus } from "@/types/product";
 import { ArrowLeft } from "lucide-react";
 
 const INITIAL: ProductCreateFormState = {
@@ -19,8 +19,8 @@ const INITIAL: ProductCreateFormState = {
   cost_price: "",
   is_taxable: false,
   vat_rate: "",
-  type: "1",
-  status: "0",
+  type: "physical",
+  status: "draft",
   is_published_online: false,
   categories: [],
   tags: "",
@@ -226,13 +226,13 @@ export default function ProductCreatePage() {
                 </label>
                 <div className="flex gap-2">
                   {[
-                    { value: "1", label: "Physical" },
-                    { value: "2", label: "Digital" },
+                    { value: "physical", label: "Physical" },
+                    { value: "digital", label: "Digital" },
                   ].map((opt) => (
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => set("type", opt.value as "1" | "2")}
+                      onClick={() => set("type", opt.value as ProductType)}
                       className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
                         form.type === opt.value
                           ? "border-accent bg-accent/10 text-accent"
@@ -250,11 +250,11 @@ export default function ProductCreatePage() {
                 </label>
                 <select
                   value={form.status}
-                  onChange={(e) => set("status", e.target.value as "0" | "1")}
+                  onChange={(e) => set("status", e.target.value as ProductStatus)}
                   className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-bg"
                 >
-                  <option value="0">Draft</option>
-                  <option value="1">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
                 </select>
               </div>
               <label className="flex items-center gap-2 text-sm text-fg/80">

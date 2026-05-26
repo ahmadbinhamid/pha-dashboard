@@ -32,6 +32,7 @@ const productVariantSchema = buildSchema({
     ref: "Attachment",
     default: null,
   },
+  // TODO(marketplace): same as Product — move to MarketplaceListing collection
   ebay_listing_id: { type: String, default: null },
   ebay_sync_status: {
     type: String,
