@@ -2,6 +2,11 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const {
+  PRODUCT_TYPE,
+  PRODUCT_STATUS,
+  EBAY_SYNC_STATUS,
+} = require("../constants/product.constants");
 
 const choiceSchema = new Schema(
   {
@@ -17,13 +22,13 @@ const productSchema = buildSchema({
   description: { type: String, default: "" },
   type: {
     type: Number,
-    enum: [1, 2], // 1=physical, 2=digital
-    default: 1,
+    enum: Object.values(PRODUCT_TYPE),
+    default: PRODUCT_TYPE.PHYSICAL,
   },
   status: {
     type: Number,
-    enum: [0, 1], // 0=draft, 1=active
-    default: 0,
+    enum: Object.values(PRODUCT_STATUS),
+    default: PRODUCT_STATUS.DRAFT,
   },
   is_published_online: { type: Boolean, default: false },
   price: { type: Number, default: 0 },
@@ -50,8 +55,8 @@ const productSchema = buildSchema({
   ebay_listing_id: { type: String, default: null },
   ebay_sync_status: {
     type: String,
-    enum: ["not_listed", "pending", "synced", "error"],
-    default: "not_listed",
+    enum: Object.values(EBAY_SYNC_STATUS),
+    default: EBAY_SYNC_STATUS.NOT_LISTED,
   },
   ebay_synced_at: { type: Date, default: null },
 });

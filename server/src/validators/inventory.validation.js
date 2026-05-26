@@ -1,6 +1,7 @@
 // validators/inventory.validation.js
 
 const Joi = require("joi");
+const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 const listInventory = {
   query: Joi.object({
@@ -19,17 +20,8 @@ const adjustStock = {
     }),
     reason: Joi.string().allow("", null).default(null),
     type: Joi.string()
-      .valid(
-        "restock",
-        "damaged",
-        "lost",
-        "stolen",
-        "correction",
-        "transfer_in",
-        "transfer_out",
-        "other",
-      )
-      .default("other"),
+      .valid(...Object.values(ADJUSTMENT_TYPE))
+      .default(ADJUSTMENT_TYPE.OTHER),
   }),
 };
 

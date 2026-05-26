@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { EBAY_SYNC_STATUS } = require("../constants/product.constants");
 
 const combinationSchema = new Schema(
   {
@@ -34,8 +35,8 @@ const productVariantSchema = buildSchema({
   ebay_listing_id: { type: String, default: null },
   ebay_sync_status: {
     type: String,
-    enum: ["not_listed", "pending", "synced", "error"],
-    default: "not_listed",
+    enum: Object.values(EBAY_SYNC_STATUS),
+    default: EBAY_SYNC_STATUS.NOT_LISTED,
   },
 });
 

@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 const inventoryHistorySchema = buildSchema(
   {
@@ -31,17 +32,8 @@ const inventoryHistorySchema = buildSchema(
     reason: { type: String, default: null },
     type: {
       type: String,
-      enum: [
-        "restock",
-        "damaged",
-        "lost",
-        "stolen",
-        "correction",
-        "transfer_in",
-        "transfer_out",
-        "other",
-      ],
-      default: "other",
+      enum: Object.values(ADJUSTMENT_TYPE),
+      default: ADJUSTMENT_TYPE.OTHER,
     },
     user: {
       type: Schema.Types.ObjectId,
@@ -49,7 +41,7 @@ const inventoryHistorySchema = buildSchema(
       default: null,
     },
   },
-  { softDelete: false }
+  { softDelete: false },
 );
 
 module.exports = model("InventoryHistory", inventoryHistorySchema);

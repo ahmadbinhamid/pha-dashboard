@@ -8,7 +8,9 @@
       "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/app.js)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|js\\)$\")",
       "Bash(rm /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils/response.js \\\\ *)",
-      "Bash(grep -n '`\\\\${user\\\\.' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/controllers/auth.controller.js)"
+      "Bash(grep -n '`\\\\${user\\\\.' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/controllers/auth.controller.js)",
+      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[product\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/product.service.js)",
+      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[inventory\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/inventory.service.js)"
     ],
     "additionalDirectories": [
       "/home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils"

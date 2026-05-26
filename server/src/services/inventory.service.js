@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const Inventory = require("../models/Inventory");
 const ProductVariant = require("../models/ProductVariant");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { logger } = require("../loaders/logging");
 
 async function listInventory({ page = 1, limit = 20, search, location } = {}) {
   const skip = (page - 1) * limit;
@@ -104,7 +105,9 @@ async function syncInventoryToEbay(sku, quantity) {
   try {
     await enqueueEbayJob("update_inventory", { sku, quantity });
   } catch (qErr) {
-    console.warn("[inventory.service] eBay queue unavailable:", qErr.message);
+    logger.warn("[inventory.service] eBay queue unavailable", {
+      error: qErr.message,
+    });
   }
 }
 

@@ -4,6 +4,7 @@ const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { logger } = require("../loaders/logging");
 
 function cartesian(arrays) {
   if (!arrays || arrays.length === 0) return [[]];
@@ -82,7 +83,9 @@ async function syncProductToEbay(product, variants = []) {
       variants: variants.map((v) => (v.toObject ? v.toObject() : v)),
     });
   } catch (qErr) {
-    console.warn("[product.service] eBay queue unavailable:", qErr.message);
+    logger.warn("[product.service] eBay queue unavailable", {
+      error: qErr.message,
+    });
   }
 }
 
@@ -90,7 +93,9 @@ async function deleteProductFromEbay(sku) {
   try {
     await enqueueEbayJob("delete_product", { sku });
   } catch (qErr) {
-    console.warn("[product.service] eBay queue unavailable:", qErr.message);
+    logger.warn("[product.service] eBay queue unavailable", {
+      error: qErr.message,
+    });
   }
 }
 

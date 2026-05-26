@@ -1,8 +1,10 @@
 // models/User.js
+
 const { model } = require("mongoose");
 const { buildSchema } = require("./base.model");
 const passwordHashingPlugin = require("./plugins/passwordHashing.plugin");
 const { hashPassword } = require("../utils/auth/crypto");
+const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
 const userSchema = buildSchema({
   first_name: { type: String, required: true, trim: true },
@@ -12,7 +14,7 @@ const userSchema = buildSchema({
     required: true,
     lowercase: true,
     trim: true,
-  }, // uniqueness enforced via partial index below (soft-delete compatible)
+  },
 
   phone: {
     type: String,
@@ -24,12 +26,13 @@ const userSchema = buildSchema({
   profile_image: { type: String, default: null },
   role: {
     type: String,
-    enum: ["user", "admin", "superadmin"],
-    default: "user",
+    enum: Object.values(USER_ROLE),
+    default: USER_ROLE.USER,
   },
   status: {
     type: Number,
-    default: 0,
+    enum: Object.values(USER_STATUS),
+    default: USER_STATUS.INACTIVE,
   },
   verified_at: {
     type: Date,
@@ -47,7 +50,7 @@ const userSchema = buildSchema({
   password_reset_token: {
     type: String,
     default: null,
-    select: false, // Don't include in queries by default for security
+    select: false,
   },
   password_reset_expiry: {
     type: Date,
@@ -55,18 +58,15 @@ const userSchema = buildSchema({
   },
 });
 
-// Virtual
 userSchema.virtual("full_name").get(function () {
   return `${this.first_name} ${this.last_name}`.trim();
 });
 
-// Enforce uniqueness among active users only (works with soft delete)
 userSchema.index(
   { email: 1 },
-  { unique: true, partialFilterExpression: { deleted_at: null } }
+  { unique: true, partialFilterExpression: { deleted_at: null } },
 );
 
-// Hash password
 userSchema.plugin(passwordHashingPlugin, {
   field: "password",
   hash: hashPassword,

@@ -29,6 +29,7 @@ const {
   sendPasswordReset,
 } = require("../services/email/email.service");
 const { toPublicUser, fullName } = require("../utils/user");
+const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 const config = require("../config");
 
 exports.register = async (req, res) => {
@@ -44,8 +45,8 @@ exports.register = async (req, res) => {
       last_name,
       email,
       password,
-      role: role || "user",
-      status: 0,
+      role: role || USER_ROLE.USER,
+      status: USER_STATUS.INACTIVE,
       verified_at: null,
     });
 
@@ -71,7 +72,7 @@ exports.login = async (req, res) => {
     const ok = await comparePassword(password, user.password);
     if (!ok) return unauthorized(res, "Invalid email or password");
 
-    if (user.status !== 1) {
+    if (user.status !== USER_STATUS.ACTIVE) {
       return unauthorized(
         res,
         "Account not verified. Please contact your administrator.",
@@ -146,10 +147,10 @@ exports.verifyAccount = async (req, res) => {
     if (!user) return unauthorized(res, "Invalid email");
 
     user.status = status;
-    user.verified_at = status === 1 ? new Date() : null;
+    user.verified_at = status === USER_STATUS.ACTIVE ? new Date() : null;
     await user.save();
 
-    if (status === 1) {
+    if (status === USER_STATUS.ACTIVE) {
       await accountVerified({
         to: user.email,
         name: fullName(user),
@@ -164,7 +165,7 @@ exports.verifyAccount = async (req, res) => {
     }
 
     const msg =
-      status === 1
+      status === USER_STATUS.ACTIVE
         ? "Account verified successfully"
         : "Account marked as not verified";
     return success(res, toPublicUser(user), msg);
@@ -186,7 +187,7 @@ exports.forgotPassword = async (req, res) => {
       );
     }
 
-    if (user.status !== 1) {
+    if (user.status !== USER_STATUS.ACTIVE) {
       return badRequest(
         res,
         "Account not verified. Please contact your administrator.",
@@ -289,7 +290,7 @@ exports.resendOTP = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return unauthorized(res, "Invalid email");
 
-    if (user.status !== 1) {
+    if (user.status !== USER_STATUS.ACTIVE) {
       return unauthorized(
         res,
         "Account not verified. Please contact your administrator.",

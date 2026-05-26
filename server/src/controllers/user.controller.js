@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const { success, notFound, unauthorized, systemfailure } = require("../utils/http/response");
 const { PUBLIC_SELECT } = require("../utils/user");
+const { USER_STATUS } = require("../constants/user.constants");
 
 exports.getUsers = async (req, res) => {
   try {
@@ -8,8 +9,8 @@ exports.getUsers = async (req, res) => {
     const { status } = req.query || {};
 
     const filter = {};
-    if (status == 1) filter.status = 1;
-    if (status == 0) filter.status = 0;
+    if (status == USER_STATUS.ACTIVE) filter.status = USER_STATUS.ACTIVE;
+    if (status == USER_STATUS.INACTIVE) filter.status = USER_STATUS.INACTIVE;
 
     const [items, total] = await Promise.all([
       User.find(filter).select(PUBLIC_SELECT).skip(skip).limit(limit).sort({ created_at: -1 }),

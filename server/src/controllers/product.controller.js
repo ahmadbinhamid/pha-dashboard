@@ -15,6 +15,11 @@ const {
   toBool,
 } = require("../utils/formData");
 const {
+  PRODUCT_TYPE,
+  PRODUCT_STATUS,
+  EBAY_SYNC_STATUS,
+} = require("../constants/product.constants");
+const {
   success,
   created,
   notFound,
@@ -125,8 +130,8 @@ exports.createProduct = async (req, res) => {
       title,
       slug,
       description: description || "",
-      type: type !== undefined ? Number(type) : 1,
-      status: status !== undefined ? Number(status) : 0,
+      type: type !== undefined ? Number(type) : PRODUCT_TYPE.PHYSICAL,
+      status: status !== undefined ? Number(status) : PRODUCT_STATUS.DRAFT,
       is_published_online: toBool(is_published_online),
       price: price !== undefined ? Number(price) : 0,
       compare_price: compare_price ? Number(compare_price) : null,
@@ -159,7 +164,7 @@ exports.createProduct = async (req, res) => {
     }
 
     // eBay sync (non-blocking)
-    if (product.status === 1 && product.is_published_online) {
+    if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
       const variants = product.has_variants
         ? await ProductVariant.find({ product: product._id })
         : [];
@@ -273,7 +278,7 @@ exports.updateProduct = async (req, res) => {
     }
 
     // eBay sync (non-blocking)
-    if (product.status === 1 && product.is_published_online) {
+    if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
       const variants = product.has_variants
         ? await ProductVariant.find({ product: product._id })
         : [];
@@ -297,7 +302,7 @@ exports.deleteProduct = async (req, res) => {
     const sku = product.sku || `ph-${product._id}`;
     await product.softDelete();
 
-    if (product.ebay_sync_status !== "not_listed") {
+    if (product.ebay_sync_status !== EBAY_SYNC_STATUS.NOT_LISTED) {
       await deleteProductFromEbay(sku);
     }
 
@@ -322,7 +327,7 @@ exports.duplicateProduct = async (req, res) => {
       slug,
       description: original.description,
       type: original.type,
-      status: 0,
+      status: PRODUCT_STATUS.DRAFT,
       is_published_online: false,
       price: original.price,
       compare_price: original.compare_price,
@@ -340,7 +345,7 @@ exports.duplicateProduct = async (req, res) => {
       tags: original.tags,
       choices: original.choices,
       digital_file: original.digital_file,
-      ebay_sync_status: "not_listed",
+      ebay_sync_status: EBAY_SYNC_STATUS.NOT_LISTED,
     });
 
     if (clone.has_variants && clone.choices.length > 0) {

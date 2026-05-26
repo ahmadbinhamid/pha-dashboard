@@ -1,10 +1,7 @@
-// middlewares/notfound.js
+// middlewares/notFound.js
+
+const { notFound } = require("../utils/http/response");
 
 module.exports = (req, res) => {
-  res.status(404).json({
-    status: "Fail",
-    systemfailure: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-    data: null,
-  });
+  notFound(res, `Route not found: ${req.method} ${req.originalUrl}`);
 };
