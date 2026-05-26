@@ -2,6 +2,7 @@
 
 const Queue = require("bull");
 const config = require("../config");
+const { logger } = require("../loaders/logging");
 
 const redisOpts = {
   ...(config.redis.url
@@ -15,7 +16,7 @@ const ebayQueue = new Queue("ebay", { redis: redisOpts });
 
 ebayQueue.on("error", (err) => {
   if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") return;
-  console.error("[ebayQueue] error", err);
+  logger.error("[ebayQueue] unexpected error", { error: err.message, stack: err.stack });
 });
 
 async function enqueueEbayJob(type, payload, opts = {}) {

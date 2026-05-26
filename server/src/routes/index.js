@@ -1,13 +1,10 @@
 // routes/index.js
 
 const router = require("express").Router();
+const { success } = require("../utils/http/response");
 
 router.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "Success",
-    message: "OK",
-    data: { uptime: process.uptime() },
-  });
+  success(res, { uptime: process.uptime() }, "OK");
 });
 
 router.use("/auth", require("./auth.routes"));

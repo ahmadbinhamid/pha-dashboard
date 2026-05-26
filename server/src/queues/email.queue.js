@@ -2,6 +2,7 @@
 
 const Queue = require("bull");
 const config = require("../config");
+const { logger } = require("../loaders/logging");
 
 const redisOpts = {
   ...(config.redis.url
@@ -15,7 +16,7 @@ const emailQueue = new Queue("email", { redis: redisOpts });
 
 emailQueue.on("error", (err) => {
   if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") return;
-  console.error("[emailQueue] error", err);
+  logger.error("[emailQueue] unexpected error", { error: err.message, stack: err.stack });
 });
 
 async function enqueueEmailJob(payload, opts = {}) {
