@@ -2,6 +2,8 @@
 
 require("dotenv").config();
 
+const path = require("path");
+
 const get = (key, def) => process.env[key] ?? def;
 const getNum = (key, def) => {
   const v = process.env[key];
@@ -58,6 +60,20 @@ const config = {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+  },
+
+  uploads: {
+    // Resolve relative to this file so the path is stable regardless of where node is invoked from
+    dir: get("UPLOADS_DIR", path.join(__dirname, "../../uploads")),
+    url: get("UPLOADS_URL", "http://localhost:7000/uploads"),
+  },
+
+  ebay: {
+    clientId: get("EBAY_CLIENT_ID", null),
+    clientSecret: get("EBAY_CLIENT_SECRET", null),
+    refreshToken: get("EBAY_REFRESH_TOKEN", null),
+    marketplaceId: get("EBAY_MARKETPLACE_ID", "EBAY_AU"),
+    sandbox: get("EBAY_SANDBOX", "false") === "true",
   },
 };
 

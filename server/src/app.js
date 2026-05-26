@@ -40,6 +40,13 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
+// Serve uploaded files
+// Override helmet's same-origin CORP so the FE (different port) can load images
+app.use("/uploads", (_req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(config.uploads.dir));
+
 // Auto logging (request/response)
 app.use(requestLogger);
 

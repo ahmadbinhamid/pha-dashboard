@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/routes/product.routes.js)",
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/config/index.js)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:7000/uploads/cd527e99-1cc9-4918-9b29-508e78029fb8.png)",
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/app.js)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|js\\)$\")",
+      "Bash(rm /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils/response.js \\\\ *)"
+    ],
+    "additionalDirectories": [
+      "/home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils"
+    ]
+  }
+}

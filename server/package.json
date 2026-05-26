@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "worker:email": "node src/workers/email.worker.js",
-    "seed:superadmin": "node scripts/seedSuperAdmin.js"
+    "worker:ebay": "node src/workers/ebay.worker.js",
+    "seed:superadmin": "node scripts/seedSuperAdmin.js",
+    "seed:categories": "node scripts/seedCategories.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
