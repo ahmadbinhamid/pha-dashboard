@@ -2,11 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
-
-export interface Choice {
-  name: string;
-  items: string[];
-}
+import type { Choice } from "@/types/product";
 
 interface ChoicesEditorProps {
   choices: Choice[];

@@ -19,38 +19,15 @@ import {
   getCategories,
 } from "@/lib/api/products";
 import type {
-  Attachment,
   Category,
   Product,
   ProductVariant,
+  ProductEditFormState,
 } from "@/types/product";
-import type { Choice } from "@/components/products/choices-editor";
+
 import { ArrowLeft, Copy } from "lucide-react";
 
-interface FormState {
-  title: string;
-  description: string;
-  price: string;
-  compare_price: string;
-  cost_price: string;
-  is_taxable: boolean;
-  is_vat_inclusive: boolean;
-  vat_rate: string;
-  sku: string;
-  barcode: string;
-  brand: string;
-  type: "1" | "2";
-  status: "0" | "1";
-  is_published_online: boolean;
-  stock_control: boolean;
-  has_variants: boolean;
-  categories: string[];
-  tags: string;
-  images: Attachment[];
-  choices: Choice[];
-}
-
-function productToForm(p: Product): FormState {
+function productToForm(p: Product): ProductEditFormState {
   return {
     title: p.title,
     description: p.description,
@@ -75,7 +52,7 @@ function productToForm(p: Product): FormState {
   };
 }
 
-function formToFD(form: FormState): FormData {
+function formToFD(form: ProductEditFormState): FormData {
   const fd = new FormData();
   fd.append("title", form.title.trim());
   fd.append("description", form.description);
@@ -124,7 +101,7 @@ export default function ProductEditPage() {
   });
   const product = productData?.data;
 
-  const [form, setForm] = useState<FormState | null>(null);
+  const [form, setForm] = useState<ProductEditFormState | null>(null);
   const [setStockDialog, setSetStockDialog] = useState<{
     inventoryId: string;
     stock: number;
@@ -180,8 +157,10 @@ export default function ProductEditPage() {
     },
   });
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => (prev ? { ...prev, [key]: value } : null));
+  const set = <K extends keyof ProductEditFormState>(
+    key: K,
+    value: ProductEditFormState[K],
+  ) => setForm((prev) => (prev ? { ...prev, [key]: value } : null));
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();

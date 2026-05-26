@@ -8,26 +8,10 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ProductImages } from "@/components/media/product-images";
 import { useToast } from "@/context";
 import { createProduct, getCategories } from "@/lib/api/products";
-import type { Attachment, Category } from "@/types/product";
+import type { Category, ProductCreateFormState } from "@/types/product";
 import { ArrowLeft } from "lucide-react";
 
-interface FormState {
-  title: string;
-  description: string;
-  price: string;
-  compare_price: string;
-  cost_price: string;
-  is_taxable: boolean;
-  vat_rate: string;
-  type: "1" | "2";
-  status: "0" | "1";
-  is_published_online: boolean;
-  categories: string[];
-  tags: string;
-  images: Attachment[];
-}
-
-const INITIAL: FormState = {
+const INITIAL: ProductCreateFormState = {
   title: "",
   description: "",
   price: "",
@@ -43,7 +27,7 @@ const INITIAL: FormState = {
   images: [],
 };
 
-function formToFD(form: FormState): FormData {
+function formToFD(form: ProductCreateFormState): FormData {
   const fd = new FormData();
   fd.append("title", form.title.trim());
   fd.append("description", form.description);
@@ -75,7 +59,7 @@ function formToFD(form: FormState): FormData {
 export default function ProductCreatePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [form, setForm] = useState<FormState>(INITIAL);
+  const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
 
   const { data: catData } = useQuery({
     queryKey: ["categories"],
@@ -99,8 +83,10 @@ export default function ProductCreatePage() {
     },
   });
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const set = <K extends keyof ProductCreateFormState>(
+    key: K,
+    value: ProductCreateFormState[K],
+  ) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

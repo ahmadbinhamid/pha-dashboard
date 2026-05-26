@@ -31,6 +31,11 @@ export interface Location {
   is_active: boolean;
 }
 
+export interface Choice {
+  name: string;
+  items: string[];
+}
+
 export interface ProductVariant {
   _id: string;
   id: string;
@@ -73,11 +78,50 @@ export interface Product {
   categories: Category[];
   tags: string[];
   related_products: Product[];
-  choices: Array<{ name: string; items: string[] }>;
+  choices: Choice[];
   digital_file: Attachment | null;
   ebay_listing_id: string | null;
   ebay_sync_status: EbaySyncStatus;
   ebay_synced_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProductCreateFormState {
+  title: string;
+  description: string;
+  price: string;
+  compare_price: string;
+  cost_price: string;
+  is_taxable: boolean;
+  vat_rate: string;
+  type: "1" | "2";
+  status: "0" | "1";
+  is_published_online: boolean;
+  categories: string[];
+  tags: string;
+  images: Attachment[];
+}
+
+export interface ProductEditFormState {
+  title: string;
+  description: string;
+  price: string;
+  compare_price: string;
+  cost_price: string;
+  is_taxable: boolean;
+  is_vat_inclusive: boolean;
+  vat_rate: string;
+  sku: string;
+  barcode: string;
+  brand: string;
+  type: "1" | "2";
+  status: "0" | "1";
+  is_published_online: boolean;
+  stock_control: boolean;
+  has_variants: boolean;
+  categories: string[];
+  tags: string;
+  images: Attachment[];
+  choices: Choice[];
 }

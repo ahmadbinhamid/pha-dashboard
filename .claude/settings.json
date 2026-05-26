@@ -10,7 +10,10 @@
       "Bash(rm /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils/response.js \\\\ *)",
       "Bash(grep -n '`\\\\${user\\\\.' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/controllers/auth.controller.js)",
       "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[product\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/product.service.js)",
-      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[inventory\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/inventory.service.js)"
+      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[inventory\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/inventory.service.js)",
+      "Bash(sed -i 's/^import type { Choice } from \"@\\\\/components\\\\/products\\\\/choices-editor\";//' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
+      "Bash(sed -i 's/\\\\bFormState\\\\b/ProductEditFormState/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
+      "Bash(sed -i 's/import type {$/import type {/' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)"
     ],
     "additionalDirectories": [
       "/home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils"
