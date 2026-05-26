@@ -1,7 +1,12 @@
 const User = require("../models/User");
 const { comparePassword } = require("../utils/auth/crypto");
 const { signJwt } = require("../utils/auth/jwt");
-const { generateOTP, generateOTPExpiry, isOTPExpired, hashOTP } = require("../utils/auth/otp");
+const {
+  generateOTP,
+  generateOTPExpiry,
+  isOTPExpired,
+  hashOTP,
+} = require("../utils/auth/otp");
 const {
   generateResetToken,
   generateResetTokenExpiry,
@@ -11,9 +16,19 @@ const {
   hashResetToken,
   verifyResetToken,
 } = require("../utils/auth/passwordReset");
-const { success, badRequest, unauthorized, systemfailure, requestConflict } = require("../utils/http/response");
-const { sendOTP, accountVerified, sendPasswordReset } = require("../services/email/email.service");
-const { toPublicUser } = require("../utils/user");
+const {
+  success,
+  badRequest,
+  unauthorized,
+  systemfailure,
+  requestConflict,
+} = require("../utils/http/response");
+const {
+  sendOTP,
+  accountVerified,
+  sendPasswordReset,
+} = require("../services/email/email.service");
+const { toPublicUser, fullName } = require("../utils/user");
 const config = require("../config");
 
 exports.register = async (req, res) => {
@@ -70,7 +85,7 @@ exports.login = async (req, res) => {
 
     await sendOTP({
       to: user.email,
-      name: `${user.first_name} ${user.last_name}`.trim(),
+      name: fullName(user),
       otp,
     });
 
@@ -114,7 +129,7 @@ exports.verifyOTP = async (req, res) => {
       sub: user._id.toString(),
       role: user.role,
       email: user.email,
-      name: `${user.first_name} ${user.last_name}`.trim(),
+      name: fullName(user),
     });
 
     return success(res, toPublicUser(user), "Login successful", token);
@@ -137,7 +152,7 @@ exports.verifyAccount = async (req, res) => {
     if (status === 1) {
       await accountVerified({
         to: user.email,
-        name: `${user.first_name} ${user.last_name}`.trim(),
+        name: fullName(user),
         verifiedDate: user.verified_at.toLocaleDateString("en-US", {
           year: "numeric",
           month: "long",
@@ -185,7 +200,7 @@ exports.forgotPassword = async (req, res) => {
 
     await sendPasswordReset({
       to: user.email,
-      name: `${user.first_name} ${user.last_name}`.trim(),
+      name: fullName(user),
       resetUrl: createResetUrl(resetToken),
       expiryMinutes: config.passwordReset.expiryMinutes,
     });
@@ -288,7 +303,7 @@ exports.resendOTP = async (req, res) => {
 
     await sendOTP({
       to: user.email,
-      name: `${user.first_name} ${user.last_name}`.trim(),
+      name: fullName(user),
       otp,
     });
 

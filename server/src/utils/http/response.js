@@ -29,18 +29,28 @@ const systemfailure = (response, err) => {
   });
 
   if (
-    ["MongooseServerSelectionError", "MongoNetworkError", "MongoTimeoutError"].includes(err?.name) &&
+    [
+      "MongooseServerSelectionError",
+      "MongoNetworkError",
+      "MongoTimeoutError",
+    ].includes(err?.name) &&
     process.env.APP_ENV === "production"
   ) {
-    sendErrorAlert("🚨 MongoDB Connection Error", `${err?.name}\n\n${err?.stack || ""}`);
+    sendErrorAlert(
+      "🚨 MongoDB Connection Error",
+      `${err?.name}\n\n${err?.stack || ""}`,
+    );
   }
 
-  return response.status(status).json({ status: "Fail", systemfailure: true, message, data: null });
+  return response
+    .status(status)
+    .json({ status: "Fail", systemfailure: true, message, data: null });
 };
 
 const requestfailure = (response, err, jsonerr = null) => {
   const status = err?.status && Number.isInteger(err.status) ? err.status : 404;
-  const message = typeof err === "object" && err.message ? err.message : String(err);
+  const message =
+    typeof err === "object" && err.message ? err.message : String(err);
 
   logger.error({
     message: err?.message || "Unhandled error",
@@ -48,13 +58,40 @@ const requestfailure = (response, err, jsonerr = null) => {
     stack: err?.stack || null,
   });
 
-  return response.status(status).json({ status: "Fail", systemfailure: false, message, jsonerr });
+  return response
+    .status(status)
+    .json({ status: "Fail", systemfailure: false, message, jsonerr });
 };
 
-const badRequest      = (response, message = "Bad Request")  => response.status(400).json({ status: "Fail", systemfailure: false, message, data: null });
-const requestConflict = (response, message = "Conflict")     => response.status(409).json({ status: "Fail", systemfailure: false, message, data: null });
-const unauthorized    = (response, message = "Unauthorized") => response.status(401).json({ status: "Fail", systemfailure: false, message, data: null });
-const forbidden       = (response, message = "Forbidden")    => response.status(403).json({ status: "Fail", systemfailure: false, message, data: null });
-const notFound        = (response, message = "Not Found")    => response.status(404).json({ status: "Fail", systemfailure: false, message, data: null });
+const badRequest = (response, message = "Bad Request") =>
+  response
+    .status(400)
+    .json({ status: "Fail", systemfailure: false, message, data: null });
+const requestConflict = (response, message = "Conflict") =>
+  response
+    .status(409)
+    .json({ status: "Fail", systemfailure: false, message, data: null });
+const unauthorized = (response, message = "Unauthorized") =>
+  response
+    .status(401)
+    .json({ status: "Fail", systemfailure: false, message, data: null });
+const forbidden = (response, message = "Forbidden") =>
+  response
+    .status(403)
+    .json({ status: "Fail", systemfailure: false, message, data: null });
+const notFound = (response, message = "Not Found") =>
+  response
+    .status(404)
+    .json({ status: "Fail", systemfailure: false, message, data: null });
 
-module.exports = { success, created, badRequest, systemfailure, requestfailure, requestConflict, unauthorized, forbidden, notFound };
+module.exports = {
+  success,
+  created,
+  badRequest,
+  systemfailure,
+  requestfailure,
+  requestConflict,
+  unauthorized,
+  forbidden,
+  notFound,
+};

@@ -1,0 +1,13 @@
+// models/index.js — central export for all models
+
+module.exports = {
+  User: require("./User"),
+  Attachment: require("./Attachment"),
+  Category: require("./Category"),
+  Location: require("./Location"),
+  Product: require("./Product"),
+  ProductVariant: require("./ProductVariant"),
+  Inventory: require("./Inventory"),
+  InventoryHistory: require("./InventoryHistory"),
+  InventorySettings: require("./InventorySettings"),
+};
