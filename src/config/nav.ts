@@ -8,6 +8,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Icons.Home },
+  { label: "Products", href: "/products", icon: Icons.Package },
   { label: "Inventory", href: "/inventory", icon: Icons.Box },
   { label: "Orders", href: "/orders", icon: Icons.Cart },
   { label: "Listings", href: "/listings", icon: Icons.Tag },
@@ -15,7 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customers", href: "/customers", icon: Icons.Users },
   { label: "Suppliers", href: "/suppliers", icon: Icons.Truck },
   { label: "Reports", href: "/reports", icon: Icons.Layers },
-  { label: "eBay uploader", href: "/tools/ebay-uploader", icon: Icons.Upload },
+  { label: "eBay Uploader", href: "/tools/ebay-uploader", icon: Icons.Upload },
   { label: "Settings", href: "/settings", icon: Icons.Settings },
 ];
 

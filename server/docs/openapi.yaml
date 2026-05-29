@@ -1,0 +1,1927 @@
+openapi: 3.0.3
+info:
+  title: Parts Hub Australia API
+  version: 1.0.0
+  description: REST API for Parts Hub Australia — products, inventory, categories, locations, and auth.
+servers:
+  - url: http://localhost:7000/api/v1
+    description: Local development
+
+tags:
+  - name: health
+    description: Server health check
+  - name: auth
+    description: Authentication & account management
+  - name: user
+    description: User management
+  - name: attachment
+    description: File & image uploads
+  - name: category
+    description: Product categories
+  - name: location
+    description: Stock locations / warehouses
+  - name: product
+    description: Products and variants
+  - name: inventory
+    description: Stock levels and adjustments
+
+# ─────────────────────────────────────────────
+# Reusable components
+# ─────────────────────────────────────────────
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── Primitives ──────────────────────────
+    MongoId:
+      type: string
+      pattern: '^[a-f\d]{24}$'
+      example: 64a1f2c3e4b5d6789abc0001
+
+    Slug:
+      type: string
+      example: brake-pad-front
+
+    # ── Domain objects ───────────────────────
+    Attachment:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        uid:
+          type: string
+        file_name:
+          type: string
+          example: 1718000000000-abc123.jpg
+        original_name:
+          type: string
+          example: brake-pad.jpg
+        mime_type:
+          type: string
+          example: image/jpeg
+        size:
+          type: integer
+          example: 204800
+        url:
+          type: string
+          example: http://localhost:7000/uploads/1718000000000-abc123.jpg
+        type:
+          type: string
+          enum: [image, file]
+
+    Category:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        name:
+          type: string
+          example: Brakes
+        slug:
+          $ref: '#/components/schemas/Slug'
+        parent:
+          oneOf:
+            - $ref: '#/components/schemas/MongoId'
+            - type: 'null'
+        sort_order:
+          type: integer
+          example: 0
+
+    Location:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        name:
+          type: string
+          example: Sydney Warehouse
+        address:
+          type: string
+          example: 12 Harbour St, Sydney NSW 2000
+        is_active:
+          type: boolean
+          example: true
+
+    Choice:
+      type: object
+      required: [name, items]
+      properties:
+        name:
+          type: string
+          example: Size
+        items:
+          type: array
+          items:
+            type: string
+          example: [Small, Medium, Large]
+
+    ProductVariant:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        product:
+          $ref: '#/components/schemas/MongoId'
+        combination:
+          type: array
+          items:
+            type: object
+            properties:
+              option:
+                type: string
+              value:
+                type: string
+        display_name:
+          type: string
+          example: Size / Medium
+        price:
+          type: number
+          example: 49.99
+        compare_price:
+          type: number
+          nullable: true
+        cost_price:
+          type: number
+          nullable: true
+        sku:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        digital_file:
+          allOf:
+            - $ref: '#/components/schemas/Attachment'
+          nullable: true
+        ebay_listing_id:
+          type: string
+          nullable: true
+        ebay_sync_status:
+          type: string
+          enum: [not_listed, pending, synced, error]
+
+    Product:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        title:
+          type: string
+          example: Front Brake Pad Set
+        slug:
+          $ref: '#/components/schemas/Slug'
+        description:
+          type: string
+        type:
+          type: integer
+          enum: [1, 2]
+          description: "1 = physical, 2 = digital"
+        status:
+          type: integer
+          enum: [0, 1]
+          description: "0 = draft, 1 = active"
+        is_published_online:
+          type: boolean
+        price:
+          type: number
+          example: 89.99
+        compare_price:
+          type: number
+          nullable: true
+        cost_price:
+          type: number
+          nullable: true
+        is_taxable:
+          type: boolean
+        is_vat_inclusive:
+          type: boolean
+        vat_rate:
+          type: number
+          nullable: true
+        sku:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        stock_control:
+          type: boolean
+        has_variants:
+          type: boolean
+        brand:
+          type: string
+          nullable: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        tags:
+          type: array
+          items:
+            type: string
+        related_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/MongoId'
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Choice'
+        digital_file:
+          allOf:
+            - $ref: '#/components/schemas/Attachment'
+          nullable: true
+        ebay_listing_id:
+          type: string
+          nullable: true
+        ebay_sync_status:
+          type: string
+          enum: [not_listed, pending, synced, error]
+        ebay_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    InventoryRecord:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        product:
+          $ref: '#/components/schemas/Product'
+        variant:
+          allOf:
+            - $ref: '#/components/schemas/ProductVariant'
+          nullable: true
+        location:
+          allOf:
+            - $ref: '#/components/schemas/Location'
+          nullable: true
+        stock_count:
+          type: integer
+          example: 42
+        reserved_count:
+          type: integer
+          example: 0
+
+    InventorySettings:
+      type: object
+      properties:
+        low_stock_threshold:
+          type: integer
+          example: 10
+        email_notifications:
+          type: boolean
+          example: true
+        notification_email:
+          type: string
+          format: email
+          nullable: true
+        notification_send_time:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          example: "08:00"
+          nullable: true
+
+    User:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/MongoId'
+        id:
+          $ref: '#/components/schemas/MongoId'
+        first_name:
+          type: string
+          example: Ahmad
+        last_name:
+          type: string
+          example: Hamid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin, superadmin]
+        status:
+          type: integer
+          enum: [0, 1]
+          description: "0 = inactive, 1 = active"
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Envelope responses ───────────────────
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: OK
+        data:
+          type: object
+
+    PaginatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+            totalPages:
+              type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation error
+
+  # ── Common responses ─────────────────────
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+# ─────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────
+paths:
+
+  # ── Health ───────────────────────────────
+  /health:
+    get:
+      operationId: health_check
+      summary: Server health check
+      tags: [health]
+      responses:
+        "200":
+          description: Server is up
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          uptime:
+                            type: number
+                            example: 123.45
+
+  # ── Auth ─────────────────────────────────
+  /auth/register:
+    post:
+      operationId: auth_register
+      summary: Register a new user (superadmin only)
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name, email, password]
+              properties:
+                first_name:
+                  type: string
+                  example: Ahmad
+                last_name:
+                  type: string
+                  example: Hamid
+                email:
+                  type: string
+                  format: email
+                  example: ahmad@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: secret123
+                role:
+                  type: string
+                  enum: [user, admin]
+                  default: user
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/login:
+    post:
+      operationId: auth_login
+      summary: Login — returns JWT after OTP verification
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@partshub.com.au
+                password:
+                  type: string
+                  example: secret123
+      responses:
+        "200":
+          description: OTP sent to email — verify with /auth/verify-otp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          description: Invalid credentials
+
+  /auth/verify-otp:
+    post:
+      operationId: auth_verify_otp
+      summary: Verify login OTP — returns access token
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                otp:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  pattern: '^\d{6}$'
+                  example: "123456"
+      responses:
+        "200":
+          description: OTP verified — token returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          description: Invalid or expired OTP
+
+  /auth/resend-otp:
+    post:
+      operationId: auth_resend_otp
+      summary: Resend login OTP
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: OTP resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/forgot-password:
+    post:
+      operationId: auth_forgot_password
+      summary: Request a password reset link
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Reset link sent if email exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/reset-password:
+    post:
+      operationId: auth_reset_password
+      summary: Reset password using token from email
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                  minLength: 64
+                  maxLength: 64
+                new_password:
+                  type: string
+                  minLength: 6
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          description: Invalid or expired token
+
+  /auth/verify-account:
+    post:
+      operationId: auth_verify_account
+      summary: Activate or deactivate a user account (superadmin only)
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, status]
+              properties:
+                email:
+                  type: string
+                  format: email
+                status:
+                  type: integer
+                  enum: [0, 1]
+                  description: "0 = deactivate, 1 = activate"
+      responses:
+        "200":
+          description: Account status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/change-password:
+    post:
+      operationId: auth_change_password
+      summary: Change own password
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                  minLength: 6
+                new_password:
+                  type: string
+                  minLength: 6
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── User ─────────────────────────────────
+  /user:
+    get:
+      operationId: user_list
+      summary: List all users
+      tags: [user]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: ["0", "1"]
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      operationId: user_update_profile
+      summary: Update own profile
+      tags: [user]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name]
+              properties:
+                first_name:
+                  type: string
+                  example: Ahmad
+                last_name:
+                  type: string
+                  example: Hamid
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /user/profile:
+    get:
+      operationId: user_get_profile
+      summary: Get own profile
+      tags: [user]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /user/{id}:
+    delete:
+      operationId: user_delete
+      summary: Soft-delete a user
+      tags: [user]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Attachment ───────────────────────────
+  /attachment:
+    post:
+      operationId: attachment_upload
+      summary: Upload one or more files
+      tags: [attachment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "201":
+          description: Files uploaded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Attachment'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      operationId: attachment_list
+      summary: List uploaded attachments
+      tags: [attachment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of attachments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /attachment/{id}:
+    delete:
+      operationId: attachment_delete
+      summary: Delete an attachment
+      tags: [attachment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Attachment deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Category ─────────────────────────────
+  /category:
+    get:
+      operationId: category_list
+      summary: List all categories (public)
+      tags: [category]
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+
+    post:
+      operationId: category_create
+      summary: Create a category (admin)
+      tags: [category]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Brakes
+                parent:
+                  type: string
+                  nullable: true
+                  description: Parent category ID
+                sort_order:
+                  type: integer
+                  minimum: 0
+                  default: 0
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /category/{id}:
+    get:
+      operationId: category_get
+      summary: Get a single category (public)
+      tags: [category]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Category detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      operationId: category_update
+      summary: Update a category (admin)
+      tags: [category]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                parent:
+                  type: string
+                  nullable: true
+                sort_order:
+                  type: integer
+                  minimum: 0
+                slug:
+                  type: string
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: category_delete
+      summary: Delete a category (admin)
+      tags: [category]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Location ─────────────────────────────
+  /location:
+    get:
+      operationId: location_list
+      summary: List all locations
+      tags: [location]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of locations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Location'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: location_create
+      summary: Create a location
+      tags: [location]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Sydney Warehouse
+                address:
+                  type: string
+                  example: 12 Harbour St, Sydney NSW 2000
+                is_active:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Location created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Location'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /location/{id}:
+    get:
+      operationId: location_get
+      summary: Get a single location
+      tags: [location]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Location detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Location'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      operationId: location_update
+      summary: Update a location
+      tags: [location]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: location_delete
+      summary: Delete a location
+      tags: [location]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Location deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Product ──────────────────────────────
+  /product:
+    get:
+      operationId: product_list
+      summary: List products
+      tags: [product]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: ["0", "1", ""]
+            description: "0 = draft, 1 = active"
+        - name: categories
+          in: query
+          description: Comma-separated category IDs
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: ["1", "2", ""]
+            description: "1 = physical, 2 = digital"
+      responses:
+        "200":
+          description: Paginated list of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      operationId: product_create
+      summary: Create a product
+      tags: [product]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: Front Brake Pad Set
+                description:
+                  type: string
+                  default: ""
+                type:
+                  type: integer
+                  enum: [1, 2]
+                  default: 1
+                  description: "1 = physical, 2 = digital"
+                status:
+                  type: integer
+                  enum: [0, 1]
+                  default: 0
+                  description: "0 = draft, 1 = active"
+                is_published_online:
+                  type: boolean
+                  default: false
+                price:
+                  type: number
+                  minimum: 0
+                  default: 0
+                compare_price:
+                  type: number
+                  minimum: 0
+                  nullable: true
+                cost_price:
+                  type: number
+                  minimum: 0
+                  nullable: true
+                is_taxable:
+                  type: boolean
+                  default: false
+                is_vat_inclusive:
+                  type: boolean
+                  default: false
+                vat_rate:
+                  type: number
+                  minimum: 0
+                  nullable: true
+                sku:
+                  type: string
+                  nullable: true
+                barcode:
+                  type: string
+                  nullable: true
+                stock_control:
+                  type: boolean
+                  default: false
+                has_variants:
+                  type: boolean
+                  default: false
+                brand:
+                  type: string
+                  nullable: true
+                attachments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                  description: Attachment IDs
+                categories:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                tags:
+                  type: array
+                  items:
+                    type: string
+                related_products:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                choices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Choice'
+                digital_file:
+                  $ref: '#/components/schemas/MongoId'
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /product/{slug}:
+    get:
+      operationId: product_get
+      summary: Get a product by slug
+      tags: [product]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Slug'
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /product/{id}:
+    put:
+      operationId: product_update
+      summary: Update a product
+      tags: [product]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                type:
+                  type: integer
+                  enum: [1, 2]
+                status:
+                  type: integer
+                  enum: [0, 1]
+                is_published_online:
+                  type: boolean
+                price:
+                  type: number
+                  minimum: 0
+                compare_price:
+                  type: number
+                  nullable: true
+                cost_price:
+                  type: number
+                  nullable: true
+                is_taxable:
+                  type: boolean
+                is_vat_inclusive:
+                  type: boolean
+                vat_rate:
+                  type: number
+                  nullable: true
+                sku:
+                  type: string
+                  nullable: true
+                barcode:
+                  type: string
+                  nullable: true
+                stock_control:
+                  type: boolean
+                has_variants:
+                  type: boolean
+                brand:
+                  type: string
+                  nullable: true
+                attachments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                categories:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                tags:
+                  type: array
+                  items:
+                    type: string
+                related_products:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                choices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Choice'
+                digital_file:
+                  $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: product_delete
+      summary: Delete a product
+      tags: [product]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Product deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /product/{id}/duplicate:
+    post:
+      operationId: product_duplicate
+      summary: Duplicate a product
+      tags: [product]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "201":
+          description: Duplicated product
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /product/{id}/variants:
+    get:
+      operationId: product_list_variants
+      summary: List variants for a product
+      tags: [product]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: List of variants
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProductVariant'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /product/{id}/variants/{variantId}:
+    put:
+      operationId: product_update_variant
+      summary: Update a product variant
+      tags: [product]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+        - name: variantId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                price:
+                  type: number
+                  minimum: 0
+                compare_price:
+                  type: number
+                  nullable: true
+                cost_price:
+                  type: number
+                  nullable: true
+                sku:
+                  type: string
+                  nullable: true
+                barcode:
+                  type: string
+                  nullable: true
+                is_active:
+                  type: boolean
+                attachments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MongoId'
+                digital_file:
+                  $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Variant updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProductVariant'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Inventory ────────────────────────────
+  /inventory:
+    get:
+      operationId: inventory_list
+      summary: List inventory records
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: location
+          in: query
+          description: Location ID to filter by
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Paginated inventory records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /inventory/settings:
+    get:
+      operationId: inventory_get_settings
+      summary: Get inventory settings
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory settings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/InventorySettings'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      operationId: inventory_update_settings
+      summary: Update inventory settings
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                low_stock_threshold:
+                  type: integer
+                  minimum: 0
+                  example: 10
+                email_notifications:
+                  type: boolean
+                notification_email:
+                  type: string
+                  format: email
+                  nullable: true
+                notification_send_time:
+                  type: string
+                  pattern: '^\d{2}:\d{2}$'
+                  example: "08:00"
+                  nullable: true
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /inventory/{inventoryId}/adjust:
+    post:
+      operationId: inventory_adjust_stock
+      summary: Adjust stock (relative delta)
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inventoryId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adjustment]
+              properties:
+                adjustment:
+                  type: number
+                  description: Positive to add, negative to remove
+                  example: -5
+                type:
+                  type: string
+                  enum: [restock, damaged, lost, stolen, correction, transfer_in, transfer_out, other]
+                  default: other
+                reason:
+                  type: string
+                  nullable: true
+                  example: Damaged in transit
+      responses:
+        "200":
+          description: Stock adjusted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /inventory/{inventoryId}/set:
+    post:
+      operationId: inventory_set_stock
+      summary: Set stock to an absolute value
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inventoryId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_count]
+              properties:
+                stock_count:
+                  type: integer
+                  minimum: 0
+                  example: 100
+                reason:
+                  type: string
+                  nullable: true
+                  example: Annual stocktake
+      responses:
+        "200":
+          description: Stock set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          $ref: '#/components/responses/ValidationError'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /inventory/{inventoryId}/history:
+    get:
+      operationId: inventory_get_history
+      summary: Get stock adjustment history for an inventory record
+      tags: [inventory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inventoryId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/MongoId'
+      responses:
+        "200":
+          description: Adjustment history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              $ref: '#/components/schemas/MongoId'
+                            inventory:
+                              $ref: '#/components/schemas/MongoId'
+                            type:
+                              type: string
+                              enum: [restock, damaged, lost, stolen, correction, transfer_in, transfer_out, other]
+                            adjustment:
+                              type: number
+                            stock_before:
+                              type: integer
+                            stock_after:
+                              type: integer
+                            reason:
+                              type: string
+                              nullable: true
+                            created_by:
+                              $ref: '#/components/schemas/MongoId'
+                            created_at:
+                              type: string
+                              format: date-time
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'

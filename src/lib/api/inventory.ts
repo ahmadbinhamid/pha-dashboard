@@ -1,51 +1,90 @@
-import type { ApiResponse, PaginatedResponse } from "./base";
-import type { InventoryItem } from "@/types";
+import { apiClient } from "./client";
+import type { BeResponse } from "./base";
+import type {
+  InventoryRecord,
+  InventoryHistoryRecord,
+  InventorySettings,
+} from "@/types/inventory";
 
-export type InventoryListParams = {
+export interface InventoryListParams {
   page?: number;
   search?: string;
-  category?: string;
-  make?: string;
-  model?: string;
-  year?: string;
-  ebay?: string;
+  location?: string;
+  product?: string;
+  variant?: string;
+  limit?: number;
+}
+
+export interface InventoryListData {
+  items: InventoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export const getInventory = async (params: InventoryListParams = {}) => {
+  const { data } = await apiClient.get<BeResponse<InventoryListData>>(
+    "/inventory",
+    { params },
+  );
+  return data;
 };
 
-export type CreateInventoryItemInput = {
-  sku: string;
-  title: string;
-  category: string;
-  make: string;
-  model: string;
-  yearFrom: number;
-  yearTo: number;
-  stock: number;
-  cost: number;
-  price: number;
+export const adjustStock = async (
+  inventoryId: string,
+  payload: { adjustment: number; reason?: string; type?: string },
+) => {
+  const { data } = await apiClient.post<BeResponse<InventoryRecord>>(
+    `/inventory/${inventoryId}/adjust`,
+    payload,
+  );
+  return data;
 };
 
-export type UpdateInventoryItemInput = Partial<CreateInventoryItemInput>;
+export const setStock = async (
+  inventoryId: string,
+  payload: { stock_count: number; reason?: string },
+) => {
+  const { data } = await apiClient.post<BeResponse<InventoryRecord>>(
+    `/inventory/${inventoryId}/set`,
+    payload,
+  );
+  return data;
+};
 
-// Stubs — implement once BE is ready
-export async function getInventoryItems(
-  _params: InventoryListParams = {},
-): Promise<ApiResponse<PaginatedResponse<InventoryItem>>> {
-  throw new Error("Not implemented — BE not finalized");
-}
+export const getInventoryHistory = async (inventoryId: string) => {
+  const { data } = await apiClient.get<BeResponse<InventoryHistoryRecord[]>>(
+    `/inventory/${inventoryId}/history`,
+  );
+  return data;
+};
 
-export async function createInventoryItem(
-  _input: CreateInventoryItemInput,
-): Promise<ApiResponse<{ item: InventoryItem }>> {
-  throw new Error("Not implemented — BE not finalized");
-}
+export const getInventorySettings = async () => {
+  const { data } = await apiClient.get<BeResponse<InventorySettings>>(
+    "/inventory/settings",
+  );
+  return data;
+};
 
-export async function updateInventoryItem(
-  _id: string,
-  _input: UpdateInventoryItemInput,
-): Promise<ApiResponse<{ item: InventoryItem }>> {
-  throw new Error("Not implemented — BE not finalized");
-}
+export const updateInventorySettings = async (
+  payload: Partial<InventorySettings>,
+) => {
+  const { data } = await apiClient.put<BeResponse<InventorySettings>>(
+    "/inventory/settings",
+    payload,
+  );
+  return data;
+};
 
-export async function deleteInventoryItem(_id: string): Promise<ApiResponse> {
-  throw new Error("Not implemented — BE not finalized");
-}
+export const ensureInventoryRecord = async (payload: {
+  product: string;
+  location: string;
+  variant?: string | null;
+}) => {
+  const { data } = await apiClient.post<BeResponse<InventoryRecord>>(
+    "/inventory/ensure",
+    payload,
+  );
+  return data;
+};

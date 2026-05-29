@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/routes/product.routes.js)",
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/config/index.js)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:7000/uploads/cd527e99-1cc9-4918-9b29-508e78029fb8.png)",
+      "Bash(node --check /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/app.js)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|js\\)$\")",
+      "Bash(rm /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils/response.js \\\\ *)",
+      "Bash(grep -n '`\\\\${user\\\\.' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/controllers/auth.controller.js)",
+      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[product\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/product.service.js)",
+      "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[inventory\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/inventory.service.js)",
+      "Bash(sed -i 's/^import type { Choice } from \"@\\\\/components\\\\/products\\\\/choices-editor\";//' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
+      "Bash(sed -i 's/\\\\bFormState\\\\b/ProductEditFormState/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
+      "Bash(sed -i 's/import type {$/import type {/' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)"
+    ],
+    "additionalDirectories": [
+      "/home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils"
+    ]
+  }
+}

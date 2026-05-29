@@ -4,7 +4,7 @@ import Link from "@/components/ui/link";
 import type { Order, OrderChannel, PaymentStatus } from "@/types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { NativeSelect as Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
@@ -64,7 +64,7 @@ export function OrdersTable() {
           right={
             <Button
               variant="secondary"
-              size="sm"
+              
               onClick={() => toast({ tone: "default", title: "Export queued", description: "Demo action." })}
             >
               Export
@@ -90,7 +90,7 @@ export function OrdersTable() {
                   value={payment}
                   onChange={(e) => setPayment(e.target.value as "" | PaymentStatus)}
                   aria-label="Filter by payment status"
-                  size="sm"
+                  
                 >
                   <option value="">All payments</option>
                   <option value="paid">Paid</option>
@@ -100,7 +100,7 @@ export function OrdersTable() {
                   value={channel}
                   onChange={(e) => setChannel(e.target.value as "" | OrderChannel)}
                   aria-label="Filter by channel"
-                  size="sm"
+                  
                 >
                   <option value="">All channels</option>
                   <option value="counter">Counter</option>
@@ -109,7 +109,7 @@ export function OrdersTable() {
                 </Select>
               </div>
             <Link href="/orders/new">
-              <Button size="sm">Create order</Button>
+              <Button >Create order</Button>
             </Link>
             </div>
           </div>
@@ -163,10 +163,10 @@ export function OrdersTable() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-2">
-                        <Button variant="secondary" size="sm" onClick={() => setInvoiceFor(o)}>
+                        <Button variant="secondary"  onClick={() => setInvoiceFor(o)}>
                           Invoice
                         </Button>
-                        <Button variant="secondary" size="sm" onClick={() => setActive(o)}>
+                        <Button variant="secondary"  onClick={() => setActive(o)}>
                           View
                         </Button>
                       </div>

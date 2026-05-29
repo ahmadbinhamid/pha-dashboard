@@ -41,7 +41,7 @@ function Stat({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-bg/80 px-4 py-3">
+    <div className="rounded-xs border border-border/70 bg-bg/80 px-4 py-3">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-fg/45">{label}</div>
       <div className="mt-1 text-lg font-semibold tracking-tight text-fg">{value}</div>
       {sub ? <div className="mt-0.5 text-xs text-fg/55">{sub}</div> : null}
@@ -90,7 +90,7 @@ export function ProductDetails({ productId }: { productId: string }) {
       <div className="mx-auto max-w-lg py-16 text-center">
         <Card>
           <CardContent className="space-y-4 px-6 py-12">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-bg-2 text-fg/45 ring-1 ring-border">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-xs bg-bg-2 text-fg/45 ring-1 ring-border">
               <Icons.Box className="h-7 w-7" />
             </div>
             <div>
@@ -154,7 +154,7 @@ export function ProductDetails({ productId }: { productId: string }) {
         <div className="border-b border-border/70 px-4 py-6 sm:px-8 sm:py-8" style={{ backgroundImage: heroBg }}>
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
             <div className="mx-auto w-full max-w-xl shrink-0 lg:mx-0 lg:max-w-md xl:max-w-xl">
-              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-border/80 bg-bg-2 shadow-inner ring-1 ring-inset ring-black/5">
+              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xs border border-border/80 bg-bg-2 shadow-inner ring-1 ring-inset ring-black/5">
                 {activePhotoSrc ? (
                   <Image src={activePhotoSrc} alt={product.image.alt} fill priority />
                 ) : (
@@ -180,7 +180,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                       aria-selected={i === activePhotoIndex}
                       onClick={() => setActivePhotoIndex(i)}
                       className={cn(
-                        "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition sm:h-16 sm:w-16",
+                        "relative h-14 w-14 shrink-0 overflow-hidden rounded-xs border-2 transition sm:h-16 sm:w-16",
                         i === activePhotoIndex
                           ? "border-accent ring-2 ring-accent/30"
                           : "border-transparent opacity-75 hover:opacity-100",
@@ -212,7 +212,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                 <Button type="button" variant="secondary" size="sm" onClick={copySku}>
                   {copied ? "Copied" : "Copy SKU"}
                 </Button>
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-2 py-1">
+                <div className="flex items-center gap-2 rounded-xs border border-border bg-bg px-2 py-1">
                   <span className="text-xs font-semibold text-fg/60">Qty</span>
                   <Input
                     value={String(qty)}
@@ -297,7 +297,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                 <Stat label="Reorder at" value={extras.reorderPoint} />
                 <Stat label="Reorder qty" value={extras.reorderQty} />
               </div>
-              <p className="mt-4 rounded-lg border border-border/60 bg-bg-2/40 px-3 py-2 text-sm text-fg/70">{extras.notes}</p>
+              <p className="mt-4 rounded-xs border border-border/60 bg-bg-2/40 px-3 py-2 text-sm text-fg/70">{extras.notes}</p>
             </CardContent>
           </Card>
 

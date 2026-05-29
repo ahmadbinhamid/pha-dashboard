@@ -1,6 +1,6 @@
 
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { NativeSelect as Select } from "@/components/ui/select";
 import { Icons } from "@/components/ui/icons";
 import { MAKES } from "@/lib/store/data/catalog";
 import type { EbayFilter, InventorySearchQuery } from "@/config/inventory-filters";

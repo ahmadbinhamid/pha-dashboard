@@ -1,15 +1,23 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProviders } from "@/components/providers/app-providers";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { GuestRoute } from "@/components/auth/guest-route";
+import { ErpLayout } from "@/components/layouts/erp-layout";
 
-// Layouts (inline wrappers)
-import { AppShell } from "@/components/shell/app-shell";
+// Store layout
 import StoreLayout from "@/pages/store/StoreLayout";
 
-// ERP pages
+// Auth pages
 import LoginPage from "@/pages/LoginPage";
+
+// ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
+import InventorySettingsPage from "@/pages/erp/InventorySettingsPage";
 import InventoryNewPage from "@/pages/erp/InventoryNewPage";
+import ProductsPage from "@/pages/erp/ProductsPage";
+import ProductCreatePage from "@/pages/erp/ProductCreatePage";
+import ProductEditPage from "@/pages/erp/ProductEditPage";
 import InventoryBundlesPage from "@/pages/erp/InventoryBundlesPage";
 import ProductPage from "@/pages/erp/ProductPage";
 import OrdersPage from "@/pages/erp/OrdersPage";
@@ -33,34 +41,52 @@ import AccountPage from "@/pages/store/AccountPage";
 import SearchPage from "@/pages/store/SearchPage";
 import AboutPage from "@/pages/store/AboutPage";
 
-function ErpLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
-}
-
 export default function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <AppProviders>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/login"
+            element={
+              <GuestRoute>
+                <LoginPage />
+              </GuestRoute>
+            }
+          />
 
-          {/* ERP routes under /app shell */}
-          <Route path="/dashboard" element={<ErpLayout><DashboardPage /></ErpLayout>} />
-          <Route path="/inventory" element={<ErpLayout><InventoryPage /></ErpLayout>} />
-          <Route path="/inventory/new" element={<ErpLayout><InventoryNewPage /></ErpLayout>} />
-          <Route path="/inventory/bundles" element={<ErpLayout><InventoryBundlesPage /></ErpLayout>} />
-          <Route path="/products/:id" element={<ErpLayout><ProductPage /></ErpLayout>} />
-          <Route path="/orders" element={<ErpLayout><OrdersPage /></ErpLayout>} />
-          <Route path="/orders/new" element={<ErpLayout><OrdersNewPage /></ErpLayout>} />
-          <Route path="/customers" element={<ErpLayout><CustomersPage /></ErpLayout>} />
-          <Route path="/suppliers" element={<ErpLayout><SuppliersPage /></ErpLayout>} />
-          <Route path="/reports" element={<ErpLayout><ReportsPage /></ErpLayout>} />
-          <Route path="/analytics" element={<ErpLayout><AnalyticsPage /></ErpLayout>} />
-          <Route path="/listings" element={<ErpLayout><ListingsPage /></ErpLayout>} />
-          <Route path="/settings" element={<ErpLayout><SettingsPage /></ErpLayout>} />
-          <Route path="/tools/ebay-uploader" element={<ErpLayout><EbayUploaderPage /></ErpLayout>} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <ErpLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/inventory/settings" element={<InventorySettingsPage />} />
+            <Route path="/inventory/new" element={<InventoryNewPage />} />
+            <Route
+              path="/inventory/bundles"
+              element={<InventoryBundlesPage />}
+            />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/products/new" element={<ProductCreatePage />} />
+            <Route path="/products/:slug/edit" element={<ProductEditPage />} />
+            <Route path="/products/:id" element={<ProductPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/new" element={<OrdersNewPage />} />
+            <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/suppliers" element={<SuppliersPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/listings" element={<ListingsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/tools/ebay-uploader" element={<EbayUploaderPage />} />
+          </Route>
 
-          {/* Store routes */}
           <Route element={<StoreLayout />}>
             <Route path="/" element={<StoreHomePage />} />
             <Route path="/parts" element={<PartsPage />} />
