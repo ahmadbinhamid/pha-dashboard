@@ -24,7 +24,7 @@ export function Switch({
   const switchId = id ?? innerId;
 
   return (
-    <div className={cn("flex items-start justify-between gap-4 rounded-xl border border-border bg-bg-2/40 px-4 py-3", className)}>
+    <div className={cn("flex items-start justify-between gap-4 rounded-xs border border-border bg-bg-2/40 px-4 py-3", className)}>
       {(label || description) ? (
         <div className="min-w-0">
           {label ? (
@@ -45,16 +45,16 @@ export function Switch({
         disabled={disabled}
         onClick={() => onCheckedChange(!checked)}
         className={cn(
-          "relative h-7 w-12 shrink-0 rounded-full transition-colors",
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           "disabled:pointer-events-none disabled:opacity-50",
-          checked ? "bg-accent" : "bg-border",
+          checked ? "bg-accent" : "bg-fg/20",
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
-            checked ? "left-5" : "left-0.5",
+            "absolute top-0.5 left-0 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200",
+            checked ? "translate-x-4.5" : "translate-x-0.5",
           )}
         />
       </button>

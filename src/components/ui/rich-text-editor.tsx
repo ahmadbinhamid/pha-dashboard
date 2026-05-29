@@ -57,7 +57,7 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded transition",
+        "flex h-7 w-7 items-center justify-center rounded-xs transition",
         "text-fg/65 hover:bg-bg-2 hover:text-fg",
         "disabled:cursor-not-allowed disabled:opacity-40",
         active && "bg-bg-2 text-fg ring-1 ring-inset ring-border",
@@ -123,7 +123,7 @@ export function RichTextEditor({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-lg border border-border bg-bg shadow-sm",
+        "overflow-hidden rounded-xs border border-border bg-bg shadow-sm",
         "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-bg",
         className,
       )}

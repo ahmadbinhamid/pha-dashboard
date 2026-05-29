@@ -99,7 +99,7 @@ export interface ProductCreateFormState {
   status: ProductStatus;
   is_published_online: boolean;
   categories: string[];
-  tags: string;
+  tags: string[];
   images: Attachment[];
 }
 
@@ -121,7 +121,7 @@ export interface ProductEditFormState {
   stock_control: boolean;
   has_variants: boolean;
   categories: string[];
-  tags: string;
+  tags: string[];
   images: Attachment[];
   choices: Choice[];
 }

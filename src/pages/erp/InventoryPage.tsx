@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/select";
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog";
 import { SetStockDialogFull } from "@/components/inventory/set-stock-dialog";
 import { HistoryDrawer } from "@/components/inventory/history-drawer";
@@ -124,22 +125,20 @@ export default function InventoryPage() {
           </div>
 
           {locations.length > 0 && (
-            <select
+            <NativeSelect
               value={locationFilter}
               onChange={(e) => setLocation(e.target.value)}
-              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-bg"
+              className="w-auto min-w-36"
             >
               <option value="">All locations</option>
               {locations.map((loc) => (
-                <option key={loc._id} value={loc._id}>
-                  {loc.name}
-                </option>
+                <option key={loc._id} value={loc._id}>{loc.name}</option>
               ))}
-            </select>
+            </NativeSelect>
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="w-full overflow-x-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-16 text-sm text-fg/50">
               Loading inventory...
@@ -147,14 +146,14 @@ export default function InventoryPage() {
           ) : items.length === 0 ? (
             <InventoryEmptyState search={search} />
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full min-w-160 text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-2/40">
-                  {["Product", "Variant", "Location", "Stock", ""].map((h) => (
+                  {["Product", "Variant", "Location", "Stock", "Actions"].map((h) => (
                     <th
                       key={h}
                       className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-fg/50 ${
-                        h === "" ? "text-right" : "text-left"
+                        h === "Actions" ? "text-right" : "text-left"
                       } first:px-5 last:px-5`}
                     >
                       {h}

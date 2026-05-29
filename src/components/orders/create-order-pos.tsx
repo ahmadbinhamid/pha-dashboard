@@ -4,8 +4,9 @@ import Link from "@/components/ui/link";
 import { useRouter } from "@/hooks";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { NativeSelect as Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/ui/icons";
 import { useToast } from "@/context";
@@ -327,7 +328,7 @@ export function CreateOrderPos() {
                     key={p.id}
                     type="button"
                     onClick={() => addProduct(p.id)}
-                    className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-bg px-4 py-3 text-left transition hover:bg-bg-2/30"
+                    className="group flex items-center justify-between gap-3 rounded-xs border border-border bg-bg px-4 py-3 text-left transition hover:bg-bg-2/30"
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{p.title}</div>
@@ -353,7 +354,7 @@ export function CreateOrderPos() {
                   return (
                     <div
                       key={l.productId}
-                      className="flex flex-col gap-3 rounded-xl border border-border bg-bg px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 rounded-xs border border-border bg-bg px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{l.title}</div>
@@ -399,7 +400,7 @@ export function CreateOrderPos() {
                   );
                 })
               ) : (
-                <div className="rounded-xl border border-border bg-bg-2/30 px-4 py-10 text-center text-sm text-fg/65">
+                <div className="rounded-xs border border-border bg-bg-2/30 px-4 py-10 text-center text-sm text-fg/65">
                   Search or click a product to add lines.
                 </div>
               )}
@@ -472,7 +473,7 @@ export function CreateOrderPos() {
                         setCustomerPhone(c.phone ?? "");
                       setActivity((a) => [...a, { at: nowStamp(), text: `Customer selected: ${c.name}.` }]);
                     }}
-                    className={`rounded-xl border px-4 py-3 text-left transition ${
+                    className={`rounded-xs border px-4 py-3 text-left transition ${
                       customer?.id === c.id
                         ? "border-accent bg-accent/10"
                         : "border-border bg-bg hover:bg-bg-2/30"
@@ -513,7 +514,7 @@ export function CreateOrderPos() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border bg-bg-2/30 px-4 py-3">
+              <div className="rounded-xs border border-border bg-bg-2/30 px-4 py-3">
                 <div className="flex items-center justify-between text-sm">
                   <div className="text-fg/70">Subtotal (ex GST)</div>
                   <div className="font-semibold">{formatCurrency(subtotal, "AUD")}</div>
@@ -531,8 +532,7 @@ export function CreateOrderPos() {
 
               <div>
                 <div className="mb-2 text-xs font-semibold text-fg/70">Payment method</div>
-                <select
-                  className="h-10 w-full appearance-none rounded-lg border border-border bg-bg px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                <Select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                 >
@@ -542,16 +542,16 @@ export function CreateOrderPos() {
                   <option value="bank_transfer">Bank transfer</option>
                   <option value="afterpay">Afterpay</option>
                   <option value="other">Other</option>
-                </select>
+                </Select>
               </div>
 
               <div>
                 <div className="mb-2 text-xs font-semibold text-fg/70">Notes</div>
-                <textarea
-                  className="min-h-[88px] w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm shadow-sm outline-none placeholder:text-fg/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Internal notes, delivery instructions…"
+                  rows={3}
                 />
               </div>
 
@@ -574,7 +574,7 @@ export function CreateOrderPos() {
                 </Button>
               </div>
 
-              <div className="rounded-xl border border-border bg-bg-2/30 px-4 py-3 text-xs text-fg/65">
+              <div className="rounded-xs border border-border bg-bg-2/30 px-4 py-3 text-xs text-fg/65">
                 Invoice #{invoiceNumber} · Status{" "}
                 <span className="font-semibold text-fg">{status}</span>
               </div>

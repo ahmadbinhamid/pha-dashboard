@@ -4,12 +4,30 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { TagInput } from "@/components/ui/tag-input";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
 import { useToast } from "@/context";
 import { createProduct, getCategories } from "@/lib/api/products";
-import type { Category, ProductCreateFormState, ProductType, ProductStatus } from "@/types/product";
-import { ArrowLeft } from "lucide-react";
+import type {
+  Category,
+  ProductCreateFormState,
+  ProductType,
+  ProductStatus,
+} from "@/types/product";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Package2, Image, DollarSign, Plus } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 const INITIAL: ProductCreateFormState = {
   title: "",
@@ -20,10 +38,10 @@ const INITIAL: ProductCreateFormState = {
   is_taxable: false,
   vat_rate: "",
   type: "physical",
-  status: "draft",
+  status: "active",
   is_published_online: false,
   categories: [],
-  tags: "",
+  tags: [],
   images: [],
 };
 
@@ -40,15 +58,7 @@ function formToFD(form: ProductCreateFormState): FormData {
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
   fd.append("categories", JSON.stringify(form.categories));
-  fd.append(
-    "tags",
-    JSON.stringify(
-      form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-    ),
-  );
+  fd.append("tags", JSON.stringify(form.tags));
   fd.append(
     "attachments",
     JSON.stringify(form.images.map((img) => img._id || img.id).filter(Boolean)),
@@ -56,16 +66,38 @@ function formToFD(form: ProductCreateFormState): FormData {
   return fd;
 }
 
+function SectionLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ElementType;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex h-6 w-6 items-center justify-center rounded-xs bg-accent/10">
+        <Icon className="h-3.5 w-3.5 text-accent" />
+      </div>
+      <span>{children}</span>
+    </div>
+  );
+}
+
 export default function ProductCreatePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
 
-  const { data: catData } = useQuery({
+  const { data: catData, isLoading: catLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: getCategories,
   });
   const categories: Category[] = catData?.data ?? [];
+
+  const categoryOptions = categories.map((c) => ({
+    value: c._id,
+    label: c.name,
+  }));
 
   const mutation = useMutation({
     mutationFn: (fd: FormData) => createProduct(fd),
@@ -91,7 +123,7 @@ export default function ProductCreatePage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      toast({ title: "Title is required", tone: "danger" });
+      toast({ title: "Name is required", tone: "danger" });
       return;
     }
     mutation.mutate(formToFD(form));
@@ -99,81 +131,106 @@ export default function ProductCreatePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => navigate("/products")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">New Product</h1>
-          <p className="mt-0.5 text-sm text-fg/60">Create a new product</p>
+      {/* Header */}
+      <div className="space-y-1">
+        <BreadcrumbNav
+          items={[
+            { label: "Products", href: "/products" },
+            { label: "New Product" },
+          ]}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">New Product</h1>
+            <p className="mt-0.5 text-sm text-fg/50">
+              Inventory, variants and stock can be set after creating
+            </p>
+          </div>
+          <Button
+            type="submit"
+            form="product-create-form"
+            variant="primary"
+            size="sm"
+            disabled={mutation.isPending}
+            className="gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {mutation.isPending ? "Creating…" : "Create Product"}
+          </Button>
         </div>
       </div>
 
       <form
+        id="product-create-form"
         onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-5 lg:grid-cols-3"
       >
+        {/* ── Main Column ── */}
         <div className="space-y-5 lg:col-span-2">
+
+          {/* Basic Info */}
           <Card>
-            <CardHeader title="Basic Information" />
+            <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
             <CardContent className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/70">
-                  Title <span className="text-danger">*</span>
+                <label className="mb-1.5 block text-xs font-medium text-fg/65">
+                  Name <span className="text-danger">*</span>
                 </label>
                 <Input
                   value={form.title}
                   onChange={(e) => set("title", e.target.value)}
-                  placeholder="Product title"
+                  placeholder="Product name"
                   required
+                  autoFocus
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/70">
+                <label className="mb-1.5 block text-xs font-medium text-fg/65">
                   Description
                 </label>
                 <RichTextEditor
                   value={form.description}
                   onChange={(html) => set("description", html)}
-                  placeholder="Describe your product..."
+                  placeholder="Describe your product…"
                   minHeight="140px"
                 />
               </div>
             </CardContent>
           </Card>
 
+          {/* Media */}
           <Card>
             <CardHeader
-              title="Images"
-              description="First image is used as the cover"
+              title={<SectionLabel icon={Image}>Media</SectionLabel>}
+              description="First image is used as the product cover"
             />
             <CardContent>
               <ProductImages
                 images={form.images}
                 onChange={(imgs) => set("images", imgs)}
               />
+              {form.images.length === 0 && (
+                <p className="mt-3 text-xs text-fg/40">
+                  Tip: You can add images after creating the product too.
+                </p>
+              )}
             </CardContent>
           </Card>
 
+          {/* Pricing */}
           <Card>
-            <CardHeader title="Pricing" />
+            <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-3">
                 {(
                   [
-                    { key: "price", label: "Price ($)" },
-                    { key: "compare_price", label: "Compare at ($)" },
-                    { key: "cost_price", label: "Cost price ($)" },
+                    { key: "price", label: "Price (£)" },
+                    { key: "compare_price", label: "Compare at (£)" },
+                    { key: "cost_price", label: "Cost price (£)" },
                   ] as const
                 ).map(({ key, label }) => (
                   <div key={key}>
-                    <label className="mb-1.5 block text-xs font-medium text-fg/70">
+                    <label className="mb-1.5 block text-xs font-medium text-fg/65">
                       {label}
                     </label>
                     <Input
@@ -187,18 +244,17 @@ export default function ProductCreatePage() {
                   </div>
                 ))}
               </div>
-              <label className="flex items-center gap-2 text-sm text-fg/80">
-                <input
-                  type="checkbox"
-                  checked={form.is_taxable}
-                  onChange={(e) => set("is_taxable", e.target.checked)}
-                  className="h-4 w-4 rounded border-border accent-accent"
-                />
-                Taxable
-              </label>
+
+              <Switch
+                checked={form.is_taxable}
+                onCheckedChange={(v) => set("is_taxable", v)}
+                label="Taxable"
+                description="Charge tax on this product"
+              />
+
               {form.is_taxable && (
-                <div className="max-w-30">
-                  <label className="mb-1.5 block text-xs font-medium text-fg/70">
+                <div className="w-32">
+                  <label className="mb-1.5 block text-xs font-medium text-fg/65">
                     VAT Rate (%)
                   </label>
                   <Input
@@ -208,7 +264,7 @@ export default function ProductCreatePage() {
                     step="0.01"
                     value={form.vat_rate}
                     onChange={(e) => set("vat_rate", e.target.value)}
-                    placeholder="10"
+                    placeholder="20"
                   />
                 </div>
               )}
@@ -216,126 +272,104 @@ export default function ProductCreatePage() {
           </Card>
         </div>
 
+        {/* ── Sidebar ── */}
         <div className="space-y-5">
+
+          {/* Status */}
           <Card>
             <CardHeader title="Status" />
             <CardContent className="space-y-4">
               <div>
-                <label className="mb-2 block text-xs font-medium text-fg/70">
+                <p className="mb-2 text-xs font-medium text-fg/65">
                   Product Type
-                </label>
+                </p>
                 <div className="flex gap-2">
-                  {[
-                    { value: "physical", label: "Physical" },
-                    { value: "digital", label: "Digital" },
-                  ].map((opt) => (
+                  {(
+                    [
+                      { value: "physical", label: "Physical" },
+                      { value: "digital", label: "Digital" },
+                    ] as const
+                  ).map((opt) => (
                     <button
                       key={opt.value}
                       type="button"
                       onClick={() => set("type", opt.value as ProductType)}
-                      className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
+                      className={cn(
+                        "flex-1 rounded-xs border py-2 text-sm font-medium transition",
                         form.type === opt.value
                           ? "border-accent bg-accent/10 text-accent"
-                          : "border-border bg-bg text-fg/60 hover:border-fg/20"
-                      }`}
+                          : "border-border text-fg/55 hover:border-fg/25 hover:text-fg",
+                      )}
                     >
                       {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/70">
-                  Status
+                <label className="mb-1.5 block text-xs font-medium text-fg/65">
+                  Product Status
                 </label>
-                <select
+                <Select
                   value={form.status}
-                  onChange={(e) => set("status", e.target.value as ProductStatus)}
-                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-bg"
+                  onValueChange={(v) => set("status", v as ProductStatus)}
                 >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                </select>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <label className="flex items-center gap-2 text-sm text-fg/80">
-                <input
-                  type="checkbox"
-                  checked={form.is_published_online}
-                  onChange={(e) => set("is_published_online", e.target.checked)}
-                  className="h-4 w-4 rounded border-border accent-accent"
-                />
-                Published online
-              </label>
+
+              <Switch
+                checked={form.is_published_online}
+                onCheckedChange={(v) => set("is_published_online", v)}
+                label="Published Online"
+                description="Visible on your storefront"
+              />
             </CardContent>
           </Card>
 
+          {/* Organisation */}
           <Card>
-            <CardHeader title="Categories & Tags" />
+            <CardHeader title="Organisation" />
             <CardContent className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/70">
+                <label className="mb-1.5 block text-xs font-medium text-fg/65">
                   Categories
                 </label>
-                <div className="max-h-48 space-y-1.5 overflow-y-auto">
-                  {categories.map((cat) => (
-                    <label
-                      key={cat._id}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition hover:bg-bg-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.categories.includes(cat._id)}
-                        onChange={(e) =>
-                          set(
-                            "categories",
-                            e.target.checked
-                              ? [...form.categories, cat._id]
-                              : form.categories.filter((id) => id !== cat._id),
-                          )
-                        }
-                        className="h-4 w-4 rounded border-border accent-accent"
-                      />
-                      {cat.name}
-                    </label>
-                  ))}
-                  {categories.length === 0 && (
-                    <p className="text-xs text-fg/40">No categories yet</p>
-                  )}
-                </div>
+                {catLoading ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <MultiSelect
+                    options={categoryOptions}
+                    value={form.categories}
+                    onChange={(v) => set("categories", v)}
+                    placeholder="Select categories…"
+                  />
+                )}
               </div>
+
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/70">
-                  Tags <span className="text-fg/40">(comma-separated)</span>
+                <label className="mb-1.5 block text-xs font-medium text-fg/65">
+                  Tags
                 </label>
-                <Input
+                <TagInput
                   value={form.tags}
-                  onChange={(e) => set("tags", e.target.value)}
-                  placeholder="spare part, engine, toyota"
+                  onChange={(tags) => set("tags", tags)}
+                  placeholder="Add tags…"
                 />
+                <p className="mt-1 text-[10px] text-fg/40">
+                  Press Enter or comma to add
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex flex-col gap-2">
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              disabled={mutation.isPending}
-              className="w-full"
-            >
-              {mutation.isPending ? "Creating..." : "Create Product"}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="w-full"
-              onClick={() => navigate("/products")}
-            >
-              Cancel
-            </Button>
-          </div>
         </div>
       </form>
     </div>

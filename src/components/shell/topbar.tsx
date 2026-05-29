@@ -78,7 +78,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               type="button"
               variant="secondary"
               size="sm"
-              className="h-9 w-9 shrink-0 rounded-lg p-0 sm:hidden"
+              className="h-9 w-9 shrink-0 rounded-xs p-0 sm:hidden"
               onClick={() => setInventorySearchOpen(true)}
               aria-label="Search inventory"
               title="Search inventory"
@@ -89,7 +89,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               type="button"
               variant="secondary"
               size="sm"
-              className="relative h-9 w-9 rounded-lg p-0"
+              className="relative h-9 w-9 rounded-xs p-0"
               onClick={() => setCartOpen(true)}
               aria-label="Open cart"
               title="Cart"
@@ -101,10 +101,10 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
                 </span>
               ) : null}
             </Button>
-            <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-bg-2/25 p-0.5">
+            <div className="flex items-center gap-0.5 rounded-xs border border-border/60 bg-bg-2/25 p-0.5">
               <Link
                 href="/settings"
-                className="grid h-9 w-9 place-items-center rounded-lg transition hover:bg-bg/80"
+                className="grid h-9 w-9 place-items-center rounded-xs transition hover:bg-bg/80"
                 aria-label="Settings"
                 title="Settings"
               >
@@ -124,7 +124,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               type="button"
               variant="secondary"
               size="sm"
-              className="ml-1 h-9 w-9 shrink-0 rounded-lg p-0 sm:w-auto sm:px-3 sm:text-xs sm:font-semibold"
+              className="ml-1 h-9 w-9 shrink-0 rounded-xs p-0 sm:w-auto sm:px-3 sm:text-xs sm:font-semibold"
               onClick={handleSignOut}
               aria-label="Sign out"
               title="Sign out"

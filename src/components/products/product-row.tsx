@@ -1,6 +1,13 @@
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  ActionsMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/actions-menu";
 import type { Product } from "@/types/product";
-import { Package } from "lucide-react";
+import { Package, Pencil, Trash2 } from "lucide-react";
 
 const EBAY_BADGE_MAP: Record<
   string,
@@ -22,22 +29,44 @@ export function EbaySyncBadge({
   return <Badge variant={variant}>{label}</Badge>;
 }
 
+function ActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <ActionsMenuTrigger />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onEdit}>
+          <Pencil className="h-3.5 w-3.5 text-fg/50" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem destructive onSelect={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface ProductRowProps {
   product: Product;
   onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-export function ProductRow({ product, onClick }: ProductRowProps) {
+export function ProductRow({ product, onClick, onEdit, onDelete }: ProductRowProps) {
   const coverImage = product.attachments?.[0];
 
   return (
     <tr
       onClick={onClick}
-      className="cursor-pointer transition hover:bg-bg-2/50"
+      className="group cursor-pointer transition hover:bg-bg-2/50"
     >
-      <td className="px-5 py-3">
+      {/* Product — absorbs all spare width; max-w-0 makes truncate work in tables */}
+      <td className="w-full max-w-0 px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-bg-2">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
             {coverImage?.url ? (
               <img
                 src={coverImage.url}
@@ -52,32 +81,57 @@ export function ProductRow({ product, onClick }: ProductRowProps) {
           </div>
           <div className="min-w-0">
             <div className="truncate font-medium text-fg">{product.title}</div>
-            {product.sku && (
-              <div className="mt-0.5 truncate text-xs text-fg/50">
-                SKU: {product.sku}
-              </div>
-            )}
+            <div className="mt-0.5 flex items-center gap-2">
+              {product.sku ? (
+                <span className="truncate text-xs text-fg/45">
+                  {product.sku}
+                </span>
+              ) : (
+                <span className="text-xs text-fg/30 italic">No SKU</span>
+              )}
+            </div>
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
+
+      {/* Status */}
+      <td className="whitespace-nowrap px-4 py-3">
         <Badge variant={product.status === "active" ? "ok" : "muted"}>
           {product.status === "active" ? "Active" : "Draft"}
         </Badge>
       </td>
-      <td className="px-4 py-3">
+
+      {/* Type */}
+      <td className="whitespace-nowrap px-4 py-3">
         <Badge variant="default">
           {product.type === "digital" ? "Digital" : "Physical"}
         </Badge>
       </td>
-      <td className="px-4 py-3 text-right font-medium tabular-nums">
-        ${product.price.toFixed(2)}
+
+      {/* Price */}
+      <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums text-sm">
+        £{product.price.toFixed(2)}
       </td>
-      <td className="px-4 py-3">
+
+      {/* eBay */}
+      <td className="whitespace-nowrap px-4 py-3">
         <EbaySyncBadge status={product.ebay_sync_status} />
       </td>
-      <td className="px-5 py-3 text-right text-xs text-fg/50">
-        {new Date(product.created_at).toLocaleDateString()}
+
+      {/* Created */}
+      <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-fg/45">
+        {new Date(product.created_at).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })}
+      </td>
+
+      {/* Actions */}
+      <td className="w-px whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end">
+          <ActionsMenu onEdit={onEdit} onDelete={onDelete} />
+        </div>
       </td>
     </tr>
   );

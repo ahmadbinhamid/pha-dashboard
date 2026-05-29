@@ -10,6 +10,9 @@ export interface InventoryListParams {
   page?: number;
   search?: string;
   location?: string;
+  product?: string;
+  variant?: string;
+  limit?: number;
 }
 
 export interface InventoryListData {
@@ -69,6 +72,18 @@ export const updateInventorySettings = async (
 ) => {
   const { data } = await apiClient.put<BeResponse<InventorySettings>>(
     "/inventory/settings",
+    payload,
+  );
+  return data;
+};
+
+export const ensureInventoryRecord = async (payload: {
+  product: string;
+  location: string;
+  variant?: string | null;
+}) => {
+  const { data } = await apiClient.post<BeResponse<InventoryRecord>>(
+    "/inventory/ensure",
     payload,
   );
   return data;

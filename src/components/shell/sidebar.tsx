@@ -3,8 +3,6 @@ import { Suspense } from "react";
 import { cn } from "@/utils/cn";
 import { useOrgSettings } from "@/context";
 import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
-import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
 import { NavItemsList } from "@/components/shell/nav-items-list";
 
 type SidebarProps = {
@@ -16,7 +14,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const { settings } = useOrgSettings();
 
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] flex-col border-r border-border bg-card/55">
+    <div className="flex h-dvh max-h-dvh flex-col border-r border-border bg-card/55">
+      {/* Logo / brand */}
       <div
         className={cn(
           "flex items-center gap-3 px-3 py-4",
@@ -25,7 +24,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       >
         <div
           className={cn(
-            "shrink-0 rounded-xl bg-black p-1.5 shadow-sm ring-1 ring-[hsl(var(--accent)/0.28)]",
+            "shrink-0 rounded-xs bg-black p-1.5 shadow-sm ring-1 ring-[hsl(var(--accent)/0.28)]",
             collapsed && "p-1",
           )}
         >
@@ -59,24 +58,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <NavItemsList collapsed={collapsed} />
         </Suspense>
       </nav>
-
-      <div className="border-t border-border/70 p-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "h-9 w-full text-fg/55 hover:bg-bg-2/80 hover:text-fg",
-            collapsed && "px-0",
-          )}
-          onClick={onToggleCollapse}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <Icons.ChevronRight /> : <Icons.ChevronLeft />}
-          {!collapsed ? <span className="ml-2 text-xs font-medium">Collapse</span> : null}
-        </Button>
-      </div>
     </div>
   );
 }

@@ -123,7 +123,7 @@ export default function InventorySettingsPage() {
                 type="checkbox"
                 checked={form.email_notifications ?? false}
                 onChange={(e) => set("email_notifications", e.target.checked)}
-                className="h-4 w-4 rounded border-border accent-accent"
+                className="h-4 w-4 rounded-xs border-border accent-accent"
               />
               Enable email notifications
             </label>

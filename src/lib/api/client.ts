@@ -21,14 +21,20 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const status: number | undefined = err.response?.status;
+    const message: string =
+      err.response?.data?.message ?? err.message ?? "Something went wrong";
+
+    if (status === 401) {
       clearToken();
       if (!window.location.pathname.startsWith("/login")) {
         window.location.replace("/login");
       }
     }
-    const message: string =
-      err.response?.data?.message ?? err.message ?? "Something went wrong";
-    return Promise.reject(new Error(message));
+
+    // Attach status so callers can distinguish auth failures from other errors
+    const error = new Error(message) as Error & { status?: number };
+    error.status = status;
+    return Promise.reject(error);
   },
 );

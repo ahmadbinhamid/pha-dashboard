@@ -31,9 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getProfile()
       .then((res) => setUser(res.data))
-      .catch(() => {
-        clearToken();
-        setTokenState(null);
+      .catch((err: Error & { status?: number }) => {
+        // Only kill the session on a genuine auth failure (401).
+        // Network errors, 500s, timeouts etc. should NOT log the user out —
+        // the axios interceptor already handles the 401 → redirect case.
+        if (err.status === 401) {
+          clearToken();
+          setTokenState(null);
+        }
       })
       .finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

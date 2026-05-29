@@ -1,7 +1,40 @@
-import { Button } from "@/components/ui/button";
 import { StockBadge } from "@/components/inventory/stock-badge";
+import {
+  DropdownMenu,
+  ActionsMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/actions-menu";
 import type { InventoryRecord } from "@/types/inventory";
-import { Package, History } from "lucide-react";
+import { History, Package, TrendingUp, Hash } from "lucide-react";
+
+function InventoryActionsMenu({ onAdjust, onSet, onHistory }: {
+  onAdjust: () => void;
+  onSet: () => void;
+  onHistory: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <ActionsMenuTrigger />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onAdjust}>
+          <TrendingUp className="h-3.5 w-3.5 text-fg/50" />
+          Adjust Stock
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSet}>
+          <Hash className="h-3.5 w-3.5 text-fg/50" />
+          Set Stock
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onHistory}>
+          <History className="h-3.5 w-3.5 text-fg/50" />
+          View History
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 interface InventoryRowProps {
   item: InventoryRecord;
@@ -11,13 +44,7 @@ interface InventoryRowProps {
   onHistory: () => void;
 }
 
-export function InventoryRow({
-  item,
-  threshold,
-  onAdjust,
-  onSet,
-  onHistory,
-}: InventoryRowProps) {
+export function InventoryRow({ item, threshold, onAdjust, onSet, onHistory }: InventoryRowProps) {
   const productName =
     typeof item.product === "object" ? item.product.title : "Unknown";
   const coverUrl =
@@ -27,15 +54,12 @@ export function InventoryRow({
 
   return (
     <tr className="hover:bg-bg-2/30">
-      <td className="px-5 py-3">
+      {/* Product — w-full so it absorbs all extra space; max-w-0 lets truncate work */}
+      <td className="w-full max-w-0 px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-border bg-bg-2">
+          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
             {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={productName}
-                className="h-full w-full object-cover"
-              />
+              <img src={coverUrl} alt={productName} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <Package className="h-4 w-4 text-fg/25" />
@@ -45,43 +69,16 @@ export function InventoryRow({
           <span className="truncate font-medium">{productName}</span>
         </div>
       </td>
-      <td className="px-4 py-3 text-fg/60">
+      <td className="whitespace-nowrap px-4 py-3 text-fg/60">
         {item.variant?.display_name ?? <span className="text-fg/30">—</span>}
       </td>
-      <td className="px-4 py-3 text-fg/70">{item.location?.name ?? "—"}</td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3 text-fg/70">{item.location?.name ?? "—"}</td>
+      <td className="whitespace-nowrap px-4 py-3">
         <StockBadge item={item} threshold={threshold} />
       </td>
-      <td className="px-5 py-3">
-        <div className="flex justify-end gap-1">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onAdjust}
-          >
-            Adjust
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onSet}
-          >
-            Set
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            title="View history"
-            onClick={onHistory}
-          >
-            <History className="h-3.5 w-3.5" />
-          </Button>
+      <td className="w-px whitespace-nowrap px-5 py-3">
+        <div className="flex justify-end">
+          <InventoryActionsMenu onAdjust={onAdjust} onSet={onSet} onHistory={onHistory} />
         </div>
       </td>
     </tr>
@@ -95,7 +92,7 @@ interface InventoryEmptyStateProps {
 export function InventoryEmptyState({ search }: InventoryEmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-2">
+      <div className="flex h-14 w-14 items-center justify-center rounded-xs bg-bg-2">
         <Package className="h-7 w-7 text-fg/30" />
       </div>
       <div>

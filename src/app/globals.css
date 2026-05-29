@@ -211,8 +211,8 @@
 
   body {
     @apply bg-bg font-sans text-fg antialiased;
-    overflow-x: clip;
-    min-height: 100dvh;
+    overflow: hidden;
+    height: 100dvh;
   }
 
   /* ─── Typography scale ─────────────────────────────────────────────────── */

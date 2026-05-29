@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/select";
 import { useToast } from "@/context";
 import { adjustStock } from "@/lib/api/inventory";
 import type { InventoryRecord } from "@/types/inventory";
@@ -58,7 +59,7 @@ export function AdjustStockDialog({ item, onClose }: AdjustStockDialogProps) {
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative z-10 w-[min(95vw,420px)] rounded-xl border border-border bg-bg p-5 shadow-2xl">
+      <div className="relative z-10 w-[min(95vw,420px)] rounded-xs border border-border bg-bg p-5 shadow-2xl">
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-semibold">Adjust Stock</div>
           <button
@@ -115,17 +116,11 @@ export function AdjustStockDialog({ item, onClose }: AdjustStockDialogProps) {
             <label className="mb-1 block text-xs font-medium text-fg/70">
               Type
             </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-bg"
-            >
+            <NativeSelect value={type} onChange={(e) => setType(e.target.value)}>
               {ADJUST_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
           <div>
