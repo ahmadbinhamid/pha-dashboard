@@ -27,6 +27,13 @@ router.get(
   asyncHandler(ctrl.getInventory),
 );
 
+// Ensure (upsert) an inventory record for a product+location
+router.post(
+  "/ensure",
+  validate(v.ensureRecord),
+  asyncHandler(ctrl.ensureRecord),
+);
+
 // Stock adjustments
 router.post(
   "/:inventoryId/adjust",

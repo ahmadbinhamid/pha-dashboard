@@ -1,33 +1,83 @@
-// scripts/seedSuperAdmin.js
-require("dotenv").config();
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const mongoose = require("mongoose");
 const User = require("../src/models/User");
+const Location = require("../src/models/Location");
+const Category = require("../src/models/Category");
+const { USER_ROLE, USER_STATUS } = require("../src/constants/user.constants");
+
+const LOCATIONS = [
+  { name: "Main Warehouse", address: "12 Industrial Ave, Sydney NSW 2000" },
+  { name: "Showroom", address: "45 High Street, Melbourne VIC 3000" },
+  { name: "Storage Unit B", address: "7 Depot Road, Brisbane QLD 4000" },
+];
+
+const CATEGORIES = [
+  { name: "Engine Parts", slug: "engine-parts" },
+  { name: "Brakes & Rotors", slug: "brakes-rotors" },
+  { name: "Suspension", slug: "suspension" },
+  { name: "Electrical", slug: "electrical" },
+  { name: "Body & Exterior", slug: "body-exterior" },
+  { name: "Filters & Fluids", slug: "filters-fluids" },
+  { name: "Transmission", slug: "transmission" },
+  { name: "Exhaust", slug: "exhaust" },
+];
 
 (async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     await User.syncIndexes();
 
+    // ── Super Admin ────────────────────────────────────────────────────────
     const email = process.env.SUPERADMIN_EMAIL || "superadmin@xyz.com";
     const password = process.env.SUPERADMIN_PASSWORD || "dewdrops123";
     const phone = process.env.SUPERADMIN_PHONE || null;
 
-    const exists = await User.exists({ email });
-    if (exists) {
-      console.log(`Superadmin already exists: ${email}`);
+    const existing = await User.findOne({ email });
+    if (existing) {
+      if (existing.status !== USER_STATUS.ACTIVE) {
+        existing.status = USER_STATUS.ACTIVE;
+        existing.verified_at = existing.verified_at ?? new Date();
+        await existing.save();
+        console.log(`SuperAdmin status updated to "${USER_STATUS.ACTIVE}": ${email}`);
+      } else {
+        console.log(`SuperAdmin already exists: ${email}`);
+      }
     } else {
       await User.create({
         first_name: "Super",
         last_name: "Admin",
         email,
         password,
-        role: "superadmin",
+        role: USER_ROLE.SUPERADMIN,
         phone,
-        status: 1,
+        status: USER_STATUS.ACTIVE,
         verified_at: new Date(),
       });
       console.log(`SuperAdmin created: ${email}`);
     }
+
+    // ── Locations ──────────────────────────────────────────────────────────
+    for (const loc of LOCATIONS) {
+      const exists = await Location.findOne({ name: loc.name });
+      if (!exists) {
+        await Location.create(loc);
+        console.log(`Location created: ${loc.name}`);
+      } else {
+        console.log(`Location already exists: ${loc.name}`);
+      }
+    }
+
+    // ── Categories ─────────────────────────────────────────────────────────
+    for (const cat of CATEGORIES) {
+      const exists = await Category.findOne({ slug: cat.slug });
+      if (!exists) {
+        await Category.create(cat);
+        console.log(`Category created: ${cat.name}`);
+      } else {
+        console.log(`Category already exists: ${cat.name}`);
+      }
+    }
+
   } catch (err) {
     console.error("Seed failed:", err);
     process.exit(1);

@@ -51,10 +51,10 @@ exports.getProducts = async (req, res) => {
       filter.$or = [{ title: re }, { sku: re }, { brand: re }, { tags: re }];
     }
     if (req.query.status !== undefined && req.query.status !== "") {
-      filter.status = parseInt(req.query.status);
+      filter.status = req.query.status;
     }
     if (req.query.type !== undefined && req.query.type !== "") {
-      filter.type = parseInt(req.query.type);
+      filter.type = req.query.type;
     }
     if (req.query.categories) {
       const cats = req.query.categories.split(",").filter(Boolean);
@@ -130,8 +130,8 @@ exports.createProduct = async (req, res) => {
       title,
       slug,
       description: description || "",
-      type: type !== undefined ? Number(type) : PRODUCT_TYPE.PHYSICAL,
-      status: status !== undefined ? Number(status) : PRODUCT_STATUS.DRAFT,
+      type: type !== undefined ? type : PRODUCT_TYPE.PHYSICAL,
+      status: status !== undefined ? status : PRODUCT_STATUS.DRAFT,
       is_published_online: toBool(is_published_online),
       price: price !== undefined ? Number(price) : 0,
       compare_price: compare_price ? Number(compare_price) : null,
@@ -217,8 +217,8 @@ exports.updateProduct = async (req, res) => {
     }
 
     if (description !== undefined) product.description = description;
-    if (type !== undefined) product.type = Number(type);
-    if (status !== undefined) product.status = Number(status);
+    if (type !== undefined) product.type = type;
+    if (status !== undefined) product.status = status;
     if (is_published_online !== undefined)
       product.is_published_online = toBool(is_published_online);
     if (price !== undefined) product.price = Number(price);

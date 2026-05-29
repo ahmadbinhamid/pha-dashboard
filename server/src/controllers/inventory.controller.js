@@ -31,9 +31,28 @@ exports.getInventory = async (req, res) => {
       limit,
       search: req.query.search || undefined,
       location: req.query.location || undefined,
+      product: req.query.product || undefined,
+      variant: req.query.variant || undefined,
     });
 
     return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.ensureRecord = async (req, res) => {
+  try {
+    const { product, location, variant } = req.body;
+
+    const record = await Inventory.findOneAndUpdate(
+      { product, location, variant: variant || null },
+      { $setOnInsert: { product, location, variant: variant || null, stock_count: 0, stock_reserved: 0 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    const populated = await fetchPopulatedRecord(record._id);
+    return success(res, populated, "Inventory record ensured");
   } catch (err) {
     return systemfailure(res, err);
   }

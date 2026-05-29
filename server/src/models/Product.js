@@ -21,12 +21,12 @@ const productSchema = buildSchema({
   slug: { type: String, unique: true },
   description: { type: String, default: "" },
   type: {
-    type: Number,
+    type: String,
     enum: Object.values(PRODUCT_TYPE),
     default: PRODUCT_TYPE.PHYSICAL,
   },
   status: {
-    type: Number,
+    type: String,
     enum: Object.values(PRODUCT_STATUS),
     default: PRODUCT_STATUS.DRAFT,
   },

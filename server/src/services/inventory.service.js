@@ -6,10 +6,21 @@ const ProductVariant = require("../models/ProductVariant");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { logger } = require("../loaders/logging");
 
-async function listInventory({ page = 1, limit = 20, search, location } = {}) {
+async function listInventory({ page = 1, limit = 20, search, location, product, variant } = {}) {
   const skip = (page - 1) * limit;
 
+  const preFilters = [];
+  if (product) {
+    preFilters.push({ $match: { product: mongoose.Types.ObjectId.createFromHexString(product) } });
+  }
+  if (variant === "null") {
+    preFilters.push({ $match: { variant: null } });
+  } else if (variant) {
+    preFilters.push({ $match: { variant: mongoose.Types.ObjectId.createFromHexString(variant) } });
+  }
+
   const pipeline = [
+    ...preFilters,
     {
       $lookup: {
         from: "products",
@@ -18,7 +29,7 @@ async function listInventory({ page = 1, limit = 20, search, location } = {}) {
         as: "product",
       },
     },
-    { $unwind: { path: "$product", preserveNullAndEmpty: false } },
+    { $unwind: { path: "$product", preserveNullAndEmptyArrays: false } },
     { $match: { "product.deleted_at": null } },
     {
       $lookup: {
@@ -37,7 +48,7 @@ async function listInventory({ page = 1, limit = 20, search, location } = {}) {
         as: "location",
       },
     },
-    { $unwind: { path: "$location", preserveNullAndEmpty: false } },
+    { $unwind: { path: "$location", preserveNullAndEmptyArrays: false } },
     {
       $lookup: {
         from: "attachments",

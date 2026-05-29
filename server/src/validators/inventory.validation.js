@@ -9,6 +9,16 @@ const listInventory = {
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().allow("").default(""),
     location: Joi.string().allow("").default(""),
+    product: Joi.string().allow("").default(""),
+    variant: Joi.string().allow("").default(""),
+  }),
+};
+
+const ensureRecord = {
+  body: Joi.object({
+    product: Joi.string().required(),
+    location: Joi.string().required(),
+    variant: Joi.string().allow(null, "").default(null),
   }),
 };
 
@@ -48,4 +58,4 @@ const updateSettings = {
   }),
 };
 
-module.exports = { listInventory, adjustStock, setStock, updateSettings };
+module.exports = { listInventory, adjustStock, setStock, updateSettings, ensureRecord };

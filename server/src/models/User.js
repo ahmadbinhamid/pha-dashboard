@@ -30,7 +30,7 @@ const userSchema = buildSchema({
     default: USER_ROLE.USER,
   },
   status: {
-    type: Number,
+    type: String,
     enum: Object.values(USER_STATUS),
     default: USER_STATUS.INACTIVE,
   },
