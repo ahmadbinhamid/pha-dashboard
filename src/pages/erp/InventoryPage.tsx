@@ -16,7 +16,8 @@ import { getInventory, getInventorySettings } from "@/lib/api/inventory";
 import { getLocations } from "@/lib/api/products";
 import type { InventoryRecord } from "@/types/inventory";
 import type { Location } from "@/types/product";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
+import { Search } from "lucide-react";
 
 export default function InventoryPage() {
   const navigate = useNavigate();
@@ -33,17 +34,18 @@ export default function InventoryPage() {
   );
   const [historyItem, setHistoryItem] = useState<InventoryRecord | null>(null);
 
-  // Debounce search input with useEffect + cleanup (no window hacks)
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchParams((prev) => {
+        const current = prev.get("search") ?? "";
+        if (inputValue === current) return prev; // no change — don't reset page
         const next = new URLSearchParams(prev);
         if (inputValue) next.set("search", inputValue);
         else next.delete("search");
         next.set("page", "1");
         return next;
       });
-    }, 500);
+    }, 400);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
 
@@ -177,34 +179,12 @@ export default function InventoryPage() {
           )}
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-5 py-3">
-            <div className="text-xs text-fg/50">
-              {total} record{total !== 1 ? "s" : ""} — Page {page} of{" "}
-              {totalPages}
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={total}
+          onPageChange={setPage}
+        />
       </Card>
 
       {adjustItem && (

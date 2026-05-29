@@ -11,7 +11,7 @@
 module.exports = function pagination(options = {}) {
   const defaultLimit = Number.isInteger(options.defaultLimit)
     ? options.defaultLimit
-    : 20;
+    : 15;
   const maxLimit = Number.isInteger(options.maxLimit) ? options.maxLimit : 100;
 
   return function paginationMiddleware(req, _res, next) {

@@ -18,7 +18,7 @@ router.use(auth());
 router.get(
   "/",
   validate(V.listUsers),
-  pagination({ defaultLimit: 20, maxLimit: 100 }),
+  pagination({ defaultLimit: 15, maxLimit: 100 }),
   asyncHandler(ctrl.getUsers)
 );
 

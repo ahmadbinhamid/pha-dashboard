@@ -16,15 +16,8 @@ import { ProductRow } from "@/components/products/product-row";
 import { getProducts, deleteProduct } from "@/lib/api/products";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
-import {
-  Plus,
-  Search,
-  Package,
-  ChevronLeft,
-  ChevronRight,
-  Trash2,
-  AlertTriangle,
-} from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
+import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [
   { label: "All", value: "" },
@@ -61,6 +54,8 @@ export default function ProductsPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchParams((prev) => {
+        const current = prev.get("search") ?? "";
+        if (inputValue === current) return prev; // no change — don't reset page
         const next = new URLSearchParams(prev);
         if (inputValue) next.set("search", inputValue);
         else next.delete("search");
@@ -216,52 +211,13 @@ export default function ProductsPage() {
           )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-5 py-3">
-            <p className="text-xs text-fg/50">
-              Page {page} of {totalPages} · {total} total
-            </p>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1 || isFetching}
-                onClick={() => setPage(page - 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {/* Page number chips */}
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                const pg = i + 1;
-                return (
-                  <button
-                    key={pg}
-                    type="button"
-                    onClick={() => setPage(pg)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-xs text-xs font-medium transition ${
-                      pg === page
-                        ? "bg-accent text-accent-fg"
-                        : "text-fg/60 hover:bg-bg-2"
-                    }`}
-                  >
-                    {pg}
-                  </button>
-                );
-              })}
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPages || isFetching}
-                onClick={() => setPage(page + 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={total}
+          isLoading={isFetching}
+          onPageChange={setPage}
+        />
       </Card>
 
       {/* Delete confirm modal */}

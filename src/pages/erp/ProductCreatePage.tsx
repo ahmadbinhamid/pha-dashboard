@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +86,7 @@ function SectionLabel({
 export default function ProductCreatePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
 
   const { data: catData, isLoading: catLoading } = useQuery({
@@ -103,6 +104,7 @@ export default function ProductCreatePage() {
     mutationFn: (fd: FormData) => createProduct(fd),
     onSuccess: (res) => {
       toast({ title: "Product created", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       const slug = res.data?.slug;
       navigate(slug ? `/products/${slug}/edit` : "/products");
     },
