@@ -47,7 +47,15 @@ exports.ensureRecord = async (req, res) => {
 
     const record = await Inventory.findOneAndUpdate(
       { product, location, variant: variant || null },
-      { $setOnInsert: { product, location, variant: variant || null, stock_count: 0, stock_reserved: 0 } },
+      {
+        $setOnInsert: {
+          product,
+          location,
+          variant: variant || null,
+          stock_count: 0,
+          stock_reserved: 0,
+        },
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
 
