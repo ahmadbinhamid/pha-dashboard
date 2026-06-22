@@ -34,6 +34,7 @@ const productVariantSchema = buildSchema({
   },
   // TODO(marketplace): same as Product — move to MarketplaceListing collection
   ebay_listing_id: { type: String, default: null },
+  ebay_offer_id: { type: String, default: null },
   ebay_sync_status: {
     type: String,
     enum: Object.values(EBAY_SYNC_STATUS),

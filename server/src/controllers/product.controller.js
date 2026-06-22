@@ -204,6 +204,8 @@ exports.updateProduct = async (req, res) => {
       has_variants,
       brand,
       digital_file,
+      ebay_category_id,
+      ebay_condition,
     } = body;
 
     // Slug regeneration only when title actually changes
@@ -243,6 +245,10 @@ exports.updateProduct = async (req, res) => {
     if (has_variants !== undefined) product.has_variants = toBool(has_variants);
     if (brand !== undefined) product.brand = brand || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
+    if (ebay_category_id !== undefined)
+      product.ebay_category_id = ebay_category_id || null;
+    if (ebay_condition !== undefined && ebay_condition)
+      product.ebay_condition = ebay_condition;
 
     // Parse array fields from FormData
     const { attachments, categories, tags, related_products, choices } =
@@ -354,6 +360,27 @@ exports.duplicateProduct = async (req, res) => {
 
     const populated = await fetchPopulated(clone._id);
     return created(res, populated, "Product duplicated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.syncToEbay = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id).populate("attachments");
+    if (!product) return notFound(res, "Product not found");
+
+    const variants = product.has_variants
+      ? await ProductVariant.find({ product: product._id })
+      : [];
+
+    product.ebay_sync_status = EBAY_SYNC_STATUS.PENDING;
+    await product.save();
+
+    await syncProductToEbay(product, variants);
+
+    const populated = await fetchPopulated(product._id);
+    return success(res, populated, "eBay sync queued");
   } catch (err) {
     return systemfailure(res, err);
   }

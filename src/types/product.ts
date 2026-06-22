@@ -81,6 +81,9 @@ export interface Product {
   choices: Choice[];
   digital_file: Attachment | null;
   ebay_listing_id: string | null;
+  ebay_offer_id: string | null;
+  ebay_category_id: string | null;
+  ebay_condition: string;
   ebay_sync_status: EbaySyncStatus;
   ebay_synced_at: string | null;
   created_at: string;
@@ -124,4 +127,18 @@ export interface ProductEditFormState {
   tags: string[];
   images: Attachment[];
   choices: Choice[];
+  ebay_category_id: string;
+  ebay_condition: string;
+}
+
+export interface EbaySettings {
+  merchant_location_key: string | null;
+  fulfillment_policy_id: string | null;
+  payment_policy_id: string | null;
+  return_policy_id: string | null;
+}
+
+export interface EbayStatus {
+  connected: boolean;
+  reason?: string;
 }

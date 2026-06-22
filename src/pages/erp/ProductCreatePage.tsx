@@ -26,7 +26,7 @@ import type {
   ProductStatus,
 } from "@/types/product";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package2, Image, DollarSign, Plus } from "lucide-react";
+import { Package2, Image, DollarSign, Plus, ShoppingBag } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 const INITIAL: ProductCreateFormState = {
@@ -369,6 +369,48 @@ export default function ProductCreatePage() {
                   Press Enter or comma to add
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* eBay tip */}
+          <Card>
+            <CardHeader
+              title={
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-xs bg-accent/10">
+                    <ShoppingBag className="h-3.5 w-3.5 text-accent" />
+                  </div>
+                  <span>eBay Listing</span>
+                </div>
+              }
+            />
+            <CardContent>
+              <p className="text-xs text-fg/55">
+                After creating, open the product editor to set the eBay Category
+                and Condition — then hit <strong>Sync to eBay</strong>.
+              </p>
+              <ul className="mt-3 space-y-1.5 text-[11px] text-fg/50">
+                <li className="flex items-start gap-1.5">
+                  <span className="mt-px text-danger">*</span>
+                  <span><strong>Title</strong> — required</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="mt-px text-danger">*</span>
+                  <span><strong>Description</strong> — required</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="mt-px text-danger">*</span>
+                  <span><strong>At least 1 image</strong> — required to publish</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="mt-px text-danger">*</span>
+                  <span><strong>Price</strong> — required</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="mt-px text-fg/30">·</span>
+                  <span>SKU — recommended (auto-generated if blank)</span>
+                </li>
+              </ul>
             </CardContent>
           </Card>
 

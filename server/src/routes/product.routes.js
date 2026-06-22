@@ -39,6 +39,12 @@ router.post(
   validate(v.byIdParam),
   asyncHandler(ctrl.duplicateProduct),
 );
+router.post(
+  "/:id/sync-ebay",
+  auth(),
+  validate(v.byIdParam),
+  asyncHandler(ctrl.syncToEbay),
+);
 router.get(
   "/:id/variants",
   auth(),

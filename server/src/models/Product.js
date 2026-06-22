@@ -56,6 +56,9 @@ const productSchema = buildSchema({
   // MarketplaceListing collection when adding Amazon/Shopify/Daraz etc.
   // Schema: { product, variant, platform, listing_id, sync_status, synced_at }
   ebay_listing_id: { type: String, default: null },
+  ebay_offer_id: { type: String, default: null },
+  ebay_category_id: { type: String, default: null },
+  ebay_condition: { type: String, default: "NEW" },
   ebay_sync_status: {
     type: String,
     enum: Object.values(EBAY_SYNC_STATUS),
