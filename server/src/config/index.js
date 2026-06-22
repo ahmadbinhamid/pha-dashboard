@@ -74,6 +74,11 @@ const config = {
     refreshToken: get("EBAY_REFRESH_TOKEN", null),
     marketplaceId: get("EBAY_MARKETPLACE_ID", "EBAY_AU"),
     sandbox: get("EBAY_SANDBOX", "false") === "true",
+    // Fallback settings — used when the EbaySettings DB record has no value set
+    merchantLocationKey: get("EBAY_MERCHANT_LOCATION_KEY", null),
+    fulfillmentPolicyId: get("EBAY_FULFILLMENT_POLICY_ID", null),
+    paymentPolicyId: get("EBAY_PAYMENT_POLICY_ID", null),
+    returnPolicyId: get("EBAY_RETURN_POLICY_ID", null),
   },
 };
 

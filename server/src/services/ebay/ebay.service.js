@@ -90,7 +90,18 @@ function ebayHeaders(token, extra = {}) {
 async function loadSettings() {
   // Lazy-load to avoid circular dep at module load time
   const EbaySettings = require("../../models/EbaySettings");
-  return EbaySettings.findOne().lean() || {};
+  const db = (await EbaySettings.findOne().lean()) || {};
+  // Fall back to env vars so the app works without a DB settings record
+  return {
+    merchant_location_key:
+      db.merchant_location_key || config.ebay.merchantLocationKey || null,
+    fulfillment_policy_id:
+      db.fulfillment_policy_id || config.ebay.fulfillmentPolicyId || null,
+    payment_policy_id:
+      db.payment_policy_id || config.ebay.paymentPolicyId || null,
+    return_policy_id:
+      db.return_policy_id || config.ebay.returnPolicyId || null,
+  };
 }
 
 // ── Step 1: Inventory Item ────────────────────────────────────────────────────
