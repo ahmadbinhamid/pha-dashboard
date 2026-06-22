@@ -48,7 +48,11 @@ import {
   Layers,
   Tag,
   Boxes,
+  ExternalLink,
+  RefreshCcw,
+  AlertCircle,
 } from "lucide-react";
+import { syncProductToEbay } from "@/lib/api/products";
 import { cn } from "@/utils/cn";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,6 +79,8 @@ function productToForm(p: Product): ProductEditFormState {
     tags: p.tags ?? [],
     images: p.attachments ?? [],
     choices: p.choices?.map((c) => ({ name: c.name, items: c.items })) ?? [],
+    ebay_category_id: p.ebay_category_id ?? "",
+    ebay_condition: p.ebay_condition ?? "NEW",
   };
 }
 
@@ -103,6 +109,8 @@ function formToFD(form: ProductEditFormState): FormData {
     JSON.stringify(form.images.map((img) => img._id || img.id).filter(Boolean)),
   );
   fd.append("choices", JSON.stringify(form.choices));
+  fd.append("ebay_category_id", form.ebay_category_id);
+  fd.append("ebay_condition", form.ebay_condition);
   return fd;
 }
 
@@ -124,6 +132,165 @@ function SectionLabel({
       </div>
       <span>{children}</span>
     </div>
+  );
+}
+
+// ── eBay condition options (eBay Sell Inventory API values) ───────────────────
+const EBAY_CONDITIONS = [
+  { value: "NEW", label: "New" },
+  { value: "LIKE_NEW", label: "Like New" },
+  { value: "USED_EXCELLENT", label: "Used – Excellent" },
+  { value: "USED_GOOD", label: "Used – Good" },
+  { value: "USED_ACCEPTABLE", label: "Used – Acceptable" },
+  { value: "FOR_PARTS_OR_NOT_WORKING", label: "For Parts / Not Working" },
+];
+
+// ── eBay sync card ─────────────────────────────────────────────────────────────
+function EbayCard({
+  product,
+  form,
+  set,
+  isDirty,
+  onSynced,
+}: {
+  product: import("@/types/product").Product;
+  form: import("@/types/product").ProductEditFormState;
+  set: <K extends keyof import("@/types/product").ProductEditFormState>(
+    key: K,
+    value: import("@/types/product").ProductEditFormState[K],
+  ) => void;
+  isDirty: boolean;
+  onSynced: () => void;
+}) {
+  const { toast } = useToast();
+
+  const syncMutation = useMutation({
+    mutationFn: () => syncProductToEbay(product._id),
+    onSuccess: () => {
+      toast({ title: "eBay sync queued", tone: "success" });
+      onSynced();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Sync failed", description: err.message, tone: "danger" });
+    },
+  });
+
+  const statusVariant =
+    product.ebay_sync_status === "synced"
+      ? "ok"
+      : product.ebay_sync_status === "pending"
+        ? "warn"
+        : product.ebay_sync_status === "error"
+          ? "danger"
+          : "muted";
+
+  const ebayBaseUrl = "https://www.ebay.com.au/itm/";
+
+  return (
+    <Card>
+      <CardHeader
+        title="eBay"
+        right={
+          <Badge variant={statusVariant}>
+            {product.ebay_sync_status.replace("_", " ")}
+          </Badge>
+        }
+      />
+      <CardContent className="space-y-4">
+        {/* Category ID — required by eBay to create an offer */}
+        <div>
+          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-fg/65">
+            eBay Category ID
+            <span className="text-danger" title="Required to publish on eBay">*</span>
+          </label>
+          <Input
+            value={form.ebay_category_id}
+            onChange={(e) => set("ebay_category_id", e.target.value)}
+            placeholder="e.g. 33712"
+          />
+          <p className="mt-1 text-[10px] text-fg/40">
+            Find yours in eBay's category tree. Required to list.
+          </p>
+        </div>
+
+        {/* Condition — required by eBay */}
+        <div>
+          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-fg/65">
+            Condition
+            <span className="text-danger" title="Required by eBay">*</span>
+          </label>
+          <Select
+            value={form.ebay_condition}
+            onValueChange={(v) => set("ebay_condition", v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select condition…" />
+            </SelectTrigger>
+            <SelectContent>
+              {EBAY_CONDITIONS.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Unsaved warning */}
+        {isDirty && (
+          <div className="flex items-start gap-2 rounded-xs bg-warn/10 p-2.5 text-xs text-warn">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Save your changes before syncing to eBay.
+          </div>
+        )}
+
+        {/* Sync button */}
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          className="w-full gap-1.5"
+          disabled={syncMutation.isPending || isDirty || !form.ebay_category_id}
+          onClick={() => syncMutation.mutate()}
+        >
+          <RefreshCcw className="h-3.5 w-3.5" />
+          {syncMutation.isPending ? "Syncing…" : "Sync to eBay"}
+        </Button>
+
+        {!form.ebay_category_id && !isDirty && (
+          <p className="text-center text-[10px] text-fg/40">
+            Enter an eBay Category ID above to enable sync.
+          </p>
+        )}
+
+        {/* Listing link */}
+        {product.ebay_listing_id && (
+          <a
+            href={`${ebayBaseUrl}${product.ebay_listing_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 text-xs text-accent hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            View on eBay
+          </a>
+        )}
+
+        {/* Last synced timestamp */}
+        {product.ebay_synced_at && (
+          <p className="text-center text-[10px] text-fg/40">
+            Last synced:{" "}
+            {new Date(product.ebay_synced_at).toLocaleString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -677,39 +844,15 @@ export default function ProductEditPage() {
           </Card>
 
           {/* eBay */}
-          <Card>
-            <CardHeader title="eBay" />
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-fg/55">Sync status</span>
-                <Badge
-                  variant={
-                    product.ebay_sync_status === "synced"
-                      ? "ok"
-                      : product.ebay_sync_status === "pending"
-                        ? "warn"
-                        : product.ebay_sync_status === "error"
-                          ? "danger"
-                          : "muted"
-                  }
-                >
-                  {product.ebay_sync_status.replace("_", " ")}
-                </Badge>
-              </div>
-              {product.ebay_synced_at && (
-                <p className="mt-2 text-xs text-fg/40">
-                  Last synced:{" "}
-                  {new Date(product.ebay_synced_at).toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <EbayCard
+            product={product}
+            form={form}
+            set={set}
+            isDirty={isDirty}
+            onSynced={() => {
+              queryClient.invalidateQueries({ queryKey: ["product", slug] });
+            }}
+          />
 
         </div>
       </form>

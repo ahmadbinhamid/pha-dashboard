@@ -96,6 +96,13 @@ export const getCategories = async () => {
   return data;
 };
 
+export const syncProductToEbay = async (id: string) => {
+  const { data } = await apiClient.post<BeResponse<Product>>(
+    `/product/${id}/sync-ebay`,
+  );
+  return data;
+};
+
 export const getLocations = async () => {
   const { data } = await apiClient.get<BeResponse<Location[]>>("/location");
   return data;
