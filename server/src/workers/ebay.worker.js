@@ -1,9 +1,15 @@
 // src/workers/ebay.worker.js
 
 require("dotenv").config();
+const { connectMongo } = require("../loaders/mongoose");
 const { ebayQueue } = require("../queues/ebay.queue");
 const ebayService = require("../services/ebay/ebay.service");
 const { logger } = require("../loaders/logging");
+
+connectMongo().catch((err) => {
+  logger.error(`[ebayWorker] MongoDB connection failed: ${err.message}`);
+  process.exit(1);
+});
 
 ebayQueue.process("sync_product", 2, async (job) => {
   const { product, variants } = job.data;
