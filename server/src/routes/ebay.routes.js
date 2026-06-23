@@ -8,6 +8,8 @@ const ctrl = require("../controllers/ebay.controller");
 router.get("/status", auth(), asyncHandler(ctrl.getStatus));
 router.get("/settings", auth(), asyncHandler(ctrl.getSettings));
 router.put("/settings", auth(), asyncHandler(ctrl.updateSettings));
+router.get("/category-suggestions", auth(), asyncHandler(ctrl.getCategorySuggestions));
+router.get("/condition-policies", auth(), asyncHandler(ctrl.getConditionPolicies));
 
 // Webhook — no JWT auth (eBay calls these); HMAC-verified on POST
 router.get("/webhook", asyncHandler(ctrl.handleWebhookChallenge));

@@ -53,6 +53,8 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import { syncProductToEbay } from "@/lib/api/products";
+import { getCategorySuggestions, getConditionPolicies } from "@/lib/api/ebay";
+import type { CategorySuggestion, ConditionOption } from "@/types/ebay";
 import { cn } from "@/utils/cn";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -169,6 +171,104 @@ function EbayCard({
 
   const ebayBaseUrl = "https://www.ebay.com.au/itm/";
 
+  // ── Autocomplete state ───────────────────────────────────────────────────────
+  const [searchText, setSearchText] = useState("");
+  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
+  const [isSandbox, setIsSandbox] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Condition policies state ─────────────────────────────────────────────────
+  const [conditions, setConditions] = useState<ConditionOption[]>([]);
+  const [conditionRequired, setConditionRequired] = useState(false);
+  const [conditionsLoading, setConditionsLoading] = useState(false);
+
+  // Close dropdown on outside click; clean up debounce on unmount
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  // Fetch condition policies whenever the category ID changes to a numeric value
+  useEffect(() => {
+    const categoryId = form.ebay_category_id;
+    if (!categoryId || !/^\d+$/.test(categoryId)) {
+      setConditions([]);
+      return;
+    }
+    setConditionsLoading(true);
+    getConditionPolicies(categoryId)
+      .then((res) => {
+        const { conditions: newConditions, conditionRequired: required } = res.data;
+        setConditions(newConditions);
+        setConditionRequired(required);
+        // Reset condition if the current value isn't valid for this category
+        if (newConditions.length > 0) {
+          const validIds = new Set(newConditions.map((c) => c.conditionId));
+          if (!validIds.has(form.ebay_condition)) {
+            set("ebay_condition", newConditions[0].conditionId);
+          }
+        }
+      })
+      .catch(() => setConditions([]))
+      .finally(() => setConditionsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.ebay_category_id]);
+
+  // Debounced category search
+  const handleSearchChange = (value: string) => {
+    setSearchText(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!value.trim() || value.length < 2) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const res = await getCategorySuggestions(value.trim());
+        if (res.data.sandbox) {
+          setIsSandbox(true);
+          setSuggestions([]);
+          setShowDropdown(false);
+        } else {
+          setIsSandbox(false);
+          setSuggestions(res.data.suggestions);
+          setShowDropdown(res.data.suggestions.length > 0);
+        }
+      } catch {
+        setSuggestions([]);
+        setShowDropdown(false);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 350);
+  };
+
+  const handleSelectSuggestion = (s: CategorySuggestion) => {
+    set("ebay_category_id", s.categoryId);
+    setSearchText(s.categoryName);
+    setShowDropdown(false);
+    setSuggestions([]);
+  };
+
+  // Use live API conditions when available; fall back to static list
+  const conditionOptions =
+    conditions.length > 0
+      ? conditions.map((c) => ({ value: c.conditionId, label: c.conditionDescription }))
+      : EBAY_CONDITIONS;
+
   return (
     <Card>
       <CardHeader
@@ -180,23 +280,66 @@ function EbayCard({
         }
       />
       <CardContent className="space-y-4">
-        {/* Category ID — required by eBay to create an offer */}
+
+        {/* Category search — autocomplete */}
+        <div ref={dropdownRef} className="relative">
+          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-fg/65">
+            Search Category
+          </label>
+          <div className="relative">
+            <Input
+              value={searchText}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder={isSandbox ? "Unavailable in sandbox" : "Search eBay categories…"}
+              disabled={isSandbox}
+            />
+            {suggestionsLoading && (
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-fg/40 select-none">
+                …
+              </span>
+            )}
+          </div>
+          {isSandbox && (
+            <p className="mt-1 text-[10px] text-amber-500/80">
+              Category search is unavailable in sandbox — enter the ID directly below.
+            </p>
+          )}
+          {showDropdown && suggestions.length > 0 && (
+            <div className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-xs border border-border bg-card shadow-lg">
+              {suggestions.map((s) => (
+                <button
+                  key={s.categoryId}
+                  type="button"
+                  className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-accent/10"
+                  onClick={() => handleSelectSuggestion(s)}
+                >
+                  <span className="text-xs font-medium">{s.categoryName}</span>
+                  <span className="line-clamp-1 text-[10px] leading-tight text-fg/40">
+                    {s.breadcrumb}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Category ID — manual input / sandbox fallback */}
         <div>
           <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-fg/65">
-            eBay Category ID
+            Category ID
             <span className="text-danger" title="Required to publish on eBay">*</span>
           </label>
           <Input
             value={form.ebay_category_id}
             onChange={(e) => set("ebay_category_id", e.target.value)}
-            placeholder="e.g. 33712"
+            placeholder="e.g. 9886"
           />
           <p className="mt-1 text-[10px] text-fg/40">
-            Find yours in eBay's category tree. Required to list.
+            Pre-filled from search, or enter manually. Required to list.
           </p>
         </div>
 
-        {/* Condition — required by eBay */}
+        {/* Condition — populated from category-aware API or static fallback */}
         <div>
           <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-fg/65">
             Condition
@@ -205,18 +348,25 @@ function EbayCard({
           <Select
             value={form.ebay_condition}
             onValueChange={(v) => set("ebay_condition", v)}
+            disabled={conditionsLoading}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select condition…" />
             </SelectTrigger>
             <SelectContent>
-              {EBAY_CONDITIONS.map((c) => (
+              {conditionOptions.map((c) => (
                 <SelectItem key={c.value} value={c.value}>
                   {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {conditionsLoading && (
+            <p className="mt-1 text-[10px] text-fg/40">Loading conditions for this category…</p>
+          )}
+          {!conditionsLoading && conditions.length > 0 && !conditionRequired && (
+            <p className="mt-1 text-[10px] text-fg/40">Condition is optional for this category.</p>
+          )}
         </div>
 
         {/* Listing link */}

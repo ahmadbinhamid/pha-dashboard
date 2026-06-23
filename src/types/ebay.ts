@@ -7,6 +7,26 @@ export type EbayCondition =
   | "USED_GOOD"
   | "USED_ACCEPTABLE";
 
+export type CategorySuggestion = {
+  categoryId: string;
+  categoryName: string;
+  breadcrumb: string;
+};
+
+export type CategorySuggestionsResponse =
+  | { sandbox: true; suggestions: never[] }
+  | { sandbox: false; suggestions: CategorySuggestion[] };
+
+export type ConditionOption = {
+  conditionId: string;
+  conditionDescription: string;
+};
+
+export type ConditionPoliciesResponse = {
+  conditionRequired: boolean;
+  conditions: ConditionOption[];
+};
+
 export type VehicleFitmentRow = {
   id: string;
   make: string;

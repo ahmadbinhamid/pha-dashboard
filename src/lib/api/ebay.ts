@@ -1,6 +1,10 @@
 import { apiClient } from "./client";
 import type { BeResponse } from "./base";
 import type { EbaySettings, EbayStatus } from "@/types/product";
+import type {
+  CategorySuggestionsResponse,
+  ConditionPoliciesResponse,
+} from "@/types/ebay";
 
 export const getEbayStatus = async () => {
   const { data } = await apiClient.get<BeResponse<EbayStatus>>("/ebay/status");
@@ -16,6 +20,22 @@ export const updateEbaySettings = async (payload: Partial<EbaySettings>) => {
   const { data } = await apiClient.put<BeResponse<EbaySettings>>(
     "/ebay/settings",
     payload,
+  );
+  return data;
+};
+
+export const getCategorySuggestions = async (q: string) => {
+  const { data } = await apiClient.get<BeResponse<CategorySuggestionsResponse>>(
+    "/ebay/category-suggestions",
+    { params: { q } },
+  );
+  return data;
+};
+
+export const getConditionPolicies = async (categoryId: string) => {
+  const { data } = await apiClient.get<BeResponse<ConditionPoliciesResponse>>(
+    "/ebay/condition-policies",
+    { params: { categoryId } },
   );
   return data;
 };
