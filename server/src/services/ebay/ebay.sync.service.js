@@ -59,12 +59,13 @@ async function syncProduct(productPlain, variants = []) {
 
       try {
         const totalQty = await getTotalStockForProductVariant(product._id, variantId);
-        const quantity = Math.max(totalQty, 1);
+        // Never fake stock — pass true quantity so eBay shows out-of-stock correctly
+        const quantity = totalQty;
 
         // Step 1 — inventory item
         const inventoryItem = buildInventoryItem(product, sku, quantity);
         await upsertInventoryItem(token, inventoryItem);
-        logger.info(`[eBay] inventory_item upserted: ${sku}`);
+        logger.info(`[eBay] inventory_item upserted: ${sku} (qty: ${quantity})`);
 
         if (!product.ebay_category_id) {
           logger.warn(`[eBay] ${sku}: ebay_category_id missing — skipping offer/publish`);
@@ -98,6 +99,25 @@ async function syncProduct(productPlain, variants = []) {
         }
 
         // Step 3 — publish
+        // Skip publish for brand-new offers with zero stock — eBay rejects qty-0 first publish.
+        // Existing offers (already live) are published normally so the listing updates to out-of-stock.
+        if (quantity === 0 && !existingOfferId) {
+          logger.warn(`[eBay] ${sku}: stock is 0, skipping first publish — marked out_of_stock`);
+          if (variantId) {
+            await updateVariantEbayStatus(variantId, {
+              ebay_offer_id: offerId,
+              ebay_sync_status: "out_of_stock",
+            });
+          } else {
+            await updateProductEbayStatus(product._id, {
+              ebay_offer_id: offerId,
+              ebay_sync_status: "out_of_stock",
+            });
+          }
+          results.push({ sku, ok: true, offerId, published: false, reason: "out_of_stock" });
+          continue;
+        }
+
         const listingId = await publishOffer(token, offerId);
         logger.info(`[eBay] offer published, listingId: ${listingId}`);
 
