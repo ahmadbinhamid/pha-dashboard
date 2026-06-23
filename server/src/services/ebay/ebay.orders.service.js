@@ -21,8 +21,24 @@ async function pollAndProcessOrders() {
     const orderId = order.orderId;
     if (!orderId) continue;
 
-    const alreadyDone = await EbayProcessedOrder.exists({ orderId });
-    if (alreadyDone) continue;
+    // Atomic insert — if the record already exists (duplicate key) we skip.
+    // This is safe against a concurrent webhook deduction racing the poller.
+    let inserted = false;
+    try {
+      await EbayProcessedOrder.create({
+        orderId,
+        action: "deduction",
+        source: "poller",
+        lineItems: [],
+      });
+      inserted = true;
+    } catch (err) {
+      if (err.code === 11000) {
+        logger.info(`[ebay.orders] Order ${orderId} already processed — skipping`);
+        continue;
+      }
+      throw err;
+    }
 
     const lineItems = order.lineItems || [];
     const adjustments = [];
@@ -44,7 +60,14 @@ async function pollAndProcessOrders() {
       }
     }
 
-    await EbayProcessedOrder.create({ orderId, lineItems: adjustments });
+    // Backfill lineItems now that we have the full adjustment list
+    if (inserted) {
+      await EbayProcessedOrder.updateOne(
+        { orderId, action: "deduction" },
+        { $set: { lineItems: adjustments } },
+      );
+    }
+
     processed++;
   }
 
