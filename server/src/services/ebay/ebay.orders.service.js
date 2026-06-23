@@ -2,12 +2,12 @@
 // Polls eBay Fulfillment API for new orders and deducts stock
 
 const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
-const { getOrders } = require("./ebay.api.service");
+const ebayApi = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { logger } = require("../../loaders/logging");
 
 async function pollAndProcessOrders() {
-  const data = await getOrders();
+  const data = await ebayApi.getOrders();
   const orders = data.orders || [];
 
   if (!orders.length) {

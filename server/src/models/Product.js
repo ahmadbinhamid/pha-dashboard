@@ -67,7 +67,6 @@ const productSchema = buildSchema({
   ebay_synced_at: { type: Date, default: null },
 });
 
-productSchema.index({ slug: 1 });
 productSchema.index({ sku: 1 }, { sparse: true });
 
 module.exports = model("Product", productSchema);
