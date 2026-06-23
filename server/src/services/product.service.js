@@ -95,9 +95,9 @@ async function syncProductToEbay(product, variants = []) {
   }
 }
 
-async function deleteProductFromEbay(sku) {
+async function deleteProductFromEbay(sku, offerId = null) {
   try {
-    await enqueueEbayJob("delete_product", { sku });
+    await enqueueEbayJob("delete_product", { sku, offerId });
   } catch (qErr) {
     logger.warn("[product.service] eBay queue unavailable", {
       error: qErr.message,

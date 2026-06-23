@@ -283,10 +283,11 @@ exports.deleteProduct = async (req, res) => {
     if (!product) return notFound(res, "Product not found");
 
     const sku = product.sku || `ph-${product._id}`;
+    const offerId = product.ebay_offer_id || null;
     await product.softDelete();
 
     if (product.ebay_sync_status !== EBAY_SYNC_STATUS.NOT_LISTED) {
-      await deleteProductFromEbay(sku);
+      await deleteProductFromEbay(sku, offerId);
     }
 
     return success(res, null, "Product deleted");

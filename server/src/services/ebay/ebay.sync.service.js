@@ -59,8 +59,20 @@ async function syncProduct(productPlain, variants = []) {
 
       try {
         const totalQty = await getTotalStockForProductVariant(product._id, variantId);
-        // Never fake stock — pass true quantity so eBay shows out-of-stock correctly
-        const quantity = totalQty;
+        // stock_control=false means merchant doesn't track inventory → always available
+        const quantity = product.stock_control ? totalQty : Math.max(totalQty, 1);
+
+        // Bail early for zero stock — eBay rejects qty=0 on both upsert and publish
+        if (quantity === 0) {
+          logger.warn(`[eBay] ${sku}: stock is 0 — skipping eBay sync, marked out_of_stock`);
+          if (variantId) {
+            await updateVariantEbayStatus(variantId, { ebay_sync_status: "out_of_stock" });
+          } else {
+            await updateProductEbayStatus(product._id, { ebay_sync_status: "out_of_stock" });
+          }
+          results.push({ sku, ok: true, published: false, reason: "out_of_stock" });
+          continue;
+        }
 
         // Step 1 — inventory item
         const inventoryItem = buildInventoryItem(product, sku, quantity);
@@ -99,10 +111,12 @@ async function syncProduct(productPlain, variants = []) {
         }
 
         // Step 3 — publish
-        // Skip publish for brand-new offers with zero stock — eBay rejects qty-0 first publish.
-        // Existing offers (already live) are published normally so the listing updates to out-of-stock.
-        if (quantity === 0 && !existingOfferId) {
-          logger.warn(`[eBay] ${sku}: stock is 0, skipping first publish — marked out_of_stock`);
+        // Skip if qty=0 — eBay rejects publish with zero stock.
+        // Skip if already published (ebay_listing_id set) — updateOffer already synced the change.
+        const alreadyLive = variantId ? false : !!product.ebay_listing_id;
+
+        if (quantity === 0) {
+          logger.warn(`[eBay] ${sku}: stock is 0 — skipping publish, marked out_of_stock`);
           if (variantId) {
             await updateVariantEbayStatus(variantId, {
               ebay_offer_id: offerId,
@@ -115,6 +129,12 @@ async function syncProduct(productPlain, variants = []) {
             });
           }
           results.push({ sku, ok: true, offerId, published: false, reason: "out_of_stock" });
+          continue;
+        }
+
+        if (alreadyLive) {
+          logger.info(`[eBay] ${sku}: listing already live (${product.ebay_listing_id}), updateOffer applied`);
+          results.push({ sku, ok: true, offerId, listingId: product.ebay_listing_id });
           continue;
         }
 

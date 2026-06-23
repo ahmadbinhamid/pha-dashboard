@@ -32,9 +32,9 @@ ebayQueue.process("update_inventory", 5, async (job) => {
 });
 
 ebayQueue.process("delete_product", 2, async (job) => {
-  const { sku } = job.data;
-  logger.info(`[ebayQueue] delete_product sku=${sku}`);
-  const result = await ebayService.deleteProduct(sku);
+  const { sku, offerId } = job.data;
+  logger.info(`[ebayQueue] delete_product sku=${sku} offerId=${offerId}`);
+  const result = await ebayService.deleteProduct(sku, offerId);
   if (result.error) throw new Error(result.error);
   return result;
 });

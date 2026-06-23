@@ -343,7 +343,7 @@ async function updateInventoryQuantity(sku, quantity) {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
-async function deleteProduct(sku) {
+async function deleteProduct(sku, offerId = null) {
   if (!credentialsConfigured()) {
     logger.warn("[eBay] deleteProduct skipped — credentials not configured");
     return { skipped: true };
@@ -353,15 +353,24 @@ async function deleteProduct(sku) {
   if (!token) return { error: "Could not obtain access token" };
 
   try {
+    // Step 1 — withdraw the offer first (eBay blocks inventory item deletion while an offer exists)
+    if (offerId) {
+      const offerRes = await fetch(
+        `${INVENTORY_BASE}/offer/${encodeURIComponent(offerId)}`,
+        { method: "DELETE", headers: ebayHeaders(token) },
+      );
+      if (!offerRes.ok && offerRes.status !== 404) {
+        const text = await offerRes.text();
+        logger.error(`[eBay] deleteProduct withdraw offer ${offerId} failed: ${offerRes.status} ${text}`);
+        return { error: `withdraw offer failed: ${offerRes.status}: ${text}` };
+      }
+      logger.info(`[eBay] offer withdrawn: ${offerId}`);
+    }
+
+    // Step 2 — delete the inventory item
     const res = await fetch(
       `${INVENTORY_BASE}/inventory_item/${encodeURIComponent(sku)}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
-        },
-      },
+      { method: "DELETE", headers: ebayHeaders(token) },
     );
 
     if (!res.ok && res.status !== 404) {
@@ -370,6 +379,7 @@ async function deleteProduct(sku) {
       return { error: `${res.status}: ${text}` };
     }
 
+    logger.info(`[eBay] inventory_item deleted: ${sku}`);
     return { ok: true };
   } catch (err) {
     logger.error(`[eBay] deleteProduct error: ${err.message}`);
