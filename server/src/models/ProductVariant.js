@@ -42,4 +42,6 @@ const productVariantSchema = buildSchema({
   },
 });
 
+productVariantSchema.index({ sku: 1 }, { sparse: true });
+
 module.exports = model("ProductVariant", productVariantSchema);

@@ -68,5 +68,6 @@ const productSchema = buildSchema({
 });
 
 productSchema.index({ slug: 1 });
+productSchema.index({ sku: 1 }, { sparse: true });
 
 module.exports = model("Product", productSchema);

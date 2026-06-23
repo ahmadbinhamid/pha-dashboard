@@ -11,6 +11,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TagInput } from "@/components/ui/tag-input";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectTrigger,
@@ -50,7 +51,6 @@ import {
   Boxes,
   ExternalLink,
   RefreshCcw,
-  AlertCircle,
 } from "lucide-react";
 import { syncProductToEbay } from "@/lib/api/products";
 import { cn } from "@/utils/cn";
@@ -150,8 +150,6 @@ function EbayCard({
   product,
   form,
   set,
-  isDirty,
-  onSynced,
 }: {
   product: import("@/types/product").Product;
   form: import("@/types/product").ProductEditFormState;
@@ -159,22 +157,7 @@ function EbayCard({
     key: K,
     value: import("@/types/product").ProductEditFormState[K],
   ) => void;
-  isDirty: boolean;
-  onSynced: () => void;
 }) {
-  const { toast } = useToast();
-
-  const syncMutation = useMutation({
-    mutationFn: () => syncProductToEbay(product._id),
-    onSuccess: () => {
-      toast({ title: "eBay sync queued", tone: "success" });
-      onSynced();
-    },
-    onError: (err: Error) => {
-      toast({ title: "Sync failed", description: err.message, tone: "danger" });
-    },
-  });
-
   const statusVariant =
     product.ebay_sync_status === "synced"
       ? "ok"
@@ -235,33 +218,6 @@ function EbayCard({
             </SelectContent>
           </Select>
         </div>
-
-        {/* Unsaved warning */}
-        {isDirty && (
-          <div className="flex items-start gap-2 rounded-xs bg-warn/10 p-2.5 text-xs text-warn">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Save your changes before syncing to eBay.
-          </div>
-        )}
-
-        {/* Sync button */}
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className="w-full gap-1.5"
-          disabled={syncMutation.isPending || isDirty || !form.ebay_category_id}
-          onClick={() => syncMutation.mutate()}
-        >
-          <RefreshCcw className="h-3.5 w-3.5" />
-          {syncMutation.isPending ? "Syncing…" : "Sync to eBay"}
-        </Button>
-
-        {!form.ebay_category_id && !isDirty && (
-          <p className="text-center text-[10px] text-fg/40">
-            Enter an eBay Category ID above to enable sync.
-          </p>
-        )}
 
         {/* Listing link */}
         {product.ebay_listing_id && (
@@ -354,6 +310,7 @@ export default function ProductEditPage() {
   const product = productData?.data;
 
   const [form, setForm] = useState<ProductEditFormState | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const savedFormRef = useRef<string>("");
 
   useEffect(() => {
@@ -387,6 +344,17 @@ export default function ProductEditPage() {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: () => syncProductToEbay(product!._id),
+    onSuccess: () => {
+      toast({ title: "eBay sync queued", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["product", slug] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Sync failed", description: err.message, tone: "danger" });
+    },
+  });
+
   const dupMutation = useMutation({
     mutationFn: () => duplicateProduct(product!._id),
     onSuccess: (res) => {
@@ -404,13 +372,21 @@ export default function ProductEditPage() {
     value: ProductEditFormState[K],
   ) => setForm((prev) => (prev ? { ...prev, [key]: value } : null));
 
+  const clearError = (key: string) =>
+    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
+
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (!form?.title.trim()) e.title = "Name is required";
+    if (!form?.price || Number(form.price) <= 0) e.price = "Price is required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSave = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!form || !product) return;
-    if (!form.title.trim()) {
-      toast({ title: "Name is required", tone: "danger" });
-      return;
-    }
+    if (!validate()) return;
     // Capture the snapshot now — onSuccess fires async and `form` may have
     // changed by then, causing the dirty check to silently clear unsaved edits.
     const snapshot = JSON.stringify(form);
@@ -439,15 +415,15 @@ export default function ProductEditPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5 pb-24">
 
-      {/* Page header */}
-      <div className="space-y-1">
+      {/* Sticky page header */}
+      <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
         <BreadcrumbNav
           items={[
             { label: "Products", href: "/products" },
             { label: product.title },
           ]}
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">{product.title}</h1>
             <p className="mt-0.5 text-sm text-fg/45">/{product.slug}</p>
@@ -456,6 +432,24 @@ export default function ProductEditPage() {
             <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">
               {product.status === "active" ? "Active" : "Draft"}
             </Badge>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              title={
+                isDirty
+                  ? "Save your changes before syncing"
+                  : !form?.ebay_category_id
+                    ? "Set eBay Category ID first"
+                    : "Sync to eBay"
+              }
+              disabled={syncMutation.isPending || isDirty || !form?.ebay_category_id}
+              onClick={() => syncMutation.mutate()}
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              {syncMutation.isPending ? "Syncing…" : "Sync to eBay"}
+            </Button>
             <Button
               type="button"
               variant="secondary"
@@ -493,28 +487,21 @@ export default function ProductEditPage() {
           <Card>
             <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Name <span className="text-danger">*</span>
-                </label>
+              <FormField label="Name" required error={errors.title}>
                 <Input
                   value={form.title}
-                  onChange={(e) => set("title", e.target.value)}
+                  onChange={(e) => { set("title", e.target.value); clearError("title"); }}
                   placeholder="Product name"
-                  required
                 />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Description
-                </label>
+              </FormField>
+              <FormField label="Description">
                 <RichTextEditor
                   value={form.description}
                   onChange={(html) => set("description", html)}
                   placeholder="Describe your product…"
                   minHeight="140px"
                 />
-              </div>
+              </FormField>
             </CardContent>
           </Card>
 
@@ -542,9 +529,18 @@ export default function ProductEditPage() {
             <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
+                <FormField label="Price (£)" required error={errors.price}>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => { set("price", e.target.value); clearError("price"); }}
+                    placeholder="0.00"
+                  />
+                </FormField>
                 {(
                   [
-                    { key: "price", label: "Price (£)" },
                     { key: "compare_price", label: "Compare at (£)" },
                     { key: "cost_price", label: "Cost price (£)" },
                   ] as const
@@ -844,15 +840,7 @@ export default function ProductEditPage() {
           </Card>
 
           {/* eBay */}
-          <EbayCard
-            product={product}
-            form={form}
-            set={set}
-            isDirty={isDirty}
-            onSynced={() => {
-              queryClient.invalidateQueries({ queryKey: ["product", slug] });
-            }}
-          />
+          <EbayCard product={product} form={form} set={set} />
 
         </div>
       </form>

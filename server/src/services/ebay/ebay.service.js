@@ -4,4 +4,5 @@
 module.exports = {
   ...require("./ebay.api.service"),
   ...require("./ebay.sync.service"),
+  ...require("./ebay.settings.service"),
 };

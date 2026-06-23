@@ -98,6 +98,7 @@ export interface ProductCreateFormState {
   cost_price: string;
   is_taxable: boolean;
   vat_rate: string;
+  sku: string;
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;

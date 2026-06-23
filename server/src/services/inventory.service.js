@@ -3,9 +3,11 @@
 const mongoose = require("mongoose");
 const Inventory = require("../models/Inventory");
 const InventoryHistory = require("../models/InventoryHistory");
+const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { logger } = require("../loaders/logging");
+const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 // ── List / aggregation ────────────────────────────────────────────────────────
 
@@ -218,6 +220,77 @@ async function getTotalStockForProductVariant(productId, variantId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
+// ── SKU-based stock adjustment (used by eBay webhook) ────────────────────────
+
+const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
+
+async function resolveSkuToIds(sku) {
+  const match = sku.match(FALLBACK_SKU_RE);
+  if (match) {
+    return { productId: match[1], variantId: match[2] || null };
+  }
+
+  const variant = await ProductVariant.findOne({ sku }).lean();
+  if (variant) {
+    return { productId: variant.product.toString(), variantId: variant._id.toString() };
+  }
+
+  const product = await Product.findOne({ sku }).lean();
+  if (product) {
+    return { productId: product._id.toString(), variantId: null };
+  }
+
+  return null;
+}
+
+async function adjustStockBySku(sku, delta) {
+  const ids = await resolveSkuToIds(sku);
+  if (!ids) {
+    logger.warn(`[inventory.service] SKU not found: ${sku}`);
+    return null;
+  }
+
+  const { productId, variantId } = ids;
+  const records = await Inventory.find({
+    product: productId,
+    variant: variantId || null,
+  }).sort({ stock_count: -1 });
+
+  if (!records.length) {
+    logger.warn(`[inventory.service] No inventory records for SKU: ${sku}`);
+    return null;
+  }
+
+  const adjustments = [];
+
+  if (delta < 0) {
+    let remaining = Math.abs(delta);
+    for (const record of records) {
+      if (remaining <= 0) break;
+      const deduct = Math.min(remaining, record.stock_count);
+      if (deduct === 0) continue;
+      await adjustStock(record, {
+        adjustment: -deduct,
+        reason: `eBay sale (SKU: ${sku})`,
+        type: ADJUSTMENT_TYPE.EBAY_SALE,
+        userId: null,
+      });
+      remaining -= deduct;
+      adjustments.push({ recordId: record._id, adjustment: -deduct });
+    }
+  } else {
+    await adjustStock(records[0], {
+      adjustment: delta,
+      reason: `eBay cancellation/return (SKU: ${sku})`,
+      type: ADJUSTMENT_TYPE.EBAY_SALE,
+      userId: null,
+    });
+    adjustments.push({ recordId: records[0]._id, adjustment: delta });
+  }
+
+  return { productId, variantId, adjustments };
+}
+
 module.exports = {
   listInventory,
   getSkuForRecord,
@@ -229,4 +302,6 @@ module.exports = {
   setStock,
   getHistory,
   getTotalStockForProductVariant,
+  resolveSkuToIds,
+  adjustStockBySku,
 };

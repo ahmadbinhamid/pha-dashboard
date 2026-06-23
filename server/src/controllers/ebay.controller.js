@@ -1,7 +1,9 @@
 // controllers/ebay.controller.js
 
-const EbaySettings = require("../models/EbaySettings");
 const ebayService = require("../services/ebay/ebay.service");
+const webhookService = require("../services/ebay/ebay.webhook.service");
+const settingsService = require("../services/ebay/ebay.settings.service");
+const { logger } = require("../loaders/logging");
 const {
   success,
   badRequest,
@@ -19,7 +21,6 @@ exports.getStatus = async (req, res) => {
       });
     }
 
-    // Attempt a token fetch to verify credentials are valid
     const token = await ebayService.getAccessToken();
     return success(res, { connected: !!token });
   } catch (err) {
@@ -29,7 +30,7 @@ exports.getStatus = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
   try {
-    const settings = (await EbaySettings.findOne().lean()) || {};
+    const settings = await settingsService.getSettings();
     return success(res, settings);
   } catch (err) {
     return systemfailure(res, err);
@@ -59,13 +60,71 @@ exports.updateSettings = async (req, res) => {
       return badRequest(res, "No fields provided to update");
     }
 
-    const settings = await EbaySettings.findOneAndUpdate(
-      {},
-      { $set: update },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    ).lean();
-
+    const settings = await settingsService.upsertSettings(update);
     return success(res, settings, "eBay settings updated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.handleWebhookChallenge = async (req, res) => {
+  try {
+    const { challenge_code } = req.query;
+    if (!challenge_code) return badRequest(res, "Missing challenge_code");
+
+    const settings = await settingsService.getSettings();
+    if (!settings.verification_token)
+      return badRequest(res, "Webhook not configured — call POST /webhook/subscribe first");
+
+    const endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+    const challengeResponse = webhookService.verifyChallenge(
+      challenge_code,
+      endpointUrl,
+      settings.verification_token,
+    );
+
+    return res.status(200).json({ challengeResponse });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.handleWebhook = async (req, res) => {
+  try {
+    const settings = await settingsService.getSettings();
+    if (!settings.verification_token)
+      return res.status(401).json({ error: "Webhook not configured" });
+
+    const signatureHeader = req.headers["x-ebay-signature"];
+    const valid = webhookService.verifySignature(
+      req.rawBody,
+      signatureHeader,
+      settings.verification_token,
+    );
+    if (!valid) return res.status(401).json({ error: "Invalid signature" });
+
+    // Respond immediately — eBay retries on non-2xx
+    res.status(200).json({ received: true });
+
+    webhookService.processNotification(req.body).catch((err) => {
+      logger.error("[ebay.controller] processNotification error", { error: err.message });
+    });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.subscribeWebhook = async (req, res) => {
+  try {
+    const { endpoint_url } = req.body || {};
+
+    const verificationToken = await settingsService.ensureVerificationToken();
+    const endpointUrl =
+      endpoint_url || `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+
+    const subscriptions = await webhookService.subscribeToTopics(endpointUrl, verificationToken);
+
+    return success(res, { subscriptions, endpoint: endpointUrl }, "Webhook subscriptions registered");
   } catch (err) {
     return systemfailure(res, err);
   }
