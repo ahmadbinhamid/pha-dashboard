@@ -1,11 +1,15 @@
 // services/ebay/ebay.webhook.service.js
 
 const crypto = require("crypto");
-const { getAccessToken } = require("./ebay.api.service");
+const { getAppToken } = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { logger } = require("../../loaders/logging");
+const config = require("../../config");
 
-const EBAY_NOTIFICATION_API = "https://api.ebay.com/commerce/notification/v1";
+const BASE = config.ebay.sandbox
+  ? "https://api.sandbox.ebay.com"
+  : "https://api.ebay.com";
+const EBAY_NOTIFICATION_API = `${BASE}/commerce/notification/v1`;
 const TOPICS = ["ORDER.LINE_ITEMS_CREATED", "ORDER.LINE_ITEMS_UPDATED"];
 
 function verifyChallenge(challengeCode, endpointUrl, verificationToken) {
@@ -70,7 +74,7 @@ async function processNotification(payload) {
 }
 
 async function subscribeToTopics(endpointUrl, verificationToken) {
-  const token = await getAccessToken();
+  const token = await getAppToken();
   const results = [];
 
   for (const topicId of TOPICS) {

@@ -494,6 +494,47 @@ export default function ProductEditPage() {
                   placeholder="Product name"
                 />
               </FormField>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* SKU */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-fg/65">SKU</label>
+                    <span className="text-[10px] tabular-nums text-fg/35">{form.sku.length}/64</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={form.sku}
+                      onChange={(e) => set("sku", e.target.value)}
+                      placeholder="e.g. PART-001"
+                      maxLength={64}
+                    />
+                    <button
+                      type="button"
+                      title="Generate SKU"
+                      onClick={() => set("sku", generateSku())}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs border border-border bg-bg text-fg/45 shadow-sm transition hover:text-fg"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barcode */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-fg/65">Barcode</label>
+                    <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
+                  </div>
+                  <Input
+                    value={form.barcode}
+                    onChange={(e) => set("barcode", e.target.value)}
+                    placeholder="EAN / UPC"
+                    maxLength={13}
+                  />
+                </div>
+              </div>
+
               <FormField label="Description">
                 <RichTextEditor
                   value={form.description}
@@ -545,10 +586,7 @@ export default function ProductEditPage() {
                     { key: "cost_price", label: "Cost price (£)" },
                   ] as const
                 ).map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                      {label}
-                    </label>
+                  <FormField key={key} label={label}>
                     <Input
                       type="number"
                       min="0"
@@ -557,7 +595,7 @@ export default function ProductEditPage() {
                       onChange={(e) => set(key, e.target.value)}
                       placeholder="0.00"
                     />
-                  </div>
+                  </FormField>
                 ))}
               </div>
 
@@ -576,10 +614,7 @@ export default function ProductEditPage() {
                     label="VAT inclusive"
                     description="Price already includes VAT"
                   />
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                      VAT Rate (%)
-                    </label>
+                  <FormField label="VAT Rate (%)">
                     <Input
                       type="number"
                       min="0"
@@ -589,7 +624,7 @@ export default function ProductEditPage() {
                       onChange={(e) => set("vat_rate", e.target.value)}
                       placeholder="20"
                     />
-                  </div>
+                  </FormField>
                 </div>
               )}
             </CardContent>
@@ -598,56 +633,12 @@ export default function ProductEditPage() {
           {/* Inventory */}
           <Card>
             <CardHeader title={<SectionLabel icon={Boxes}>Inventory</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {/* SKU */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-xs font-medium text-fg/65">SKU</label>
-                    <span className="text-[10px] tabular-nums text-fg/35">
-                      {form.sku.length}/64
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <Input
-                      value={form.sku}
-                      onChange={(e) => set("sku", e.target.value)}
-                      placeholder="SKU-001"
-                      maxLength={64}
-                    />
-                    <button
-                      type="button"
-                      title="Generate SKU"
-                      onClick={() => set("sku", generateSku())}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs border border-border bg-bg text-fg/45 shadow-sm transition hover:text-fg"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Barcode */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-xs font-medium text-fg/65">Barcode</label>
-                    <span className="text-[10px] tabular-nums text-fg/35">
-                      {form.barcode.length}/13
-                    </span>
-                  </div>
-                  <Input
-                    value={form.barcode}
-                    onChange={(e) => set("barcode", e.target.value)}
-                    placeholder="EAN / UPC"
-                    maxLength={13}
-                  />
-                </div>
-              </div>
-
+            <CardContent>
               <Switch
                 checked={form.stock_control}
                 onCheckedChange={(v) => set("stock_control", v)}
-                label="Stock Control"
-                description="Track inventory levels for this product"
+                label="Track stock"
+                description="Manage inventory levels and get low-stock alerts"
               />
             </CardContent>
           </Card>

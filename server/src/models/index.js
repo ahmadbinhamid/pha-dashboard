@@ -10,4 +10,5 @@ module.exports = {
   Inventory: require("./Inventory"),
   InventoryHistory: require("./InventoryHistory"),
   InventorySettings: require("./InventorySettings"),
+  EbayProcessedOrder: require("./EbayProcessedOrder"),
 };

@@ -10,9 +10,13 @@ const BASE_URL = config.ebay.sandbox
 
 const TOKEN_ENDPOINT = `${BASE_URL}/identity/v1/oauth2/token`;
 const INVENTORY_BASE = `${BASE_URL}/sell/inventory/v1`;
+const FULFILLMENT_BASE = `${BASE_URL}/sell/fulfillment/v1`;
 
 let _cachedToken = null;
 let _tokenExpiry = 0;
+
+let _cachedAppToken = null;
+let _appTokenExpiry = 0;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -65,6 +69,47 @@ async function getAccessToken() {
   _cachedToken = data.access_token;
   _tokenExpiry = now + (data.expires_in || 7200) * 1000;
   return _cachedToken;
+}
+
+async function getAppToken() {
+  const now = Date.now();
+  if (_cachedAppToken && now < _appTokenExpiry - 30_000) return _cachedAppToken;
+
+  if (!credentialsConfigured()) {
+    logger.warn("[eBay] Credentials not configured — skipping notification token fetch");
+    return null;
+  }
+
+  const credentials = Buffer.from(
+    `${config.ebay.clientId}:${config.ebay.clientSecret}`,
+  ).toString("base64");
+
+  // Uses refresh_token grant so the notification scope rides on the seller's existing OAuth consent
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: config.ebay.refreshToken,
+    scope: "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription",
+  });
+
+  const res = await fetch(TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error(`[eBay] Notification token fetch failed: ${res.status} ${text}`);
+    return null;
+  }
+
+  const data = await res.json();
+  _cachedAppToken = data.access_token;
+  _appTokenExpiry = now + (data.expires_in || 7200) * 1000;
+  return _cachedAppToken;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -332,9 +377,41 @@ async function deleteProduct(sku) {
   }
 }
 
+// ── Fulfillment / Orders ──────────────────────────────────────────────────────
+
+async function getOrders({ limit = 50, offset = 0 } = {}) {
+  const token = await getAccessToken();
+  if (!token) return { orders: [] };
+
+  const url = `${FULFILLMENT_BASE}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      logger.error(`[eBay] getOrders failed: ${res.status} ${text}`);
+      return { orders: [] };
+    }
+
+    return res.json();
+  } catch (err) {
+    logger.error(`[eBay] getOrders error: ${err.message}`);
+    return { orders: [] };
+  }
+}
+
 module.exports = {
   credentialsConfigured,
   getAccessToken,
+  getAppToken,
+  getOrders,
   loadSettings,
   buildInventoryItem,
   upsertInventoryItem,

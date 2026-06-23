@@ -5,6 +5,7 @@ const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { ebayQueue } = require("../queues/ebay.queue");
 const ebayService = require("../services/ebay/ebay.service");
+const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
 const { logger } = require("../loaders/logging");
 
 connectMongo().catch((err) => {
@@ -38,7 +39,23 @@ ebayQueue.process("delete_product", 2, async (job) => {
   return result;
 });
 
-ebayQueue.on("ready", () => logger.info("[ebayQueue] ready"));
+ebayQueue.process("poll_orders", 1, async () => {
+  logger.info("[ebayQueue] poll_orders starting");
+  return pollAndProcessOrders();
+});
+
+ebayQueue.on("ready", () => {
+  logger.info("[ebayQueue] ready");
+
+  // Schedule order polling every 60 seconds — single repeatable job
+  ebayQueue.add("poll_orders", {}, {
+    repeat: { every: 60_000 },
+    jobId: "poll_orders_repeat",
+    removeOnComplete: true,
+    removeOnFail: false,
+  });
+});
+
 ebayQueue.on("completed", (job) =>
   logger.info(`[ebayQueue] completed job ${job.id} (${job.name})`),
 );
