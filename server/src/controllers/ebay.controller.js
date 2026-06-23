@@ -3,6 +3,7 @@
 const ebayService = require("../services/ebay/ebay.service");
 const webhookService = require("../services/ebay/ebay.webhook.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
+const catalogService = require("../services/ebay/ebay.catalog.service");
 const { logger } = require("../loaders/logging");
 const {
   success,
@@ -126,6 +127,28 @@ exports.subscribeWebhook = async (req, res) => {
     const subscriptions = await webhookService.subscribeToTopics(endpointUrl, verificationToken);
 
     return success(res, { subscriptions, endpoint: endpointUrl }, "Webhook subscriptions registered");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getCategorySuggestions = async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+    if (!q) return badRequest(res, "Query parameter 'q' is required");
+    const result = await catalogService.getCategorySuggestions(q);
+    return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getConditionPolicies = async (req, res) => {
+  try {
+    const categoryId = (req.query.categoryId || "").trim();
+    if (!categoryId) return badRequest(res, "Query parameter 'categoryId' is required");
+    const result = await catalogService.getConditionPolicies(categoryId);
+    return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
   }

@@ -423,6 +423,7 @@ module.exports = {
   getAppToken,
   getOrders,
   loadSettings,
+  ebayHeaders,
   buildInventoryItem,
   upsertInventoryItem,
   buildOffer,

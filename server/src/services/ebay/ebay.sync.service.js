@@ -134,6 +134,11 @@ async function syncProduct(productPlain, variants = []) {
 
         if (alreadyLive) {
           logger.info(`[eBay] ${sku}: listing already live (${product.ebay_listing_id}), updateOffer applied`);
+          await updateProductEbayStatus(product._id, {
+            ebay_offer_id: offerId,
+            ebay_sync_status: "synced",
+            ebay_synced_at: new Date(),
+          });
           results.push({ sku, ok: true, offerId, listingId: product.ebay_listing_id });
           continue;
         }
