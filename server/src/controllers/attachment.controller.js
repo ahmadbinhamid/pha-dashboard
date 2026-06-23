@@ -1,11 +1,11 @@
 // controllers/attachment.controller.js
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-const Attachment = require("../models/Attachment");
-const { getAttachmentType } = require("../utils/attachment");
-const config = require("../config");
+const {
+  listAttachments,
+  createAttachment,
+  findAttachment,
+  remove,
+} = require("../services/attachment.service");
 const {
   success,
   created,
@@ -22,21 +22,8 @@ exports.upload = async (req, res) => {
     }
 
     const userId = req.user?._id || null;
-
     const docs = await Promise.all(
-      files.map(async (file) => {
-        const uid = crypto.randomUUID();
-
-        return Attachment.create({
-          uid,
-          file_name: file.filename,
-          original_name: file.originalname,
-          mime_type: file.mimetype,
-          size: file.size,
-          uploaded_by: userId,
-          type: getAttachmentType(file.mimetype),
-        });
-      }),
+      files.map((file) => createAttachment(file, userId)),
     );
 
     return created(res, docs, "Files uploaded successfully");
@@ -49,10 +36,7 @@ exports.list = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const [items, total] = await Promise.all([
-      Attachment.find({}).sort({ created_at: -1 }).skip(skip).limit(limit),
-      Attachment.countDocuments({}),
-    ]);
+    const { items, total } = await listAttachments({ skip, limit });
 
     return success(res, {
       items,
@@ -68,17 +52,10 @@ exports.list = async (req, res) => {
 
 exports.remove = async (req, res) => {
   try {
-    const attachment = await Attachment.findById(req.params.id);
+    const attachment = await findAttachment(req.params.id);
     if (!attachment) return notFound(res, "Attachment not found");
 
-    if (attachment.file_name) {
-      const diskPath = path.join(config.uploads.dir, attachment.file_name);
-      if (fs.existsSync(diskPath)) {
-        fs.unlinkSync(diskPath);
-      }
-    }
-
-    await attachment.softDelete();
+    await remove(attachment);
 
     return success(res, null, "Attachment deleted");
   } catch (err) {
