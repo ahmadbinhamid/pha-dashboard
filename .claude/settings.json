@@ -13,7 +13,17 @@
       "Bash(sed -i 's/console\\\\.warn\\(\\\\\\(\"\\\\[inventory\\\\.service\\\\]/logger.warn\\(\\\\1/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/services/inventory.service.js)",
       "Bash(sed -i 's/^import type { Choice } from \"@\\\\/components\\\\/products\\\\/choices-editor\";//' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
       "Bash(sed -i 's/\\\\bFormState\\\\b/ProductEditFormState/g' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
-      "Bash(sed -i 's/import type {$/import type {/' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)"
+      "Bash(sed -i 's/import type {$/import type {/' /home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/src/pages/erp/ProductEditPage.tsx)",
+      "Bash(git checkout *)",
+      "Bash(npx tsc *)",
+      "Bash(npx --yes tsc --version)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --version)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'feat: eBay sync flow \\(inventory item → offer → publish\\)' --body ' *)",
+      "Bash(brew install *)"
     ],
     "additionalDirectories": [
       "/home/ahmad-bin-hamid/dev/my-stuff/ab/partshub-australia/server/src/utils"

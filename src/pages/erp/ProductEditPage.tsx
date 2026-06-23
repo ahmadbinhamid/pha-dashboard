@@ -80,7 +80,7 @@ function productToForm(p: Product): ProductEditFormState {
     images: p.attachments ?? [],
     choices: p.choices?.map((c) => ({ name: c.name, items: c.items })) ?? [],
     ebay_category_id: p.ebay_category_id ?? "",
-    ebay_condition: p.ebay_condition ?? "NEW",
+    ebay_condition: p.ebay_condition ?? "FOR_PARTS_OR_NOT_WORKING",
   };
 }
 

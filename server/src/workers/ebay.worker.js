@@ -2,6 +2,7 @@
 
 require("dotenv").config();
 const { connectMongo } = require("../loaders/mongoose");
+require("../models/index"); // register all schemas before any populate() calls
 const { ebayQueue } = require("../queues/ebay.queue");
 const ebayService = require("../services/ebay/ebay.service");
 const { logger } = require("../loaders/logging");

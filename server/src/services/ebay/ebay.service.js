@@ -77,11 +77,22 @@ async function getAccessToken() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const MARKETPLACE_LANGUAGE = {
+  EBAY_US: "en-US",
+  EBAY_AU: "en-AU",
+  EBAY_GB: "en-GB",
+  EBAY_DE: "de-DE",
+  EBAY_FR: "fr-FR",
+};
+
 function ebayHeaders(token, extra = {}) {
+  const contentLanguage =
+    MARKETPLACE_LANGUAGE[config.ebay.marketplaceId] || "en-US";
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    "Content-Language": "en-AU",
+    "Content-Language": contentLanguage,
+    "Accept-Language": contentLanguage,
     "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
     ...extra,
   };
@@ -107,20 +118,36 @@ async function loadSettings() {
 // ── Step 1: Inventory Item ────────────────────────────────────────────────────
 
 function buildInventoryItem(product, sku, quantity = 0) {
+  const uploadsUrl = process.env.UPLOADS_URL || "http://localhost:7000/uploads";
+
+  const imageUrls = (product.attachments || [])
+    .filter((a) => a.url)
+    .map((a) => {
+      // Convert relative /uploads/... paths to absolute URLs
+      if (a.url.startsWith("http")) return a.url;
+      return `${uploadsUrl}${a.url.startsWith("/") ? "" : "/"}${a.url}`;
+    })
+    .filter((url) => url.startsWith("https://")) // eBay requires HTTPS
+    .slice(0, 12);
+
+  // Use fallback image if no valid HTTPS images found
+  const finalImageUrls =
+    imageUrls.length > 0
+      ? imageUrls
+      : config.ebay.fallbackImageUrl
+        ? [config.ebay.fallbackImageUrl]
+        : [];
+
   return {
     sku,
     availability: {
       shipToLocationAvailability: { quantity },
     },
-    condition: product.ebay_condition || "NEW",
+    condition: product.ebay_condition || "FOR_PARTS_OR_NOT_WORKING",
     product: {
       title: product.title,
       description: product.description || product.title,
-      imageUrls:
-        product.attachments
-          ?.filter((a) => a.url)
-          .map((a) => a.url)
-          .slice(0, 12) || [],
+      imageUrls: finalImageUrls,
       ...(product.brand ? { brand: product.brand } : {}),
     },
   };
@@ -128,6 +155,14 @@ function buildInventoryItem(product, sku, quantity = 0) {
 
 async function upsertInventoryItem(token, inventoryItem) {
   const { sku } = inventoryItem;
+
+  const imageUrls = inventoryItem.product?.imageUrls || [];
+  if (!imageUrls.length) {
+    throw new Error(
+      "No valid image URLs for eBay. Set EBAY_FALLBACK_IMAGE_URL in .env or upload a product image with a public HTTPS URL.",
+    );
+  }
+
   const res = await fetch(
     `${INVENTORY_BASE}/inventory_item/${encodeURIComponent(sku)}`,
     {
@@ -147,12 +182,12 @@ async function upsertInventoryItem(token, inventoryItem) {
 
 // ── Step 2: Offer ─────────────────────────────────────────────────────────────
 
-function buildOffer(product, sku, settings) {
+function buildOffer(product, sku, settings, quantity = 1) {
   const offer = {
     sku,
     marketplaceId: config.ebay.marketplaceId,
     format: "FIXED_PRICE",
-    availableQuantity: 0,
+    availableQuantity: quantity,
     categoryId: product.ebay_category_id,
     listingDescription: product.description || product.title,
     pricingSummary: {
@@ -273,12 +308,22 @@ async function syncProduct(productPlain, variants = []) {
             },
           ];
 
+    const Inventory = require("../../models/Inventory");
+
     for (const item of itemsToSync) {
       const { sku, variantId, existingOfferId } = item;
 
       try {
+        // Sum stock_count across all locations for this product/variant
+        const inventoryRecords = await Inventory.find({
+          product: product._id,
+          variant: variantId || null,
+        }).lean();
+        const totalQty = inventoryRecords.reduce((sum, r) => sum + (r.stock_count || 0), 0);
+        const quantity = Math.max(totalQty, 1); // eBay requires quantity >= 1 to publish
+
         // Step 1 — inventory item
-        const inventoryItem = buildInventoryItem(product, sku);
+        const inventoryItem = buildInventoryItem(product, sku, quantity);
         await upsertInventoryItem(token, inventoryItem);
         logger.info(`[eBay] inventory_item upserted: ${sku}`);
 
@@ -291,7 +336,7 @@ async function syncProduct(productPlain, variants = []) {
           continue;
         }
 
-        const offerBody = buildOffer(product, sku, settings);
+        const offerBody = buildOffer(product, sku, settings, quantity);
 
         let offerId = existingOfferId;
 
@@ -300,9 +345,22 @@ async function syncProduct(productPlain, variants = []) {
           await updateOffer(token, offerId, offerBody);
           logger.info(`[eBay] offer updated: ${offerId}`);
         } else {
-          // Step 2b — create new offer
-          offerId = await createOffer(token, offerBody);
-          logger.info(`[eBay] offer created: ${offerId}`);
+          // Step 2b — create new offer, recover if it already exists (error 25002)
+          try {
+            offerId = await createOffer(token, offerBody);
+            logger.info(`[eBay] offer created: ${offerId}`);
+          } catch (createErr) {
+            // eBay error 25002: offer already exists — pull the offerId from the error and update
+            const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
+            if (existingMatch) {
+              offerId = existingMatch[1];
+              logger.warn(`[eBay] offer already exists (${offerId}), switching to updateOffer`);
+              await updateOffer(token, offerId, offerBody);
+              logger.info(`[eBay] offer updated (recovered from 25002): ${offerId}`);
+            } else {
+              throw createErr;
+            }
+          }
         }
 
         // Step 3 — publish
