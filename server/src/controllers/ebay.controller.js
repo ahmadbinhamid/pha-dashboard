@@ -7,6 +7,7 @@ const { logger } = require("../loaders/logging");
 const {
   success,
   badRequest,
+  unauthorized,
   systemfailure,
 } = require("../utils/http/response");
 
@@ -93,7 +94,7 @@ exports.handleWebhook = async (req, res) => {
   try {
     const settings = await settingsService.getSettings();
     if (!settings.verification_token)
-      return res.status(401).json({ error: "Webhook not configured" });
+      return unauthorized(res, "Webhook not configured — call POST /webhook/subscribe first");
 
     const signatureHeader = req.headers["x-ebay-signature"];
     const valid = webhookService.verifySignature(
@@ -101,10 +102,10 @@ exports.handleWebhook = async (req, res) => {
       signatureHeader,
       settings.verification_token,
     );
-    if (!valid) return res.status(401).json({ error: "Invalid signature" });
+    if (!valid) return unauthorized(res, "Invalid signature");
 
     // Respond immediately — eBay retries on non-2xx
-    res.status(200).json({ received: true });
+    success(res, { received: true });
 
     webhookService.processNotification(req.body).catch((err) => {
       logger.error("[ebay.controller] processNotification error", { error: err.message });
