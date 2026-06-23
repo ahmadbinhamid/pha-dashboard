@@ -1,14 +1,23 @@
 // controllers/product.controller.js
 
-const Product = require("../models/Product");
-const ProductVariant = require("../models/ProductVariant");
 const {
   generateVariantsForProduct,
   ensureInventoryForProduct,
   syncProductToEbay,
   deleteProductFromEbay,
+  ensureUniqueProductSlug,
+  getProducts,
+  findProductById,
+  getProductBySlug,
+  getPopulatedProduct,
+  createProductRecord,
+  updateProductEbayStatus,
+  findVariantsByProductId,
+  getVariantsByProduct,
+  findVariant,
+  getPopulatedVariant,
 } = require("../services/product.service");
-const { generateSlug, ensureUniqueSlug } = require("../utils/slug");
+const { generateSlug } = require("../utils/slug");
 const {
   parseField,
   parseFormDataArrays,
@@ -27,18 +36,6 @@ const {
   requestConflict,
   systemfailure,
 } = require("../utils/http/response");
-
-const withBasePopulate = (query) =>
-  query
-    .populate("attachments", "url original_name mime_type type uid file_name")
-    .populate("categories", "name slug");
-
-async function fetchPopulated(id) {
-  return Product.findById(id)
-    .populate("attachments")
-    .populate("categories")
-    .populate("digital_file");
-}
 
 exports.getProducts = async (req, res) => {
   try {
@@ -61,13 +58,7 @@ exports.getProducts = async (req, res) => {
       if (cats.length) filter.categories = { $in: cats };
     }
 
-    const [items, total] = await Promise.all([
-      withBasePopulate(Product.find(filter))
-        .sort({ created_at: -1 })
-        .skip(skip)
-        .limit(limit),
-      Product.countDocuments(filter),
-    ]);
+    const { items, total } = await getProducts(filter, { skip, limit });
 
     return success(res, {
       items,
@@ -83,12 +74,7 @@ exports.getProducts = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   try {
-    const product = await Product.findOne({ slug: req.params.slug })
-      .populate("attachments")
-      .populate("categories")
-      .populate("digital_file")
-      .populate("related_products", "title slug price attachments");
-
+    const product = await getProductBySlug(req.params.slug);
     if (!product) return notFound(res, "Product not found");
     return success(res, product);
   } catch (err) {
@@ -124,9 +110,9 @@ exports.createProduct = async (req, res) => {
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
 
-    const slug = await ensureUniqueSlug(Product, generateSlug(title));
+    const slug = await ensureUniqueProductSlug(generateSlug(title));
 
-    const product = await Product.create({
+    const product = await createProductRecord({
       title,
       slug,
       description: description || "",
@@ -152,7 +138,6 @@ exports.createProduct = async (req, res) => {
       digital_file: digital_file || null,
     });
 
-    // Generate variants + ensure inventory
     if (product.has_variants && product.choices.length > 0) {
       const variants = await generateVariantsForProduct(product);
       if (product.stock_control) {
@@ -163,16 +148,14 @@ exports.createProduct = async (req, res) => {
       await ensureInventoryForProduct(product._id, null);
     }
 
-    // eBay sync (non-blocking)
     if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
       const variants = product.has_variants
-        ? await ProductVariant.find({ product: product._id })
+        ? await findVariantsByProductId(product._id)
         : [];
       await syncProductToEbay(product, variants);
     }
 
-    const populated = await fetchPopulated(product._id);
-    return created(res, populated, "Product created");
+    return created(res, await getPopulatedProduct(product._id), "Product created");
   } catch (err) {
     if (err.code === 11000)
       return requestConflict(res, "Product slug already exists");
@@ -182,7 +165,7 @@ exports.createProduct = async (req, res) => {
 
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
 
     const body = req.body || {};
@@ -208,10 +191,8 @@ exports.updateProduct = async (req, res) => {
       ebay_condition,
     } = body;
 
-    // Slug regeneration only when title actually changes
     if (title !== undefined && title !== product.title) {
-      product.slug = await ensureUniqueSlug(
-        Product,
+      product.slug = await ensureUniqueProductSlug(
         generateSlug(title),
         product._id.toString(),
       );
@@ -250,7 +231,6 @@ exports.updateProduct = async (req, res) => {
     if (ebay_condition !== undefined && ebay_condition)
       product.ebay_condition = ebay_condition;
 
-    // Parse array fields from FormData
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
 
@@ -261,7 +241,6 @@ exports.updateProduct = async (req, res) => {
     if (bodyKeys.includes("related_products"))
       product.related_products = related_products;
 
-    // Detect choices change and regenerate variants if needed
     const choicesChanged =
       bodyKeys.includes("choices") &&
       JSON.stringify(choices) !==
@@ -283,16 +262,14 @@ exports.updateProduct = async (req, res) => {
       await ensureInventoryForProduct(product._id, null);
     }
 
-    // eBay sync (non-blocking)
     if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
       const variants = product.has_variants
-        ? await ProductVariant.find({ product: product._id })
+        ? await findVariantsByProductId(product._id)
         : [];
       await syncProductToEbay(product, variants);
     }
 
-    const populated = await fetchPopulated(product._id);
-    return success(res, populated, "Product updated");
+    return success(res, await getPopulatedProduct(product._id), "Product updated");
   } catch (err) {
     if (err.code === 11000)
       return requestConflict(res, "Product slug already exists");
@@ -302,7 +279,7 @@ exports.updateProduct = async (req, res) => {
 
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
 
     const sku = product.sku || `ph-${product._id}`;
@@ -320,15 +297,14 @@ exports.deleteProduct = async (req, res) => {
 
 exports.duplicateProduct = async (req, res) => {
   try {
-    const original = await Product.findById(req.params.id);
+    const original = await findProductById(req.params.id);
     if (!original) return notFound(res, "Product not found");
 
-    const slug = await ensureUniqueSlug(
-      Product,
+    const slug = await ensureUniqueProductSlug(
       generateSlug(`${original.title} copy`),
     );
 
-    const clone = await Product.create({
+    const clone = await createProductRecord({
       title: `${original.title} (Copy)`,
       slug,
       description: original.description,
@@ -358,8 +334,7 @@ exports.duplicateProduct = async (req, res) => {
       await generateVariantsForProduct(clone);
     }
 
-    const populated = await fetchPopulated(clone._id);
-    return created(res, populated, "Product duplicated");
+    return created(res, await getPopulatedProduct(clone._id), "Product duplicated");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -367,20 +342,20 @@ exports.duplicateProduct = async (req, res) => {
 
 exports.syncToEbay = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate("attachments");
+    const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
 
     const variants = product.has_variants
-      ? await ProductVariant.find({ product: product._id })
+      ? await findVariantsByProductId(product._id)
       : [];
 
-    product.ebay_sync_status = EBAY_SYNC_STATUS.PENDING;
-    await product.save();
+    await updateProductEbayStatus(product._id, {
+      ebay_sync_status: EBAY_SYNC_STATUS.PENDING,
+    });
 
     await syncProductToEbay(product, variants);
 
-    const populated = await fetchPopulated(product._id);
-    return success(res, populated, "eBay sync queued");
+    return success(res, await getPopulatedProduct(product._id), "eBay sync queued");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -388,14 +363,10 @@ exports.syncToEbay = async (req, res) => {
 
 exports.getVariants = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
 
-    const variants = await ProductVariant.find({ product: product._id })
-      .populate("attachments")
-      .populate("digital_file")
-      .sort({ display_name: 1 });
-
+    const variants = await getVariantsByProduct(product._id);
     return success(res, variants);
   } catch (err) {
     return systemfailure(res, err);
@@ -404,10 +375,7 @@ exports.getVariants = async (req, res) => {
 
 exports.updateVariant = async (req, res) => {
   try {
-    const variant = await ProductVariant.findOne({
-      _id: req.params.variantId,
-      product: req.params.id,
-    });
+    const variant = await findVariant(req.params.variantId, req.params.id);
     if (!variant) return notFound(res, "Variant not found");
 
     const body = req.body || {};
@@ -441,11 +409,7 @@ exports.updateVariant = async (req, res) => {
 
     await variant.save();
 
-    const populated = await ProductVariant.findById(variant._id)
-      .populate("attachments")
-      .populate("digital_file");
-
-    return success(res, populated, "Variant updated");
+    return success(res, await getPopulatedVariant(variant._id), "Variant updated");
   } catch (err) {
     return systemfailure(res, err);
   }

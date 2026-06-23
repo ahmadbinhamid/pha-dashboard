@@ -79,6 +79,7 @@ const config = {
     fulfillmentPolicyId: get("EBAY_FULFILLMENT_POLICY_ID", null),
     paymentPolicyId: get("EBAY_PAYMENT_POLICY_ID", null),
     returnPolicyId: get("EBAY_RETURN_POLICY_ID", null),
+    fallbackImageUrl: get("EBAY_FALLBACK_IMAGE_URL", null),
   },
 };
 

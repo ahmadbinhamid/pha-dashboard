@@ -9,6 +9,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TagInput } from "@/components/ui/tag-input";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectTrigger,
@@ -37,6 +38,7 @@ const INITIAL: ProductCreateFormState = {
   cost_price: "",
   is_taxable: false,
   vat_rate: "",
+  sku: "",
   type: "physical",
   status: "active",
   is_published_online: false,
@@ -54,6 +56,7 @@ function formToFD(form: ProductCreateFormState): FormData {
   if (form.cost_price) fd.append("cost_price", form.cost_price);
   fd.append("is_taxable", String(form.is_taxable));
   if (form.vat_rate) fd.append("vat_rate", form.vat_rate);
+  if (form.sku) fd.append("sku", form.sku.trim());
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
@@ -88,17 +91,17 @@ export default function ProductCreatePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const clearError = (key: string) =>
+    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
 
   const { data: catData, isLoading: catLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: getCategories,
   });
   const categories: Category[] = catData?.data ?? [];
-
-  const categoryOptions = categories.map((c) => ({
-    value: c._id,
-    label: c.name,
-  }));
+  const categoryOptions = categories.map((c) => ({ value: c._id, label: c.name }));
 
   const mutation = useMutation({
     mutationFn: (fd: FormData) => createProduct(fd),
@@ -122,26 +125,31 @@ export default function ProductCreatePage() {
     value: ProductCreateFormState[K],
   ) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (!form.title.trim()) e.title = "Name is required";
+    if (!form.price || Number(form.price) <= 0) e.price = "Price is required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) {
-      toast({ title: "Name is required", tone: "danger" });
-      return;
-    }
+    if (!validate()) return;
     mutation.mutate(formToFD(form));
   };
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      {/* Header */}
-      <div className="space-y-1">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
         <BreadcrumbNav
           items={[
             { label: "Products", href: "/products" },
             { label: "New Product" },
           ]}
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">New Product</h1>
             <p className="mt-0.5 text-sm text-fg/50">
@@ -174,29 +182,30 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Name <span className="text-danger">*</span>
-                </label>
+              <FormField label="Name" required error={errors.title}>
                 <Input
                   value={form.title}
-                  onChange={(e) => set("title", e.target.value)}
+                  onChange={(e) => { set("title", e.target.value); clearError("title"); }}
                   placeholder="Product name"
-                  required
                   autoFocus
                 />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Description
-                </label>
+              </FormField>
+              <FormField label="SKU" hint="Leave blank — auto-generated if synced to eBay">
+                <Input
+                  value={form.sku}
+                  onChange={(e) => set("sku", e.target.value)}
+                  placeholder="e.g. PART-001"
+                  maxLength={64}
+                />
+              </FormField>
+              <FormField label="Description">
                 <RichTextEditor
                   value={form.description}
                   onChange={(html) => set("description", html)}
                   placeholder="Describe your product…"
                   minHeight="140px"
                 />
-              </div>
+              </FormField>
             </CardContent>
           </Card>
 
@@ -224,27 +233,36 @@ export default function ProductCreatePage() {
             <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
-                {(
-                  [
-                    { key: "price", label: "Price (£)" },
-                    { key: "compare_price", label: "Compare at (£)" },
-                    { key: "cost_price", label: "Cost price (£)" },
-                  ] as const
-                ).map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                      {label}
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form[key]}
-                      onChange={(e) => set(key, e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                ))}
+                <FormField label="Price (£)" required error={errors.price}>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => { set("price", e.target.value); clearError("price"); }}
+                    placeholder="0.00"
+                  />
+                </FormField>
+                <FormField label="Compare at (£)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.compare_price}
+                    onChange={(e) => set("compare_price", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </FormField>
+                <FormField label="Cost price (£)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.cost_price}
+                    onChange={(e) => set("cost_price", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </FormField>
               </div>
 
               <Switch
@@ -256,22 +274,22 @@ export default function ProductCreatePage() {
 
               {form.is_taxable && (
                 <div className="w-32">
-                  <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                    VAT Rate (%)
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={form.vat_rate}
-                    onChange={(e) => set("vat_rate", e.target.value)}
-                    placeholder="20"
-                  />
+                  <FormField label="VAT Rate (%)">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={form.vat_rate}
+                      onChange={(e) => set("vat_rate", e.target.value)}
+                      placeholder="20"
+                    />
+                  </FormField>
                 </div>
               )}
             </CardContent>
           </Card>
+
         </div>
 
         {/* ── Sidebar ── */}
@@ -281,10 +299,7 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title="Status" />
             <CardContent className="space-y-4">
-              <div>
-                <p className="mb-2 text-xs font-medium text-fg/65">
-                  Product Type
-                </p>
+              <FormField label="Product Type">
                 <div className="flex gap-2">
                   {(
                     [
@@ -307,12 +322,9 @@ export default function ProductCreatePage() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </FormField>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Product Status
-                </label>
+              <FormField label="Product Status">
                 <Select
                   value={form.status}
                   onValueChange={(v) => set("status", v as ProductStatus)}
@@ -325,7 +337,7 @@ export default function ProductCreatePage() {
                     <SelectItem value="active">Active</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </FormField>
 
               <Switch
                 checked={form.is_published_online}
@@ -340,10 +352,7 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title="Organisation" />
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Categories
-                </label>
+              <FormField label="Categories">
                 {catLoading ? (
                   <Skeleton className="h-10 w-full" />
                 ) : (
@@ -354,21 +363,15 @@ export default function ProductCreatePage() {
                     placeholder="Select categories…"
                   />
                 )}
-              </div>
+              </FormField>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Tags
-                </label>
+              <FormField label="Tags" hint="Press Enter or comma to add">
                 <TagInput
                   value={form.tags}
                   onChange={(tags) => set("tags", tags)}
                   placeholder="Add tags…"
                 />
-                <p className="mt-1 text-[10px] text-fg/40">
-                  Press Enter or comma to add
-                </p>
-              </div>
+              </FormField>
             </CardContent>
           </Card>
 
@@ -396,15 +399,11 @@ export default function ProductCreatePage() {
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="mt-px text-danger">*</span>
-                  <span><strong>Description</strong> — required</span>
+                  <span><strong>Price</strong> — required</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="mt-px text-danger">*</span>
                   <span><strong>At least 1 image</strong> — required to publish</span>
-                </li>
-                <li className="flex items-start gap-1.5">
-                  <span className="mt-px text-danger">*</span>
-                  <span><strong>Price</strong> — required</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="mt-px text-fg/30">·</span>

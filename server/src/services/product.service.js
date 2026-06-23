@@ -1,10 +1,14 @@
 // services/product.service.js
 
+const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { ensureUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
+
+// ── Variant generation ────────────────────────────────────────────────────────
 
 function cartesian(arrays) {
   if (!arrays || arrays.length === 0) return [[]];
@@ -76,6 +80,8 @@ async function ensureInventoryForProduct(productId, variantId = null) {
   }
 }
 
+// ── eBay queue ────────────────────────────────────────────────────────────────
+
 async function syncProductToEbay(product, variants = []) {
   try {
     await enqueueEbayJob("sync_product", {
@@ -99,10 +105,104 @@ async function deleteProductFromEbay(sku) {
   }
 }
 
+// ── Product CRUD ──────────────────────────────────────────────────────────────
+
+function withBasePopulate(query) {
+  return query
+    .populate("attachments", "url original_name mime_type type uid file_name")
+    .populate("categories", "name slug");
+}
+
+async function getProducts(filter, { skip, limit }) {
+  const [items, total] = await Promise.all([
+    withBasePopulate(Product.find(filter))
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit),
+    Product.countDocuments(filter),
+  ]);
+  return { items, total };
+}
+
+async function findProductById(id) {
+  return Product.findById(id);
+}
+
+async function findProductWithAttachments(id) {
+  return Product.findById(id).populate("attachments").lean();
+}
+
+async function getProductBySlug(slug) {
+  return Product.findOne({ slug })
+    .populate("attachments")
+    .populate("categories")
+    .populate("digital_file")
+    .populate("related_products", "title slug price attachments");
+}
+
+async function getPopulatedProduct(id) {
+  return Product.findById(id)
+    .populate("attachments")
+    .populate("categories")
+    .populate("digital_file");
+}
+
+async function createProductRecord(data) {
+  return Product.create(data);
+}
+
+async function ensureUniqueProductSlug(baseSlug, excludeId = null) {
+  return ensureUniqueSlug(Product, baseSlug, excludeId);
+}
+
+async function updateProductEbayStatus(id, updates) {
+  return Product.findByIdAndUpdate(id, updates);
+}
+
+// ── Variant CRUD ──────────────────────────────────────────────────────────────
+
+async function findVariantsByProductId(productId) {
+  return ProductVariant.find({ product: productId });
+}
+
+async function getVariantsByProduct(productId) {
+  return ProductVariant.find({ product: productId })
+    .populate("attachments")
+    .populate("digital_file")
+    .sort({ display_name: 1 });
+}
+
+async function findVariant(variantId, productId) {
+  return ProductVariant.findOne({ _id: variantId, product: productId });
+}
+
+async function getPopulatedVariant(id) {
+  return ProductVariant.findById(id)
+    .populate("attachments")
+    .populate("digital_file");
+}
+
+async function updateVariantEbayStatus(id, updates) {
+  return ProductVariant.findByIdAndUpdate(id, updates);
+}
+
 module.exports = {
   cartesian,
+  ensureUniqueProductSlug,
   generateVariantsForProduct,
   ensureInventoryForProduct,
   syncProductToEbay,
   deleteProductFromEbay,
+  getProducts,
+  findProductById,
+  findProductWithAttachments,
+  getProductBySlug,
+  getPopulatedProduct,
+  createProductRecord,
+  updateProductEbayStatus,
+  findVariantsByProductId,
+  getVariantsByProduct,
+  findVariant,
+  getPopulatedVariant,
+  updateVariantEbayStatus,
 };

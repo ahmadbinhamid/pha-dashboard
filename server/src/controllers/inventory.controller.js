@@ -1,12 +1,16 @@
 // controllers/inventory.controller.js
 
-const Inventory = require("../models/Inventory");
-const InventoryHistory = require("../models/InventoryHistory");
 const InventorySettings = require("../models/InventorySettings");
 const {
   listInventory,
   getSkuForRecord,
   syncInventoryToEbay,
+  fetchPopulatedRecord,
+  findRecord,
+  ensureRecord,
+  adjustStock,
+  setStock,
+  getHistory,
 } = require("../services/inventory.service");
 const {
   success,
@@ -14,13 +18,6 @@ const {
   badRequest,
   systemfailure,
 } = require("../utils/http/response");
-
-async function fetchPopulatedRecord(id) {
-  return Inventory.findById(id)
-    .populate("product", "title slug attachments")
-    .populate("variant", "display_name sku combination")
-    .populate("location", "name address");
-}
 
 exports.getInventory = async (req, res) => {
   try {
@@ -45,22 +42,8 @@ exports.ensureRecord = async (req, res) => {
   try {
     const { product, location, variant } = req.body;
 
-    const record = await Inventory.findOneAndUpdate(
-      { product, location, variant: variant || null },
-      {
-        $setOnInsert: {
-          product,
-          location,
-          variant: variant || null,
-          stock_count: 0,
-          stock_reserved: 0,
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
-
-    const populated = await fetchPopulatedRecord(record._id);
-    return success(res, populated, "Inventory record ensured");
+    const record = await ensureRecord({ product, location, variant });
+    return success(res, await fetchPopulatedRecord(record._id), "Inventory record ensured");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -68,43 +51,26 @@ exports.ensureRecord = async (req, res) => {
 
 exports.adjustStock = async (req, res) => {
   try {
-    const record = await Inventory.findById(req.params.inventoryId);
-    if (!record) return notFound(res, "Inventory record not found");
-
     const { adjustment, reason, type } = req.body;
 
     if (adjustment === undefined || isNaN(Number(adjustment))) {
       return badRequest(res, "Adjustment value is required");
     }
 
-    const adj = Number(adjustment);
-    const stock_before = record.stock_count;
-    const stock_after = Math.max(0, stock_before + adj);
+    const record = await findRecord(req.params.inventoryId);
+    if (!record) return notFound(res, "Inventory record not found");
 
-    record.stock_count = stock_after;
-    await record.save();
-
-    await InventoryHistory.create({
-      inventory: record._id,
-      product: record.product,
-      variant: record.variant,
-      location: record.location,
-      adjustment: adj,
-      stock_before,
-      stock_after,
-      reason: reason || null,
-      type: type || "other",
-      user: req.user?._id || null,
+    const { stock_after } = await adjustStock(record, {
+      adjustment: Number(adjustment),
+      reason,
+      type,
+      userId: req.user?._id,
     });
 
     const sku = await getSkuForRecord(record);
     if (sku) await syncInventoryToEbay(sku, stock_after);
 
-    return success(
-      res,
-      await fetchPopulatedRecord(record._id),
-      "Stock adjusted",
-    );
+    return success(res, await fetchPopulatedRecord(record._id), "Stock adjusted");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -112,9 +78,6 @@ exports.adjustStock = async (req, res) => {
 
 exports.setStock = async (req, res) => {
   try {
-    const record = await Inventory.findById(req.params.inventoryId);
-    if (!record) return notFound(res, "Inventory record not found");
-
     const { stock_count, reason } = req.body;
 
     if (
@@ -125,27 +88,17 @@ exports.setStock = async (req, res) => {
       return badRequest(res, "stock_count must be a non-negative number");
     }
 
-    const newCount = Math.round(Number(stock_count));
-    const stock_before = record.stock_count;
+    const record = await findRecord(req.params.inventoryId);
+    if (!record) return notFound(res, "Inventory record not found");
 
-    record.stock_count = newCount;
-    await record.save();
-
-    await InventoryHistory.create({
-      inventory: record._id,
-      product: record.product,
-      variant: record.variant,
-      location: record.location,
-      adjustment: newCount - stock_before,
-      stock_before,
-      stock_after: newCount,
-      reason: reason || null,
-      type: "correction",
-      user: req.user?._id || null,
+    const { stock_after } = await setStock(record, {
+      stock_count,
+      reason,
+      userId: req.user?._id,
     });
 
     const sku = await getSkuForRecord(record);
-    if (sku) await syncInventoryToEbay(sku, newCount);
+    if (sku) await syncInventoryToEbay(sku, stock_after);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock set");
   } catch (err) {
@@ -155,15 +108,10 @@ exports.setStock = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
   try {
-    const record = await Inventory.findById(req.params.inventoryId);
+    const record = await findRecord(req.params.inventoryId);
     if (!record) return notFound(res, "Inventory record not found");
 
-    const history = await InventoryHistory.find({ inventory: record._id })
-      .populate("user", "first_name last_name email")
-      .populate("location", "name")
-      .sort({ created_at: -1 })
-      .limit(100);
-
+    const history = await getHistory(record._id);
     return success(res, history);
   } catch (err) {
     return systemfailure(res, err);

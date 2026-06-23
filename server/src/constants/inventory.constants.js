@@ -8,6 +8,7 @@ const ADJUSTMENT_TYPE = Object.freeze({
   CORRECTION: "correction",
   TRANSFER_IN: "transfer_in",
   TRANSFER_OUT: "transfer_out",
+  EBAY_SALE: "ebay_sale",
   OTHER: "other",
 });
 

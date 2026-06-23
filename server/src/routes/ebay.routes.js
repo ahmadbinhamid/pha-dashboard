@@ -9,4 +9,11 @@ router.get("/status", auth(), asyncHandler(ctrl.getStatus));
 router.get("/settings", auth(), asyncHandler(ctrl.getSettings));
 router.put("/settings", auth(), asyncHandler(ctrl.updateSettings));
 
+// Webhook — no JWT auth (eBay calls these); HMAC-verified on POST
+router.get("/webhook", asyncHandler(ctrl.handleWebhookChallenge));
+router.post("/webhook", asyncHandler(ctrl.handleWebhook));
+
+// Admin — register webhook subscription with eBay
+router.post("/webhook/subscribe", auth(), asyncHandler(ctrl.subscribeWebhook));
+
 module.exports = router;
