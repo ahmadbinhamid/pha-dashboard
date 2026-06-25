@@ -7,9 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
-import { TagInput } from "@/components/ui/tag-input";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
 import {
@@ -20,23 +17,16 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
-import { ChoicesEditor } from "@/components/products/choices-editor";
-import { VariantRow } from "@/components/products/variant-row";
 import { ProductStockCard } from "@/components/products/product-stock-card";
 import { useToast } from "@/context";
 import {
   getProduct,
   updateProduct,
   duplicateProduct,
-  getVariants,
-  getCategories,
 } from "@/lib/api/products";
 import type {
-  Category,
   Product,
-  ProductVariant,
   ProductEditFormState,
-  ProductType,
   ProductStatus,
 } from "@/types/product";
 import {
@@ -54,7 +44,6 @@ import {
 } from "lucide-react";
 import { getListings } from "@/lib/api/listings";
 import type { EbayListing } from "@/types/marketplace";
-import { cn } from "@/utils/cn";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -116,7 +105,7 @@ function formToFD(form: ProductEditFormState): FormData {
 }
 
 function generateSku() {
-  return "SKU-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+  return "PHA-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 function SectionLabel({
@@ -277,19 +266,6 @@ export default function ProductEditPage() {
 
   const isDirty = form !== null && JSON.stringify(form) !== savedFormRef.current;
 
-  const { data: variantsData, refetch: refetchVariants } = useQuery({
-    queryKey: ["variants", product?._id],
-    queryFn: () => getVariants(product!._id),
-    enabled: !!product?._id,
-  });
-  const variants: ProductVariant[] = variantsData?.data ?? [];
-
-  const { data: catData } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
-  });
-  const categories: Category[] = catData?.data ?? [];
-  const categoryOptions = categories.map((c) => ({ value: c._id, label: c.name }));
 
   const saveMutation = useMutation({
     mutationFn: (fd: FormData) => updateProduct(product!._id, fd),
@@ -353,7 +329,6 @@ export default function ProductEditPage() {
   }
 
   const showSetStockCard = form.stock_control && !form.has_variants;
-  const showVariants = form.has_variants && variants.length > 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 pb-24">
@@ -423,17 +398,20 @@ export default function ProductEditPage() {
               <div className="grid grid-cols-2 gap-3">
                 {/* SKU */}
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-fg/65">SKU</label>
-                    <span className="text-[10px] tabular-nums text-fg/35">{form.sku.length}/64</span>
-                  </div>
+                  <label className="text-xs font-medium text-fg/65">SKU</label>
                   <div className="flex gap-1.5">
-                    <Input
-                      value={form.sku}
-                      onChange={(e) => set("sku", e.target.value)}
-                      placeholder="e.g. PART-001"
-                      maxLength={64}
-                    />
+                    <div className="flex flex-1">
+                      <span className="flex items-center rounded-l-xs border border-r-0 border-border bg-bg-2 px-3 text-sm font-medium text-fg/55 select-none">
+                        PHA-
+                      </span>
+                      <Input
+                        value={form.sku.startsWith("PHA-") ? form.sku.slice(4) : form.sku}
+                        onChange={(e) => set("sku", "PHA-" + e.target.value)}
+                        placeholder="001"
+                        maxLength={60}
+                        className="rounded-l-none"
+                      />
+                    </div>
                     <button
                       type="button"
                       title="Generate SKU"
@@ -460,14 +438,6 @@ export default function ProductEditPage() {
                 </div>
               </div>
 
-              <FormField label="Description">
-                <RichTextEditor
-                  value={form.description}
-                  onChange={(html) => set("description", html)}
-                  placeholder="Describe your product…"
-                  minHeight="140px"
-                />
-              </FormField>
             </CardContent>
           </Card>
 
@@ -494,7 +464,7 @@ export default function ProductEditPage() {
           <Card>
             <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <FormField label="Price (£)" required error={errors.price}>
                   <Input
                     type="number"
@@ -505,53 +475,17 @@ export default function ProductEditPage() {
                     placeholder="0.00"
                   />
                 </FormField>
-                {(
-                  [
-                    { key: "compare_price", label: "Compare at (£)" },
-                    { key: "cost_price", label: "Cost price (£)" },
-                  ] as const
-                ).map(({ key, label }) => (
-                  <FormField key={key} label={label}>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form[key]}
-                      onChange={(e) => set(key, e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </FormField>
-                ))}
-              </div>
-
-              <Switch
-                checked={form.is_taxable}
-                onCheckedChange={(v) => set("is_taxable", v)}
-                label="Taxable"
-                description="Charge tax on this product"
-              />
-
-              {form.is_taxable && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Switch
-                    checked={form.is_vat_inclusive}
-                    onCheckedChange={(v) => set("is_vat_inclusive", v)}
-                    label="VAT inclusive"
-                    description="Price already includes VAT"
+                <FormField label="Cost price (£)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.cost_price}
+                    onChange={(e) => set("cost_price", e.target.value)}
+                    placeholder="0.00"
                   />
-                  <FormField label="VAT Rate (%)">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={form.vat_rate}
-                      onChange={(e) => set("vat_rate", e.target.value)}
-                      placeholder="20"
-                    />
-                  </FormField>
-                </div>
-              )}
+                </FormField>
+              </div>
             </CardContent>
           </Card>
 
@@ -576,12 +510,12 @@ export default function ProductEditPage() {
                 description="Manage stock levels per location"
               />
               <CardContent>
-                <ProductStockCard productId={product._id} />
+                <ProductStockCard productId={product._id} limit={1} />
               </CardContent>
             </Card>
           )}
 
-          {/* Choices */}
+          {/* Choices — hidden for now
           <Card>
             <CardHeader
               title={<SectionLabel icon={Tag}>Choices</SectionLabel>}
@@ -605,8 +539,9 @@ export default function ProductEditPage() {
               />
             </CardContent>
           </Card>
+          */}
 
-          {/* Variant Combinations */}
+          {/* Variant Combinations — hidden for now
           {form.has_variants && (
             <Card>
               <CardHeader
@@ -644,6 +579,7 @@ export default function ProductEditPage() {
               )}
             </Card>
           )}
+          */}
         </div>
 
         {/* ── Sidebar ── */}
@@ -653,33 +589,6 @@ export default function ProductEditPage() {
           <Card>
             <CardHeader title="Status" />
             <CardContent className="space-y-4">
-              {/* Product Type */}
-              <div>
-                <p className="mb-2 text-xs font-medium text-fg/65">Product Type</p>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      { value: "physical", label: "Physical" },
-                      { value: "digital", label: "Digital" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => set("type", opt.value as ProductType)}
-                      className={cn(
-                        "flex-1 rounded-xs border py-2 text-sm font-medium transition",
-                        form.type === opt.value
-                          ? "border-accent bg-accent/10 text-accent"
-                          : "border-border text-fg/55 hover:border-fg/25 hover:text-fg",
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Status dropdown */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-fg/65">
@@ -706,52 +615,6 @@ export default function ProductEditPage() {
                 label="Published Online"
                 description="Visible on your storefront"
               />
-            </CardContent>
-          </Card>
-
-          {/* Organisation */}
-          <Card>
-            <CardHeader title="Organisation" />
-            <CardContent className="space-y-4">
-              {/* Categories */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Categories
-                </label>
-                <MultiSelect
-                  options={categoryOptions}
-                  value={form.categories}
-                  onChange={(v) => set("categories", v)}
-                  placeholder="Select categories…"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Tags
-                </label>
-                <TagInput
-                  value={form.tags}
-                  onChange={(tags) => set("tags", tags)}
-                  placeholder="Add tags…"
-                />
-                <p className="mt-1 text-[10px] text-fg/40">
-                  Press Enter or comma to add
-                </p>
-              </div>
-
-              {/* Brand */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Brand
-                </label>
-                <Input
-                  value={form.brand}
-                  onChange={(e) => set("brand", e.target.value)}
-                  placeholder="Brand name"
-                />
-              </div>
             </CardContent>
           </Card>
 
