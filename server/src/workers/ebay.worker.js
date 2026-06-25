@@ -8,6 +8,13 @@ const ebayService = require("../services/ebay/ebay.service");
 const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
 const { logger } = require("../loaders/logging");
 
+// Register marketplace adapters
+const registry = require("../services/marketplace/registry");
+const ebayAdapter = require("../services/marketplace/adapters/ebay.adapter");
+registry.register(ebayAdapter);
+
+const marketplaceSync = require("../services/marketplace/sync.service");
+
 connectMongo().catch((err) => {
   logger.error(`[ebayWorker] MongoDB connection failed: ${err.message}`);
   process.exit(1);
@@ -36,6 +43,15 @@ ebayQueue.process("delete_product", 2, async (job) => {
   logger.info(`[ebayQueue] delete_product sku=${sku} offerId=${offerId}`);
   const result = await ebayService.deleteProduct(sku, offerId);
   if (result.error) throw new Error(result.error);
+  return result;
+});
+
+// New marketplace-listing sync — runs through the adapter dispatcher
+ebayQueue.process("sync_listing", 2, async (job) => {
+  const { listingId } = job.data;
+  logger.info(`[ebayQueue] sync_listing listingId=${listingId}`);
+  const result = await marketplaceSync.syncListing(listingId);
+  if (result && result.error) throw new Error(result.error);
   return result;
 });
 

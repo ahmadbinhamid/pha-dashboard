@@ -129,6 +129,38 @@ async function syncInventoryToEbay(sku, quantity) {
   }
 }
 
+// Fan-out: enqueue a sync_listing job for every active MarketplaceListing tied
+// to this product/variant. Runs alongside the legacy syncInventoryToEbay so
+// both paths are live until Product.ebay_* fields are retired.
+async function fanOutMarketplaceInventory(productId, variantId) {
+  try {
+    // Lazy-require to avoid circular dep at module load time
+    const MarketplaceListing = require("../models/MarketplaceListing");
+    const { LISTING_STATE } = require("../constants/marketplace.constants");
+
+    const listings = await MarketplaceListing.find({
+      product: productId,
+      variant: variantId || null,
+      state: LISTING_STATE.ACTIVE,
+    }).select("_id platform").lean();
+
+    for (const listing of listings) {
+      try {
+        // All live platforms currently use the eBay queue; add platform routing here
+        // when additional queues (Amazon, Shopify) are introduced.
+        await enqueueEbayJob("sync_listing", { listingId: listing._id.toString() });
+        logger.info(`[inventory.service] fan-out queued sync_listing for ${listing._id} (${listing.platform})`);
+      } catch (qErr) {
+        logger.warn(`[inventory.service] fan-out queue unavailable for listing ${listing._id}`, {
+          error: qErr.message,
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn("[inventory.service] fanOutMarketplaceInventory error", { error: err.message });
+  }
+}
+
 // ── Record CRUD ───────────────────────────────────────────────────────────────
 
 async function fetchPopulatedRecord(id) {
@@ -295,6 +327,7 @@ module.exports = {
   listInventory,
   getSkuForRecord,
   syncInventoryToEbay,
+  fanOutMarketplaceInventory,
   fetchPopulatedRecord,
   findRecord,
   ensureRecord,

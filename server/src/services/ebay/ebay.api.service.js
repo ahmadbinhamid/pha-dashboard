@@ -213,6 +213,83 @@ async function upsertInventoryItem(token, inventoryItem) {
   return { ok: true };
 }
 
+// ── Resolved-based builders (used by EbayAdapter / MarketplaceListing path) ──
+
+function resolveImageUrls(photos) {
+  const uploadsUrl = process.env.UPLOADS_URL || "http://localhost:7000/uploads";
+  const urls = (photos || [])
+    .filter((a) => a && a.url)
+    .map((a) => {
+      if (a.url.startsWith("http")) return a.url;
+      return `${uploadsUrl}${a.url.startsWith("/") ? "" : "/"}${a.url}`;
+    })
+    .filter((url) => url.startsWith("https://"))
+    .slice(0, 12);
+  return urls.length > 0
+    ? urls
+    : config.ebay.fallbackImageUrl
+      ? [config.ebay.fallbackImageUrl]
+      : [];
+}
+
+function buildInventoryItemFromResolved(resolved, quantity = 0) {
+  const { sku, title, description, brand, photos, listing } = resolved;
+  const imageUrls = resolveImageUrls(photos);
+  const condition = listing.condition || "FOR_PARTS_OR_NOT_WORKING";
+
+  // Map stored item_specifics to eBay aspect format
+  const specs = listing.item_specifics || {};
+  const aspects = {};
+  if (brand || specs.brand) aspects["Brand"] = [specs.brand || brand];
+  if (specs.mpn) aspects["Manufacturer Part Number"] = [specs.mpn];
+  if (specs.superseded_part_number) aspects["Superseded Part Number"] = [specs.superseded_part_number];
+  if (specs.placement_on_vehicle) aspects["Placement on Vehicle"] = [specs.placement_on_vehicle];
+  if (specs.part_type) aspects["Part Type"] = [specs.part_type];
+  if (specs.finish) aspects["Surface Finish"] = [specs.finish];
+  if (specs.warranty) aspects["Warranty"] = [specs.warranty];
+
+  return {
+    sku,
+    availability: { shipToLocationAvailability: { quantity } },
+    condition,
+    product: {
+      title,
+      description: description || title,
+      imageUrls,
+      ...(brand ? { brand } : {}),
+      ...(Object.keys(aspects).length > 0 ? { aspects } : {}),
+    },
+  };
+}
+
+function buildOfferFromResolved(resolved, settings, quantity = 1) {
+  const { sku, price, description, title, listing } = resolved;
+
+  // Policy IDs: listing-level override ?? EbaySettings account default
+  const fulfillmentPolicyId = listing.fulfillment_policy_id || settings.fulfillment_policy_id;
+  const paymentPolicyId = listing.payment_policy_id || settings.payment_policy_id;
+  const returnPolicyId = listing.return_policy_id || settings.return_policy_id;
+  const merchantLocationKey = listing.merchant_location_key || settings.merchant_location_key;
+
+  return {
+    sku,
+    marketplaceId: config.ebay.marketplaceId,
+    format: listing.format || "FIXED_PRICE",
+    availableQuantity: quantity,
+    categoryId: listing.ebay_category_id,
+    listingDescription: description || title,
+    pricingSummary: {
+      price: { value: String(price || 0), currency: "AUD" },
+    },
+    listingPolicies: {
+      ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
+      ...(paymentPolicyId ? { paymentPolicyId } : {}),
+      ...(returnPolicyId ? { returnPolicyId } : {}),
+    },
+    ...(merchantLocationKey ? { merchantLocationKey } : {}),
+  };
+}
+
 // ── Step 2: Offer ─────────────────────────────────────────────────────────────
 
 function buildOffer(product, sku, settings, quantity = 1) {
@@ -425,8 +502,10 @@ module.exports = {
   loadSettings,
   ebayHeaders,
   buildInventoryItem,
+  buildInventoryItemFromResolved,
   upsertInventoryItem,
   buildOffer,
+  buildOfferFromResolved,
   createOffer,
   updateOffer,
   publishOffer,
