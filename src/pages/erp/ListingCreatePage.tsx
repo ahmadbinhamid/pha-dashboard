@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
 import { createListing, pushListing } from "@/lib/api/listings";
+import { getProduct } from "@/lib/api/products";
 import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { EbayListingFormState } from "@/types/marketplace";
 
@@ -14,11 +15,31 @@ export default function ListingCreatePage() {
   const { toast } = useToast();
 
   const productId = searchParams.get("product") || "";
+  const productSlug = searchParams.get("productSlug") || "";
 
   const [form, setForm] = useState<EbayListingFormState>({
     ...EBAY_LISTING_FORM_INITIAL,
     product_id: productId,
   });
+
+  const { data: productData } = useQuery({
+    queryKey: ["product-prefill", productSlug],
+    queryFn: () => getProduct(productSlug),
+    enabled: !!productSlug,
+  });
+
+  useEffect(() => {
+    const p = productData?.data;
+    if (!p) return;
+    setForm((prev) => ({
+      ...prev,
+      product_id: p._id,
+      title_override: p.title,
+      store_sku: p.sku || "",
+      price_override: p.price != null ? String(p.price) : "",
+      ebay_category_id: p.ebay_category_id || "",
+    }));
+  }, [productData]);
 
   function patchForm(patch: Partial<EbayListingFormState>) {
     setForm((prev) => ({ ...prev, ...patch }));

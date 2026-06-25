@@ -232,10 +232,19 @@ function resolveImageUrls(photos) {
       : [];
 }
 
+// Our UI stores "NEW" or "USED". "NEW" is valid as-is; "USED" is not an eBay
+// enum — map it to USED_GOOD as the safe default. Any other stored value is
+// assumed to already be a valid eBay condition enum (for future granularity).
+function normalizeCondition(condition) {
+  if (!condition) return "FOR_PARTS_OR_NOT_WORKING";
+  if (condition === "USED") return "USED_GOOD";
+  return condition;
+}
+
 function buildInventoryItemFromResolved(resolved, quantity = 0) {
   const { sku, title, description, brand, photos, listing } = resolved;
   const imageUrls = resolveImageUrls(photos);
-  const condition = listing.condition || "FOR_PARTS_OR_NOT_WORKING";
+  const condition = normalizeCondition(listing.condition);
 
   // Map stored item_specifics to eBay aspect format
   const specs = listing.item_specifics || {};
@@ -286,18 +295,18 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     pricingSummary: {
       price: { value: String(price || 0), currency: "AUD" },
     },
-    ...(listing.accept_best_offer ? {
-      bestOfferTerms: {
-        bestOfferEnabled: true,
-        ...(listing.min_best_offer != null ? {
-          autoDeclinePrice: { value: String(listing.min_best_offer), currency: "AUD" },
-        } : {}),
-      },
-    } : {}),
     listingPolicies: {
       ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
       ...(paymentPolicyId ? { paymentPolicyId } : {}),
       ...(returnPolicyId ? { returnPolicyId } : {}),
+      ...(listing.accept_best_offer ? {
+        bestOfferTerms: {
+          bestOfferEnabled: true,
+          ...(listing.min_best_offer != null ? {
+            autoDeclinePrice: { value: String(listing.min_best_offer), currency: "AUD" },
+          } : {}),
+        },
+      } : {}),
     },
     ...(merchantLocationKey ? { merchantLocationKey } : {}),
   };

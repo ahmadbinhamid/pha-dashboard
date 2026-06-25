@@ -17,16 +17,21 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       ? listing.variant._id
       : (listing.variant as string | null) ?? "";
 
+  // Use populated product as fallback for fields the user never explicitly overrode
+  const p = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+
   return {
     product_id: productId,
     variant_id: variantId,
-    title_override: listing.title_override || "",
+    title_override: listing.title_override || p?.title || "",
     description_override: listing.description_override || "",
-    price_override: listing.price_override != null ? String(listing.price_override) : "",
+    price_override: listing.price_override != null
+      ? String(listing.price_override)
+      : p?.price != null ? String(p.price) : "",
     photo_overrides: (listing.photo_overrides as string[]) || [],
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
-    store_sku: listing.store_sku || "",
+    store_sku: listing.store_sku || p?.sku || "",
     condition: listing.condition || "NEW",
     condition_notes: listing.condition_notes || "",
     item_specifics: {
@@ -120,7 +125,7 @@ export default function ListingEditPage() {
   }
 
   const productTitle =
-    listing && typeof listing.product === "object"
+    listing && listing.product !== null && typeof listing.product === "object"
       ? listing.product.title
       : "Listing";
 
