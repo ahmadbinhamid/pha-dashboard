@@ -25,6 +25,9 @@ const {
   deleteProduct,
 } = require("../../ebay/ebay.api.service");
 const { getTotalStockForProductVariant } = require("../../inventory.service");
+const { resolveSku } = require("../listing.resolver");
+const Product = require("../../../models/Product");
+const ProductVariant = require("../../../models/ProductVariant");
 
 const key = "ebay";
 
@@ -158,11 +161,24 @@ async function update(resolved, settings) {
 
 async function end(listing) {
   const offerId = listing.external_offer_id || null;
-  const sku = listing.store_sku || null;
+
+  let sku = listing.store_sku || null;
   if (!sku) {
-    logger.warn("[EbayAdapter] end called with no SKU — nothing to withdraw");
+    // Derive SKU the same way publish() does — store_sku → variant.sku → product.sku → ph-<id>
+    const productId = listing.product?._id || listing.product;
+    const variantId = listing.variant?._id || listing.variant || null;
+    const [product, variant] = await Promise.all([
+      Product.findById(productId).select("_id sku").lean(),
+      variantId ? ProductVariant.findById(variantId).select("_id sku").lean() : Promise.resolve(null),
+    ]);
+    if (product) sku = resolveSku(listing, product, variant);
+  }
+
+  if (!sku) {
+    logger.warn("[EbayAdapter] end called with no resolvable SKU — nothing to withdraw");
     return;
   }
+
   const result = await deleteProduct(sku, offerId);
   if (result.error) throw new Error(result.error);
   logger.info(`[EbayAdapter] listing ended: ${sku}`);

@@ -271,6 +271,11 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const returnPolicyId = listing.return_policy_id || settings.return_policy_id;
   const merchantLocationKey = listing.merchant_location_key || settings.merchant_location_key;
 
+  // require_immediate_payment cannot be set per-offer in the eBay Inventory API —
+  // it is governed by the payment policy (paymentPolicyId). To enforce it, enable
+  // "Require immediate payment" on the eBay payment policy itself via Seller Hub.
+  // listing.require_immediate_payment is intentionally not forwarded here.
+
   return {
     sku,
     marketplaceId: config.ebay.marketplaceId,
@@ -281,6 +286,14 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     pricingSummary: {
       price: { value: String(price || 0), currency: "AUD" },
     },
+    ...(listing.accept_best_offer ? {
+      bestOfferTerms: {
+        bestOfferEnabled: true,
+        ...(listing.min_best_offer != null ? {
+          autoDeclinePrice: { value: String(listing.min_best_offer), currency: "AUD" },
+        } : {}),
+      },
+    } : {}),
     listingPolicies: {
       ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
       ...(paymentPolicyId ? { paymentPolicyId } : {}),

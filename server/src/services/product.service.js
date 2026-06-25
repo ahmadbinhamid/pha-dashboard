@@ -1,5 +1,9 @@
 // services/product.service.js
 
+// When true: skip legacy sync_product enqueue — MarketplaceListing path handles
+// eBay sync. Flip only after migration parity is confirmed. Default: false.
+const MARKETPLACE_CUTOVER = process.env.MARKETPLACE_LISTINGS_CUTOVER === "true";
+
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
@@ -83,6 +87,7 @@ async function ensureInventoryForProduct(productId, variantId = null) {
 // ── eBay queue ────────────────────────────────────────────────────────────────
 
 async function syncProductToEbay(product, variants = []) {
+  if (MARKETPLACE_CUTOVER) return;
   try {
     await enqueueEbayJob("sync_product", {
       product: product.toObject ? product.toObject() : product,
