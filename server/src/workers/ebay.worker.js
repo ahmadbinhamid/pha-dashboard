@@ -4,7 +4,6 @@ require("dotenv").config();
 const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { ebayQueue } = require("../queues/ebay.queue");
-const ebayService = require("../services/ebay/ebay.service");
 const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
 const { logger } = require("../loaders/logging");
 
@@ -20,33 +19,7 @@ connectMongo().catch((err) => {
   process.exit(1);
 });
 
-ebayQueue.process("sync_product", 2, async (job) => {
-  const { product, variants } = job.data;
-  logger.info(
-    `[ebayQueue] sync_product for product ${product?._id || product?.id}`,
-  );
-  const result = await ebayService.syncProduct(product, variants || []);
-  if (result.error) throw new Error(result.error);
-  return result;
-});
-
-ebayQueue.process("update_inventory", 5, async (job) => {
-  const { sku, quantity } = job.data;
-  logger.info(`[ebayQueue] update_inventory sku=${sku} qty=${quantity}`);
-  const result = await ebayService.updateInventoryQuantity(sku, quantity);
-  if (result.error) throw new Error(result.error);
-  return result;
-});
-
-ebayQueue.process("delete_product", 2, async (job) => {
-  const { sku, offerId } = job.data;
-  logger.info(`[ebayQueue] delete_product sku=${sku} offerId=${offerId}`);
-  const result = await ebayService.deleteProduct(sku, offerId);
-  if (result.error) throw new Error(result.error);
-  return result;
-});
-
-// New marketplace-listing sync — runs through the adapter dispatcher
+// Marketplace-listing sync — runs through the adapter dispatcher
 ebayQueue.process("sync_listing", 2, async (job) => {
   const { listingId } = job.data;
   logger.info(`[ebayQueue] sync_listing listingId=${listingId}`);

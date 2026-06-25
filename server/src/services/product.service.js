@@ -129,10 +129,6 @@ async function ensureUniqueProductSlug(baseSlug, excludeId = null) {
   return ensureUniqueSlug(Product, baseSlug, excludeId);
 }
 
-async function updateProductEbayStatus(id, updates) {
-  return Product.findByIdAndUpdate(id, updates);
-}
-
 // ── Variant CRUD ──────────────────────────────────────────────────────────────
 
 async function findVariantsByProductId(productId) {
@@ -156,10 +152,6 @@ async function getPopulatedVariant(id) {
     .populate("digital_file");
 }
 
-async function updateVariantEbayStatus(id, updates) {
-  return ProductVariant.findByIdAndUpdate(id, updates);
-}
-
 module.exports = {
   cartesian,
   ensureUniqueProductSlug,
@@ -171,10 +163,8 @@ module.exports = {
   getProductBySlug,
   getPopulatedProduct,
   createProductRecord,
-  updateProductEbayStatus,
   findVariantsByProductId,
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,
-  updateVariantEbayStatus,
 };

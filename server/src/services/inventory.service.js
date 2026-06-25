@@ -109,29 +109,8 @@ async function listInventory({ page = 1, limit = 20, search, location, product, 
   };
 }
 
-// ── eBay helpers ──────────────────────────────────────────────────────────────
-
-async function getSkuForRecord(record) {
-  if (record.variant) {
-    const variant = await ProductVariant.findById(record.variant).select("sku");
-    return variant?.sku || `ph-v-${record.variant}`;
-  }
-  return null;
-}
-
-async function syncInventoryToEbay(sku, quantity) {
-  try {
-    await enqueueEbayJob("update_inventory", { sku, quantity });
-  } catch (qErr) {
-    logger.warn("[inventory.service] eBay queue unavailable", {
-      error: qErr.message,
-    });
-  }
-}
-
 // Fan-out: enqueue a sync_listing job for every active MarketplaceListing tied
-// to this product/variant. Runs alongside the legacy syncInventoryToEbay so
-// both paths are live until Product.ebay_* fields are retired.
+// to this product/variant.
 async function fanOutMarketplaceInventory(productId, variantId) {
   try {
     // Lazy-require to avoid circular dep at module load time
@@ -325,8 +304,6 @@ async function adjustStockBySku(sku, delta) {
 
 module.exports = {
   listInventory,
-  getSkuForRecord,
-  syncInventoryToEbay,
   fanOutMarketplaceInventory,
   fetchPopulatedRecord,
   findRecord,
