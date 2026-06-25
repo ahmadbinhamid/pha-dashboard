@@ -3,16 +3,12 @@
 const {
   generateVariantsForProduct,
   ensureInventoryForProduct,
-  syncProductToEbay,
-  deleteProductFromEbay,
   ensureUniqueProductSlug,
   getProducts,
   findProductById,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecord,
-  updateProductEbayStatus,
-  findVariantsByProductId,
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,
@@ -26,7 +22,6 @@ const {
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
-  EBAY_SYNC_STATUS,
 } = require("../constants/product.constants");
 const {
   success,
@@ -148,13 +143,6 @@ exports.createProduct = async (req, res) => {
       await ensureInventoryForProduct(product._id, null);
     }
 
-    if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
-      const variants = product.has_variants
-        ? await findVariantsByProductId(product._id)
-        : [];
-      await syncProductToEbay(product, variants);
-    }
-
     return created(res, await getPopulatedProduct(product._id), "Product created");
   } catch (err) {
     if (err.code === 11000)
@@ -262,13 +250,6 @@ exports.updateProduct = async (req, res) => {
       await ensureInventoryForProduct(product._id, null);
     }
 
-    if (product.status === PRODUCT_STATUS.ACTIVE && product.is_published_online) {
-      const variants = product.has_variants
-        ? await findVariantsByProductId(product._id)
-        : [];
-      await syncProductToEbay(product, variants);
-    }
-
     return success(res, await getPopulatedProduct(product._id), "Product updated");
   } catch (err) {
     if (err.code === 11000)
@@ -281,15 +262,7 @@ exports.deleteProduct = async (req, res) => {
   try {
     const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
-
-    const sku = product.sku || `ph-${product._id}`;
-    const offerId = product.ebay_offer_id || null;
     await product.softDelete();
-
-    if (product.ebay_sync_status !== EBAY_SYNC_STATUS.NOT_LISTED) {
-      await deleteProductFromEbay(sku, offerId);
-    }
-
     return success(res, null, "Product deleted");
   } catch (err) {
     return systemfailure(res, err);
@@ -328,7 +301,6 @@ exports.duplicateProduct = async (req, res) => {
       tags: original.tags,
       choices: original.choices,
       digital_file: original.digital_file,
-      ebay_sync_status: EBAY_SYNC_STATUS.NOT_LISTED,
     });
 
     if (clone.has_variants && clone.choices.length > 0) {
@@ -336,27 +308,6 @@ exports.duplicateProduct = async (req, res) => {
     }
 
     return created(res, await getPopulatedProduct(clone._id), "Product duplicated");
-  } catch (err) {
-    return systemfailure(res, err);
-  }
-};
-
-exports.syncToEbay = async (req, res) => {
-  try {
-    const product = await findProductById(req.params.id);
-    if (!product) return notFound(res, "Product not found");
-
-    const variants = product.has_variants
-      ? await findVariantsByProductId(product._id)
-      : [];
-
-    await updateProductEbayStatus(product._id, {
-      ebay_sync_status: EBAY_SYNC_STATUS.PENDING,
-    });
-
-    await syncProductToEbay(product, variants);
-
-    return success(res, await getPopulatedProduct(product._id), "eBay sync queued");
   } catch (err) {
     return systemfailure(res, err);
   }
