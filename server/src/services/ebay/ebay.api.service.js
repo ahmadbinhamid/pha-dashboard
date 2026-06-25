@@ -276,7 +276,7 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     marketplaceId: config.ebay.marketplaceId,
     format: listing.format || "FIXED_PRICE",
     availableQuantity: quantity,
-    categoryId: listing.ebay_category_id,
+    ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
     listingDescription: description || title,
     pricingSummary: {
       price: { value: String(price || 0), currency: "AUD" },
@@ -298,7 +298,7 @@ function buildOffer(product, sku, settings, quantity = 1) {
     marketplaceId: config.ebay.marketplaceId,
     format: "FIXED_PRICE",
     availableQuantity: quantity,
-    categoryId: product.ebay_category_id,
+    ...(product.ebay_category_id ? { categoryId: product.ebay_category_id } : {}),
     listingDescription: product.description || product.title,
     pricingSummary: {
       price: {

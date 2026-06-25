@@ -64,6 +64,7 @@ async function publish(resolved, settings) {
   }
 
   // Step 2 — create offer (recover from 25002 if it already exists)
+  logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
 
