@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
-import { TagInput } from "@/components/ui/tag-input";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
 import {
@@ -19,16 +16,13 @@ import {
 } from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
 import { useToast } from "@/context";
-import { createProduct, getCategories } from "@/lib/api/products";
+import { createProduct } from "@/lib/api/products";
 import type {
-  Category,
   ProductCreateFormState,
-  ProductType,
   ProductStatus,
 } from "@/types/product";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SectionLabel } from "@/components/products/section-label";
 import { Package2, Image, DollarSign, Plus } from "lucide-react";
-import { cn } from "@/utils/cn";
 
 const INITIAL: ProductCreateFormState = {
   title: "",
@@ -38,7 +32,7 @@ const INITIAL: ProductCreateFormState = {
   cost_price: "",
   is_taxable: false,
   vat_rate: "",
-  sku: "",
+  sku: "PHA-",
   type: "physical",
   status: "active",
   is_published_online: false,
@@ -69,23 +63,6 @@ function formToFD(form: ProductCreateFormState): FormData {
   return fd;
 }
 
-function SectionLabel({
-  icon: Icon,
-  children,
-}: {
-  icon: React.ElementType;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-6 w-6 items-center justify-center rounded-xs bg-accent/10">
-        <Icon className="h-3.5 w-3.5 text-accent" />
-      </div>
-      <span>{children}</span>
-    </div>
-  );
-}
-
 export default function ProductCreatePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -95,13 +72,6 @@ export default function ProductCreatePage() {
 
   const clearError = (key: string) =>
     setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
-
-  const { data: catData, isLoading: catLoading } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
-  });
-  const categories: Category[] = catData?.data ?? [];
-  const categoryOptions = categories.map((c) => ({ value: c._id, label: c.name }));
 
   const mutation = useMutation({
     mutationFn: (fd: FormData) => createProduct(fd),
@@ -190,21 +160,19 @@ export default function ProductCreatePage() {
                   autoFocus
                 />
               </FormField>
-              <FormField label="SKU" hint="Leave blank — auto-generated if synced to eBay">
-                <Input
-                  value={form.sku}
-                  onChange={(e) => set("sku", e.target.value)}
-                  placeholder="e.g. PART-001"
-                  maxLength={64}
-                />
-              </FormField>
-              <FormField label="Description">
-                <RichTextEditor
-                  value={form.description}
-                  onChange={(html) => set("description", html)}
-                  placeholder="Describe your product…"
-                  minHeight="140px"
-                />
+              <FormField label="SKU">
+                <div className="flex">
+                  <span className="flex items-center rounded-l-xs border border-r-0 border-border bg-bg-2 px-3 text-sm font-medium text-fg/55 select-none">
+                    PHA-
+                  </span>
+                  <Input
+                    value={form.sku.startsWith("PHA-") ? form.sku.slice(4) : form.sku}
+                    onChange={(e) => set("sku", "PHA-" + e.target.value)}
+                    placeholder="001"
+                    maxLength={60}
+                    className="rounded-l-none"
+                  />
+                </div>
               </FormField>
             </CardContent>
           </Card>
@@ -232,7 +200,7 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <FormField label="Price (£)" required error={errors.price}>
                   <Input
                     type="number"
@@ -240,16 +208,6 @@ export default function ProductCreatePage() {
                     step="0.01"
                     value={form.price}
                     onChange={(e) => { set("price", e.target.value); clearError("price"); }}
-                    placeholder="0.00"
-                  />
-                </FormField>
-                <FormField label="Compare at (£)">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.compare_price}
-                    onChange={(e) => set("compare_price", e.target.value)}
                     placeholder="0.00"
                   />
                 </FormField>
@@ -264,29 +222,6 @@ export default function ProductCreatePage() {
                   />
                 </FormField>
               </div>
-
-              <Switch
-                checked={form.is_taxable}
-                onCheckedChange={(v) => set("is_taxable", v)}
-                label="Taxable"
-                description="Charge tax on this product"
-              />
-
-              {form.is_taxable && (
-                <div className="w-32">
-                  <FormField label="VAT Rate (%)">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={form.vat_rate}
-                      onChange={(e) => set("vat_rate", e.target.value)}
-                      placeholder="20"
-                    />
-                  </FormField>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -299,31 +234,6 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title="Status" />
             <CardContent className="space-y-4">
-              <FormField label="Product Type">
-                <div className="flex gap-2">
-                  {(
-                    [
-                      { value: "physical", label: "Physical" },
-                      { value: "digital", label: "Digital" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => set("type", opt.value as ProductType)}
-                      className={cn(
-                        "flex-1 rounded-xs border py-2 text-sm font-medium transition",
-                        form.type === opt.value
-                          ? "border-accent bg-accent/10 text-accent"
-                          : "border-border text-fg/55 hover:border-fg/25 hover:text-fg",
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </FormField>
-
               <FormField label="Product Status">
                 <Select
                   value={form.status}
@@ -345,33 +255,6 @@ export default function ProductCreatePage() {
                 label="Published Online"
                 description="Visible on your storefront"
               />
-            </CardContent>
-          </Card>
-
-          {/* Organisation */}
-          <Card>
-            <CardHeader title="Organisation" />
-            <CardContent className="space-y-4">
-              <FormField label="Categories">
-                {catLoading ? (
-                  <Skeleton className="h-10 w-full" />
-                ) : (
-                  <MultiSelect
-                    options={categoryOptions}
-                    value={form.categories}
-                    onChange={(v) => set("categories", v)}
-                    placeholder="Select categories…"
-                  />
-                )}
-              </FormField>
-
-              <FormField label="Tags" hint="Press Enter or comma to add">
-                <TagInput
-                  value={form.tags}
-                  onChange={(tags) => set("tags", tags)}
-                  placeholder="Add tags…"
-                />
-              </FormField>
             </CardContent>
           </Card>
 

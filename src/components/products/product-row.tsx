@@ -28,14 +28,21 @@ function ActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =>
   );
 }
 
+const PLATFORM_LABEL: Record<string, string> = {
+  ebay: "eBay",
+  amazon: "Amazon",
+  shopify: "Shopify",
+};
+
 interface ProductRowProps {
   product: Product;
+  listingPlatforms?: string[];
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function ProductRow({ product, onClick, onEdit, onDelete }: ProductRowProps) {
+export function ProductRow({ product, listingPlatforms = [], onClick, onEdit, onDelete }: ProductRowProps) {
   const coverImage = product.attachments?.[0];
 
   return (
@@ -86,6 +93,21 @@ export function ProductRow({ product, onClick, onEdit, onDelete }: ProductRowPro
         <Badge variant="default">
           {product.type === "digital" ? "Digital" : "Physical"}
         </Badge>
+      </td>
+
+      {/* Channels */}
+      <td className="whitespace-nowrap px-4 py-3">
+        {listingPlatforms.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {listingPlatforms.map((platform) => (
+              <Badge key={platform} variant="ok">
+                {PLATFORM_LABEL[platform] ?? platform}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-fg/35">—</span>
+        )}
       </td>
 
       {/* Price */}

@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { ProductImages } from "@/components/media/product-images";
 import {
@@ -16,6 +15,8 @@ import {
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
+import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
+import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/EbayDescriptionSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
 import { getBusinessPolicies } from "@/lib/api/ebay";
@@ -157,20 +158,18 @@ export function ListingForm({
         <EbayItemSpecificsSection form={form} onChange={onChange} />
       </Section>
 
-      {/* 5 — Item Description */}
-      <Section number={5} title="Item Description">
-        <RichTextEditor
-          value={form.description_override}
-          onChange={(v) => onChange({ description_override: v })}
-          placeholder="Describe the item condition, fitment, and any relevant details…"
-        />
-        <p className="mt-2 text-right text-xs text-fg/50">
-          {(form.description_override || "").replace(/<[^>]*>/g, "").length} / 500,000
-        </p>
+      {/* 5 — Vehicle Fitment */}
+      <Section number={5} title="Vehicle Fitment">
+        <EbayVehicleFitmentSection form={form} onChange={onChange} />
       </Section>
 
-      {/* 6 — Pricing & Format */}
-      <Section number={6} title="Pricing & Format">
+      {/* 6 — Item Description */}
+      <Section number={6} title="Item Description">
+        <EbayDescriptionSection form={form} />
+      </Section>
+
+      {/* 7 — Pricing & Format */}
+      <Section number={7} title="Pricing & Format">
         <div className="space-y-4">
           <FormField label="Format">
             <div className="grid grid-cols-2 gap-0 overflow-hidden rounded-md border border-border">
@@ -263,8 +262,8 @@ export function ListingForm({
         </div>
       </Section>
 
-      {/* 7 — Shipping */}
-      <Section number={7} title="Shipping">
+      {/* 8 — Shipping */}
+      <Section number={8} title="Shipping">
         <EbayShippingSection
           form={form}
           onChange={onChange}
@@ -273,8 +272,8 @@ export function ListingForm({
         />
       </Section>
 
-      {/* 8 — Return Policy */}
-      <Section number={8} title="Return Policy">
+      {/* 9 — Return Policy */}
+      <Section number={9} title="Return Policy">
         <FormField label="Return Policy" required>
           <Select
             value={form.return_policy_id}
@@ -308,8 +307,8 @@ export function ListingForm({
         </FormField>
       </Section>
 
-      {/* 9 — Payment */}
-      <Section number={9} title="Payment">
+      {/* 10 — Payment */}
+      <Section number={10} title="Payment">
         <div className="space-y-4">
           <FormField label="Payment Policy" required>
             <Select
@@ -358,9 +357,9 @@ export function ListingForm({
         </div>
       </Section>
 
-      {/* 10 — eBay Sync Status (edit mode only) */}
+      {/* 11 — eBay Sync Status (edit mode only) */}
       {isEdit && (
-        <Section number={10} title="eBay Sync Status">
+        <Section number={11} title="eBay Sync Status">
           <EbaySyncStatusSection listing={listing} />
         </Section>
       )}

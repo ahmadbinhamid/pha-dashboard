@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Modal,
   ModalContent,
@@ -15,134 +14,12 @@ import {
 } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { getListings, pushListing, deleteListing } from "@/lib/api/listings";
-import { getProducts } from "@/lib/api/products";
 import { useToast } from "@/context";
-import type { EbayListing, ListingSyncStatus } from "@/types/marketplace";
+import type { EbayListing } from "@/types/marketplace";
 import type { Product } from "@/types/product";
-import { Plus, Cloud, Pencil, Trash2, Search, Package } from "lucide-react";
-
-// ── Status badge ─────────────────────────────────────────────────────────────
-
-const STATUS_LABEL: Record<ListingSyncStatus, string> = {
-  not_listed: "Not listed",
-  pending: "Pending",
-  synced: "Live",
-  out_of_stock: "Out of stock",
-  error: "Error",
-};
-
-const STATUS_VARIANT: Record<ListingSyncStatus, "muted" | "warn" | "ok" | "danger"> = {
-  not_listed: "muted",
-  pending: "warn",
-  synced: "ok",
-  out_of_stock: "warn",
-  error: "danger",
-};
-
-function SyncBadge({ status }: { status: ListingSyncStatus }) {
-  return (
-    <Badge variant={STATUS_VARIANT[status] ?? "muted"}>
-      {STATUS_LABEL[status] ?? status}
-    </Badge>
-  );
-}
-
-// ── Product picker modal ──────────────────────────────────────────────────────
-
-function ProductPickerModal({
-  open,
-  onClose,
-  onSelect,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (product: Product) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [search]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["products-picker", debouncedSearch],
-    queryFn: () => getProducts({ search: debouncedSearch, page: 1 }),
-    enabled: open,
-  });
-
-  const products: Product[] = data?.data?.items ?? [];
-
-  return (
-    <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <ModalContent className="max-w-lg">
-        <ModalHeader>
-          <ModalTitle>Select a product</ModalTitle>
-          <ModalDescription>Choose the product this listing is for.</ModalDescription>
-        </ModalHeader>
-
-        <div className="px-6 pb-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40 pointer-events-none" />
-            <Input
-              autoFocus
-              placeholder="Search products…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="max-h-80 overflow-y-auto px-6 pb-4">
-          {isLoading ? (
-            <div className="space-y-2 py-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-12 animate-pulse rounded-md bg-bg-2" />
-              ))}
-            </div>
-          ) : products.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <Package className="h-8 w-8 text-fg/30" />
-              <p className="text-sm text-fg/50">
-                {debouncedSearch ? `No results for "${debouncedSearch}"` : "No products found"}
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {products.map((p) => (
-                <li key={p._id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(p)}
-                    className="flex w-full items-center gap-3 py-3 text-left hover:opacity-80 transition-opacity"
-                  >
-                    <div className="h-9 w-9 shrink-0 rounded-xs bg-bg-2 overflow-hidden">
-                      {p.attachments?.[0]?.url ? (
-                        <img src={p.attachments[0].url} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <Package className="h-4 w-4 text-fg/30" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-fg">{p.title}</p>
-                      <p className="text-xs text-fg/50">{p.sku ?? "No SKU"}</p>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </ModalContent>
-    </Modal>
-  );
-}
+import { SyncBadge } from "@/components/listings/sync-badge";
+import { ProductPickerModal } from "@/components/listings/product-picker-modal";
+import { Plus, Cloud, Pencil, Trash2 } from "lucide-react";
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -171,6 +48,14 @@ export default function ListingsPage() {
   const listings: EbayListing[] = (data?.data?.items ?? []) as EbayListing[];
   const total = data?.data?.total ?? 0;
   const totalPages = data?.data?.totalPages ?? 1;
+
+  const deleteListingProduct =
+    deleteTarget?.product !== null && typeof deleteTarget?.product === "object"
+      ? (deleteTarget?.product as { title?: string })
+      : null;
+  const deleteListingName = deleteListingProduct?.title ?? "This listing";
+  const deleteListingIsLive =
+    !!deleteTarget?.external_offer_id || !!deleteTarget?.external_listing_id;
 
   const pushMutation = useMutation({
     mutationFn: (id: string) => pushListing(id),
@@ -331,27 +216,17 @@ export default function ListingsPage() {
           <ModalHeader>
             <ModalTitle>Delete listing?</ModalTitle>
             <ModalDescription>
-              {deleteTarget &&
-                (() => {
-                  const p =
-                    deleteTarget.product !== null &&
-                    typeof deleteTarget.product === "object"
-                      ? deleteTarget.product
-                      : null;
-                  const name = p?.title ?? "This listing";
-                  const isLive = !!deleteTarget.external_offer_id || !!deleteTarget.external_listing_id;
-                  return (
-                    <>
-                      <span className="font-medium text-fg">{name}</span> will be
-                      permanently removed.
-                      {isLive && (
-                        <span className="mt-1 block text-amber-500">
-                          This listing is live on eBay and will also be withdrawn.
-                        </span>
-                      )}
-                    </>
-                  );
-                })()}
+              {deleteTarget && (
+                <>
+                  <span className="font-medium text-fg">{deleteListingName}</span> will be
+                  permanently removed.
+                  {deleteListingIsLive && (
+                    <span className="mt-1 block text-amber-500">
+                      This listing is live on eBay and will also be withdrawn.
+                    </span>
+                  )}
+                </>
+              )}
             </ModalDescription>
           </ModalHeader>
           <ModalFooter>

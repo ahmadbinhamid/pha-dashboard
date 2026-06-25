@@ -13,9 +13,10 @@ import { MapPin, Plus } from "lucide-react";
 interface ProductStockCardProps {
   productId: string;
   variantId?: string;
+  limit?: number;
 }
 
-export function ProductStockCard({ productId, variantId }: ProductStockCardProps) {
+export function ProductStockCard({ productId, variantId, limit }: ProductStockCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [setStockTarget, setSetStockTarget] = useState<InventoryRecord | null>(null);
@@ -31,6 +32,7 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
       getInventory({ product: productId, variant: variantParam, limit: 100 }),
   });
   const inventoryRecords: InventoryRecord[] = invData?.data?.items ?? [];
+  const displayRecords = limit ? inventoryRecords.slice(0, limit) : inventoryRecords;
 
   const { data: locData } = useQuery({
     queryKey: ["locations"],
@@ -77,7 +79,7 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
     setInitialQty("");
   };
 
-  if (inventoryRecords.length === 0 && !addingLocation) {
+  if (displayRecords.length === 0 && !addingLocation) {
     return (
       <>
         <div className="flex flex-col items-center gap-2 rounded-xs border border-dashed border-border py-6 text-center">
@@ -106,7 +108,7 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
   return (
     <>
       <div className="space-y-1.5">
-        {inventoryRecords.map((rec) => (
+        {displayRecords.map((rec) => (
           <div
             key={rec._id}
             className="flex items-center justify-between rounded-xs border border-border bg-bg px-3 py-2.5"
@@ -128,7 +130,7 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
         ))}
 
         {/* Add Location inline form */}
-        {addingLocation ? (
+        {addingLocation && (!limit || inventoryRecords.length < limit) ? (
           <div className="rounded-xs border border-border bg-bg-2/40 p-3 space-y-2">
             <p className="text-xs font-medium text-fg/60">Add Location</p>
             <div className="flex gap-2">
@@ -172,7 +174,7 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
               </Button>
             </div>
           </div>
-        ) : availableLocations.length > 0 ? (
+        ) : availableLocations.length > 0 && (!limit || inventoryRecords.length < limit) ? (
           <button
             type="button"
             onClick={() => setAddingLocation(true)}

@@ -12,6 +12,7 @@ const {
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,
+  hasMarketplaceListings,
 } = require("../services/product.service");
 const { generateSlug } = require("../utils/slug");
 const {
@@ -262,6 +263,12 @@ exports.deleteProduct = async (req, res) => {
   try {
     const product = await findProductById(req.params.id);
     if (!product) return notFound(res, "Product not found");
+
+    const hasListing = await hasMarketplaceListings(product._id);
+    if (hasListing) {
+      return requestConflict(res, "Cannot delete a product that has a marketplace listing. Remove the listing first.");
+    }
+
     await product.softDelete();
     return success(res, null, "Product deleted");
   } catch (err) {

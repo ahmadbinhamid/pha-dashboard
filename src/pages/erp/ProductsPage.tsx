@@ -14,8 +14,10 @@ import {
 } from "@/components/ui/modal";
 import { ProductRow } from "@/components/products/product-row";
 import { getProducts, deleteProduct } from "@/lib/api/products";
+import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
+import type { EbayListing } from "@/types/marketplace";
 import { Pagination } from "@/components/ui/pagination";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
@@ -29,6 +31,7 @@ const TABLE_HEADERS = [
   { label: "Product", align: "left" },
   { label: "Status", align: "left" },
   { label: "Type", align: "left" },
+  { label: "Channels", align: "left" },
   { label: "Price", align: "right" },
   { label: "Created", align: "right" },
   { label: "Actions", align: "right" },
@@ -94,6 +97,23 @@ export default function ProductsPage() {
     queryFn: () => getProducts({ search, status, page }),
   });
 
+  const { data: listingsData } = useQuery({
+    queryKey: ["listings-all-ids"],
+    queryFn: () => getListings({ limit: 500 }),
+    staleTime: 30_000,
+  });
+
+  const listingPlatformsMap = new Map<string, string[]>();
+  ((listingsData?.data?.items ?? []) as EbayListing[])
+    .filter((l) => l.product != null)
+    .forEach((l) => {
+      const id = typeof l.product === "string" ? l.product : (l.product as { _id: string })._id;
+      const platforms = listingPlatformsMap.get(id) ?? [];
+      if (!platforms.includes(l.platform)) listingPlatformsMap.set(id, [...platforms, l.platform]);
+    });
+
+  const listedProductIds = new Set(listingPlatformsMap.keys());
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => {
@@ -110,6 +130,7 @@ export default function ProductsPage() {
   const products: Product[] = data?.data?.items ?? [];
   const total = data?.data?.total ?? 0;
   const totalPages = data?.data?.totalPages ?? 1;
+  const isDeleteTargetListed = deleteTarget ? listedProductIds.has(deleteTarget._id) : false;
 
   return (
     <div className="space-y-6">
@@ -200,6 +221,7 @@ export default function ProductsPage() {
                   <ProductRow
                     key={product._id}
                     product={product}
+                    listingPlatforms={listingPlatformsMap.get(product._id) ?? []}
                     onClick={() => navigate(`/products/${product.slug}/edit`)}
                     onEdit={() => navigate(`/products/${product.slug}/edit`)}
                     onDelete={() => setDeleteTarget(product)}
@@ -227,13 +249,22 @@ export default function ProductsPage() {
         {deleteTarget && (
           <ModalContent className="max-w-sm">
             <ModalHeader>
-              <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-danger/10">
-                <AlertTriangle className="h-5 w-5 text-danger" />
+              <div className={`mb-1 flex h-11 w-11 items-center justify-center rounded-full ${isDeleteTargetListed ? "bg-warn/10" : "bg-danger/10"}`}>
+                <AlertTriangle className={`h-5 w-5 ${isDeleteTargetListed ? "text-warn" : "text-danger"}`} />
               </div>
-              <ModalTitle>Delete product?</ModalTitle>
+              <ModalTitle>{isDeleteTargetListed ? "Cannot delete product" : "Delete product?"}</ModalTitle>
               <ModalDescription>
-                <span className="font-medium text-fg">{deleteTarget.title}</span>{" "}
-                will be permanently deleted. This action cannot be undone.
+                {isDeleteTargetListed ? (
+                  <>
+                    <span className="font-medium text-fg">{deleteTarget.title}</span>{" "}
+                    has a marketplace listing. Remove the listing first, then delete the product.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-fg">{deleteTarget.title}</span>{" "}
+                    will be permanently deleted. This action cannot be undone.
+                  </>
+                )}
               </ModalDescription>
             </ModalHeader>
             <ModalFooter>
@@ -245,19 +276,21 @@ export default function ProductsPage() {
                 disabled={deleteMutation.isPending}
                 onClick={() => setDeleteTarget(null)}
               >
-                Cancel
+                {isDeleteTargetListed ? "Close" : "Cancel"}
               </Button>
-              <Button
-                type="button"
-                variant="danger"
-                size="md"
-                className="flex-1 gap-2"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget._id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {deleteMutation.isPending ? "Deleting…" : "Delete"}
-              </Button>
+              {!isDeleteTargetListed && (
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="md"
+                  className="flex-1 gap-2"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate(deleteTarget._id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deleteMutation.isPending ? "Deleting…" : "Delete"}
+                </Button>
+              )}
             </ModalFooter>
           </ModalContent>
         )}

@@ -4,6 +4,20 @@
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 
+// Strip HTML tags and collapse whitespace for fields that only accept plain text
+function toPlainText(html, maxLen = 4000) {
+  return (html || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
 const BASE_URL = config.ebay.sandbox
   ? "https://api.sandbox.ebay.com"
   : "https://api.ebay.com";
@@ -180,7 +194,7 @@ function buildInventoryItem(product, sku, quantity = 0) {
     condition: product.ebay_condition || "FOR_PARTS_OR_NOT_WORKING",
     product: {
       title: product.title,
-      description: product.description || product.title,
+      description: toPlainText(product.description || product.title) || product.title,
       imageUrls: finalImageUrls,
       ...(product.brand ? { brand: product.brand } : {}),
     },
@@ -251,11 +265,11 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
   const aspects = {};
   if (brand || specs.brand) aspects["Brand"] = [specs.brand || brand];
   if (specs.mpn) aspects["Manufacturer Part Number"] = [specs.mpn];
-  if (specs.superseded_part_number) aspects["Superseded Part Number"] = [specs.superseded_part_number];
-  if (specs.placement_on_vehicle) aspects["Placement on Vehicle"] = [specs.placement_on_vehicle];
-  if (specs.part_type) aspects["Part Type"] = [specs.part_type];
-  if (specs.finish) aspects["Surface Finish"] = [specs.finish];
-  if (specs.warranty) aspects["Warranty"] = [specs.warranty];
+  const rawSpn = specs.superseded_part_number;
+  const spnArr = (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : [])
+    .map((s) => (s == null ? "" : String(s).trim()))
+    .filter((s) => s !== "" && s !== "null");
+  if (spnArr.length > 0) aspects["Superseded Part Number"] = spnArr;
 
   // packageWeightAndSize — only included when at least one dimension/weight is set
   const pkg = listing.package || {};
@@ -287,7 +301,9 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
     ...(packageWeightAndSize ? { packageWeightAndSize } : {}),
     product: {
       title,
-      description: description || title,
+      // Inventory API product.description is plain-text only, max 4000 chars.
+      // The full HTML listing description lives in the offer's listingDescription.
+      description: toPlainText(description || title) || title,
       imageUrls,
       ...(brand ? { brand } : {}),
       ...(Object.keys(aspects).length > 0 ? { aspects } : {}),

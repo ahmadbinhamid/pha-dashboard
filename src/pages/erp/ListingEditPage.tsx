@@ -9,6 +9,15 @@ import { getListing, updateListing, pushListing } from "@/lib/api/listings";
 import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 
+function normaliseSpn(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    const arr = (raw as string[]).filter((s) => s !== "");
+    return arr.length > 0 ? arr : [""];
+  }
+  if (typeof raw === "string" && raw.trim()) return [raw.trim()];
+  return [""];
+}
+
 function listingToForm(listing: EbayListing): EbayListingFormState {
   const productId =
     typeof listing.product === "object" ? listing.product._id : listing.product;
@@ -17,8 +26,10 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       ? listing.variant._id
       : (listing.variant as string | null) ?? "";
 
-  // Use populated product as fallback for fields the user never explicitly overrode
   const p = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+
+  const rawFitment = (listing as unknown as Record<string, unknown>).fitment;
+  const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
   return {
     product_id: productId,
@@ -37,14 +48,16 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     item_specifics: {
       brand: listing.item_specifics?.brand || "",
       mpn: listing.item_specifics?.mpn || "",
-      superseded_part_number: listing.item_specifics?.superseded_part_number || "",
-      placement_on_vehicle: listing.item_specifics?.placement_on_vehicle || "",
-      part_type: listing.item_specifics?.part_type || "",
-      finish: listing.item_specifics?.finish || "",
-      warranty: listing.item_specifics?.warranty || "",
-      custom_bundle: listing.item_specifics?.custom_bundle || false,
-      modified_item: listing.item_specifics?.modified_item || false,
+      superseded_part_number: normaliseSpn(
+        (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
+      ),
     },
+    fitment: fitmentRows.map((r) => ({
+      make: String(r.make ?? ""),
+      model: String(r.model ?? ""),
+      year_from: r.year_from != null ? String(r.year_from) : "",
+      year_to: r.year_to != null ? String(r.year_to) : "",
+    })),
     format: listing.format || "FIXED_PRICE",
     quantity_available:
       listing.quantity_available != null ? String(listing.quantity_available) : "",
