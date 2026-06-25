@@ -5,13 +5,21 @@ export type ListingSyncStatus = "not_listed" | "pending" | "synced" | "out_of_st
 export interface ItemSpecifics {
   brand: string | null;
   mpn: string | null;
-  superseded_part_number: string | null;
-  placement_on_vehicle: string | null;
-  part_type: string | null;
-  finish: string | null;
-  warranty: string | null;
-  custom_bundle: boolean;
-  modified_item: boolean;
+  superseded_part_number: string[];
+}
+
+export interface FitmentRow {
+  make: string;
+  model: string;
+  year_from: number | null;
+  year_to: number | null;
+}
+
+export interface FitmentRowFormState {
+  make: string;
+  model: string;
+  year_from: string;
+  year_to: string;
 }
 
 export interface PackageDimensions {
@@ -49,6 +57,7 @@ export interface EbayListing extends MarketplaceListing {
   condition: string;
   condition_notes: string;
   item_specifics: ItemSpecifics;
+  fitment: FitmentRow[];
   format: "FIXED_PRICE" | "AUCTION";
   quantity_available: number | null;
   listing_duration: string;
@@ -79,14 +88,9 @@ export interface EbayListingFormState {
   item_specifics: {
     brand: string;
     mpn: string;
-    superseded_part_number: string;
-    placement_on_vehicle: string;
-    part_type: string;
-    finish: string;
-    warranty: string;
-    custom_bundle: boolean;
-    modified_item: boolean;
+    superseded_part_number: string[];
   };
+  fitment: FitmentRowFormState[];
   format: "FIXED_PRICE" | "AUCTION";
   quantity_available: string;
   listing_duration: string;
@@ -120,14 +124,9 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   item_specifics: {
     brand: "",
     mpn: "",
-    superseded_part_number: "",
-    placement_on_vehicle: "",
-    part_type: "",
-    finish: "",
-    warranty: "",
-    custom_bundle: false,
-    modified_item: false,
+    superseded_part_number: [""],
   },
+  fitment: [],
   format: "FIXED_PRICE",
   quantity_available: "",
   listing_duration: "GTC",

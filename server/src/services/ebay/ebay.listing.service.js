@@ -21,6 +21,7 @@ async function createListing(payload) {
     condition = "NEW",
     condition_notes = "",
     item_specifics = {},
+    fitment = [],
     format = "FIXED_PRICE",
     quantity_available = null,
     listing_duration = "GTC",
@@ -50,6 +51,7 @@ async function createListing(payload) {
     condition,
     condition_notes,
     item_specifics,
+    fitment,
     format,
     quantity_available: quantity_available != null ? Number(quantity_available) : null,
     listing_duration,
@@ -116,6 +118,7 @@ async function updateListing(id, payload) {
     "title_override", "description_override", "price_override", "photo_overrides",
     "ebay_category_id", "store_category_id", "store_sku",
     "condition", "condition_notes", "item_specifics",
+    "fitment",
     "format", "quantity_available", "listing_duration",
     "accept_best_offer", "min_best_offer",
     "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
@@ -142,7 +145,19 @@ async function updateListing(id, payload) {
     };
   }
 
-  return MarketplaceListing.findByIdAndUpdate(id, { $set: update }, { new: true })
+  // Expand item_specifics into dot-notation keys so Mongoose doesn't
+  // try to cast the whole subdoc through the old in-memory schema path
+  if (update.item_specifics) {
+    const specs = update.item_specifics;
+    update["item_specifics.brand"] = specs.brand ?? null;
+    update["item_specifics.mpn"] = specs.mpn ?? null;
+    update["item_specifics.superseded_part_number"] = Array.isArray(specs.superseded_part_number)
+      ? specs.superseded_part_number
+      : [];
+    delete update.item_specifics;
+  }
+
+  return MarketplaceListing.findByIdAndUpdate(id, { $set: update }, { new: true, strict: false })
     .populate("product", "title slug sku price brand attachments")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");

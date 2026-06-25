@@ -88,14 +88,17 @@ const ebaySchema = new Schema({
   item_specifics: {
     brand: { type: String, default: null },
     mpn: { type: String, default: null },
-    superseded_part_number: { type: String, default: null },
-    placement_on_vehicle: { type: String, default: null },
-    part_type: { type: String, default: null },
-    finish: { type: String, default: null },
-    warranty: { type: String, default: null },
-    custom_bundle: { type: Boolean, default: false },
-    modified_item: { type: Boolean, default: false },
+    superseded_part_number: [{ type: String }],
   },
+
+  fitment: [
+    {
+      make: { type: String, default: "" },
+      model: { type: String, default: "" },
+      year_from: { type: Number, default: null },
+      year_to: { type: Number, default: null },
+    },
+  ],
 
   format: {
     type: String,

@@ -22,7 +22,19 @@ function formStateToPayload(form: EbayListingFormState) {
     store_sku: form.store_sku || null,
     condition: form.condition,
     condition_notes: form.condition_notes,
-    item_specifics: form.item_specifics,
+    item_specifics: {
+      brand: form.item_specifics.brand || null,
+      mpn: form.item_specifics.mpn || null,
+      superseded_part_number: form.item_specifics.superseded_part_number.filter((s) => s.trim() !== ""),
+    },
+    fitment: form.fitment
+      .filter((r) => r.make.trim() || r.model.trim())
+      .map((r) => ({
+        make: r.make.trim(),
+        model: r.model.trim(),
+        year_from: r.year_from !== "" ? Number(r.year_from) : null,
+        year_to: r.year_to !== "" ? Number(r.year_to) : null,
+      })),
     format: form.format,
     quantity_available: form.quantity_available !== "" ? Number(form.quantity_available) : null,
     listing_duration: form.listing_duration,
