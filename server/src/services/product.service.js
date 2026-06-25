@@ -4,6 +4,7 @@ const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
+const MarketplaceListing = require("../models/MarketplaceListing");
 const { ensureUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 
@@ -152,6 +153,10 @@ async function getPopulatedVariant(id) {
     .populate("digital_file");
 }
 
+async function hasMarketplaceListings(productId) {
+  return MarketplaceListing.exists({ product: productId });
+}
+
 module.exports = {
   cartesian,
   ensureUniqueProductSlug,
@@ -167,4 +172,5 @@ module.exports = {
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,
+  hasMarketplaceListings,
 };

@@ -40,10 +40,7 @@ import {
   Tag,
   Boxes,
   ShoppingBag,
-  Pencil,
 } from "lucide-react";
-import { getListings } from "@/lib/api/listings";
-import type { EbayListing } from "@/types/marketplace";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -122,74 +119,6 @@ function SectionLabel({
       </div>
       <span>{children}</span>
     </div>
-  );
-}
-
-// ── Channels card ─────────────────────────────────────────────────────────────
-function ChannelsCard({ product }: { product: import("@/types/product").Product }) {
-  const navigate = useNavigate();
-
-  const { data } = useQuery({
-    queryKey: ["listings", { product: product._id }],
-    queryFn: () => getListings({ product: product._id }),
-  });
-
-  const listings = (data?.data?.items ?? []) as EbayListing[];
-
-  const STATUS_VARIANT: Record<string, "ok" | "warn" | "danger" | "muted"> = {
-    synced: "ok", pending: "warn", error: "danger",
-    not_listed: "muted", out_of_stock: "warn",
-  };
-
-  return (
-    <Card>
-      <CardHeader
-        title={
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-xs bg-accent/10">
-              <ShoppingBag className="h-3.5 w-3.5 text-accent" />
-            </div>
-            <span>Channels</span>
-          </div>
-        }
-      />
-      <CardContent className="space-y-3">
-        {listings.length === 0 ? (
-          <p className="text-xs text-fg/50">No channel listings yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {listings.map((l) => (
-              <li key={l._id} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-medium capitalize text-fg">{l.platform}</span>
-                  <Badge variant={STATUS_VARIANT[l.sync_status] ?? "muted"} className="text-[10px]">
-                    {l.sync_status.replace("_", " ")}
-                  </Badge>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/listings/${l._id}/edit`)}
-                  className="shrink-0 rounded p-1 text-fg/40 hover:text-fg transition-colors"
-                  title="Edit listing"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full gap-1.5"
-          onClick={() => navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`)}
-        >
-          <ShoppingBag className="h-3.5 w-3.5" />
-          List on eBay
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -350,6 +279,16 @@ export default function ProductEditPage() {
             <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">
               {product.status === "active" ? "Active" : "Draft"}
             </Badge>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`)}
+            >
+              <ShoppingBag className="h-3.5 w-3.5" />
+              List on eBay
+            </Button>
             <Button
               type="button"
               variant="secondary"
@@ -617,9 +556,6 @@ export default function ProductEditPage() {
               />
             </CardContent>
           </Card>
-
-          {/* Channels */}
-          <ChannelsCard product={product} />
 
         </div>
       </form>

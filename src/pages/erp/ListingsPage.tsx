@@ -74,7 +74,23 @@ function ProductPickerModal({
     enabled: open,
   });
 
-  const products: Product[] = data?.data?.items ?? [];
+  const { data: listingsData } = useQuery({
+    queryKey: ["listings-all-ids"],
+    queryFn: () => getListings({ limit: 500 }),
+    enabled: open,
+  });
+
+  const listedProductIds = new Set(
+    (listingsData?.data?.items ?? [])
+      .filter((l) => l.product != null)
+      .map((l) =>
+        typeof l.product === "string" ? l.product : (l.product as { _id: string })._id,
+      ),
+  );
+
+  const products: Product[] = (data?.data?.items ?? []).filter(
+    (p) => !listedProductIds.has(p._id),
+  );
 
   return (
     <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
