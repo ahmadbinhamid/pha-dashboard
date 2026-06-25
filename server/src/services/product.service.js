@@ -1,14 +1,9 @@
 // services/product.service.js
 
-// When true: skip legacy sync_product enqueue — MarketplaceListing path handles
-// eBay sync. Flip only after migration parity is confirmed. Default: false.
-const MARKETPLACE_CUTOVER = process.env.MARKETPLACE_LISTINGS_CUTOVER === "true";
-
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
-const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { ensureUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 
@@ -81,32 +76,6 @@ async function ensureInventoryForProduct(productId, variantId = null) {
       },
       { upsert: true, new: true },
     );
-  }
-}
-
-// ── eBay queue ────────────────────────────────────────────────────────────────
-
-async function syncProductToEbay(product, variants = []) {
-  if (MARKETPLACE_CUTOVER) return;
-  try {
-    await enqueueEbayJob("sync_product", {
-      product: product.toObject ? product.toObject() : product,
-      variants: variants.map((v) => (v.toObject ? v.toObject() : v)),
-    });
-  } catch (qErr) {
-    logger.warn("[product.service] eBay queue unavailable", {
-      error: qErr.message,
-    });
-  }
-}
-
-async function deleteProductFromEbay(sku, offerId = null) {
-  try {
-    await enqueueEbayJob("delete_product", { sku, offerId });
-  } catch (qErr) {
-    logger.warn("[product.service] eBay queue unavailable", {
-      error: qErr.message,
-    });
   }
 }
 
@@ -196,8 +165,6 @@ module.exports = {
   ensureUniqueProductSlug,
   generateVariantsForProduct,
   ensureInventoryForProduct,
-  syncProductToEbay,
-  deleteProductFromEbay,
   getProducts,
   findProductById,
   findProductWithAttachments,

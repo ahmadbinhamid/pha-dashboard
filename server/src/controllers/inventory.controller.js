@@ -1,15 +1,8 @@
 // controllers/inventory.controller.js
 
-// When true: skip legacy syncInventoryToEbay (update_inventory) — new sync_listing
-// fan-out handles all inventory updates. Flip to "true" only after migration parity
-// is confirmed. Default: false (both paths run in parallel).
-const MARKETPLACE_CUTOVER = process.env.MARKETPLACE_LISTINGS_CUTOVER === "true";
-
 const InventorySettings = require("../models/InventorySettings");
 const {
   listInventory,
-  getSkuForRecord,
-  syncInventoryToEbay,
   fanOutMarketplaceInventory,
   fetchPopulatedRecord,
   findRecord,
@@ -73,8 +66,6 @@ exports.adjustStock = async (req, res) => {
       userId: req.user?._id,
     });
 
-    const sku = await getSkuForRecord(record);
-    if (!MARKETPLACE_CUTOVER && sku) await syncInventoryToEbay(sku, stock_after);
     await fanOutMarketplaceInventory(record.product, record.variant);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock adjusted");
@@ -104,8 +95,6 @@ exports.setStock = async (req, res) => {
       userId: req.user?._id,
     });
 
-    const sku = await getSkuForRecord(record);
-    if (!MARKETPLACE_CUTOVER && sku) await syncInventoryToEbay(sku, stock_after);
     await fanOutMarketplaceInventory(record.product, record.variant);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock set");

@@ -9,26 +9,6 @@ import {
 import type { Product } from "@/types/product";
 import { Package, Pencil, Trash2 } from "lucide-react";
 
-const EBAY_BADGE_MAP: Record<
-  string,
-  { label: string; variant: "ok" | "warn" | "danger" | "muted" }
-> = {
-  synced: { label: "Synced", variant: "ok" },
-  pending: { label: "Pending", variant: "warn" },
-  error: { label: "Error", variant: "danger" },
-  not_listed: { label: "Not listed", variant: "muted" },
-};
-
-export function EbaySyncBadge({
-  status,
-}: {
-  status: Product["ebay_sync_status"];
-}) {
-  const { label, variant } =
-    EBAY_BADGE_MAP[status] ?? EBAY_BADGE_MAP.not_listed;
-  return <Badge variant={variant}>{label}</Badge>;
-}
-
 function ActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return (
     <DropdownMenu>
@@ -111,11 +91,6 @@ export function ProductRow({ product, onClick, onEdit, onDelete }: ProductRowPro
       {/* Price */}
       <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums text-sm">
         £{product.price.toFixed(2)}
-      </td>
-
-      {/* eBay */}
-      <td className="whitespace-nowrap px-4 py-3">
-        <EbaySyncBadge status={product.ebay_sync_status} />
       </td>
 
       {/* Created */}

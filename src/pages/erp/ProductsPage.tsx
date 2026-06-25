@@ -30,7 +30,6 @@ const TABLE_HEADERS = [
   { label: "Status", align: "left" },
   { label: "Type", align: "left" },
   { label: "Price", align: "right" },
-  { label: "eBay", align: "left" },
   { label: "Created", align: "right" },
   { label: "Actions", align: "right" },
 ];
