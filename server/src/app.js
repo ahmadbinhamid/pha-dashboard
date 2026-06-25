@@ -10,6 +10,11 @@ const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const routes = require("./routes");
+
+// Register marketplace adapters — needed by the API process for endListing on delete
+require("./services/marketplace/registry").register(
+  require("./services/marketplace/adapters/ebay.adapter"),
+);
 const { requestLogger, errorLogger } = require("./middlewares/logging");
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");

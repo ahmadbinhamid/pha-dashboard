@@ -9,6 +9,7 @@ import {
   Modal,
   ModalContent,
   ModalHeader,
+  ModalFooter,
   ModalTitle,
   ModalDescription,
 } from "@/components/ui/modal";
@@ -160,6 +161,7 @@ export default function ListingsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EbayListing | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["listings", { page }],
@@ -291,8 +293,7 @@ export default function ListingsPage() {
                           <button
                             type="button"
                             title="Delete"
-                            onClick={() => deleteMutation.mutate(listing._id)}
-                            disabled={deleteMutation.isPending}
+                            onClick={() => setDeleteTarget(listing)}
                             className="rounded p-1.5 text-fg/50 hover:bg-bg-2 hover:text-danger transition-colors"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -321,6 +322,62 @@ export default function ListingsPage() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleProductSelected}
       />
+
+      <Modal
+        open={!!deleteTarget}
+        onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
+      >
+        <ModalContent className="max-w-sm">
+          <ModalHeader>
+            <ModalTitle>Delete listing?</ModalTitle>
+            <ModalDescription>
+              {deleteTarget &&
+                (() => {
+                  const p =
+                    deleteTarget.product !== null &&
+                    typeof deleteTarget.product === "object"
+                      ? deleteTarget.product
+                      : null;
+                  const name = p?.title ?? "This listing";
+                  const isLive = !!deleteTarget.external_offer_id || !!deleteTarget.external_listing_id;
+                  return (
+                    <>
+                      <span className="font-medium text-fg">{name}</span> will be
+                      permanently removed.
+                      {isLive && (
+                        <span className="mt-1 block text-amber-500">
+                          This listing is live on eBay and will also be withdrawn.
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
+            </ModalDescription>
+          </ModalHeader>
+          <ModalFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-xs border border-border bg-bg px-4 py-2 text-sm text-fg hover:bg-bg-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (!deleteTarget) return;
+                deleteMutation.mutate(deleteTarget._id, {
+                  onSuccess: () => setDeleteTarget(null),
+                });
+              }}
+              className="rounded-xs bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
