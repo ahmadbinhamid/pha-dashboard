@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import { generateListingHtml } from "@/components/listings/platforms/ebay/ebay-description-generator";
 
 export interface ListingListParams {
   page?: number;
@@ -15,7 +16,7 @@ function formStateToPayload(form: EbayListingFormState) {
     product: form.product_id,
     variant: form.variant_id || null,
     title_override: form.title_override || null,
-    description_override: form.description_override || null,
+    description_override: generateListingHtml(form),
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,

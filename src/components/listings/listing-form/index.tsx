@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { ProductImages } from "@/components/media/product-images";
 import {
@@ -17,6 +16,7 @@ import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCate
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
 import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
+import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/EbayDescriptionSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
 import { getBusinessPolicies } from "@/lib/api/ebay";
@@ -165,14 +165,7 @@ export function ListingForm({
 
       {/* 6 — Item Description */}
       <Section number={6} title="Item Description">
-        <RichTextEditor
-          value={form.description_override}
-          onChange={(v) => onChange({ description_override: v })}
-          placeholder="Describe the item condition, fitment, and any relevant details…"
-        />
-        <p className="mt-2 text-right text-xs text-fg/50">
-          {(form.description_override || "").replace(/<[^>]*>/g, "").length} / 500,000
-        </p>
+        <EbayDescriptionSection form={form} />
       </Section>
 
       {/* 7 — Pricing & Format */}
