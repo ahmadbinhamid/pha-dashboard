@@ -27,6 +27,8 @@ import SuppliersPage from "@/pages/erp/SuppliersPage";
 import ReportsPage from "@/pages/erp/ReportsPage";
 import AnalyticsPage from "@/pages/erp/AnalyticsPage";
 import ListingsPage from "@/pages/erp/ListingsPage";
+import ListingCreatePage from "@/pages/erp/ListingCreatePage";
+import ListingEditPage from "@/pages/erp/ListingEditPage";
 import SettingsPage from "@/pages/erp/SettingsPage";
 import EbayUploaderPage from "@/pages/erp/EbayUploaderPage";
 
@@ -83,6 +85,8 @@ export default function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/listings" element={<ListingsPage />} />
+            <Route path="/listings/new" element={<ListingCreatePage />} />
+            <Route path="/listings/:id/edit" element={<ListingEditPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/tools/ebay-uploader" element={<EbayUploaderPage />} />
           </Route>

@@ -5,6 +5,7 @@ const {
   listInventory,
   getSkuForRecord,
   syncInventoryToEbay,
+  fanOutMarketplaceInventory,
   fetchPopulatedRecord,
   findRecord,
   ensureRecord,
@@ -69,6 +70,7 @@ exports.adjustStock = async (req, res) => {
 
     const sku = await getSkuForRecord(record);
     if (sku) await syncInventoryToEbay(sku, stock_after);
+    await fanOutMarketplaceInventory(record.product, record.variant);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock adjusted");
   } catch (err) {
@@ -99,6 +101,7 @@ exports.setStock = async (req, res) => {
 
     const sku = await getSkuForRecord(record);
     if (sku) await syncInventoryToEbay(sku, stock_after);
+    await fanOutMarketplaceInventory(record.product, record.variant);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock set");
   } catch (err) {
