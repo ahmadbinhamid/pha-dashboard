@@ -4,6 +4,7 @@ const ebayService = require("../services/ebay/ebay.service");
 const webhookService = require("../services/ebay/ebay.webhook.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
 const catalogService = require("../services/ebay/ebay.catalog.service");
+const policiesService = require("../services/ebay/ebay.policies.service");
 const { logger } = require("../loaders/logging");
 const {
   success,
@@ -148,6 +149,15 @@ exports.getConditionPolicies = async (req, res) => {
     const categoryId = (req.query.categoryId || "").trim();
     if (!categoryId) return badRequest(res, "Query parameter 'categoryId' is required");
     const result = await catalogService.getConditionPolicies(categoryId);
+    return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getBusinessPolicies = async (req, res) => {
+  try {
+    const result = await policiesService.getBusinessPolicies();
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);

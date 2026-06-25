@@ -257,10 +257,34 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
   if (specs.finish) aspects["Surface Finish"] = [specs.finish];
   if (specs.warranty) aspects["Warranty"] = [specs.warranty];
 
+  // packageWeightAndSize — only included when at least one dimension/weight is set
+  const pkg = listing.package || {};
+  const hasAnyDimension = pkg.length || pkg.width || pkg.height;
+  const hasWeight = pkg.weight != null && String(pkg.weight).trim() !== "";
+  const packageWeightAndSize =
+    hasAnyDimension || hasWeight
+      ? {
+          ...(hasAnyDimension
+            ? {
+                dimensions: {
+                  ...(pkg.length ? { length: Number(pkg.length) } : {}),
+                  ...(pkg.width ? { width: Number(pkg.width) } : {}),
+                  ...(pkg.height ? { height: Number(pkg.height) } : {}),
+                  unit: "CENTIMETER",
+                },
+              }
+            : {}),
+          ...(hasWeight
+            ? { weight: { value: Number(pkg.weight), unit: "KILOGRAM" } }
+            : {}),
+        }
+      : null;
+
   return {
     sku,
     availability: { shipToLocationAvailability: { quantity } },
     condition,
+    ...(packageWeightAndSize ? { packageWeightAndSize } : {}),
     product: {
       title,
       description: description || title,

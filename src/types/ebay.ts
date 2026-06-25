@@ -27,6 +27,17 @@ export type ConditionPoliciesResponse = {
   conditions: ConditionOption[];
 };
 
+export type BusinessPolicy = {
+  id: string;
+  name: string;
+};
+
+export type BusinessPoliciesResponse = {
+  fulfillment: BusinessPolicy[];
+  payment: BusinessPolicy[];
+  return: BusinessPolicy[];
+};
+
 export type VehicleFitmentRow = {
   id: string;
   make: string;

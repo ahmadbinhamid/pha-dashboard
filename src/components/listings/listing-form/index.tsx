@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
@@ -17,7 +18,9 @@ import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayC
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
+import { getBusinessPolicies } from "@/lib/api/ebay";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { BusinessPolicy } from "@/types/ebay";
 import type { Attachment } from "@/types/product";
 import { Cloud } from "lucide-react";
 
@@ -33,13 +36,6 @@ const LISTING_DURATIONS = [
   { value: "DAYS_7", label: "7 Days" },
   { value: "DAYS_10", label: "10 Days" },
   { value: "DAYS_30", label: "30 Days" },
-];
-
-const AU_RETURN_PERIODS = [
-  { value: "DAYS_14", label: "14 Days" },
-  { value: "DAYS_30", label: "30 Days" },
-  { value: "MONTHS_1", label: "1 Month" },
-  { value: "NO_RETURNS", label: "No Returns" },
 ];
 
 interface SectionProps {
@@ -89,6 +85,16 @@ export function ListingForm({
 }: ListingFormProps) {
   const titleLen = (form.title_override || "").length;
   const photoImages = idsToAttachments(form.photo_overrides || []);
+
+  const { data: policiesData, isLoading: policiesLoading } = useQuery({
+    queryKey: ["ebay-business-policies"],
+    queryFn: getBusinessPolicies,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const fulfillmentPolicies: BusinessPolicy[] = policiesData?.data?.fulfillment ?? [];
+  const paymentPolicies: BusinessPolicy[] = policiesData?.data?.payment ?? [];
+  const returnPolicies: BusinessPolicy[] = policiesData?.data?.return ?? [];
 
   return (
     <div className="space-y-4">
@@ -259,72 +265,95 @@ export function ListingForm({
 
       {/* 7 — Shipping */}
       <Section number={7} title="Shipping">
-        <EbayShippingSection form={form} onChange={onChange} />
+        <EbayShippingSection
+          form={form}
+          onChange={onChange}
+          fulfillmentPolicies={fulfillmentPolicies}
+          policiesLoading={policiesLoading}
+        />
       </Section>
 
       {/* 8 — Return Policy */}
       <Section number={8} title="Return Policy">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <FormField label="Returns Accepted">
-            <Select
-              value={form.return_policy_id}
-              onValueChange={(v) => onChange({ return_policy_id: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                {AU_RETURN_PERIODS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-
-          <FormField label="Return Shipping Paid By">
-            <Select
-              value={form.return_shipping_paid_by}
-              onValueChange={(v) => onChange({ return_shipping_paid_by: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="BUYER">Buyer</SelectItem>
-                <SelectItem value="SELLER">Seller</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormField>
-
-          <FormField label="Refund Method">
-            <Select
-              value={form.refund_method}
-              onValueChange={(v) => onChange({ refund_method: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MONEY_BACK">Money Back</SelectItem>
-                <SelectItem value="MONEY_BACK_OR_EXCHANGE">Money Back or Exchange</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormField>
-        </div>
+        <FormField label="Return Policy" required>
+          <Select
+            value={form.return_policy_id}
+            onValueChange={(v) => onChange({ return_policy_id: v })}
+            disabled={policiesLoading}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  policiesLoading
+                    ? "Loading…"
+                    : returnPolicies.length === 0
+                      ? "No policies found"
+                      : "Select policy"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {returnPolicies.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!policiesLoading && returnPolicies.length === 0 && (
+            <p className="mt-1 text-[11px] text-amber-500/80">
+              No return policies found. Set one up in eBay Seller Hub.
+            </p>
+          )}
+        </FormField>
       </Section>
 
       {/* 9 — Payment */}
       <Section number={9} title="Payment">
-        <div className="space-y-3">
-          <div className="rounded-md bg-primary/5 px-3 py-2 text-sm text-primary">
-            Payments managed through eBay Managed Payments. PayPal integration auto-applied.
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={form.require_immediate_payment}
-              onCheckedChange={(v) => onChange({ require_immediate_payment: v })}
-            />
-            <span className="text-sm text-fg">Require Immediate Payment (Buy It Now only)</span>
+        <div className="space-y-4">
+          <FormField label="Payment Policy" required>
+            <Select
+              value={form.payment_policy_id}
+              onValueChange={(v) => onChange({ payment_policy_id: v })}
+              disabled={policiesLoading}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    policiesLoading
+                      ? "Loading…"
+                      : paymentPolicies.length === 0
+                        ? "No policies found"
+                        : "Select policy"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {paymentPolicies.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!policiesLoading && paymentPolicies.length === 0 && (
+              <p className="mt-1 text-[11px] text-amber-500/80">
+                No payment policies found. Set one up in eBay Seller Hub.
+              </p>
+            )}
+          </FormField>
+
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.require_immediate_payment}
+                onCheckedChange={(v) => onChange({ require_immediate_payment: v })}
+              />
+              <span className="text-sm text-fg">Require Immediate Payment (Buy It Now only)</span>
+            </div>
+            <p className="ml-10 text-[11px] text-fg/45">
+              Enforced via the payment policy — enable "Require immediate payment" in eBay Seller Hub to apply it.
+            </p>
           </div>
         </div>
       </Section>

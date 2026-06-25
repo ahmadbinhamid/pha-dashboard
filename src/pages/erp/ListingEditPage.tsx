@@ -55,11 +55,6 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     payment_policy_id: listing.payment_policy_id || "",
     return_policy_id: listing.return_policy_id || "",
     require_immediate_payment: listing.require_immediate_payment ?? true,
-    shipping_service: "",
-    handling_time: "1",
-    free_shipping: false,
-    return_shipping_paid_by: "BUYER",
-    refund_method: "MONEY_BACK",
     item_location_zip: listing.item_location_zip || "",
     package: {
       length: listing.package?.length != null ? String(listing.package.length) : "",

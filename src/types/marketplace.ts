@@ -96,11 +96,6 @@ export interface EbayListingFormState {
   payment_policy_id: string;
   return_policy_id: string;
   require_immediate_payment: boolean;
-  shipping_service: string;
-  handling_time: string;
-  free_shipping: boolean;
-  return_shipping_paid_by: string;
-  refund_method: string;
   item_location_zip: string;
   package: {
     length: string;
@@ -142,11 +137,6 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   payment_policy_id: "",
   return_policy_id: "",
   require_immediate_payment: true,
-  shipping_service: "",
-  handling_time: "1",
-  free_shipping: false,
-  return_shipping_paid_by: "BUYER",
-  refund_method: "MONEY_BACK",
   item_location_zip: "",
   package: { length: "", width: "", height: "", weight: "" },
 };

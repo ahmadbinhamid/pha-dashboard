@@ -2,6 +2,8 @@
 
 const listingService = require("../services/ebay/ebay.listing.service");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { endListing } = require("../services/marketplace/sync.service");
+const { logger } = require("../loaders/logging");
 const {
   success,
   created,
@@ -63,8 +65,17 @@ exports.updateListing = async (req, res) => {
 
 exports.deleteListing = async (req, res) => {
   try {
-    const listing = await listingService.deleteListing(req.params.id);
+    const listing = await listingService.getListingById(req.params.id);
     if (!listing) return notFound(res, "Listing not found");
+
+    if (listing.external_listing_id || listing.external_offer_id) {
+      const result = await endListing(listing._id);
+      if (result.error) {
+        logger.warn(`[listingCtrl] eBay withdrawal failed for ${listing._id}: ${result.error}`);
+      }
+    }
+
+    await listingService.deleteListing(req.params.id);
     return success(res, null, "Listing deleted");
   } catch (err) {
     return systemfailure(res, err);

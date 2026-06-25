@@ -12,6 +12,7 @@ router.get("/settings", auth(), asyncHandler(ctrl.getSettings));
 router.put("/settings", auth(), asyncHandler(ctrl.updateSettings));
 router.get("/category-suggestions", auth(), asyncHandler(ctrl.getCategorySuggestions));
 router.get("/condition-policies", auth(), asyncHandler(ctrl.getConditionPolicies));
+router.get("/business-policies", auth(), asyncHandler(ctrl.getBusinessPolicies));
 
 // ── eBay listings CRUD ────────────────────────────────────────────────────────
 router.post("/listings", auth(), asyncHandler(listingCtrl.createListing));

@@ -77,4 +77,26 @@ async function syncListing(listingId) {
   }
 }
 
-module.exports = { syncListing };
+async function endListing(listingId) {
+  const listing = await MarketplaceListing.findById(listingId)
+    .populate("product", "_id sku");
+
+  if (!listing) return { error: "Listing not found" };
+
+  if (!listing.external_listing_id && !listing.external_offer_id) {
+    return { skipped: true, reason: "never_synced" };
+  }
+
+  const adapter = getAdapter(listing.platform);
+
+  try {
+    await adapter.end(listing);
+    logger.info(`[marketplace.sync] listing ${listingId} ended on ${listing.platform}`);
+    return { ok: true };
+  } catch (err) {
+    logger.error(`[marketplace.sync] listing ${listingId} end failed: ${err.message}`);
+    return { error: err.message };
+  }
+}
+
+module.exports = { syncListing, endListing };
