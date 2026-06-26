@@ -24,7 +24,8 @@ async function loadPlatformSettings(platform) {
 
 async function syncListing(listingId) {
   const listing = await MarketplaceListing.findById(listingId)
-    .populate({ path: "product", populate: { path: "attachments" } });
+    .populate({ path: "product", populate: { path: "attachments" } })
+    .populate("photo_overrides");
 
   if (!listing) {
     logger.error(`[marketplace.sync] Listing not found: ${listingId}`);
