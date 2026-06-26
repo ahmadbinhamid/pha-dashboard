@@ -5,8 +5,10 @@ services:
       dockerfile: Dockerfile.frontend
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - uploads:/var/www/uploads:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
     restart: unless-stopped
