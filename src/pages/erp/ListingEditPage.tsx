@@ -106,6 +106,7 @@ export default function ListingEditPage() {
     mutationFn: () => updateListing(id!, form),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listing", id] });
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
       toast({ title: "Listing saved", tone: "success" });
     },
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
@@ -118,6 +119,7 @@ export default function ListingEditPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listing", id] });
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
       toast({ title: "Listing queued for eBay sync", tone: "success" });
     },
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),

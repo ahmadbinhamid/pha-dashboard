@@ -221,12 +221,19 @@ export default function ProductEditPage() {
     saveMutation.mutate(formToFD(form), {
       onSuccess: (res) => {
         savedFormRef.current = snapshot;
-        queryClient.invalidateQueries({ queryKey: ["product", slug] });
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+        queryClient.invalidateQueries({ queryKey: ["listings"] });
         queryClient.invalidateQueries({ queryKey: ["variants", product?._id] });
         toast({ title: "Saved", tone: "success" });
         const newSlug = res.data?.slug;
         if (newSlug && newSlug !== slug) {
+          // Slug changed: just navigate — don't touch the old query.
+          // Removing it while the component is still subscribed causes RQ to
+          // immediately refetch the now-dead URL. Leaving it in cache is safe:
+          // it loses its subscriber on re-render and gets GC'd after gcTime.
           navigate(`/products/${newSlug}/edit`, { replace: true });
+        } else {
+          queryClient.invalidateQueries({ queryKey: ["product", slug] });
         }
       },
     });

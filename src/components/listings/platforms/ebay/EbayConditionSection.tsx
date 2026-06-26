@@ -25,8 +25,8 @@ export function EbayConditionSection({ form, onChange }: Props) {
               className={[
                 "px-4 py-2 text-sm transition-colors",
                 form.condition === c.value
-                  ? "bg-primary text-white"
-                  : "bg-card text-fg hover:bg-muted",
+                  ? "bg-accent text-accent-fg font-medium"
+                  : "bg-card text-fg hover:bg-bg-2",
                 "border-r border-border last:border-r-0",
               ].join(" ")}
             >

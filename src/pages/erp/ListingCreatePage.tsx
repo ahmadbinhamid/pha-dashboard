@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
@@ -13,6 +13,7 @@ export default function ListingCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const productId = searchParams.get("product") || "";
   const productSlug = searchParams.get("productSlug") || "";
@@ -49,6 +50,7 @@ export default function ListingCreatePage() {
     mutationFn: createListing,
     onSuccess: (res) => {
       toast({ title: "Listing saved", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
       navigate(`/listings/${res.data._id}/edit`);
     },
     onError: (err: Error) => {
@@ -64,6 +66,7 @@ export default function ListingCreatePage() {
     },
     onSuccess: (res) => {
       toast({ title: "Listing queued for eBay sync", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
       navigate(`/listings/${res.data._id}/edit`);
     },
     onError: (err: Error) => {

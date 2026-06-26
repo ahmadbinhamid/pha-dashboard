@@ -46,7 +46,7 @@ function Section({ number, title, children }: SectionProps) {
       <CardHeader
         title={
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-fg">
               {number}
             </span>
             <span className="text-sm font-semibold uppercase tracking-wide">{title}</span>
@@ -171,8 +171,8 @@ export function ListingForm({
                   className={[
                     "px-4 py-2 text-sm transition-colors",
                     form.format === fmt
-                      ? "bg-primary text-white"
-                      : "bg-card text-fg hover:bg-muted",
+                      ? "bg-accent text-accent-fg font-medium"
+                      : "bg-card text-fg hover:bg-bg-2",
                     "border-r border-border last:border-r-0",
                   ].join(" ")}
                 >
