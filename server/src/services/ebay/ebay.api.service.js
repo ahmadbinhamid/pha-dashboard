@@ -171,7 +171,7 @@ async function upsertInventoryItem(token, inventoryItem) {
   const imageUrls = inventoryItem.product?.imageUrls || [];
   if (!imageUrls.length) {
     throw new Error(
-      "No valid image URLs for eBay. Set EBAY_FALLBACK_IMAGE_URL in .env or upload a product image with a public HTTPS URL.",
+      "No HTTPS image URLs found. Add images to the listing's Photos section and ensure UPLOADS_URL in .env is set to your public HTTPS URL (e.g. https://yourdomain.com/uploads).",
     );
   }
 
@@ -194,20 +194,42 @@ async function upsertInventoryItem(token, inventoryItem) {
 // ── Resolved-based builders (used by EbayAdapter / MarketplaceListing path) ──
 
 function resolveImageUrls(photos) {
-  const uploadsUrl = process.env.UPLOADS_URL || "http://localhost:7000/uploads";
-  const urls = (photos || [])
-    .filter((a) => a && a.url)
+  const uploadsUrl = config.uploads.url;
+  const allUrls = (photos || [])
+    .filter((a) => a && a.type === "image" && (a.url || a.file_name))
     .map((a) => {
-      if (a.url.startsWith("http")) return a.url;
-      return `${uploadsUrl}${a.url.startsWith("/") ? "" : "/"}${a.url}`;
+      if (a.url && a.url.startsWith("http")) return a.url;
+      const name = a.file_name;
+      if (!name) return null;
+      return `${uploadsUrl}/${name}`;
     })
-    .filter((url) => url.startsWith("https://"))
+    .filter(Boolean)
     .slice(0, 12);
-  return urls.length > 0
-    ? urls
-    : config.ebay.fallbackImageUrl
-      ? [config.ebay.fallbackImageUrl]
-      : [];
+
+  const httpsUrls = allUrls.filter((url) => url.startsWith("https://"));
+
+  if (httpsUrls.length > 0) return httpsUrls;
+
+  // In sandbox/dev, fall back to EBAY_FALLBACK_IMAGE_URL so the sync flow can
+  // be tested without a public HTTPS upload server. Production requires real images.
+  if (config.ebay.sandbox && config.ebay.fallbackImageUrl) {
+    if (allUrls.length > 0) {
+      logger.warn(
+        `[eBay] resolveImageUrls: ${allUrls.length} image(s) found but none are HTTPS — ` +
+        `using fallback image for sandbox. In production set UPLOADS_URL to your public HTTPS URL.`,
+      );
+    }
+    return [config.ebay.fallbackImageUrl];
+  }
+
+  if (allUrls.length > 0) {
+    logger.warn(
+      `[eBay] resolveImageUrls: ${allUrls.length} image(s) found but none are HTTPS. ` +
+      `Set UPLOADS_URL to your public HTTPS URL (e.g. https://yourdomain.com/uploads).`,
+    );
+  }
+
+  return [];
 }
 
 // Our UI stores "NEW" or "USED". "NEW" is valid as-is; "USED" is not an eBay

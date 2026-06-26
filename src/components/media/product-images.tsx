@@ -97,6 +97,14 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
                   className="h-full w-full object-cover"
                   draggable={false}
                 />
+              ) : img.type === "video" || /\.(mp4|mov|webm|avi|mkv)$/i.test(img.file_name ?? "") ? (
+                <video
+                  src={img.url}
+                  className="h-full w-full object-cover"
+                  muted
+                  playsInline
+                  draggable={false}
+                />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-bg-2 text-xs text-fg/50">
                   {img.original_name || img.file_name}
