@@ -19,7 +19,7 @@ const attachmentSchema = buildSchema(
     },
     type: {
       type: String,
-      enum: ["image", "file"],
+      enum: ["image", "video", "file"],
       default: "image",
     },
   },

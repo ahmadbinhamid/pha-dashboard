@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/select";
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog";
 import { SetStockDialogFull } from "@/components/inventory/set-stock-dialog";
 import { HistoryDrawer } from "@/components/inventory/history-drawer";
@@ -13,9 +12,7 @@ import {
   InventoryEmptyState,
 } from "@/components/inventory/inventory-row";
 import { getInventory, getInventorySettings } from "@/lib/api/inventory";
-import { getLocations } from "@/lib/api/products";
 import type { InventoryRecord } from "@/types/inventory";
-import type { Location } from "@/types/product";
 import { Pagination } from "@/components/ui/pagination";
 import { Search } from "lucide-react";
 
@@ -24,7 +21,6 @@ export default function InventoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const search = searchParams.get("search") ?? "";
-  const locationFilter = searchParams.get("location") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
 
   const [inputValue, setInputValue] = useState(search);
@@ -49,19 +45,6 @@ export default function InventoryPage() {
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
 
-  const setLocation = useCallback(
-    (loc: string) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (loc) next.set("location", loc);
-        else next.delete("location");
-        next.set("page", "1");
-        return next;
-      });
-    },
-    [setSearchParams],
-  );
-
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
@@ -74,9 +57,8 @@ export default function InventoryPage() {
   );
 
   const { data, isLoading } = useQuery({
-    queryKey: ["inventory", { search, location: locationFilter, page }],
-    queryFn: () =>
-      getInventory({ search, location: locationFilter || undefined, page }),
+    queryKey: ["inventory", { search, page }],
+    queryFn: () => getInventory({ search, page }),
   });
 
   const { data: settingsData } = useQuery({
@@ -84,16 +66,10 @@ export default function InventoryPage() {
     queryFn: getInventorySettings,
   });
 
-  const { data: locationsData } = useQuery({
-    queryKey: ["locations"],
-    queryFn: getLocations,
-  });
-
   const threshold = settingsData?.data?.low_stock_threshold ?? 10;
   const items: InventoryRecord[] = data?.data?.items ?? [];
   const total = data?.data?.total ?? 0;
   const totalPages = data?.data?.totalPages ?? 1;
-  const locations: Location[] = locationsData?.data ?? [];
 
   return (
     <div className="space-y-5">
@@ -126,18 +102,6 @@ export default function InventoryPage() {
             />
           </div>
 
-          {locations.length > 0 && (
-            <NativeSelect
-              value={locationFilter}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-auto min-w-36"
-            >
-              <option value="">All locations</option>
-              {locations.map((loc) => (
-                <option key={loc._id} value={loc._id}>{loc.name}</option>
-              ))}
-            </NativeSelect>
-          )}
         </div>
 
         <div className="w-full overflow-x-auto">

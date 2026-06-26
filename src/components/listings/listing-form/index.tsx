@@ -15,7 +15,6 @@ import {
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
-import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
 import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/EbayDescriptionSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
@@ -154,18 +153,13 @@ export function ListingForm({
         <EbayItemSpecificsSection form={form} onChange={onChange} />
       </Section>
 
-      {/* 5 — Vehicle Fitment */}
-      <Section number={5} title="Vehicle Fitment">
-        <EbayVehicleFitmentSection form={form} onChange={onChange} />
-      </Section>
-
-      {/* 6 — Item Description */}
-      <Section number={6} title="Item Description">
+      {/* 5 — Item Description */}
+      <Section number={5} title="Item Description">
         <EbayDescriptionSection form={form} />
       </Section>
 
-      {/* 7 — Pricing & Format */}
-      <Section number={7} title="Pricing & Format">
+      {/* 6 — Pricing & Format */}
+      <Section number={6} title="Pricing & Format">
         <div className="space-y-4">
           <FormField label="Format">
             <div className="grid grid-cols-2 gap-0 overflow-hidden rounded-md border border-border">
@@ -191,7 +185,7 @@ export function ListingForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Buy It Now Price (AUD)" required>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg/50">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg/50">A$</span>
                 <Input
                   type="number"
                   min="0"
@@ -242,7 +236,7 @@ export function ListingForm({
           {form.accept_best_offer && (
             <FormField label="Minimum Best Offer Amount (AUD)">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg/50">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg/50">A$</span>
                 <Input
                   type="number"
                   min="0"
@@ -259,7 +253,7 @@ export function ListingForm({
       </Section>
 
       {/* 8 — Shipping */}
-      <Section number={8} title="Shipping">
+      <Section number={7} title="Shipping">
         <EbayShippingSection
           form={form}
           onChange={onChange}
@@ -269,7 +263,7 @@ export function ListingForm({
       </Section>
 
       {/* 9 — Return Policy */}
-      <Section number={9} title="Return Policy">
+      <Section number={8} title="Return Policy">
         <FormField label="Return Policy" required>
           <Select
             value={form.return_policy_id}
@@ -304,7 +298,7 @@ export function ListingForm({
       </Section>
 
       {/* 10 — Payment */}
-      <Section number={10} title="Payment">
+      <Section number={9} title="Payment">
         <div className="space-y-4">
           <FormField label="Payment Policy" required>
             <Select
@@ -355,7 +349,7 @@ export function ListingForm({
 
       {/* 11 — eBay Sync Status (edit mode only) */}
       {isEdit && (
-        <Section number={11} title="eBay Sync Status">
+        <Section number={10} title="eBay Sync Status">
           <EbaySyncStatusSection listing={listing} />
         </Section>
       )}

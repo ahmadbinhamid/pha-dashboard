@@ -7,6 +7,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/actions-menu";
 import type { Product } from "@/types/product";
+import { formatCurrency } from "@/utils/format";
 import { Package, Pencil, Trash2 } from "lucide-react";
 
 function ActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
@@ -112,7 +113,7 @@ export function ProductRow({ product, listingPlatforms = [], onClick, onEdit, on
 
       {/* Price */}
       <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums text-sm">
-        £{product.price.toFixed(2)}
+        {formatCurrency(product.price)}
       </td>
 
       {/* Created */}

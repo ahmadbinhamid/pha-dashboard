@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +42,14 @@ export function ProductStockCard({ productId, variantId, limit }: ProductStockCa
   const allLocations = locData?.data ?? [];
   const usedLocationIds = new Set(inventoryRecords.map((r) => r.location?._id));
   const availableLocations = allLocations.filter(
-    (l) => l.is_active && !usedLocationIds.has(l._id),
+    (l) => l.is_active && !usedLocationIds.has(l._id) && l.name === "Main Warehouse",
   );
+
+  useEffect(() => {
+    if (availableLocations.length > 0 && !selectedLocation) {
+      setSelectedLocation(availableLocations[0]._id);
+    }
+  }, [availableLocations.length]);
 
   const ensureMutation = useMutation({
     mutationFn: async (locationId: string) => {

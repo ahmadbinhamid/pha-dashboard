@@ -201,7 +201,7 @@ export default function ProductCreatePage() {
             <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Price (£)" required error={errors.price}>
+                <FormField label="Price (A$)" required error={errors.price}>
                   <Input
                     type="number"
                     min="0"
@@ -211,7 +211,7 @@ export default function ProductCreatePage() {
                     placeholder="0.00"
                   />
                 </FormField>
-                <FormField label="Cost price (£)">
+                <FormField label="Cost price (A$)">
                   <Input
                     type="number"
                     min="0"

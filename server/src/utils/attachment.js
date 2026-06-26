@@ -11,8 +11,19 @@ const IMAGE_MIMES = [
   "image/gif",
 ];
 
+const VIDEO_MIMES = [
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-msvideo",
+  "video/avi",
+  "video/mov",
+];
+
 function getAttachmentType(mimeType) {
-  return IMAGE_MIMES.includes(mimeType) ? "image" : "file";
+  if (IMAGE_MIMES.includes(mimeType)) return "image";
+  if (VIDEO_MIMES.includes(mimeType)) return "video";
+  return "file";
 }
 
 function buildAttachmentUrl(fileName) {

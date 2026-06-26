@@ -11,7 +11,7 @@ export interface Attachment {
   mime_type: string;
   size: number;
   url: string;
-  type: "image" | "file";
+  type: "image" | "video" | "file";
 }
 
 export interface Category {

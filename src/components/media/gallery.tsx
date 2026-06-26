@@ -24,6 +24,7 @@ function AttachmentThumbnail({
   onClick: () => void;
 }) {
   const isImage = attachment.type === "image";
+  const isVideo = attachment.type === "video" || /\.(mp4|mov|webm|avi|mkv)$/i.test(attachment.file_name ?? "");
 
   return (
     <button
@@ -41,6 +42,13 @@ function AttachmentThumbnail({
           src={attachment.url}
           alt={attachment.original_name || attachment.file_name}
           className="h-full w-full object-cover"
+        />
+      ) : isVideo ? (
+        <video
+          src={attachment.url}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-bg-2">
@@ -186,7 +194,7 @@ export function Gallery({
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,.pdf,.doc,.docx,.zip"
+            accept="image/*,video/*,.pdf,.doc,.docx,.zip"
             className="hidden"
             onChange={handleFileChange}
           />

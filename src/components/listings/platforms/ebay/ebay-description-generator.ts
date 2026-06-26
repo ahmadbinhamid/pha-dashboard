@@ -172,7 +172,7 @@ section{padding:14px}ul.spec li strong{display:block;min-width:0;margin-bottom:2
 <div class="tab-panel tab-panel-1">
 <h3>General Information</h3>
 <ul class="policy">
-<li>Business hours: Monday to Friday 8:00 AM – 5:00 PM, Saturday 9:00 AM – 1:00 PM, excluding public holidays.</li>
+<li>Business hours: Monday to Friday 8:30 AM – 5:00 PM, Saturday 9:00 AM – 1:00 PM, excluding public holidays.</li>
 <li>Please confirm the item is correct and compatible with your vehicle before purchasing.</li>
 <li>Provide your VIN or registration number and we will verify fitment for you.</li>
 <li>All items are described as accurately as possible. Contact us if you need more details before buying.</li>
@@ -237,7 +237,7 @@ section{padding:14px}ul.spec li strong{display:block;min-width:0;margin-bottom:2
 <li><a href="#">Contact Us</a></li>
 </ul>
 <p class="fstore">Parts Hub Australia</p>
-<p class="fhours">Mon – Fri: 8:00 AM – 5:00 PM &nbsp;|&nbsp; Sat: 9:00 AM – 1:00 PM</p>
+<p class="fhours">Mon – Fri: 8:30 AM – 5:00 PM &nbsp;|&nbsp; Sat: 9:00 AM – 1:00 PM</p>
 <p class="fthanks">Thank you for shopping with us — we appreciate your business!</p>
 </footer>
 

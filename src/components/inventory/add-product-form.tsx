@@ -64,7 +64,7 @@ const FORM_STEPS = [
   { id: "add-section-basics", label: "Basics" },
   { id: "add-section-fitment", label: "Fitment" },
   { id: "add-section-pricing", label: "Pricing" },
-  { id: "add-section-images", label: "Images" },
+  { id: "add-section-images", label: "Media" },
   { id: "add-section-ebay", label: "eBay" },
 ] as const;
 
@@ -137,9 +137,9 @@ export function AddProductForm() {
   }, []);
 
   const addFiles = (files: FileList | File[]) => {
-    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
     if (!list.length) {
-      toast({ tone: "warning", title: "No images added", description: "Please choose image files (JPG, PNG, WebP)." });
+      toast({ tone: "warning", title: "No files added", description: "Please choose image or video files." });
       return;
     }
     setImages((prev) => {
@@ -529,15 +529,15 @@ export function AddProductForm() {
               <Icons.Image className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-fg">Product images</h2>
-              <p className="mt-0.5 text-sm text-fg/60">Drag files in or browse. First image is typically used as the main photo.</p>
+              <h2 className="text-base font-semibold text-fg">Product images &amp; videos</h2>
+              <p className="mt-0.5 text-sm text-fg/60">Drag images or videos in or browse. First image is typically used as the main photo.</p>
             </div>
           </div>
 
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             multiple
             className="sr-only"
             onChange={(e) => {
@@ -566,8 +566,8 @@ export function AddProductForm() {
             <div className="grid h-12 w-12 place-items-center rounded-full bg-card text-fg/50 shadow-sm ring-1 ring-border">
               <Icons.Plus className="h-6 w-6" />
             </div>
-            <p className="mt-3 text-sm font-medium text-fg">Drop images here or click to upload</p>
-            <p className="mt-1 text-xs text-fg/55">PNG, JPG or WebP · multiple files OK</p>
+            <p className="mt-3 text-sm font-medium text-fg">Drop images or videos here or click to upload</p>
+            <p className="mt-1 text-xs text-fg/55">PNG, JPG, WebP, MP4, MOV · multiple files OK</p>
           </div>
 
           {images.length > 0 ? (
@@ -577,9 +577,13 @@ export function AddProductForm() {
                   key={img.id}
                   className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-bg-2 shadow-sm"
                 >
-                  <Image src={img.url} alt="" fill />
+                  {img.file.type.startsWith("video/") ? (
+                    <video src={img.url} className="h-full w-full object-cover" muted playsInline />
+                  ) : (
+                    <Image src={img.url} alt="" fill />
+                  )}
                   <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                    {index === 0 ? "Main" : `Photo ${index + 1}`}
+                    {index === 0 ? "Main" : img.file.type.startsWith("video/") ? `Video ${index + 1}` : `Photo ${index + 1}`}
                   </span>
                   <Button
                     type="button"

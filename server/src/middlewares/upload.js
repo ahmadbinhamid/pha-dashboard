@@ -18,6 +18,14 @@ const ALLOWED_IMAGES = [
   "image/webp",
   "image/gif",
 ];
+const ALLOWED_VIDEOS = [
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-msvideo",
+  "video/avi",
+  "video/mov",
+];
 const ALLOWED_FILES = [
   "application/pdf",
   "application/msword",
@@ -25,7 +33,7 @@ const ALLOWED_FILES = [
   "application/zip",
   "application/x-zip-compressed",
 ];
-const ALLOWED_MIME_TYPES = [...ALLOWED_IMAGES, ...ALLOWED_FILES];
+const ALLOWED_MIME_TYPES = [...ALLOWED_IMAGES, ...ALLOWED_VIDEOS, ...ALLOWED_FILES];
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -44,7 +52,7 @@ const fileFilter = (_req, file, cb) => {
   } else {
     cb(
       new Error(
-        `File type not allowed. Allowed types: jpeg, jpg, png, webp, gif, pdf, doc, docx, zip`,
+        `File type not allowed. Allowed types: jpeg, jpg, png, webp, gif, mp4, mov, webm, avi, pdf, doc, docx, zip`,
       ),
       false,
     );
@@ -54,7 +62,7 @@ const fileFilter = (_req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB (supports video)
 });
 
 const uploadSingle = upload.single("file");
