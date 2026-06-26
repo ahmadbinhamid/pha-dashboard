@@ -10,7 +10,9 @@ const {
   notFound,
   badRequest,
   systemfailure,
+  validationError,
 } = require("../utils/http/response");
+const { validateListingForPush } = require("../validators/ebay.listing.validation");
 
 exports.createListing = async (req, res) => {
   try {
@@ -86,6 +88,10 @@ exports.pushListing = async (req, res) => {
   try {
     const listing = await listingService.getListingById(req.params.id);
     if (!listing) return notFound(res, "Listing not found");
+
+    const product = listing.product && typeof listing.product === "object" ? listing.product : null;
+    const errs = validateListingForPush(listing, product);
+    if (errs.length > 0) return validationError(res, errs);
 
     await enqueueEbayJob("sync_listing", { listingId: listing._id.toString() });
     return success(res, { queued: true }, "Listing queued for eBay sync");

@@ -89,6 +89,7 @@ export interface EbayListingFormState {
     brand: string;
     mpn: string;
     superseded_part_number: string[];
+    aspects: Record<string, string>;
   };
   fitment: FitmentRowFormState[];
   format: "FIXED_PRICE" | "AUCTION";
@@ -125,6 +126,7 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
     brand: "",
     mpn: "",
     superseded_part_number: [""],
+    aspects: {},
   },
   fitment: [],
   format: "FIXED_PRICE",

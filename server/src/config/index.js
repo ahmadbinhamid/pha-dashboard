@@ -74,6 +74,18 @@ const config = {
     refreshToken: get("EBAY_REFRESH_TOKEN", null),
     marketplaceId: get("EBAY_MARKETPLACE_ID", "EBAY_AU"),
     sandbox: get("EBAY_SANDBOX", "false") === "true",
+    apiBaseUrl: get(
+      "EBAY_API_BASE_URL",
+      get("EBAY_SANDBOX", "false") === "true"
+        ? "https://api.sandbox.ebay.com"
+        : "https://api.ebay.com",
+    ),
+    taxonomyBaseUrl: get(
+      "EBAY_TAXONOMY_BASE_URL",
+      get("EBAY_SANDBOX", "false") === "true"
+        ? "https://api.sandbox.ebay.com/commerce/taxonomy/v1"
+        : "https://api.ebay.com/commerce/taxonomy/v1",
+    ),
     // Fallback settings — used when the EbaySettings DB record has no value set
     merchantLocationKey: get("EBAY_MERCHANT_LOCATION_KEY", null),
     fulfillmentPolicyId: get("EBAY_FULFILLMENT_POLICY_ID", null),

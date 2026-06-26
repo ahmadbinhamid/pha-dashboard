@@ -32,9 +32,14 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Attach status so callers can distinguish auth failures from other errors
-    const error = new Error(message) as Error & { status?: number };
+    const error = new Error(message) as Error & {
+      status?: number;
+      errors?: Array<{ field: string; message: string }>;
+    };
     error.status = status;
+    if (status === 422 && Array.isArray(err.response?.data?.errors)) {
+      error.errors = err.response.data.errors;
+    }
     return Promise.reject(error);
   },
 );

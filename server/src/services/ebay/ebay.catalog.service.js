@@ -5,11 +5,8 @@ const config = require("../../config");
 const { getAccessToken, ebayHeaders } = require("./ebay.api.service");
 const { logger } = require("../../loaders/logging");
 
-const BASE_URL = config.ebay.sandbox
-  ? "https://api.sandbox.ebay.com"
-  : "https://api.ebay.com";
-
-const TAXONOMY_BASE = `${BASE_URL}/commerce/taxonomy/v1`;
+const BASE_URL = config.ebay.apiBaseUrl;
+const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
 const METADATA_BASE = `${BASE_URL}/sell/metadata/v1`;
 
 // ── In-memory caches ──────────────────────────────────────────────────────────

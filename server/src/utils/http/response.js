@@ -84,6 +84,11 @@ const notFound = (response, message = "Not Found") =>
     .status(404)
     .json({ status: "Fail", systemfailure: false, message, data: null });
 
+const validationError = (response, errors) =>
+  response
+    .status(422)
+    .json({ status: "Fail", systemfailure: false, message: "Validation failed", errors, data: null });
+
 module.exports = {
   success,
   created,
@@ -94,4 +99,5 @@ module.exports = {
   unauthorized,
   forbidden,
   notFound,
+  validationError,
 };

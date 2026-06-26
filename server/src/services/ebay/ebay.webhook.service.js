@@ -8,10 +8,7 @@ const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const config = require("../../config");
 
-const BASE = config.ebay.sandbox
-  ? "https://api.sandbox.ebay.com"
-  : "https://api.ebay.com";
-const EBAY_NOTIFICATION_API = `${BASE}/commerce/notification/v1`;
+const EBAY_NOTIFICATION_API = `${config.ebay.apiBaseUrl}/commerce/notification/v1`;
 const TOPICS = ["ORDER.LINE_ITEMS_CREATED", "ORDER.LINE_ITEMS_UPDATED"];
 
 function verifyChallenge(challengeCode, endpointUrl, verificationToken) {

@@ -8,6 +8,7 @@ import { useToast } from "@/context";
 import { getListing, updateListing, pushListing } from "@/lib/api/listings";
 import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { EbayListingErrors } from "@/lib/validation/ebay-listing";
 
 function normaliseSpn(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -51,6 +52,7 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       superseded_part_number: normaliseSpn(
         (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
       ),
+      aspects: ((listing.item_specifics as unknown as Record<string, unknown>)?.aspects as Record<string, string>) ?? {},
     },
     fitment: fitmentRows.map((r) => ({
       make: String(r.make ?? ""),
@@ -85,6 +87,7 @@ export default function ListingEditPage() {
   const { toast } = useToast();
 
   const [form, setForm] = useState<EbayListingFormState>(EBAY_LISTING_FORM_INITIAL);
+  const [serverErrors, setServerErrors] = useState<EbayListingErrors>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ["listing", id],
@@ -118,11 +121,22 @@ export default function ListingEditPage() {
       await pushListing(id!);
     },
     onSuccess: () => {
+      setServerErrors({});
       queryClient.invalidateQueries({ queryKey: ["listing", id] });
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       toast({ title: "Listing queued for eBay sync", tone: "success" });
     },
-    onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
+    onError: (err: Error & { status?: number; errors?: Array<{ field: string; message: string }> }) => {
+      if (err.status === 422 && Array.isArray(err.errors)) {
+        const mapped: EbayListingErrors = {};
+        err.errors.forEach(({ field, message }) => {
+          mapped[field as keyof EbayListingErrors] = message;
+        });
+        setServerErrors(mapped);
+      } else {
+        toast({ title: err.message, tone: "danger" });
+      }
+    },
   });
 
   if (isLoading) {
@@ -161,6 +175,7 @@ export default function ListingEditPage() {
         onPush={() => pushMutation.mutate()}
         saving={saveMutation.isPending}
         pushing={pushMutation.isPending}
+        externalErrors={serverErrors}
         isEdit
       />
     </div>

@@ -9,12 +9,15 @@ import {
 } from "@/components/ui/select";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
+import type { EbayListingErrors } from "@/lib/validation/ebay-listing";
 
 interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   fulfillmentPolicies: BusinessPolicy[];
   policiesLoading?: boolean;
+  errors?: EbayListingErrors;
+  onClearError?: (field: keyof EbayListingErrors) => void;
 }
 
 export function EbayShippingSection({
@@ -22,20 +25,23 @@ export function EbayShippingSection({
   onChange,
   fulfillmentPolicies,
   policiesLoading = false,
+  errors = {},
+  onClearError,
 }: Props) {
   const pkg = form.package;
 
   function patchPkg(patch: Partial<EbayListingFormState["package"]>) {
     onChange({ package: { ...pkg, ...patch } });
+    onClearError?.("package");
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Fulfillment Policy" required>
+        <FormField label="Fulfillment Policy" required error={errors.fulfillment_policy_id}>
           <Select
             value={form.fulfillment_policy_id}
-            onValueChange={(v) => onChange({ fulfillment_policy_id: v })}
+            onValueChange={(v) => { onChange({ fulfillment_policy_id: v }); onClearError?.("fulfillment_policy_id"); }}
             disabled={policiesLoading}
           >
             <SelectTrigger>
@@ -75,7 +81,9 @@ export function EbayShippingSection({
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-medium text-fg">Package Dimensions &amp; Weight</p>
+        <p className={["mb-2 text-sm font-medium", errors.package ? "text-danger" : "text-fg"].join(" ")}>
+          Package Dimensions &amp; Weight
+        </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <FormField label="Length (cm)">
             <Input
@@ -115,6 +123,9 @@ export function EbayShippingSection({
             />
           </FormField>
         </div>
+        {errors.package && (
+          <p className="mt-1.5 text-xs text-danger">{errors.package}</p>
+        )}
       </div>
     </div>
   );

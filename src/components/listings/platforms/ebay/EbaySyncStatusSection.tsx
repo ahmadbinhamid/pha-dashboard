@@ -59,8 +59,8 @@ export function EbaySyncStatusSection({ listing }: Props) {
       </div>
 
       {listing?.sync_error && (
-        <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {listing.sync_error}
+        <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+          <span className="font-medium">Sync error: </span>{listing.sync_error}
         </div>
       )}
 

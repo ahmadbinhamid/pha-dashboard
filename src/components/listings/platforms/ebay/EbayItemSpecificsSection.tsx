@@ -1,8 +1,27 @@
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getCategoryAspects } from "@/lib/api/ebay";
 import type { EbayListingFormState } from "@/types/marketplace";
+import type { CategoryAspect } from "@/types/ebay";
 import { Plus, X } from "lucide-react";
+
+// Aspects already captured by dedicated form fields — skip them in dynamic list
+const STATIC_ASPECT_NAMES = new Set([
+  "brand",
+  "manufacturer part number",
+  "mpn",
+  "superseded part number",
+]);
 
 interface Props {
   form: EbayListingFormState;
@@ -42,6 +61,69 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
     patch({ superseded_part_number: next.length > 0 ? next : [""] });
   }
 
+  // Dynamic aspects from eBay Taxonomy API
+  const categoryId = form.ebay_category_id;
+  const [showAllOptional, setShowAllOptional] = useState(false);
+
+  const { data: aspectsData, isLoading: aspectsLoading } = useQuery({
+    queryKey: ["ebay-category-aspects", categoryId],
+    queryFn: () => getCategoryAspects(categoryId),
+    enabled: !!categoryId,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  // Reset optional toggle when category changes
+  useEffect(() => {
+    setShowAllOptional(false);
+  }, [categoryId]);
+
+  const allAspects = (aspectsData?.data?.aspects ?? []).filter(
+    (a) => !STATIC_ASPECT_NAMES.has(a.name.toLowerCase()),
+  );
+  const requiredAspects = allAspects.filter((a) => a.required);
+  const optionalAspects = allAspects.filter((a) => !a.required);
+
+  const displayedOptional = showAllOptional
+    ? optionalAspects
+    : optionalAspects.filter((a) => (specs.aspects?.[a.name] || "").trim());
+
+  function setAspectValue(name: string, value: string) {
+    patch({ aspects: { ...(specs.aspects ?? {}), [name]: value } });
+  }
+
+  function renderAspectInput(aspect: CategoryAspect) {
+    const value = specs.aspects?.[aspect.name] ?? "";
+    if (aspect.mode === "SELECTION_ONLY" && aspect.values.length > 0) {
+      return (
+        <Select value={value} onValueChange={(v) => setAspectValue(aspect.name, v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {aspect.values.map((v) => (
+              <SelectItem key={v} value={v}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+    return (
+      <>
+        {aspect.values.length > 0 && (
+          <datalist id={`aspect-${aspect.name}`}>
+            {aspect.values.map((v) => <option key={v} value={v} />)}
+          </datalist>
+        )}
+        <Input
+          value={value}
+          onChange={(e) => setAspectValue(aspect.name, e.target.value)}
+          placeholder={aspect.values.length > 0 ? `e.g. ${aspect.values[0]}` : undefined}
+          list={aspect.values.length > 0 ? `aspect-${aspect.name}` : undefined}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Brand + MPN */}
@@ -58,7 +140,7 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
           <Input
             value={specs.mpn}
             onChange={(e) => patch({ mpn: e.target.value })}
-            placeholder="e.g. 45022-TBC-A01"
+            placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
           />
         </FormField>
       </div>
@@ -112,6 +194,57 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
           List all older part numbers this part supersedes — helps buyers find this listing.
         </p>
       </div>
+
+      {/* Dynamic category aspects — only shown when a category is selected */}
+      {categoryId && (
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className="text-sm font-medium text-fg">
+            Category Aspects
+            {aspectsLoading && (
+              <span className="ml-2 text-xs font-normal text-fg/40">Loading…</span>
+            )}
+          </p>
+
+          {/* Required aspects */}
+          {requiredAspects.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {requiredAspects.map((aspect) => (
+                <FormField key={aspect.name} label={aspect.name} required>
+                  {renderAspectInput(aspect)}
+                </FormField>
+              ))}
+            </div>
+          )}
+
+          {/* Optional aspects */}
+          {optionalAspects.length > 0 && (
+            <div className="space-y-3">
+              {displayedOptional.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {displayedOptional.map((aspect) => (
+                    <FormField key={aspect.name} label={aspect.name}>
+                      {renderAspectInput(aspect)}
+                    </FormField>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowAllOptional((v) => !v)}
+                className="text-xs text-fg/50 underline-offset-2 hover:text-fg hover:underline"
+              >
+                {showAllOptional
+                  ? "Hide optional aspects"
+                  : `Show ${optionalAspects.length} optional aspect${optionalAspects.length !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
+
+          {!aspectsLoading && allAspects.length === 0 && aspectsData && (
+            <p className="text-xs text-fg/40">No aspect data available for this category.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -9,9 +9,10 @@ interface Props {
   value: string;
   onChange: (id: string, name?: string) => void;
   required?: boolean;
+  error?: string;
 }
 
-export function EbayCategoryInput({ label, value, onChange, required }: Props) {
+export function EbayCategoryInput({ label, value, onChange, required, error }: Props) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export function EbayCategoryInput({ label, value, onChange, required }: Props) {
 
   return (
     <div ref={containerRef} className="space-y-1.5">
-      <FormField label={label} required={required}>
+      <FormField label={label} required={required} error={error}>
         <div className="relative">
           <Input
             value={selectedName ? query : query}

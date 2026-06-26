@@ -5,6 +5,7 @@ import type {
   CategorySuggestionsResponse,
   ConditionPoliciesResponse,
   BusinessPoliciesResponse,
+  CategoryAspectsResponse,
 } from "@/types/ebay";
 
 export const getEbayStatus = async () => {
@@ -44,6 +45,14 @@ export const getConditionPolicies = async (categoryId: string) => {
 export const getBusinessPolicies = async () => {
   const { data } = await apiClient.get<BeResponse<BusinessPoliciesResponse>>(
     "/ebay/business-policies",
+  );
+  return data;
+};
+
+export const getCategoryAspects = async (categoryId: string) => {
+  const { data } = await apiClient.get<BeResponse<CategoryAspectsResponse>>(
+    "/ebay/category-aspects",
+    { params: { categoryId } },
   );
   return data;
 };

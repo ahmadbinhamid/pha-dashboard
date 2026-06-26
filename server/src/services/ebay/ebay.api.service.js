@@ -18,10 +18,7 @@ function toPlainText(html, maxLen = 4000) {
     .slice(0, maxLen);
 }
 
-const BASE_URL = config.ebay.sandbox
-  ? "https://api.sandbox.ebay.com"
-  : "https://api.ebay.com";
-
+const BASE_URL = config.ebay.apiBaseUrl;
 const TOKEN_ENDPOINT = `${BASE_URL}/identity/v1/oauth2/token`;
 const INVENTORY_BASE = `${BASE_URL}/sell/inventory/v1`;
 const FULFILLMENT_BASE = `${BASE_URL}/sell/fulfillment/v1`;
@@ -256,6 +253,13 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
     .map((s) => (s == null ? "" : String(s).trim()))
     .filter((s) => s !== "" && s !== "null");
   if (spnArr.length > 0) aspects["Superseded Part Number"] = spnArr;
+  // Dynamic aspects from Taxonomy API (stored as Map on listing document)
+  const dynamicAspects = specs.aspects instanceof Map
+    ? Object.fromEntries(specs.aspects)
+    : (typeof specs.aspects === "object" && specs.aspects !== null ? specs.aspects : {});
+  for (const [name, value] of Object.entries(dynamicAspects)) {
+    if (value && !aspects[name]) aspects[name] = [String(value)];
+  }
 
   // packageWeightAndSize — only included when at least one dimension/weight is set
   const pkg = listing.package || {};
@@ -509,6 +513,49 @@ async function getOrders({ limit = 50, offset = 0 } = {}) {
   }
 }
 
+// ── Taxonomy ──────────────────────────────────────────────────────────────────
+
+const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
+
+async function getDefaultCategoryTreeId(token) {
+  const marketplaceId = config.ebay.marketplaceId;
+  const res = await fetch(
+    `${TAXONOMY_BASE}/get_default_category_tree_id?marketplace_id=${marketplaceId}`,
+    { headers: ebayHeaders(token) },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error(`[eBay] getDefaultCategoryTreeId failed: ${res.status} ${text}`);
+    throw new Error(`Failed to resolve eBay category tree: ${res.status}`);
+  }
+  const data = await res.json();
+  logger.debug(`[eBay] Category tree ID for ${marketplaceId}: ${data.categoryTreeId}`);
+  return data.categoryTreeId;
+}
+
+async function getItemAspectsForCategory(token, categoryId) {
+  const treeId = await getDefaultCategoryTreeId(token);
+  const res = await fetch(
+    `${TAXONOMY_BASE}/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`,
+    { headers: ebayHeaders(token) },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error(`[eBay] getItemAspectsForCategory(${categoryId}) failed: ${res.status} ${text}`);
+    throw new Error(`Failed to fetch category aspects: ${res.status}`);
+  }
+  const data = await res.json();
+  const aspects = (data.aspects || []).map((a) => ({
+    name: a.localizedAspectName,
+    required: a.aspectConstraint?.aspectRequired === true,
+    mode: a.aspectConstraint?.aspectMode || "FREE_TEXT",
+    cardinality: a.aspectConstraint?.itemToAspectCardinality || "SINGLE",
+    values: (a.aspectValues || []).map((v) => v.localizedValue),
+  }));
+  logger.info(`[eBay] Fetched ${aspects.length} aspects for category ${categoryId}`);
+  return aspects;
+}
+
 module.exports = {
   credentialsConfigured,
   getAccessToken,
@@ -524,4 +571,5 @@ module.exports = {
   publishOffer,
   updateInventoryQuantity,
   deleteProduct,
+  getItemAspectsForCategory,
 };

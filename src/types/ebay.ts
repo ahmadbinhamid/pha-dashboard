@@ -46,6 +46,18 @@ export type VehicleFitmentRow = {
   engine: string;
 };
 
+export type CategoryAspect = {
+  name: string;
+  required: boolean;
+  mode: "FREE_TEXT" | "SELECTION_ONLY";
+  cardinality: "SINGLE" | "MULTI";
+  values: string[];
+};
+
+export type CategoryAspectsResponse = {
+  aspects: CategoryAspect[];
+};
+
 export type EbayUploaderFormPayload = {
   title: string;
   sku: string;

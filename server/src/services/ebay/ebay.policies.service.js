@@ -13,9 +13,7 @@ const config = require("../../config");
 const { getAccessToken, ebayHeaders } = require("./ebay.api.service");
 const { logger } = require("../../loaders/logging");
 
-const ACCOUNT_BASE = config.ebay.sandbox
-  ? "https://api.sandbox.ebay.com/sell/account/v1"
-  : "https://api.ebay.com/sell/account/v1";
+const ACCOUNT_BASE = `${config.ebay.apiBaseUrl}/sell/account/v1`;
 
 const TTL_MS = 10 * 60 * 1000; // 10 minutes
 let _cache = null;

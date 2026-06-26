@@ -1,6 +1,7 @@
 // controllers/ebay.controller.js
 
 const ebayService = require("../services/ebay/ebay.service");
+const ebayApiService = require("../services/ebay/ebay.api.service");
 const webhookService = require("../services/ebay/ebay.webhook.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
 const catalogService = require("../services/ebay/ebay.catalog.service");
@@ -159,6 +160,18 @@ exports.getBusinessPolicies = async (req, res) => {
   try {
     const result = await policiesService.getBusinessPolicies();
     return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getCategoryAspects = async (req, res) => {
+  try {
+    const categoryId = (req.query.categoryId || "").trim();
+    if (!categoryId) return badRequest(res, "categoryId is required");
+    const token = await ebayApiService.getAccessToken();
+    const aspects = await ebayApiService.getItemAspectsForCategory(token, categoryId);
+    return success(res, { aspects });
   } catch (err) {
     return systemfailure(res, err);
   }
