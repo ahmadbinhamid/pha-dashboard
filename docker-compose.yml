@@ -1,0 +1,68 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    volumes:
+      - uploads:/var/www/uploads:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    env_file: ./server/.env.production
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  worker-email:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: node src/workers/email.worker.js
+    env_file: ./server/.env.production
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  worker-ebay:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: node src/workers/ebay.worker.js
+    env_file: ./server/.env.production
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  uploads:
+  logs:

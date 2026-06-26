@@ -16,7 +16,7 @@ const config = {
   env: get("NODE_ENV", "development"),
   appEnv: get("APP_ENV", "development"),
   port: getNum("PORT", 7000),
-  mongoUri: get("MONGO_URI", "mongodb://localhost:27017/vcvs"),
+  mongoUri: get("MONGO_URI", "mongodb://localhost:27017/partshub-australia"),
   logLevel: get("LOG_LEVEL", "info"),
 
   jwt: {
