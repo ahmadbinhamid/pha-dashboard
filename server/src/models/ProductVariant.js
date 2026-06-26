@@ -2,8 +2,6 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
-const { EBAY_SYNC_STATUS } = require("../constants/product.constants");
-
 const combinationSchema = new Schema(
   {
     option: { type: String },
@@ -31,14 +29,6 @@ const productVariantSchema = buildSchema({
     type: Schema.Types.ObjectId,
     ref: "Attachment",
     default: null,
-  },
-  // TODO(marketplace): same as Product — move to MarketplaceListing collection
-  ebay_listing_id: { type: String, default: null },
-  ebay_offer_id: { type: String, default: null },
-  ebay_sync_status: {
-    type: String,
-    enum: Object.values(EBAY_SYNC_STATUS),
-    default: EBAY_SYNC_STATUS.NOT_LISTED,
   },
 });
 

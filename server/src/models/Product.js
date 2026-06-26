@@ -5,7 +5,6 @@ const { buildSchema } = require("./base.model");
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
-  EBAY_SYNC_STATUS,
 } = require("../constants/product.constants");
 
 const choiceSchema = new Schema(
@@ -52,19 +51,6 @@ const productSchema = buildSchema({
     ref: "Attachment",
     default: null,
   },
-  // TODO(marketplace): these eBay fields should move to a separate
-  // MarketplaceListing collection when adding Amazon/Shopify/Daraz etc.
-  // Schema: { product, variant, platform, listing_id, sync_status, synced_at }
-  ebay_listing_id: { type: String, default: null },
-  ebay_offer_id: { type: String, default: null },
-  ebay_category_id: { type: String, default: null },
-  ebay_condition: { type: String, default: "NEW" },
-  ebay_sync_status: {
-    type: String,
-    enum: Object.values(EBAY_SYNC_STATUS),
-    default: EBAY_SYNC_STATUS.NOT_LISTED,
-  },
-  ebay_synced_at: { type: Date, default: null },
 });
 
 productSchema.index({ sku: 1 }, { sparse: true });

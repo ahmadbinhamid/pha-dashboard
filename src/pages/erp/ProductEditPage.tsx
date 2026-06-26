@@ -67,8 +67,6 @@ function productToForm(p: Product): ProductEditFormState {
     tags: p.tags ?? [],
     images: p.attachments ?? [],
     choices: p.choices?.map((c) => ({ name: c.name, items: c.items })) ?? [],
-    ebay_category_id: p.ebay_category_id ?? "",
-    ebay_condition: p.ebay_condition ?? "FOR_PARTS_OR_NOT_WORKING",
   };
 }
 
@@ -97,8 +95,6 @@ function formToFD(form: ProductEditFormState): FormData {
     JSON.stringify(form.images.map((img) => img._id || img.id).filter(Boolean)),
   );
   fd.append("choices", JSON.stringify(form.choices));
-  fd.append("ebay_category_id", form.ebay_category_id);
-  fd.append("ebay_condition", form.ebay_condition);
   return fd;
 }
 

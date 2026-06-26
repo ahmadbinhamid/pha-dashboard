@@ -176,8 +176,6 @@ exports.updateProduct = async (req, res) => {
       has_variants,
       brand,
       digital_file,
-      ebay_category_id,
-      ebay_condition,
     } = body;
 
     if (title !== undefined && title !== product.title) {
@@ -215,10 +213,6 @@ exports.updateProduct = async (req, res) => {
     if (has_variants !== undefined) product.has_variants = toBool(has_variants);
     if (brand !== undefined) product.brand = brand || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
-    if (ebay_category_id !== undefined)
-      product.ebay_category_id = ebay_category_id || null;
-    if (ebay_condition !== undefined && ebay_condition)
-      product.ebay_condition = ebay_condition;
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);

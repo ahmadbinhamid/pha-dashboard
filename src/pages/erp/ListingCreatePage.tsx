@@ -37,7 +37,6 @@ export default function ListingCreatePage() {
       title_override: p.title,
       store_sku: p.sku || "",
       price_override: p.price != null ? String(p.price) : "",
-      ebay_category_id: p.ebay_category_id || "",
     }));
   }, [productData]);
 

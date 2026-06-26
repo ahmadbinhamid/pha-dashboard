@@ -103,10 +103,6 @@ async function findProductById(id) {
   return Product.findById(id);
 }
 
-async function findProductWithAttachments(id) {
-  return Product.findById(id).populate("attachments").lean();
-}
-
 async function getProductBySlug(slug) {
   return Product.findOne({ slug })
     .populate("attachments")
@@ -164,7 +160,6 @@ module.exports = {
   ensureInventoryForProduct,
   getProducts,
   findProductById,
-  findProductWithAttachments,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecord,

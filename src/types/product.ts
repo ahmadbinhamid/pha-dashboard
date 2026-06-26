@@ -128,8 +128,6 @@ export interface ProductEditFormState {
   tags: string[];
   images: Attachment[];
   choices: Choice[];
-  ebay_category_id: string;
-  ebay_condition: string;
 }
 
 export interface EbaySettings {

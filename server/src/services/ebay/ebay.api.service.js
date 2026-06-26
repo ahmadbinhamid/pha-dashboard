@@ -165,42 +165,6 @@ async function loadSettings() {
   };
 }
 
-// ── Step 1: Inventory Item ────────────────────────────────────────────────────
-
-function buildInventoryItem(product, sku, quantity = 0) {
-  const uploadsUrl = process.env.UPLOADS_URL || "http://localhost:7000/uploads";
-
-  const imageUrls = (product.attachments || [])
-    .filter((a) => a.url)
-    .map((a) => {
-      if (a.url.startsWith("http")) return a.url;
-      return `${uploadsUrl}${a.url.startsWith("/") ? "" : "/"}${a.url}`;
-    })
-    .filter((url) => url.startsWith("https://"))
-    .slice(0, 12);
-
-  const finalImageUrls =
-    imageUrls.length > 0
-      ? imageUrls
-      : config.ebay.fallbackImageUrl
-        ? [config.ebay.fallbackImageUrl]
-        : [];
-
-  return {
-    sku,
-    availability: {
-      shipToLocationAvailability: { quantity },
-    },
-    condition: product.ebay_condition || "FOR_PARTS_OR_NOT_WORKING",
-    product: {
-      title: product.title,
-      description: toPlainText(product.description || product.title) || product.title,
-      imageUrls: finalImageUrls,
-      ...(product.brand ? { brand: product.brand } : {}),
-    },
-  };
-}
-
 async function upsertInventoryItem(token, inventoryItem) {
   const { sku } = inventoryItem;
 
@@ -349,39 +313,6 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
       } : {}),
     },
     ...(merchantLocationKey ? { merchantLocationKey } : {}),
-  };
-}
-
-// ── Step 2: Offer ─────────────────────────────────────────────────────────────
-
-function buildOffer(product, sku, settings, quantity = 1) {
-  return {
-    sku,
-    marketplaceId: config.ebay.marketplaceId,
-    format: "FIXED_PRICE",
-    availableQuantity: quantity,
-    ...(product.ebay_category_id ? { categoryId: product.ebay_category_id } : {}),
-    listingDescription: product.description || product.title,
-    pricingSummary: {
-      price: {
-        value: String(product.price || 0),
-        currency: "AUD",
-      },
-    },
-    listingPolicies: {
-      ...(settings.fulfillment_policy_id
-        ? { fulfillmentPolicyId: settings.fulfillment_policy_id }
-        : {}),
-      ...(settings.payment_policy_id
-        ? { paymentPolicyId: settings.payment_policy_id }
-        : {}),
-      ...(settings.return_policy_id
-        ? { returnPolicyId: settings.return_policy_id }
-        : {}),
-    },
-    ...(settings.merchant_location_key
-      ? { merchantLocationKey: settings.merchant_location_key }
-      : {}),
   };
 }
 
@@ -563,10 +494,8 @@ module.exports = {
   getOrders,
   loadSettings,
   ebayHeaders,
-  buildInventoryItem,
   buildInventoryItemFromResolved,
   upsertInventoryItem,
-  buildOffer,
   buildOfferFromResolved,
   createOffer,
   updateOffer,

@@ -5,6 +5,7 @@ const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
 const ebayApi = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { logger } = require("../../loaders/logging");
+const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 
 async function pollAndProcessOrders() {
   const data = await ebayApi.getOrders();
@@ -26,6 +27,7 @@ async function pollAndProcessOrders() {
     let inserted = false;
     try {
       await EbayProcessedOrder.create({
+        platform: MARKETPLACE_PLATFORM.EBAY,
         orderId,
         action: "deduction",
         source: "poller",
@@ -63,7 +65,7 @@ async function pollAndProcessOrders() {
     // Backfill lineItems now that we have the full adjustment list
     if (inserted) {
       await EbayProcessedOrder.updateOne(
-        { orderId, action: "deduction" },
+        { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "deduction" },
         { $set: { lineItems: adjustments } },
       );
     }
