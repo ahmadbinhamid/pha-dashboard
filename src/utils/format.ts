@@ -4,7 +4,7 @@ const _compactFmt = new Intl.NumberFormat("en-AU", { notation: "compact" });
 export function formatCurrency(amount: number, currency: string = "AUD") {
   let fmt = _currencyFmts.get(currency);
   if (!fmt) {
-    fmt = new Intl.NumberFormat("en-AU", { style: "currency", currency, maximumFractionDigits: 2 });
+    fmt = new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 });
     _currencyFmts.set(currency, fmt);
   }
   return fmt.format(amount);
