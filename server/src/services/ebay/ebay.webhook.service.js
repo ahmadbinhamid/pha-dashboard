@@ -5,6 +5,7 @@ const { getAppToken } = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
 const { logger } = require("../../loaders/logging");
+const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const config = require("../../config");
 
 const BASE = config.ebay.sandbox
@@ -41,6 +42,7 @@ function verifySignature(rawBody, signatureHeader, verificationToken) {
 async function claimEvent(orderId, action) {
   try {
     await EbayProcessedOrder.create({
+      platform: MARKETPLACE_PLATFORM.EBAY,
       orderId,
       action,
       source: "webhook",
@@ -90,7 +92,7 @@ async function processNotification(payload) {
     await adjustStockBySku(sku, -qty);
 
     await EbayProcessedOrder.updateOne(
-      { orderId, action: "deduction" },
+      { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "deduction" },
       { $set: { lineItems: [{ sku, quantity: qty }] } },
     );
 
@@ -121,7 +123,7 @@ async function processNotification(payload) {
       await adjustStockBySku(sku, qty);
 
       await EbayProcessedOrder.updateOne(
-        { orderId, action: "restock" },
+        { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "restock" },
         { $set: { lineItems: [{ sku, quantity: qty }] } },
       );
 
