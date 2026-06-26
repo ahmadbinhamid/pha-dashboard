@@ -22,13 +22,9 @@ import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/Ebay
 import { getBusinessPolicies } from "@/lib/api/ebay";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
-import type { Attachment } from "@/types/product";
+
 import { Cloud } from "lucide-react";
 
-// Converts stored attachment IDs back to Attachment-shaped objects for ProductImages
-function idsToAttachments(ids: string[]): Attachment[] {
-  return ids.map((id) => ({ _id: id, id, uid: id, file_name: "", original_name: "", mime_type: "image/jpeg", size: 0, url: "", type: "image" as const }));
-}
 
 const LISTING_DURATIONS = [
   { value: "GTC", label: "Good 'Til Cancelled" },
@@ -85,7 +81,7 @@ export function ListingForm({
   isEdit = false,
 }: ListingFormProps) {
   const titleLen = (form.title_override || "").length;
-  const photoImages = idsToAttachments(form.photo_overrides || []);
+  const photoImages = form.photo_overrides || [];
 
   const { data: policiesData, isLoading: policiesLoading } = useQuery({
     queryKey: ["ebay-business-policies"],
@@ -141,7 +137,7 @@ export function ListingForm({
       <Section number={2} title="Photos">
         <ProductImages
           images={photoImages}
-          onChange={(imgs) => onChange({ photo_overrides: imgs.map((a) => a._id || a.id) })}
+          onChange={(imgs) => onChange({ photo_overrides: imgs })}
         />
         <p className="mt-2 text-xs text-fg/50">
           Up to 24 images · JPEG, PNG · First photo is the main listing photo

@@ -44,6 +44,7 @@ function formStateToPayload(form: EbayListingFormState) {
     fulfillment_policy_id: form.fulfillment_policy_id || null,
     payment_policy_id: form.payment_policy_id || null,
     return_policy_id: form.return_policy_id || null,
+    photo_overrides: (form.photo_overrides || []).map((a) => a._id || a.id).filter(Boolean),
     require_immediate_payment: form.require_immediate_payment,
     item_location_zip: form.item_location_zip || null,
     package: {

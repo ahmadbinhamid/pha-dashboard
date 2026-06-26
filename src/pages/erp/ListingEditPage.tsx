@@ -39,7 +39,7 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     price_override: listing.price_override != null
       ? String(listing.price_override)
       : p?.price != null ? String(p.price) : "",
-    photo_overrides: (listing.photo_overrides as string[]) || [],
+    photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",

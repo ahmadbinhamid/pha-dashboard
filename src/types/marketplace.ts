@@ -38,7 +38,7 @@ export interface MarketplaceListing {
   title_override: string | null;
   description_override: string | null;
   price_override: number | null;
-  photo_overrides: string[];
+  photo_overrides: import("@/types/product").Attachment[];
   state: ListingState;
   sync_status: ListingSyncStatus;
   synced_at: string | null;
@@ -78,7 +78,7 @@ export interface EbayListingFormState {
   title_override: string;
   description_override: string;
   price_override: string;
-  photo_overrides: string[];
+  photo_overrides: import("@/types/product").Attachment[];
   // eBay-specific
   ebay_category_id: string;
   store_category_id: string;

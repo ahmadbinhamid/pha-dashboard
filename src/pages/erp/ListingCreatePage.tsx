@@ -37,6 +37,7 @@ export default function ListingCreatePage() {
       title_override: p.title,
       store_sku: p.sku || "",
       price_override: p.price != null ? String(p.price) : "",
+      photo_overrides: p.attachments ?? [],
     }));
   }, [productData]);
 
