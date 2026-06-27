@@ -3,6 +3,7 @@ import { AppProviders } from "@/components/providers/app-providers";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { GuestRoute } from "@/components/auth/guest-route";
 import { ErpLayout } from "@/components/layouts/erp-layout";
+import { useAuth } from "@/context/auth";
 
 // Store layout
 import StoreLayout from "@/pages/store/StoreLayout";
@@ -33,7 +34,6 @@ import SettingsPage from "@/pages/erp/SettingsPage";
 import EbayUploaderPage from "@/pages/erp/EbayUploaderPage";
 
 // Store pages
-import StoreHomePage from "@/pages/store/StoreHomePage";
 import PartsPage from "@/pages/store/PartsPage";
 import ProductPdpPage from "@/pages/store/ProductPdpPage";
 import BrandsPage from "@/pages/store/BrandsPage";
@@ -42,6 +42,18 @@ import ContactPage from "@/pages/store/ContactPage";
 import AccountPage from "@/pages/store/AccountPage";
 import SearchPage from "@/pages/store/SearchPage";
 import AboutPage from "@/pages/store/AboutPage";
+
+function HomeRedirect() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-bg">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
+      </div>
+    );
+  }
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />;
+}
 
 export default function App() {
   return (
@@ -91,8 +103,9 @@ export default function App() {
             <Route path="/tools/ebay-uploader" element={<EbayUploaderPage />} />
           </Route>
 
+          <Route path="/" element={<HomeRedirect />} />
+
           <Route element={<StoreLayout />}>
-            <Route path="/" element={<StoreHomePage />} />
             <Route path="/parts" element={<PartsPage />} />
             <Route path="/parts/:slug" element={<ProductPdpPage />} />
             <Route path="/brands" element={<BrandsPage />} />
@@ -103,7 +116,7 @@ export default function App() {
             <Route path="/about" element={<AboutPage />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AppProviders>
     </BrowserRouter>
