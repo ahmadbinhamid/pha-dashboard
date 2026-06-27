@@ -29,6 +29,11 @@ let _tokenExpiry = 0;
 let _cachedAppToken = null;
 let _appTokenExpiry = 0;
 
+let _cachedCatalogToken = null;
+let _catalogTokenExpiry = 0;
+
+let _cachedCategoryTreeId = null;
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 function credentialsConfigured() {
@@ -121,6 +126,46 @@ async function getAppToken() {
   _cachedAppToken = data.access_token;
   _appTokenExpiry = now + (data.expires_in || 7200) * 1000;
   return _cachedAppToken;
+}
+
+// App token scoped for Taxonomy / Catalog APIs (client_credentials, base scope)
+async function getCatalogToken() {
+  const now = Date.now();
+  if (_cachedCatalogToken && now < _catalogTokenExpiry - 30_000) return _cachedCatalogToken;
+
+  if (!credentialsConfigured()) {
+    logger.warn("[eBay] Credentials not configured — skipping catalog token fetch");
+    return null;
+  }
+
+  const credentials = Buffer.from(
+    `${config.ebay.clientId}:${config.ebay.clientSecret}`,
+  ).toString("base64");
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    scope: "https://api.ebay.com/oauth/api_scope",
+  });
+
+  const res = await fetch(TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error(`[eBay] Catalog token fetch failed: ${res.status} ${text}`);
+    return null;
+  }
+
+  const data = await res.json();
+  _cachedCatalogToken = data.access_token;
+  _catalogTokenExpiry = now + (data.expires_in || 7200) * 1000;
+  return _cachedCatalogToken;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -517,7 +562,10 @@ async function getOrders({ limit = 50, offset = 0 } = {}) {
 
 const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
 
-async function getDefaultCategoryTreeId(token) {
+async function getDefaultCategoryTreeId() {
+  if (_cachedCategoryTreeId) return _cachedCategoryTreeId;
+
+  const token = await getCatalogToken();
   const marketplaceId = config.ebay.marketplaceId;
   const res = await fetch(
     `${TAXONOMY_BASE}/get_default_category_tree_id?marketplace_id=${marketplaceId}`,
@@ -529,18 +577,24 @@ async function getDefaultCategoryTreeId(token) {
     throw new Error(`Failed to resolve eBay category tree: ${res.status}`);
   }
   const data = await res.json();
-  logger.debug(`[eBay] Category tree ID for ${marketplaceId}: ${data.categoryTreeId}`);
-  return data.categoryTreeId;
+  _cachedCategoryTreeId = data.categoryTreeId;
+  logger.debug(`[eBay] Category tree ID for ${marketplaceId}: ${_cachedCategoryTreeId}`);
+  return _cachedCategoryTreeId;
 }
 
-async function getItemAspectsForCategory(token, categoryId) {
-  const treeId = await getDefaultCategoryTreeId(token);
+async function getItemAspectsForCategory(categoryId) {
+  const token = await getCatalogToken();
+  const treeId = await getDefaultCategoryTreeId();
   const res = await fetch(
     `${TAXONOMY_BASE}/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`,
     { headers: ebayHeaders(token) },
   );
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 400) {
+      logger.warn(`[eBay] getItemAspectsForCategory(${categoryId}) bad category ID: ${text}`);
+      return [];
+    }
     logger.error(`[eBay] getItemAspectsForCategory(${categoryId}) failed: ${res.status} ${text}`);
     throw new Error(`Failed to fetch category aspects: ${res.status}`);
   }

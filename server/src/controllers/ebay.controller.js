@@ -169,8 +169,7 @@ exports.getCategoryAspects = async (req, res) => {
   try {
     const categoryId = (req.query.categoryId || "").trim();
     if (!categoryId) return badRequest(res, "categoryId is required");
-    const token = await ebayApiService.getAccessToken();
-    const aspects = await ebayApiService.getItemAspectsForCategory(token, categoryId);
+    const aspects = await ebayApiService.getItemAspectsForCategory(categoryId);
     return success(res, { aspects });
   } catch (err) {
     return systemfailure(res, err);

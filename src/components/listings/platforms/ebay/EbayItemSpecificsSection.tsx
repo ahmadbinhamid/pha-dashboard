@@ -68,7 +68,7 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
   const { data: aspectsData, isLoading: aspectsLoading } = useQuery({
     queryKey: ["ebay-category-aspects", categoryId],
     queryFn: () => getCategoryAspects(categoryId),
-    enabled: !!categoryId,
+    enabled: !!categoryId && /^\d+$/.test(categoryId),
     staleTime: 30 * 60 * 1000,
   });
 
