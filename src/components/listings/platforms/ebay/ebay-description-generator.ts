@@ -136,8 +136,6 @@ section{padding:14px}ul.spec li strong{display:block;min-width:0;margin-bottom:2
 <section>
 <h2>Item Specifications</h2>
 <ul class="spec">
-<li><strong>Make / Model:</strong> ${esc(makeModel)}</li>
-<li><strong>Year:</strong> ${esc(yearStr)}</li>
 <li><strong>Part Number:</strong> ${esc(mpn)}</li>
 <li><strong>Stock Number:</strong> ${esc(sku)}</li>
 <li><strong>Condition:</strong> ${esc(condition)}</li>
