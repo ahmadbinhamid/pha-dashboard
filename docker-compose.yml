@@ -12,6 +12,9 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - default
+      - pha-net
 
   backend:
     build:
@@ -68,3 +71,7 @@ volumes:
   mongo_data:
   uploads:
   logs:
+
+networks:
+  pha-net:
+    external: true
