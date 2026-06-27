@@ -3,6 +3,7 @@
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
+const { EBAY_SCOPES } = require("../../constants/ebay.constants");
 
 // Strip HTML tags and collapse whitespace for fields that only accept plain text
 function toPlainText(html, maxLen = 4000) {
@@ -63,7 +64,7 @@ async function getAccessToken() {
     grant_type: "refresh_token",
     refresh_token: config.ebay.refreshToken,
     scope:
-      "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account",
+      `${EBAY_SCOPES.SELL_INVENTORY} ${EBAY_SCOPES.SELL_ACCOUNT}`,
   });
 
   const res = await fetch(TOKEN_ENDPOINT, {
@@ -104,7 +105,7 @@ async function getAppToken() {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: config.ebay.refreshToken,
-    scope: "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription",
+    scope: EBAY_SCOPES.NOTIFICATION_SUBSCRIPTION,
   });
 
   const res = await fetch(TOKEN_ENDPOINT, {
@@ -144,7 +145,7 @@ async function getCatalogToken() {
 
   const body = new URLSearchParams({
     grant_type: "client_credentials",
-    scope: "https://api.ebay.com/oauth/api_scope",
+    scope: EBAY_SCOPES.BASE,
   });
 
   const res = await fetch(TOKEN_ENDPOINT, {
