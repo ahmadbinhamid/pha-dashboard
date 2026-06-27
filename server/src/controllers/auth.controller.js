@@ -79,22 +79,22 @@ exports.login = async (req, res) => {
       );
     }
 
-    const otp = generateOTP();
-    user.otp = hashOTP(otp);
-    user.otp_expiry = generateOTPExpiry();
-    await user.save();
+    // OTP DISABLED — issue JWT directly on login
+    // const otp = generateOTP();
+    // user.otp = hashOTP(otp);
+    // user.otp_expiry = generateOTPExpiry();
+    // await user.save();
+    // await sendOTP({ to: user.email, name: fullName(user), otp });
+    // return success(res, { email: user.email }, "OTP sent to your email. Please verify to complete login.");
 
-    await sendOTP({
-      to: user.email,
+    const token = signJwt({
+      sub: user._id.toString(),
+      role: user.role,
+      email: user.email,
       name: fullName(user),
-      otp,
     });
 
-    return success(
-      res,
-      { email: user.email },
-      "OTP sent to your email. Please verify to complete login.",
-    );
+    return success(res, toPublicUser(user), "Login successful", token);
   } catch (err) {
     return systemfailure(res, err);
   }

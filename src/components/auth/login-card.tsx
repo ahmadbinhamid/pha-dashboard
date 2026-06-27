@@ -92,10 +92,18 @@ export function LoginCard() {
 
   const loginMutation = useMutation({
     mutationFn: login,
-    onSuccess: () => {
-      setErrorMsg("");
-      setStep("otp");
-      startCooldown();
+    // OTP DISABLED — authenticate directly on login success
+    onSuccess: (res) => {
+      if (!res.token || !res.data) {
+        setErrorMsg("Unexpected server response. Please try again.");
+        return;
+      }
+      setAuth(res.data, res.token);
+      navigate(redirectTo, { replace: true });
+      // OTP flow (re-enable when OTP is back):
+      // setErrorMsg("");
+      // setStep("otp");
+      // startCooldown();
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });
@@ -264,6 +272,7 @@ export function LoginCard() {
           </>
         )}
 
+        {/* OTP DISABLED — OTP step hidden, login goes straight to dashboard
         {step === "otp" && (
           <>
             <CardHeader
@@ -273,76 +282,38 @@ export function LoginCard() {
             <CardContent>
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="space-y-2">
-                  <label
-                    className="text-xs font-semibold text-fg/75"
-                    htmlFor="otp"
-                  >
+                  <label className="text-xs font-semibold text-fg/75" htmlFor="otp">
                     Verification code
                   </label>
                   <Input
-                    id="otp"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{6}"
-                    maxLength={6}
-                    placeholder="000000"
-                    autoComplete="one-time-code"
-                    value={otp}
+                    id="otp" type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
+                    placeholder="000000" autoComplete="one-time-code" value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    required
-                    disabled={isLoadingVerify}
+                    required disabled={isLoadingVerify}
                     className="text-center tracking-[0.4em] text-lg font-semibold"
                   />
                 </div>
-
                 {errorMsg && (
                   <p className="rounded-lg border border-[hsl(var(--danger)/0.3)] bg-[hsl(var(--danger)/0.08)] px-3 py-2 text-xs text-[hsl(var(--danger))]">
                     {errorMsg}
                   </p>
                 )}
-
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoadingVerify || otp.length < 6}
-                >
+                <Button type="submit" className="w-full" disabled={isLoadingVerify || otp.length < 6}>
                   {isLoadingVerify ? "Verifying…" : "Verify & Sign in"}
-                  <span className="ml-2 opacity-80">
-                    <Icons.ArrowRight />
-                  </span>
+                  <span className="ml-2 opacity-80"><Icons.ArrowRight /></span>
                 </Button>
-
                 <div className="flex items-center justify-between pt-1 text-xs text-fg/55">
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="hover:text-fg transition-colors"
-                  >
-                    ← Back
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resendCooldown > 0 || isLoadingResend}
-                    className={cn(
-                      "transition-colors",
-                      resendCooldown > 0 || isLoadingResend
-                        ? "cursor-not-allowed opacity-40"
-                        : "text-accent hover:underline",
-                    )}
-                  >
-                    {isLoadingResend
-                      ? "Sending…"
-                      : resendCooldown > 0
-                        ? `Resend in ${resendCooldown}s`
-                        : "Resend code"}
+                  <button type="button" onClick={handleBack} className="hover:text-fg transition-colors">← Back</button>
+                  <button type="button" onClick={handleResend} disabled={resendCooldown > 0 || isLoadingResend}
+                    className={cn("transition-colors", resendCooldown > 0 || isLoadingResend ? "cursor-not-allowed opacity-40" : "text-accent hover:underline")}>
+                    {isLoadingResend ? "Sending…" : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
                   </button>
                 </div>
               </form>
             </CardContent>
           </>
         )}
+        */}
       </Card>
     </div>
   );

@@ -13,7 +13,8 @@ export interface VerifyOtpPayload {
 }
 
 export async function login(payload: LoginPayload) {
-  const { data } = await apiClient.post<BeResponse<{ email: string }>>(
+  // OTP DISABLED — login now returns user + token directly (same shape as verifyOtp)
+  const { data } = await apiClient.post<BeResponse<AuthUser>>(
     "/auth/login",
     payload,
   );
