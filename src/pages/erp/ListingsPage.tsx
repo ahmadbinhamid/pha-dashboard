@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,17 @@ import { SyncBadge } from "@/components/listings/sync-badge";
 import { ProductPickerModal } from "@/components/listings/product-picker-modal";
 import { Plus, Cloud, Pencil, Trash2 } from "lucide-react";
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
+
+const SYNC_STATUS_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Synced", value: "synced" },
+  { label: "Pending", value: "pending" },
+  { label: "Error", value: "error" },
+  { label: "Not listed", value: "not_listed" },
+];
 
 const TABLE_HEADERS = [
   { label: "Product", align: "left" },
@@ -32,17 +42,50 @@ const TABLE_HEADERS = [
   { label: "Actions", align: "right" },
 ];
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function ListingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL-synced state (survives refresh/back navigation)
+  const syncStatus = searchParams.get("sync_status") ?? "";
+  const page = parseInt(searchParams.get("page") ?? "1", 10);
+
+  // Local UI state (doesn't need to be in URL)
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EbayListing | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["listings", { page }],
-    queryFn: () => getListings({ page, limit: 20 }),
+  const setSyncStatus = useCallback(
+    (val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set("sync_status", val);
+        else next.delete("sync_status");
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("page", String(p));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["listings", { page, sync_status: syncStatus }],
+    queryFn: () =>
+      getListings({ page, limit: PAGE_SIZE, ...(syncStatus ? { sync_status: syncStatus } : {}) }),
   });
 
   const listings: EbayListing[] = (data?.data?.items ?? []) as EbayListing[];
@@ -82,6 +125,7 @@ export default function ListingsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Listings</h1>
@@ -103,6 +147,30 @@ export default function ListingsPage() {
       </div>
 
       <Card>
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-1 rounded-xs bg-bg-2 p-1">
+            {SYNC_STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setSyncStatus(f.value)}
+                className={`rounded-xs px-3 py-1.5 text-xs font-medium transition ${
+                  syncStatus === f.value
+                    ? "bg-bg text-fg shadow-sm ring-1 ring-inset ring-border"
+                    : "text-fg/55 hover:text-fg"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {isFetching && !isLoading && (
+            <span className="text-xs text-fg/40">Updating…</span>
+          )}
+        </div>
+
+        {/* Table */}
         <div className="overflow-x-auto">
           {isLoading ? (
             <LoadingSkeleton />
@@ -139,7 +207,7 @@ export default function ListingsPage() {
                   return (
                     <tr
                       key={listing._id}
-                      className="hover:bg-bg-2/30 transition-colors cursor-pointer"
+                      className="cursor-pointer transition-colors hover:bg-bg-2/30"
                       onClick={() => navigate(`/listings/${listing._id}/edit`)}
                     >
                       <td className="px-5 py-3 font-medium text-fg">{productTitle}</td>
@@ -163,7 +231,7 @@ export default function ListingsPage() {
                             title="Push to eBay"
                             onClick={() => pushMutation.mutate(listing._id)}
                             disabled={pushMutation.isPending}
-                            className="rounded p-1.5 text-fg/50 hover:bg-bg-2 hover:text-primary transition-colors"
+                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-primary"
                           >
                             <Cloud className="h-4 w-4" />
                           </button>
@@ -171,7 +239,7 @@ export default function ListingsPage() {
                             type="button"
                             title="Edit"
                             onClick={() => navigate(`/listings/${listing._id}/edit`)}
-                            className="rounded p-1.5 text-fg/50 hover:bg-bg-2 hover:text-fg transition-colors"
+                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-fg"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -179,7 +247,7 @@ export default function ListingsPage() {
                             type="button"
                             title="Delete"
                             onClick={() => setDeleteTarget(listing)}
-                            className="rounded p-1.5 text-fg/50 hover:bg-bg-2 hover:text-danger transition-colors"
+                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-danger"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -197,7 +265,8 @@ export default function ListingsPage() {
           currentPage={page}
           totalPages={totalPages}
           totalItems={total}
-          isLoading={isLoading}
+          itemsPerPage={PAGE_SIZE}
+          isLoading={isFetching}
           onPageChange={setPage}
         />
       </Card>
@@ -210,7 +279,9 @@ export default function ListingsPage() {
 
       <Modal
         open={!!deleteTarget}
-        onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
       >
         <ModalContent className="max-w-sm">
           <ModalHeader>
@@ -233,7 +304,7 @@ export default function ListingsPage() {
             <button
               type="button"
               onClick={() => setDeleteTarget(null)}
-              className="rounded-xs border border-border bg-bg px-4 py-2 text-sm text-fg hover:bg-bg-2 transition-colors"
+              className="rounded-xs border border-border bg-bg px-4 py-2 text-sm text-fg transition-colors hover:bg-bg-2"
             >
               Cancel
             </button>
@@ -246,7 +317,7 @@ export default function ListingsPage() {
                   onSuccess: () => setDeleteTarget(null),
                 });
               }}
-              className="rounded-xs bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
+              className="rounded-xs bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/90 disabled:opacity-50"
             >
               {deleteMutation.isPending ? "Deleting…" : "Delete"}
             </button>
@@ -256,6 +327,8 @@ export default function ListingsPage() {
     </div>
   );
 }
+
+// ── Skeleton & empty state ────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (

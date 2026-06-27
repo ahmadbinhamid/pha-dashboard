@@ -17,6 +17,7 @@ import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCate
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
 import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/EbayDescriptionSection";
+import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
 import { getBusinessPolicies } from "@/lib/api/ebay";
@@ -27,6 +28,7 @@ import {
 } from "@/lib/validation/ebay-listing";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
+import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Cloud } from "lucide-react";
 
 // Auction durations — GTC is Fixed Price only
@@ -249,13 +251,31 @@ export function ListingForm({
         )}
       </Section>
 
-      {/* 5 — Item Description */}
-      <Section number={5} title="Item Description">
-        <EbayDescriptionSection form={form} />
+      {/* 5 — Vehicle Fitment */}
+      <Section number={5} title="Vehicle Fitment">
+        <EbayVehicleFitmentSection form={form} onChange={onChange} />
       </Section>
 
-      {/* 6 — Pricing & Format */}
-      <Section number={6} title="Pricing & Format" hasError={sec6Error}>
+      {/* 6 — Item Description */}
+      <Section number={6} title="Item Description">
+        <div className="space-y-4">
+          <FormField
+            label="Custom Description Override"
+            hint="Optional — leave blank to use the auto-generated description below."
+          >
+            <Textarea
+              value={form.description_override ?? ""}
+              onChange={(e) => onChange({ description_override: e.target.value })}
+              placeholder="Paste or write a fully custom HTML or plain-text description. Overrides the auto-generated preview."
+              rows={6}
+            />
+          </FormField>
+          <EbayDescriptionSection form={form} />
+        </div>
+      </Section>
+
+      {/* 7 — Pricing & Format */}
+      <Section number={7} title="Pricing & Format" hasError={sec6Error}>
         <div className="space-y-4">
           <FormField label="Format">
             <div className="grid grid-cols-2 gap-0 overflow-hidden rounded-md border border-border">
@@ -366,8 +386,8 @@ export function ListingForm({
         </div>
       </Section>
 
-      {/* 7 — Shipping */}
-      <Section number={7} title="Shipping" hasError={sec7Error}>
+      {/* 8 — Shipping */}
+      <Section number={8} title="Shipping" hasError={sec7Error}>
         <EbayShippingSection
           form={form}
           onChange={onChange}
@@ -378,8 +398,8 @@ export function ListingForm({
         />
       </Section>
 
-      {/* 8 — Return Policy */}
-      <Section number={8} title="Return Policy" hasError={sec8Error}>
+      {/* 9 — Return Policy */}
+      <Section number={9} title="Return Policy" hasError={sec8Error}>
         <FormField label="Return Policy" required error={errors.return_policy_id}>
           <Select
             value={form.return_policy_id}
@@ -413,8 +433,8 @@ export function ListingForm({
         </FormField>
       </Section>
 
-      {/* 9 — Payment */}
-      <Section number={9} title="Payment" hasError={sec9Error}>
+      {/* 10 — Payment */}
+      <Section number={10} title="Payment" hasError={sec9Error}>
         <div className="space-y-4">
           <FormField label="Payment Policy" required error={errors.payment_policy_id}>
             <Select
@@ -463,9 +483,9 @@ export function ListingForm({
         </div>
       </Section>
 
-      {/* 10 — eBay Sync Status (edit mode only) */}
+      {/* 11 — eBay Sync Status (edit mode only) */}
       {isEdit && (
-        <Section number={10} title="eBay Sync Status">
+        <Section number={11} title="eBay Sync Status">
           <EbaySyncStatusSection listing={listing} />
         </Section>
       )}
