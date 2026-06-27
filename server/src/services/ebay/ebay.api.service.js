@@ -289,11 +289,23 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
   const imageUrls = resolveImageUrls(photos);
   const condition = normalizeCondition(listing.condition);
 
-  // Map stored item_specifics to eBay aspect format
+  // Resolve brand/mpn once — used for both aspects and the product-level fields.
+  // eBay validates Brand/MPN as a pair at the product level (error 25002 if one
+  // is present without the other), so we default the missing side rather than
+  // omitting one.
   const specs = listing.item_specifics || {};
+  const resolvedBrand = (specs.brand || brand || "").trim();
+  const resolvedMpn = (specs.mpn || "").trim();
+
+  const hasBrand = !!resolvedBrand;
+  const hasMpn = !!resolvedMpn;
+  const productBrand = hasBrand ? resolvedBrand : hasMpn ? "Unbranded" : null;
+  const productMpn = hasMpn ? resolvedMpn : hasBrand ? "Does Not Apply" : null;
+
+  // Map stored item_specifics to eBay aspect format
   const aspects = {};
-  if (brand || specs.brand) aspects["Brand"] = [specs.brand || brand];
-  if (specs.mpn) aspects["Manufacturer Part Number"] = [specs.mpn];
+  if (productBrand) aspects["Brand"] = [productBrand];
+  if (productMpn) aspects["Manufacturer Part Number"] = [productMpn];
   const rawSpn = specs.superseded_part_number;
   const spnArr = (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : [])
     .map((s) => (s == null ? "" : String(s).trim()))
@@ -341,7 +353,8 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
       // The full HTML listing description lives in the offer's listingDescription.
       description: toPlainText(description || title) || title,
       imageUrls,
-      ...(brand ? { brand } : {}),
+      // Brand and MPN must always be paired — eBay rejects one without the other (error 25002)
+      ...(productBrand ? { brand: productBrand, mpn: productMpn } : {}),
       ...(Object.keys(aspects).length > 0 ? { aspects } : {}),
     },
   };
