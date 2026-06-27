@@ -6,7 +6,7 @@ import { ErpLayout } from "@/components/layouts/erp-layout";
 import { useAuth } from "@/context/auth";
 
 // Store layout
-import StoreLayout from "@/pages/store/StoreLayout";
+// import StoreLayout from "@/pages/store/StoreLayout";
 
 // Auth pages
 import LoginPage from "@/pages/LoginPage";
@@ -33,15 +33,15 @@ import ListingEditPage from "@/pages/erp/ListingEditPage";
 import SettingsPage from "@/pages/erp/SettingsPage";
 import EbayUploaderPage from "@/pages/erp/EbayUploaderPage";
 
-// Store pages
-import PartsPage from "@/pages/store/PartsPage";
-import ProductPdpPage from "@/pages/store/ProductPdpPage";
-import BrandsPage from "@/pages/store/BrandsPage";
-import CartPage from "@/pages/store/CartPage";
-import ContactPage from "@/pages/store/ContactPage";
-import AccountPage from "@/pages/store/AccountPage";
-import SearchPage from "@/pages/store/SearchPage";
-import AboutPage from "@/pages/store/AboutPage";
+// Store pages — disabled (unauthenticated store routes not in use)
+// import PartsPage from "@/pages/store/PartsPage";
+// import ProductPdpPage from "@/pages/store/ProductPdpPage";
+// import BrandsPage from "@/pages/store/BrandsPage";
+// import CartPage from "@/pages/store/CartPage";
+// import ContactPage from "@/pages/store/ContactPage";
+// import AccountPage from "@/pages/store/AccountPage";
+// import SearchPage from "@/pages/store/SearchPage";
+// import AboutPage from "@/pages/store/AboutPage";
 
 function HomeRedirect() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -105,6 +105,7 @@ export default function App() {
 
           <Route path="/" element={<HomeRedirect />} />
 
+          {/* Store routes — disabled until storefront is ready
           <Route element={<StoreLayout />}>
             <Route path="/parts" element={<PartsPage />} />
             <Route path="/parts/:slug" element={<ProductPdpPage />} />
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/about" element={<AboutPage />} />
           </Route>
+          */}
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
