@@ -57,6 +57,7 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     fitment: fitmentRows.map((r) => ({
       make: String(r.make ?? ""),
       model: String(r.model ?? ""),
+      model_code: String(r.model_code ?? ""),
       year_from: r.year_from != null ? String(r.year_from) : "",
       year_to: r.year_to != null ? String(r.year_to) : "",
     })),

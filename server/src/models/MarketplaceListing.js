@@ -96,6 +96,7 @@ const ebaySchema = new Schema({
     {
       make: { type: String, default: "" },
       model: { type: String, default: "" },
+      model_code: { type: String, default: "" },
       year_from: { type: Number, default: null },
       year_to: { type: Number, default: null },
     },

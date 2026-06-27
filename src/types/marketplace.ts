@@ -11,6 +11,7 @@ export interface ItemSpecifics {
 export interface FitmentRow {
   make: string;
   model: string;
+  model_code: string;
   year_from: number | null;
   year_to: number | null;
 }
@@ -18,6 +19,7 @@ export interface FitmentRow {
 export interface FitmentRowFormState {
   make: string;
   model: string;
+  model_code: string;
   year_from: string;
   year_to: string;
 }

@@ -33,6 +33,7 @@ function formStateToPayload(form: EbayListingFormState) {
       .map((r) => ({
         make: r.make.trim(),
         model: r.model.trim(),
+        model_code: r.model_code.trim(),
         year_from: r.year_from !== "" ? Number(r.year_from) : null,
         year_to: r.year_to !== "" ? Number(r.year_to) : null,
       })),

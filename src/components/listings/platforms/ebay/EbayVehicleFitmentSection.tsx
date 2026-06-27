@@ -1,5 +1,6 @@
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
+import { MAKES, getModels, getModelCodes, getYears } from "@/lib/data/vehicle-models";
 import type { EbayListingFormState, FitmentRowFormState } from "@/types/marketplace";
 import { Plus, Trash2, Car } from "lucide-react";
 
@@ -8,7 +9,126 @@ interface Props {
   onChange: (patch: Partial<EbayListingFormState>) => void;
 }
 
-const EMPTY_ROW: FitmentRowFormState = { make: "", model: "", year_from: "", year_to: "" };
+const EMPTY_ROW: FitmentRowFormState = {
+  make: "",
+  model: "",
+  model_code: "",
+  year_from: "",
+  year_to: "",
+};
+
+function FitmentRow({
+  row,
+  index,
+  onUpdate,
+  onRemove,
+}: {
+  row: FitmentRowFormState;
+  index: number;
+  onUpdate: (patch: Partial<FitmentRowFormState>) => void;
+  onRemove: () => void;
+}) {
+  const models = row.make ? getModels(row.make) : [];
+  const modelCodes = row.make && row.model ? getModelCodes(row.make, row.model) : [];
+
+  function handleMakeChange(make: string) {
+    // Reset everything downstream when make changes
+    onUpdate({ make, model: "", model_code: "", year_from: "", year_to: "" });
+  }
+
+  function handleModelChange(model: string) {
+    // Reset model_code and years when model changes
+    onUpdate({ model, model_code: "", year_from: "", year_to: "" });
+  }
+
+  function handleModelCodeChange(model_code: string) {
+    const years = getYears(row.make, row.model, model_code);
+    if (years) {
+      onUpdate({
+        model_code,
+        year_from: String(years.year_from),
+        year_to: years.year_to != null ? String(years.year_to) : "",
+      });
+    } else {
+      onUpdate({ model_code, year_from: "", year_to: "" });
+    }
+  }
+
+  return (
+    <div className="rounded-xs border border-border bg-bg-2/30 p-3 space-y-3">
+      {/* Row index label */}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">
+          Vehicle {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="flex h-7 w-7 items-center justify-center rounded-xs border border-border text-fg/40 transition-colors hover:border-danger/50 hover:bg-danger/5 hover:text-danger"
+          title="Remove vehicle"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Make + Model */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Make</span>
+          <Combobox
+            options={MAKES}
+            value={row.make}
+            onChange={handleMakeChange}
+            placeholder="Select make…"
+            searchPlaceholder="Search makes…"
+          />
+        </div>
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Model</span>
+          <Combobox
+            options={models}
+            value={row.model}
+            onChange={handleModelChange}
+            placeholder={row.make ? "Select model…" : "Select make first"}
+            searchPlaceholder="Search models…"
+            disabled={!row.make}
+          />
+        </div>
+      </div>
+
+      {/* Model Code + Years */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Model Code</span>
+          <Combobox
+            options={modelCodes}
+            value={row.model_code}
+            onChange={handleModelCodeChange}
+            placeholder={row.model ? "Select code…" : "Select model first"}
+            searchPlaceholder="Search codes…"
+            disabled={!row.model}
+          />
+        </div>
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year From</span>
+          <div
+            className="flex h-10 w-full items-center rounded-xs border border-border bg-bg px-3 text-sm text-fg/70 shadow-sm"
+          >
+            {row.year_from || <span className="text-fg/35">—</span>}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year To</span>
+          <div
+            className="flex h-10 w-full items-center rounded-xs border border-border bg-bg px-3 text-sm text-fg/70 shadow-sm"
+          >
+            {row.year_to ? row.year_to : <span className="text-fg/35">Present</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function EbayVehicleFitmentSection({ form, onChange }: Props) {
   const rows = form.fitment;
@@ -46,89 +166,17 @@ export function EbayVehicleFitmentSection({ form, onChange }: Props) {
         </div>
       ) : (
         <>
-          {/* Column headers */}
-          <div className="hidden grid-cols-[1fr_1fr_90px_90px_36px] gap-2 sm:grid">
-            {["Make", "Model", "Year From", "Year To", ""].map((h, i) => (
-              <span key={i} className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">
-                {h}
-              </span>
-            ))}
-          </div>
-
-          {/* Rows */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             {rows.map((row, i) => (
-              <div
+              <FitmentRow
                 key={i}
-                className="grid grid-cols-1 gap-2 rounded-xs border border-border bg-bg-2/30 p-3 sm:grid-cols-[1fr_1fr_90px_90px_36px] sm:items-center sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
-              >
-                {/* Mobile label + Make */}
-                <div className="sm:contents">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40 sm:hidden">
-                    Make
-                  </span>
-                  <Input
-                    value={row.make}
-                    onChange={(e) => updateRow(i, { make: e.target.value })}
-                    placeholder="e.g. Toyota"
-                  />
-                </div>
-
-                {/* Model */}
-                <div className="sm:contents">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40 sm:hidden">
-                    Model
-                  </span>
-                  <Input
-                    value={row.model}
-                    onChange={(e) => updateRow(i, { model: e.target.value })}
-                    placeholder="e.g. Corolla"
-                  />
-                </div>
-
-                {/* Year From */}
-                <div className="sm:contents">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40 sm:hidden">
-                    Year From
-                  </span>
-                  <Input
-                    type="number"
-                    min="1900"
-                    max="2099"
-                    value={row.year_from}
-                    onChange={(e) => updateRow(i, { year_from: e.target.value })}
-                    placeholder="2018"
-                  />
-                </div>
-
-                {/* Year To */}
-                <div className="sm:contents">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40 sm:hidden">
-                    Year To
-                  </span>
-                  <Input
-                    type="number"
-                    min="1900"
-                    max="2099"
-                    value={row.year_to}
-                    onChange={(e) => updateRow(i, { year_to: e.target.value })}
-                    placeholder="2023"
-                  />
-                </div>
-
-                {/* Remove */}
-                <button
-                  type="button"
-                  onClick={() => removeRow(i)}
-                  className="flex h-8 w-8 items-center justify-center self-end rounded-xs border border-border text-fg/40 transition-colors hover:border-danger/50 hover:bg-danger/5 hover:text-danger sm:self-auto"
-                  title="Remove vehicle"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+                row={row}
+                index={i}
+                onUpdate={(patch) => updateRow(i, patch)}
+                onRemove={() => removeRow(i)}
+              />
             ))}
           </div>
-
           <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1.5 text-xs">
             <Plus className="h-3 w-3" />
             Add Vehicle
