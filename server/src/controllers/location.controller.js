@@ -1,6 +1,6 @@
 // controllers/location.controller.js
 
-const Location = require("../models/Location");
+const locationService = require("../services/location.service");
 const {
   success,
   created,
@@ -10,7 +10,7 @@ const {
 
 exports.getLocations = async (req, res) => {
   try {
-    const locations = await Location.find({}).sort({ name: 1 });
+    const locations = await locationService.listLocations();
     return success(res, locations);
   } catch (err) {
     return systemfailure(res, err);
@@ -19,7 +19,7 @@ exports.getLocations = async (req, res) => {
 
 exports.getLocation = async (req, res) => {
   try {
-    const location = await Location.findById(req.params.id);
+    const location = await locationService.getLocationById(req.params.id);
     if (!location) return notFound(res, "Location not found");
     return success(res, location);
   } catch (err) {
@@ -29,12 +29,7 @@ exports.getLocation = async (req, res) => {
 
 exports.createLocation = async (req, res) => {
   try {
-    const { name, address, is_active } = req.body;
-    const location = await Location.create({
-      name,
-      address: address || null,
-      is_active: is_active !== undefined ? is_active : true,
-    });
+    const location = await locationService.createLocation(req.body);
     return created(res, location, "Location created");
   } catch (err) {
     return systemfailure(res, err);
@@ -43,15 +38,8 @@ exports.createLocation = async (req, res) => {
 
 exports.updateLocation = async (req, res) => {
   try {
-    const location = await Location.findById(req.params.id);
+    const location = await locationService.updateLocation(req.params.id, req.body);
     if (!location) return notFound(res, "Location not found");
-
-    const { name, address, is_active } = req.body;
-    if (name !== undefined) location.name = name;
-    if (address !== undefined) location.address = address;
-    if (is_active !== undefined) location.is_active = is_active;
-
-    await location.save();
     return success(res, location, "Location updated");
   } catch (err) {
     return systemfailure(res, err);
@@ -60,9 +48,8 @@ exports.updateLocation = async (req, res) => {
 
 exports.deleteLocation = async (req, res) => {
   try {
-    const location = await Location.findById(req.params.id);
+    const location = await locationService.deleteLocation(req.params.id);
     if (!location) return notFound(res, "Location not found");
-    await location.softDelete();
     return success(res, null, "Location deleted");
   } catch (err) {
     return systemfailure(res, err);

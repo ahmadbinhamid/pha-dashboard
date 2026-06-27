@@ -1,6 +1,5 @@
 // controllers/inventory.controller.js
 
-const InventorySettings = require("../models/InventorySettings");
 const {
   listInventory,
   fanOutMarketplaceInventory,
@@ -11,8 +10,10 @@ const {
   setStock,
   getHistory,
 } = require("../services/inventory.service");
+const { getSettings, updateSettings } = require("../services/inventory-settings.service");
 const {
   success,
+  created,
   notFound,
   badRequest,
   systemfailure,
@@ -59,7 +60,7 @@ exports.adjustStock = async (req, res) => {
     const record = await findRecord(req.params.inventoryId);
     if (!record) return notFound(res, "Inventory record not found");
 
-    const { stock_after } = await adjustStock(record, {
+    await adjustStock(record, {
       adjustment: Number(adjustment),
       reason,
       type,
@@ -89,7 +90,7 @@ exports.setStock = async (req, res) => {
     const record = await findRecord(req.params.inventoryId);
     if (!record) return notFound(res, "Inventory record not found");
 
-    const { stock_after } = await setStock(record, {
+    await setStock(record, {
       stock_count,
       reason,
       userId: req.user?._id,
@@ -117,7 +118,7 @@ exports.getHistory = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
   try {
-    const settings = await InventorySettings.getOrCreate();
+    const settings = await getSettings();
     return success(res, settings);
   } catch (err) {
     return systemfailure(res, err);
@@ -126,25 +127,9 @@ exports.getSettings = async (req, res) => {
 
 exports.updateSettings = async (req, res) => {
   try {
-    const settings = await InventorySettings.getOrCreate();
-    const {
-      low_stock_threshold,
-      email_notifications,
-      notification_email,
-      notification_send_time,
-    } = req.body;
-
-    if (low_stock_threshold !== undefined)
-      settings.low_stock_threshold = low_stock_threshold;
-    if (email_notifications !== undefined)
-      settings.email_notifications = email_notifications;
-    if (notification_email !== undefined)
-      settings.notification_email = notification_email || null;
-    if (notification_send_time !== undefined)
-      settings.notification_send_time = notification_send_time;
-
-    await settings.save();
-    return success(res, settings, "Settings updated");
+    const settings = await getSettings();
+    const updated = await updateSettings(settings, req.body);
+    return success(res, updated, "Settings updated");
   } catch (err) {
     return systemfailure(res, err);
   }
