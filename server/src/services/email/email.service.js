@@ -54,4 +54,24 @@ async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   });
 }
 
-module.exports = { sendOTP, accountVerified, sendPasswordReset };
+/**
+ * Send storefront inquiry notification to sales inbox
+ */
+async function sendInquiryNotification({ customerName, customerEmail, customerPhone, subject, message }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to: config.smtp.salesEmail,
+    subject: `[Inquiry] ${subject} — ${customerName}`,
+    template: "inquiryNotification",
+    variables: {
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone || null,
+      subject,
+      message,
+      app_name: config.emailBrand.appName,
+    },
+  });
+}
+
+module.exports = { sendOTP, accountVerified, sendPasswordReset, sendInquiryNotification };

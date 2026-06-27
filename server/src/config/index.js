@@ -44,6 +44,7 @@ const config = {
     user: get("SMTP_USER"),
     pass: get("SMTP_PASS"),
     alertsTo: get("ALERTS_TO"),
+    salesEmail: get("SALES_EMAIL", "sales@partshubaustralia.com.au"),
   },
 
   emailBrand: {
