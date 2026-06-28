@@ -83,6 +83,8 @@ const config = {
     paymentPolicyId: get("EBAY_PAYMENT_POLICY_ID", null),
     returnPolicyId: get("EBAY_RETURN_POLICY_ID", null),
     fallbackImageUrl: get("EBAY_FALLBACK_IMAGE_URL", null),
+    // Must byte-for-byte match the URL registered in eBay's Marketplace Account Deletion form
+    webhookEndpointUrl: get("EBAY_WEBHOOK_ENDPOINT_URL", null),
   },
 };
 

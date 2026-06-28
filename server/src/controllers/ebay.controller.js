@@ -6,6 +6,7 @@ const webhookService = require("../services/ebay/ebay.webhook.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
 const catalogService = require("../services/ebay/ebay.catalog.service");
 const policiesService = require("../services/ebay/ebay.policies.service");
+const config = require("../config");
 const { logger } = require("../loaders/logging");
 const {
   success,
@@ -80,7 +81,15 @@ exports.handleWebhookChallenge = async (req, res) => {
     if (!settings.verification_token)
       return badRequest(res, "Webhook not configured — call POST /webhook/subscribe first");
 
-    const endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+    let endpointUrl = config.ebay.webhookEndpointUrl;
+    if (!endpointUrl) {
+      logger.warn(
+        "[ebay.controller] EBAY_WEBHOOK_ENDPOINT_URL is not set — falling back to request-derived URL. " +
+        "Set this env var to the exact URL registered in eBay's Marketplace Account Deletion form."
+      );
+      endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+    }
+
     const challengeResponse = webhookService.verifyChallenge(
       challenge_code,
       endpointUrl,
@@ -123,8 +132,15 @@ exports.subscribeWebhook = async (req, res) => {
     const { endpoint_url } = req.body || {};
 
     const verificationToken = await settingsService.ensureVerificationToken();
-    const endpointUrl =
-      endpoint_url || `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+
+    let endpointUrl = endpoint_url || config.ebay.webhookEndpointUrl;
+    if (!endpointUrl) {
+      logger.warn(
+        "[ebay.controller] EBAY_WEBHOOK_ENDPOINT_URL is not set — falling back to request-derived URL. " +
+        "Set this env var to the exact URL registered in eBay's Marketplace Account Deletion form."
+      );
+      endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
+    }
 
     const subscriptions = await webhookService.subscribeToTopics(endpointUrl, verificationToken);
 

@@ -22,6 +22,9 @@ const requestId = require("./middlewares/requestId");
 
 const app = express();
 
+// Trust the X-Forwarded-Proto header set by nginx so req.protocol resolves to "https"
+app.set("trust proxy", true);
+
 // Core middlewares
 app.use(requestId);
 app.use(helmet());
