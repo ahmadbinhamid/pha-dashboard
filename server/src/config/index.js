@@ -85,6 +85,13 @@ const config = {
     fallbackImageUrl: get("EBAY_FALLBACK_IMAGE_URL", null),
     // Must byte-for-byte match the URL registered in eBay's Marketplace Account Deletion form
     webhookEndpointUrl: get("EBAY_WEBHOOK_ENDPOINT_URL", null),
+    // Warehouse address — used to auto-create the merchant location if it doesn't exist on eBay
+    warehouseStreet: get("EBAY_WAREHOUSE_STREET", null),
+    warehouseCity: get("EBAY_WAREHOUSE_CITY", null),
+    warehouseState: get("EBAY_WAREHOUSE_STATE", null),
+    warehousePostcode: get("EBAY_WAREHOUSE_POSTCODE", null),
+    warehouseCountry: get("EBAY_WAREHOUSE_COUNTRY", "AU"),
+    warehousePhone: get("EBAY_WAREHOUSE_PHONE", null),
   },
 };
 

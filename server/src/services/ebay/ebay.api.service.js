@@ -542,6 +542,75 @@ async function deleteProduct(sku, offerId = null) {
   }
 }
 
+// ── Merchant Location ─────────────────────────────────────────────────────────
+
+async function ensureLocation(token) {
+  const key = config.ebay.merchantLocationKey;
+  if (!key) throw new Error("EBAY_MERCHANT_LOCATION_KEY is not set — set it to the location key registered in eBay Seller Hub");
+
+  const checkRes = await fetch(
+    `${INVENTORY_BASE}/location/${encodeURIComponent(key)}`,
+    { headers: ebayHeaders(token) },
+  );
+
+  if (checkRes.ok) {
+    logger.debug(`[eBay] merchant location "${key}" already exists`);
+    return;
+  }
+
+  if (checkRes.status !== 404) {
+    const text = await checkRes.text();
+    throw new Error(`GET location/${key} failed: ${checkRes.status} ${text}`);
+  }
+
+  // Location doesn't exist — build from env vars
+  const { warehouseStreet, warehouseCity, warehouseState, warehousePostcode, warehouseCountry, warehousePhone } = config.ebay;
+  const missing = [];
+  if (!warehouseStreet) missing.push("EBAY_WAREHOUSE_STREET");
+  if (!warehouseCity) missing.push("EBAY_WAREHOUSE_CITY");
+  if (!warehouseState) missing.push("EBAY_WAREHOUSE_STATE");
+  if (!warehousePostcode) missing.push("EBAY_WAREHOUSE_POSTCODE");
+
+  if (missing.length) {
+    throw new Error(
+      `Merchant location "${key}" does not exist on eBay and cannot be auto-created. ` +
+      `Set these env vars with your warehouse address: ${missing.join(", ")}`,
+    );
+  }
+
+  const body = {
+    location: {
+      address: {
+        addressLine1: warehouseStreet,
+        city: warehouseCity,
+        stateOrProvince: warehouseState,
+        postalCode: warehousePostcode,
+        country: warehouseCountry,
+      },
+    },
+    locationTypes: ["WAREHOUSE"],
+    name: key,
+    merchantLocationStatus: "ENABLED",
+    ...(warehousePhone ? { phone: warehousePhone } : {}),
+  };
+
+  const createRes = await fetch(
+    `${INVENTORY_BASE}/location/${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: ebayHeaders(token),
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(`Create merchant location "${key}" failed: ${createRes.status} ${text}`);
+  }
+
+  logger.info(`[eBay] merchant location created: "${key}" (${warehouseCity}, ${warehouseState})`);
+}
+
 // ── Fulfillment / Orders ──────────────────────────────────────────────────────
 
 async function getOrders({ limit = 50, offset = 0 } = {}) {
@@ -639,5 +708,6 @@ module.exports = {
   publishOffer,
   updateInventoryQuantity,
   deleteProduct,
+  ensureLocation,
   getItemAspectsForCategory,
 };

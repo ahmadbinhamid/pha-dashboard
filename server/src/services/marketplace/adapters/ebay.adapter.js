@@ -23,6 +23,7 @@ const {
   publishOffer,
   updateInventoryQuantity,
   deleteProduct,
+  ensureLocation,
 } = require("../../ebay/ebay.api.service");
 const { getTotalStockForProductVariant } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
@@ -66,7 +67,10 @@ async function publish(resolved, settings) {
     throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
   }
 
-  // Step 2 — create offer (recover from 25002 if it already exists)
+  // Step 2 — ensure merchant location exists (creates it from env vars if missing)
+  await ensureLocation(token);
+
+  // Step 4 — create offer (recover from 25002 if it already exists)
   logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
@@ -91,7 +95,7 @@ async function publish(resolved, settings) {
     }
   }
 
-  // Step 3 — publish
+  // Step 5 — publish
   const listingId = await publishOffer(token, offerId);
   logger.info(`[EbayAdapter] offer published, listingId: ${listingId}`);
 
