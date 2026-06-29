@@ -2,7 +2,7 @@
 // eBay Taxonomy (category suggestions) and Sell Metadata (condition policies)
 
 const config = require("../../config");
-const { getAccessToken, ebayHeaders } = require("./ebay.api.service");
+const { getAccessToken, getCatalogToken, ebayHeaders } = require("./ebay.api.service");
 const { logger } = require("../../loaders/logging");
 
 const BASE_URL = config.ebay.apiBaseUrl;
@@ -48,8 +48,8 @@ async function getCategorySuggestions(q) {
     return { sandbox: true, suggestions: [] };
   }
 
-  const token = await getAccessToken();
-  if (!token) throw new Error("Could not obtain eBay access token");
+  const token = await getCatalogToken();
+  if (!token) throw new Error("Could not obtain eBay catalog token");
 
   const treeId = await getCategoryTreeId(token);
   const url = `${TAXONOMY_BASE}/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(q)}`;

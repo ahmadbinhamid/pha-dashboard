@@ -697,6 +697,7 @@ module.exports = {
   credentialsConfigured,
   getAccessToken,
   getAppToken,
+  getCatalogToken,
   getOrders,
   loadSettings,
   ebayHeaders,
