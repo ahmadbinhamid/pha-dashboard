@@ -194,7 +194,7 @@ export function Gallery({
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,video/*,.pdf,.doc,.docx,.zip"
+            accept="image/*"
             className="hidden"
             onChange={handleFileChange}
           />

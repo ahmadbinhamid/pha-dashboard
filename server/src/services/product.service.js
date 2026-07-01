@@ -8,6 +8,19 @@ const MarketplaceListing = require("../models/MarketplaceListing");
 const { ensureUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 
+// ── SKU generation ────────────────────────────────────────────────────────────
+
+async function generateNextSku() {
+  // SKUs are zero-padded to 6 digits, so lexicographic desc = numeric desc
+  const last = await Product.findOne(
+    { sku: /^PHA-\d{6}$/ },
+    { sku: 1 },
+  ).sort({ sku: -1 });
+
+  const num = last?.sku ? parseInt(last.sku.slice(4), 10) : 0;
+  return `PHA-${String(num + 1).padStart(6, "0")}`;
+}
+
 // ── Variant generation ────────────────────────────────────────────────────────
 
 function cartesian(arrays) {
@@ -155,6 +168,7 @@ async function hasMarketplaceListings(productId) {
 
 module.exports = {
   cartesian,
+  generateNextSku,
   ensureUniqueProductSlug,
   generateVariantsForProduct,
   ensureInventoryForProduct,

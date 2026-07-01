@@ -23,7 +23,6 @@ import { useToast } from "@/context";
 import {
   getProduct,
   updateProduct,
-  duplicateProduct,
 } from "@/lib/api/products";
 import type {
   Product,
@@ -31,8 +30,6 @@ import type {
   ProductStatus,
 } from "@/types/product";
 import {
-  Copy,
-  RefreshCw,
   Save,
   Package2,
   Image,
@@ -96,10 +93,6 @@ function formToFD(form: ProductEditFormState): FormData {
   );
   fd.append("choices", JSON.stringify(form.choices));
   return fd;
-}
-
-function generateSku() {
-  return "PHA-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -183,18 +176,6 @@ export default function ProductEditPage() {
     },
   });
 
-  const dupMutation = useMutation({
-    mutationFn: () => duplicateProduct(product!._id),
-    onSuccess: (res) => {
-      toast({ title: "Duplicated", tone: "success" });
-      const newSlug = res.data?.slug;
-      if (newSlug) navigate(`/products/${newSlug}/edit`);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Duplication failed", description: err.message, tone: "danger" });
-    },
-  });
-
   const set = <K extends keyof ProductEditFormState>(
     key: K,
     value: ProductEditFormState[K],
@@ -205,7 +186,7 @@ export default function ProductEditPage() {
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
-    if (!form?.title.trim()) e.title = "Name is required";
+    if (!form?.title.trim()) e.title = "Title is required";
     if (!form?.price || Number(form.price) <= 0) e.price = "Price is required";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -278,17 +259,6 @@ export default function ProductEditPage() {
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              className="gap-1.5"
-              disabled={dupMutation.isPending}
-              onClick={() => dupMutation.mutate()}
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Duplicate
-            </Button>
-            <Button
-              type="button"
               variant="primary"
               size="sm"
               className="gap-1.5"
@@ -313,41 +283,25 @@ export default function ProductEditPage() {
           <Card>
             <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
             <CardContent className="space-y-4">
-              <FormField label="Name" required error={errors.title}>
+              <FormField label="Title" required error={errors.title}>
                 <Input
                   value={form.title}
                   onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                  placeholder="Product name"
+                  placeholder="Product title"
                 />
               </FormField>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* SKU */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-fg/65">SKU</label>
-                  <div className="flex gap-1.5">
-                    <div className="flex flex-1">
-                      <span className="flex items-center rounded-l-xs border border-r-0 border-border bg-bg-2 px-3 text-sm font-medium text-fg/55 select-none">
-                        PHA-
-                      </span>
-                      <Input
-                        value={form.sku.startsWith("PHA-") ? form.sku.slice(4) : form.sku}
-                        onChange={(e) => set("sku", "PHA-" + e.target.value)}
-                        placeholder="001"
-                        maxLength={60}
-                        className="rounded-l-none"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      title="Generate SKU"
-                      onClick={() => set("sku", generateSku())}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs border border-border bg-bg text-fg/45 shadow-sm transition hover:text-fg"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
+                {/* SKU — auto-generated, read-only */}
+                <FormField label="SKU">
+                  <Input
+                    value={form.sku}
+                    readOnly
+                    disabled
+                    placeholder="Not assigned"
+                    className="cursor-not-allowed opacity-60 font-mono"
+                  />
+                </FormField>
 
                 {/* Barcode */}
                 <div className="flex flex-col gap-1.5">
@@ -364,25 +318,6 @@ export default function ProductEditPage() {
                 </div>
               </div>
 
-            </CardContent>
-          </Card>
-
-          {/* Media */}
-          <Card>
-            <CardHeader
-              title={<SectionLabel icon={Image}>Media</SectionLabel>}
-              description="First image is used as the product cover"
-            />
-            <CardContent>
-              <ProductImages
-                images={form.images}
-                onChange={(imgs) => set("images", imgs)}
-              />
-              {form.images.length === 0 && (
-                <p className="mt-3 text-xs text-fg/40">
-                  Tip: high-quality images from multiple angles increase conversion.
-                </p>
-              )}
             </CardContent>
           </Card>
 
@@ -440,6 +375,25 @@ export default function ProductEditPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Media */}
+          <Card>
+            <CardHeader
+              title={<SectionLabel icon={Image}>Media</SectionLabel>}
+              description="First image is used as the product cover"
+            />
+            <CardContent>
+              <ProductImages
+                images={form.images}
+                onChange={(imgs) => set("images", imgs)}
+              />
+              {form.images.length === 0 && (
+                <p className="mt-3 text-xs text-fg/40">
+                  Tip: high-quality images from multiple angles increase conversion.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Choices — hidden for now
           <Card>

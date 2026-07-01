@@ -1,6 +1,7 @@
 // controllers/product.controller.js
 
 const {
+  generateNextSku,
   generateVariantsForProduct,
   ensureInventoryForProduct,
   ensureUniqueProductSlug,
@@ -99,6 +100,7 @@ exports.createProduct = async (req, res) => {
       has_variants,
       brand,
       digital_file,
+      stock_entries,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -107,6 +109,7 @@ exports.createProduct = async (req, res) => {
       parseFormDataArrays(body);
 
     const slug = await ensureUniqueProductSlug(generateSlug(title));
+    const autoSku = await generateNextSku();
 
     const product = await createProductRecord({
       title,
@@ -121,7 +124,7 @@ exports.createProduct = async (req, res) => {
       is_taxable: toBool(is_taxable),
       is_vat_inclusive: toBool(is_vat_inclusive),
       vat_rate: vat_rate ? Number(vat_rate) : null,
-      sku: sku || null,
+      sku: autoSku,
       barcode: barcode || null,
       stock_control: toBool(stock_control),
       has_variants: toBool(has_variants),
@@ -134,6 +137,10 @@ exports.createProduct = async (req, res) => {
       digital_file: digital_file || null,
     });
 
+    const parsedStockEntries = stock_entries
+      ? JSON.parse(stock_entries)
+      : [];
+
     if (product.has_variants && product.choices.length > 0) {
       const variants = await generateVariantsForProduct(product);
       if (product.stock_control) {
@@ -142,6 +149,17 @@ exports.createProduct = async (req, res) => {
       }
     } else if (product.stock_control) {
       await ensureInventoryForProduct(product._id, null);
+      if (parsedStockEntries.length > 0) {
+        const Inventory = require("../models/Inventory");
+        for (const entry of parsedStockEntries) {
+          if (entry.qty > 0) {
+            await Inventory.updateOne(
+              { product: product._id, variant: null, location: entry.location_id },
+              { $set: { stock_count: entry.qty } },
+            );
+          }
+        }
+      }
     }
 
     return created(res, await getPopulatedProduct(product._id), "Product created");

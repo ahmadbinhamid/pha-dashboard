@@ -15,14 +15,12 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
+import { CreateStockSection } from "@/components/products/create-stock-section";
 import { useToast } from "@/context";
 import { createProduct } from "@/lib/api/products";
-import type {
-  ProductCreateFormState,
-  ProductStatus,
-} from "@/types/product";
+import type { ProductCreateFormState, ProductStatus } from "@/types/product";
 import { SectionLabel } from "@/components/products/section-label";
-import { Package2, Image, DollarSign, Plus } from "lucide-react";
+import { Package2, Image, DollarSign, Boxes, Layers, Plus } from "lucide-react";
 
 const INITIAL: ProductCreateFormState = {
   title: "",
@@ -32,7 +30,9 @@ const INITIAL: ProductCreateFormState = {
   cost_price: "",
   is_taxable: false,
   vat_rate: "",
-  sku: "PHA-",
+  barcode: "",
+  stock_control: false,
+  stock_entries: [],
   type: "physical",
   status: "active",
   is_published_online: false,
@@ -50,7 +50,11 @@ function formToFD(form: ProductCreateFormState): FormData {
   if (form.cost_price) fd.append("cost_price", form.cost_price);
   fd.append("is_taxable", String(form.is_taxable));
   if (form.vat_rate) fd.append("vat_rate", form.vat_rate);
-  if (form.sku) fd.append("sku", form.sku.trim());
+  fd.append("barcode", form.barcode);
+  fd.append("stock_control", String(form.stock_control));
+  if (form.stock_control && form.stock_entries.length > 0) {
+    fd.append("stock_entries", JSON.stringify(form.stock_entries));
+  }
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
@@ -97,7 +101,7 @@ export default function ProductCreatePage() {
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
-    if (!form.title.trim()) e.title = "Name is required";
+    if (!form.title.trim()) e.title = "Title is required";
     if (!form.price || Number(form.price) <= 0) e.price = "Price is required";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -123,7 +127,7 @@ export default function ProductCreatePage() {
           <div>
             <h1 className="text-xl font-semibold tracking-tight">New Product</h1>
             <p className="mt-0.5 text-sm text-fg/50">
-              Inventory, variants and stock can be set after creating
+              SKU is auto-generated on save. Variants can be added after creating.
             </p>
           </div>
           <Button
@@ -152,47 +156,28 @@ export default function ProductCreatePage() {
           <Card>
             <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
             <CardContent className="space-y-4">
-              <FormField label="Name" required error={errors.title}>
+              <FormField label="Title" required error={errors.title}>
                 <Input
                   value={form.title}
                   onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                  placeholder="Product name"
+                  placeholder="Product title"
                   autoFocus
                 />
               </FormField>
-              <FormField label="SKU">
-                <div className="flex">
-                  <span className="flex items-center rounded-l-xs border border-r-0 border-border bg-bg-2 px-3 text-sm font-medium text-fg/55 select-none">
-                    PHA-
-                  </span>
-                  <Input
-                    value={form.sku.startsWith("PHA-") ? form.sku.slice(4) : form.sku}
-                    onChange={(e) => set("sku", "PHA-" + e.target.value)}
-                    placeholder="001"
-                    maxLength={60}
-                    className="rounded-l-none"
-                  />
-                </div>
-              </FormField>
-            </CardContent>
-          </Card>
 
-          {/* Media */}
-          <Card>
-            <CardHeader
-              title={<SectionLabel icon={Image}>Media</SectionLabel>}
-              description="First image is used as the product cover"
-            />
-            <CardContent>
-              <ProductImages
-                images={form.images}
-                onChange={(imgs) => set("images", imgs)}
-              />
-              {form.images.length === 0 && (
-                <p className="mt-3 text-xs text-fg/40">
-                  Tip: You can add images after creating the product too.
-                </p>
-              )}
+              {/* Barcode */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-fg/65">Barcode</label>
+                  <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
+                </div>
+                <Input
+                  value={form.barcode}
+                  onChange={(e) => set("barcode", e.target.value)}
+                  placeholder="EAN / UPC"
+                  maxLength={13}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -222,6 +207,57 @@ export default function ProductCreatePage() {
                   />
                 </FormField>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Inventory */}
+          <Card>
+            <CardHeader title={<SectionLabel icon={Boxes}>Inventory</SectionLabel>} />
+            <CardContent className="space-y-4">
+              <Switch
+                checked={form.stock_control}
+                onCheckedChange={(v) => {
+                  set("stock_control", v);
+                  if (!v) set("stock_entries", []);
+                }}
+                label="Track stock"
+                description="Manage inventory levels and get low-stock alerts"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Set Stock — shown only when stock tracking is on */}
+          {form.stock_control && (
+            <Card>
+              <CardHeader
+                title={<SectionLabel icon={Layers}>Set Stock</SectionLabel>}
+                description="Set initial stock levels per location"
+              />
+              <CardContent>
+                <CreateStockSection
+                  entries={form.stock_entries}
+                  onChange={(entries) => set("stock_entries", entries)}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Media */}
+          <Card>
+            <CardHeader
+              title={<SectionLabel icon={Image}>Media</SectionLabel>}
+              description="First image is used as the product cover"
+            />
+            <CardContent>
+              <ProductImages
+                images={form.images}
+                onChange={(imgs) => set("images", imgs)}
+              />
+              {form.images.length === 0 && (
+                <p className="mt-3 text-xs text-fg/40">
+                  Tip: You can add images after creating the product too.
+                </p>
+              )}
             </CardContent>
           </Card>
 

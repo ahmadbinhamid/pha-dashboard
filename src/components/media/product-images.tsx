@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/utils/cn";
-import { Button } from "@/components/ui/button";
-import { Gallery } from "@/components/media/gallery";
 import { useToast } from "@/context";
+import { uploadAttachments } from "@/lib/api/products";
 import type { Attachment } from "@/types/product";
-import { Star, Trash2, GripVertical, Plus } from "lucide-react";
+import { Star, Trash2, GripVertical, Plus, Loader2 } from "lucide-react";
 
 interface ProductImagesProps {
   images: Attachment[];
@@ -13,22 +13,34 @@ interface ProductImagesProps {
 
 export function ProductImages({ images, onChange }: ProductImagesProps) {
   const { toast } = useToast();
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  const handleSelect = (selected: Attachment[]) => {
-    const existingIds = new Set(images.map((img) => img._id || img.id));
-    const newImages = selected.filter(
-      (a) => !existingIds.has(a._id) && !existingIds.has(a.id),
-    );
-    onChange([...images, ...newImages]);
-    toast({ title: "Images added", tone: "default" });
+  const queryClient = useQueryClient();
+  const uploadMutation = useMutation({
+    mutationFn: (files: File[]) => uploadAttachments(files),
+    onSuccess: (res) => {
+      const uploaded: Attachment[] = res.data ?? [];
+      onChange([...images, ...uploaded]);
+      queryClient.invalidateQueries({ queryKey: ["attachments"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Upload failed", description: err.message, tone: "danger" });
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    uploadMutation.mutate(files);
+    e.target.value = "";
   };
 
+  const openPicker = () => fileInputRef.current?.click();
+
   const handleRemove = (idx: number) => {
-    const updated = images.filter((_, i) => i !== idx);
-    onChange(updated);
+    onChange(images.filter((_, i) => i !== idx));
   };
 
   const handleSetCover = (idx: number) => {
@@ -40,9 +52,7 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
     toast({ title: "Cover image updated", tone: "default" });
   };
 
-  const handleDragStart = (idx: number) => {
-    setDraggingIdx(idx);
-  };
+  const handleDragStart = (idx: number) => setDraggingIdx(idx);
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
@@ -71,6 +81,15 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
 
   return (
     <div className="space-y-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {images.length > 0 ? (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {images.map((img, idx) => (
@@ -85,31 +104,15 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
                 "group relative aspect-square overflow-hidden rounded-lg border-2 transition",
                 idx === 0 ? "border-accent" : "border-border",
                 draggingIdx === idx && "opacity-40",
-                dragOverIdx === idx &&
-                  draggingIdx !== idx &&
-                  "ring-2 ring-accent ring-offset-1",
+                dragOverIdx === idx && draggingIdx !== idx && "ring-2 ring-accent ring-offset-1",
               )}
             >
-              {img.type === "image" ? (
-                <img
-                  src={img.url}
-                  alt={img.original_name || img.file_name}
-                  className="h-full w-full object-cover"
-                  draggable={false}
-                />
-              ) : img.type === "video" || /\.(mp4|mov|webm|avi|mkv)$/i.test(img.file_name ?? "") ? (
-                <video
-                  src={img.url}
-                  className="h-full w-full object-cover"
-                  muted
-                  playsInline
-                  draggable={false}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-bg-2 text-xs text-fg/50">
-                  {img.original_name || img.file_name}
-                </div>
-              )}
+              <img
+                src={img.url}
+                alt={img.original_name || img.file_name}
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
 
               {idx === 0 && (
                 <div className="absolute left-1 top-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-accent-fg shadow">
@@ -148,51 +151,44 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
 
           <button
             type="button"
-            onClick={() => setGalleryOpen(true)}
-            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-fg/40 transition hover:border-fg/20 hover:text-fg/60"
+            onClick={openPicker}
+            disabled={uploadMutation.isPending}
+            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-fg/40 transition hover:border-fg/20 hover:text-fg/60 disabled:opacity-50"
           >
-            <Plus className="h-5 w-5" />
-            <span className="text-[10px]">Add</span>
+            {uploadMutation.isPending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <Plus className="h-5 w-5" />
+                <span className="text-[10px]">Add</span>
+              </>
+            )}
           </button>
         </div>
       ) : (
         <button
           type="button"
-          onClick={() => setGalleryOpen(true)}
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border py-10 text-center transition hover:border-fg/20"
+          onClick={openPicker}
+          disabled={uploadMutation.isPending}
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border py-10 text-center transition hover:border-fg/20 disabled:opacity-50"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-2">
-            <Plus className="h-6 w-6 text-fg/40" />
+            {uploadMutation.isPending ? (
+              <Loader2 className="h-6 w-6 animate-spin text-fg/40" />
+            ) : (
+              <Plus className="h-6 w-6 text-fg/40" />
+            )}
           </div>
           <div>
-            <div className="text-sm font-medium text-fg/70">Add images</div>
+            <div className="text-sm font-medium text-fg/70">
+              {uploadMutation.isPending ? "Uploading…" : "Add images"}
+            </div>
             <div className="mt-0.5 text-xs text-fg/45">
-              Click to open media library
+              Click to upload from your device
             </div>
           </div>
         </button>
       )}
-
-      {images.length > 0 && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => setGalleryOpen(true)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add from library
-        </Button>
-      )}
-
-      <Gallery
-        open={galleryOpen}
-        onClose={() => setGalleryOpen(false)}
-        onSelect={handleSelect}
-        isMultiple
-        selectedIds={images.map((img) => img._id || img.id)}
-      />
     </div>
   );
 }

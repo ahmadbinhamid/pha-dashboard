@@ -90,6 +90,12 @@ export interface Product {
   updated_at: string;
 }
 
+export interface StockEntry {
+  location_id: string;
+  location_name: string;
+  qty: number;
+}
+
 export interface ProductCreateFormState {
   title: string;
   description: string;
@@ -98,7 +104,9 @@ export interface ProductCreateFormState {
   cost_price: string;
   is_taxable: boolean;
   vat_rate: string;
-  sku: string;
+  barcode: string;
+  stock_control: boolean;
+  stock_entries: StockEntry[];
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;
