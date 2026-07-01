@@ -24,6 +24,8 @@ export function EbayDescriptionSection({ form }: Props) {
     JSON.stringify(form.item_specifics.superseded_part_number),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     JSON.stringify(form.item_specifics.aspects),
+    form.item_specifics.authenticity,
+    form.item_specifics.warranty,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     form.photo_overrides?.[0]?.url,
   ]);

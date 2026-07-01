@@ -26,8 +26,8 @@ export function generateListingHtml(form: EbayListingFormState): string {
   const spnArr = (form.item_specifics.superseded_part_number || []).filter((s) => s.trim());
   const superseded = esc(spnArr.length > 0 ? spnArr.join(", ") : "—");
 
-  const authenticity = esc(form.item_specifics.aspects?.["Authenticity"]?.trim() || "—");
-  const warranty = esc(form.item_specifics.aspects?.["Warranty"]?.trim() || "12 Months · Australian Cover");
+  const authenticity = esc(form.item_specifics.authenticity?.trim() || "—");
+  const warranty = esc(form.item_specifics.warranty?.trim() || "—");
   const condition = esc(CONDITION_LABEL[form.condition] ?? form.condition);
   const notes = esc(form.condition_notes.trim() || "—");
 

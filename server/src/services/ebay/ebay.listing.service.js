@@ -154,6 +154,8 @@ async function updateListing(id, payload) {
     update["item_specifics.superseded_part_number"] = Array.isArray(specs.superseded_part_number)
       ? specs.superseded_part_number
       : [];
+    update["item_specifics.authenticity"] = specs.authenticity || null;
+    update["item_specifics.warranty"] = specs.warranty || null;
     delete update.item_specifics;
   }
 

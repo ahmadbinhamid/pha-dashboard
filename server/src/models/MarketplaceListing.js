@@ -90,6 +90,8 @@ const ebaySchema = new Schema({
     mpn: { type: String, default: null },
     superseded_part_number: [{ type: String }],
     aspects: { type: Map, of: String, default: {} },
+    authenticity: { type: String, default: null },
+    warranty: { type: String, default: null },
   },
 
   fitment: [

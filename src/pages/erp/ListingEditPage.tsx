@@ -59,6 +59,8 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
         (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
       ),
       aspects: ((listing.item_specifics as unknown as Record<string, unknown>)?.aspects as Record<string, string>) ?? {},
+      authenticity: listing.item_specifics?.authenticity || "",
+      warranty: listing.item_specifics?.warranty || "",
     },
     fitment: fitmentRows.map((r) => ({
       make: String(r.make ?? ""),

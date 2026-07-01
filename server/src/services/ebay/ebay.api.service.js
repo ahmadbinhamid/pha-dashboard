@@ -311,6 +311,10 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
     .map((s) => (s == null ? "" : String(s).trim()))
     .filter((s) => s !== "" && s !== "null");
   if (spnArr.length > 0) aspects["Superseded Part Number"] = spnArr;
+  // Dedicated authenticity / warranty fields (override dynamic aspects of same name)
+  if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
+  if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
+
   // Dynamic aspects from Taxonomy API (stored as Map on listing document)
   const dynamicAspects = specs.aspects instanceof Map
     ? Object.fromEntries(specs.aspects)

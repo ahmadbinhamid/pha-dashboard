@@ -27,6 +27,8 @@ function formStateToPayload(form: EbayListingFormState) {
       brand: form.item_specifics.brand || null,
       mpn: form.item_specifics.mpn || null,
       superseded_part_number: form.item_specifics.superseded_part_number.filter((s) => s.trim() !== ""),
+      authenticity: form.item_specifics.authenticity || null,
+      warranty: form.item_specifics.warranty || null,
     },
     fitment: form.fitment
       .filter((r) => r.make.trim() || r.model.trim())

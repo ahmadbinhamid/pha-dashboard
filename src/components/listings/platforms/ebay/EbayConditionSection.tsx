@@ -1,10 +1,23 @@
 import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/select";
 import type { EbayListingFormState } from "@/types/marketplace";
 
 const CONDITIONS = [
   { value: "NEW", label: "New" },
   { value: "USED", label: "Used" },
+];
+
+const AUTHENTICITY_OPTIONS = [
+  { value: "Genuine", label: "Genuine" },
+  { value: "Aftermarket", label: "Aftermarket" },
+];
+
+const WARRANTY_OPTIONS = [
+  { value: "1 Month", label: "1 Month" },
+  { value: "3 Months", label: "3 Months" },
+  { value: "6 Months", label: "6 Months" },
+  { value: "12 Months", label: "12 Months" },
 ];
 
 interface Props {
@@ -13,6 +26,10 @@ interface Props {
 }
 
 export function EbayConditionSection({ form, onChange }: Props) {
+  function patchSpecs(patch: Partial<EbayListingFormState["item_specifics"]>) {
+    onChange({ item_specifics: { ...form.item_specifics, ...patch } });
+  }
+
   return (
     <div className="space-y-4">
       <FormField label="Item Condition" required>
@@ -35,6 +52,32 @@ export function EbayConditionSection({ form, onChange }: Props) {
           ))}
         </div>
       </FormField>
+
+      <div className="grid grid-cols-2 gap-4">
+        <FormField label="Authenticity">
+          <NativeSelect
+            value={form.item_specifics.authenticity}
+            onChange={(e) => patchSpecs({ authenticity: e.target.value })}
+          >
+            <option value="">Select authenticity…</option>
+            {AUTHENTICITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="Warranty">
+          <NativeSelect
+            value={form.item_specifics.warranty}
+            onChange={(e) => patchSpecs({ warranty: e.target.value })}
+          >
+            <option value="">Select warranty…</option>
+            {WARRANTY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </div>
 
       <FormField label="Condition Notes / Description to Buyer">
         <Textarea
