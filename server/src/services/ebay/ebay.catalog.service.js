@@ -8,6 +8,7 @@ const { logger } = require("../../loaders/logging");
 const BASE_URL = config.ebay.apiBaseUrl;
 const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
 const METADATA_BASE = `${BASE_URL}/sell/metadata/v1`;
+const ACCOUNT_BASE = `${BASE_URL}/sell/account/v1`;
 
 // ── In-memory caches ──────────────────────────────────────────────────────────
 
@@ -15,6 +16,10 @@ let _treeId = null;
 
 const _conditionCache = new Map();
 const CONDITION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+let _storeCategoriesCache = null;
+let _storeCacheExpiry = 0;
+const STORE_CATEGORIES_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // ── Category tree ID (cached indefinitely — eBay tree IDs are very stable) ────
 
@@ -149,4 +154,46 @@ async function getConditionPolicies(categoryId) {
   return result;
 }
 
-module.exports = { getCategorySuggestions, getConditionPolicies };
+// ── Seller store categories ───────────────────────────────────────────────────
+// Calls GET /sell/account/v1/store_category_tree with the seller's OAuth token.
+// Returns a flat list so the frontend can render a simple <select>.
+// level=0 means top-level, level=1 means one level deep, etc.
+
+function flattenStoreTree(node, level, result) {
+  if (!node) return result;
+  if (level > 0) {
+    result.push({ categoryId: String(node.categoryId), name: node.name, level: level - 1 });
+  }
+  for (const child of node.subCategories || []) {
+    flattenStoreTree(child, level + 1, result);
+  }
+  return result;
+}
+
+async function getStoreCategories() {
+  if (_storeCategoriesCache && Date.now() < _storeCacheExpiry) {
+    return _storeCategoriesCache;
+  }
+
+  const token = await getAccessToken();
+  if (!token) throw new Error("Could not obtain eBay access token");
+
+  const res = await fetch(`${ACCOUNT_BASE}/store_category_tree`, {
+    headers: ebayHeaders(token),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`getStoreCategoryTree failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  const categories = flattenStoreTree(data.rootCategory, 0, []);
+
+  _storeCategoriesCache = categories;
+  _storeCacheExpiry = Date.now() + STORE_CATEGORIES_TTL_MS;
+  logger.info(`[eBay catalog] cached ${categories.length} seller store categories`);
+  return categories;
+}
+
+module.exports = { getCategorySuggestions, getConditionPolicies, getStoreCategories };

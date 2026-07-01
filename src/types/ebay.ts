@@ -58,6 +58,16 @@ export type CategoryAspectsResponse = {
   aspects: CategoryAspect[];
 };
 
+export type StoreCategory = {
+  categoryId: string;
+  name: string;
+  level: number;
+};
+
+export type StoreCategoriesResponse = {
+  categories: StoreCategory[];
+};
+
 export type EbayUploaderFormPayload = {
   title: string;
   sku: string;
