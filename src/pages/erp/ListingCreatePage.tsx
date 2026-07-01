@@ -39,6 +39,10 @@ export default function ListingCreatePage() {
       store_sku: p.sku || "",
       price_override: p.price != null ? String(p.price) : "",
       photo_overrides: p.attachments ?? [],
+      vehicle_make: p.vehicle_make || "",
+      vehicle_model: p.vehicle_model || "",
+      vehicle_model_code: p.vehicle_model_code || "",
+      vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
     }));
   }, [productData]);
 

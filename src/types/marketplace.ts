@@ -81,6 +81,11 @@ export interface EbayListingFormState {
   description_override: string;
   price_override: string;
   photo_overrides: import("@/types/product").Attachment[];
+  // Vehicle info (pre-populated from product for description generation)
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_model_code: string;
+  vehicle_year: string;
   // eBay-specific
   ebay_category_id: string;
   store_category_id: string;
@@ -119,6 +124,10 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   description_override: "",
   price_override: "",
   photo_overrides: [],
+  vehicle_make: "",
+  vehicle_model: "",
+  vehicle_model_code: "",
+  vehicle_year: "",
   ebay_category_id: "",
   store_category_id: "",
   store_sku: "",

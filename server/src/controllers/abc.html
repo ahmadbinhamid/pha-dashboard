@@ -1,78 +1,21 @@
-import type { EbayListingFormState } from "@/types/marketplace";
-
-const CONDITION_LABEL: Record<string, string> = {
-  NEW: "Brand New · Sealed",
-  USED: "Used",
-};
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-const LOGO_SVG_INLINE = `<img src="/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">`;
-
-export function generateListingHtml(form: EbayListingFormState): string {
-  const title = esc(form.title_override.trim() || "Parts Hub Australia Product");
-  const make = esc(form.vehicle_make?.trim() || "—");
-  const model = esc(form.vehicle_model?.trim() || "—");
-  const series = esc(form.vehicle_model_code?.trim() || "—");
-  const year = esc(form.vehicle_year?.trim() || "—");
-  const partNumber = esc(form.store_sku.trim() || form.item_specifics.mpn.trim() || "—");
-
-  const spnArr = (form.item_specifics.superseded_part_number || []).filter((s) => s.trim());
-  const superseded = esc(spnArr.length > 0 ? spnArr.join(", ") : "—");
-
-  const authenticity = esc(form.item_specifics.aspects?.["Authenticity"]?.trim() || "—");
-  const warranty = esc(form.item_specifics.aspects?.["Warranty"]?.trim() || "12 Months · Australian Cover");
-  const condition = esc(CONDITION_LABEL[form.condition] ?? form.condition);
-  const notes = esc(form.condition_notes.trim() || "—");
-
-  const firstImage = form.photo_overrides?.[0]?.url || "";
-
-  const validFitment = form.fitment.filter((r) => r.make.trim() || r.model.trim());
-
-  const fitmentRows = validFitment.length > 0
-    ? validFitment.map((r, i) => {
-        const rowBg = i % 2 === 1 ? "background:#0e0e0e;" : "";
-        const mk = esc(r.make.trim());
-        const md = esc(r.model.trim());
-        const cd = esc(r.model_code?.trim() || "—");
-        const from = r.year_from.trim();
-        const to = r.year_to.trim();
-        const yearRange = from && to ? `${from} – ${to}` : from ? `${from}+` : to ? `up to ${to}` : "—";
-        return `<tr style="${rowBg}">
-        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#f0e8d8;border-bottom:1px solid #2a2520;">${mk}</td>
-        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#d1c5b4;border-bottom:1px solid #2a2520;">${md}</td>
-        <td style="padding:14px 16px;font-family:'Courier New',monospace;font-size:13px;color:#d1c5b4;border-bottom:1px solid #2a2520;">${cd}</td>
-        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#d1c5b4;border-bottom:1px solid #2a2520;">${esc(yearRange)}</td>
-      </tr>`;
-      }).join("\n")
-    : `<tr>
-        <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
-      </tr>`;
-
-  const imageCell = firstImage
-    ? `<img src="${firstImage}" alt="${title}" style="width:100%;height:auto;display:block;">`
-    : `<div style="width:100%;padding-top:75%;background:#1a1a1a;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;font-size:11px;color:#8a8070;letter-spacing:2px;">NO IMAGE</span></div>`;
-
-  return `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parts Hub Australia – Item Description Preview</title>
 </head>
 <body style="margin:0;padding:0;background:#000;">
 
 <div style="font-family:Georgia,'Times New Roman',serif;background:#0a0a0a;color:#e5e2e1;max-width:1100px;margin:0 auto;border:1px solid #c5a059;">
 
+  <!-- Header -->
   <div style="background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);padding:32px 40px;border-bottom:2px solid #c5a059;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>
-        <td valign="middle">${LOGO_SVG_INLINE}</td>
+        <td valign="middle">
+          <img src="../../../public/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">
+        </td>
         <td valign="middle" align="right">
           <div style="font-family:Arial,sans-serif;font-size:10px;color:#8a8070;letter-spacing:2px;text-align:right;">AUTHORISED RESELLER</div>
           <div style="font-family:Arial,sans-serif;font-size:11px;color:#c5a059;letter-spacing:1px;margin-top:4px;">&#9733; &#9733; &#9733; &#9733; &#9733;</div>
@@ -82,6 +25,7 @@ export function generateListingHtml(form: EbayListingFormState): string {
     </table>
   </div>
 
+  <!-- Trust bar -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111111;border-bottom:1px solid #2a2520;">
     <tr>
       <td width="25%" align="center" style="padding:20px 12px;border-right:1px solid #2a2520;">
@@ -103,11 +47,13 @@ export function generateListingHtml(form: EbayListingFormState): string {
     </tr>
   </table>
 
+  <!-- Title banner -->
   <div style="background:linear-gradient(135deg,#1a1611 0%,#0a0a0a 60%,#0a0a0a 100%);padding:48px 40px;border-bottom:1px solid #2a2520;">
-    <h1 style="font-family:Georgia,serif;font-size:28px;line-height:1.25;color:#f8e19b;margin:0 0 16px 0;font-weight:normal;letter-spacing:0.5px;">${title}</h1>
+    <h1 style="font-family:Georgia,serif;font-size:28px;line-height:1.25;color:#f8e19b;margin:0 0 16px 0;font-weight:normal;letter-spacing:0.5px;">Sample Product Title</h1>
     <div style="width:60px;height:2px;background:#c5a059;margin-top:8px;"></div>
   </div>
 
+  <!-- Specs + image -->
   <div style="background:#0e0e0e;padding:40px;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr valign="top">
@@ -118,66 +64,69 @@ export function generateListingHtml(form: EbayListingFormState): string {
             <tr>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;border-right:1px solid #2a2520;width:50%;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">MAKE</div>
-                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">${make}</div>
+                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">Toyota</div>
               </td>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">MODEL</div>
-                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">${model}</div>
+                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">LandCruiser</div>
               </td>
             </tr>
             <tr>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;border-right:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">SERIES</div>
-                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">${series}</div>
+                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">200 Series</div>
               </td>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">YEAR</div>
-                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">${year}</div>
+                <div style="font-family:Georgia,serif;font-size:15px;color:#f0e8d8;">2007–2021</div>
               </td>
             </tr>
             <tr>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;border-right:1px solid #2a2520;background:#1a1611;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#c5a059;letter-spacing:3px;margin-bottom:6px;">PART NUMBER</div>
-                <div style="font-family:'Courier New',monospace;font-size:16px;color:#f8e19b;font-weight:bold;letter-spacing:1px;">${partNumber}</div>
+                <div style="font-family:'Courier New',monospace;font-size:16px;color:#f8e19b;font-weight:bold;letter-spacing:1px;">ABC-12345</div>
               </td>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">SUPERSEDED PART NO.</div>
-                <div style="font-family:'Courier New',monospace;font-size:13px;color:#d1c5b4;">${superseded}</div>
+                <div style="font-family:'Courier New',monospace;font-size:13px;color:#d1c5b4;">—</div>
               </td>
             </tr>
             <tr>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;border-right:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">AUTHENTICITY</div>
-                <div style="font-family:Georgia,serif;font-size:14px;color:#f0e8d8;">${authenticity}</div>
+                <div style="font-family:Georgia,serif;font-size:14px;color:#f0e8d8;">OEM Genuine</div>
               </td>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">CONDITION</div>
-                <div style="font-family:Georgia,serif;font-size:14px;color:#f0e8d8;">${condition}</div>
+                <div style="font-family:Georgia,serif;font-size:14px;color:#f0e8d8;">Brand New · Sealed</div>
               </td>
             </tr>
             <tr>
               <td colspan="2" style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">PRODUCT NOTE</div>
-                <div style="font-family:Georgia,serif;font-size:14px;color:#d1c5b4;line-height:1.6;font-style:italic;">${notes}</div>
+                <div style="font-family:Georgia,serif;font-size:14px;color:#d1c5b4;line-height:1.6;font-style:italic;">—</div>
               </td>
             </tr>
             <tr>
               <td colspan="2" style="padding:14px 18px;background:#1a1611;">
                 <span style="font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;">WARRANTY</span>
-                <span style="font-family:Georgia,serif;font-size:14px;color:#f8e19b;margin-left:12px;">${warranty}</span>
+                <span style="font-family:Georgia,serif;font-size:14px;color:#f8e19b;margin-left:12px;">12 Months · Australian Cover</span>
               </td>
             </tr>
           </table>
         </td>
         <td width="44%" style="vertical-align:top;">
           <div style="background:#000000;border:1px solid #c5a059;padding:8px;">
-            ${imageCell}
+            <div style="width:100%;padding-top:75%;background:#1a1a1a;position:relative;">
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;font-size:11px;color:#8a8070;letter-spacing:2px;">NO IMAGE</span>
+            </div>
           </div>
         </td>
       </tr>
     </table>
   </div>
 
+  <!-- Fitment -->
   <div style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);padding:40px;border-top:1px solid #2a2520;">
     <h2 style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Vehicle Fitment</h2>
     <div style="width:40px;height:2px;background:#c5a059;margin-bottom:24px;"></div>
@@ -188,7 +137,12 @@ export function generateListingHtml(form: EbayListingFormState): string {
         <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">SERIES</td>
         <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">YEAR RANGE</td>
       </tr>
-      ${fitmentRows}
+      <tr>
+        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#f0e8d8;border-bottom:1px solid #2a2520;">Toyota</td>
+        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#d1c5b4;border-bottom:1px solid #2a2520;">LandCruiser</td>
+        <td style="padding:14px 16px;font-family:'Courier New',monospace;font-size:13px;color:#d1c5b4;border-bottom:1px solid #2a2520;">200 Series</td>
+        <td style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#d1c5b4;border-bottom:1px solid #2a2520;">2007 – 2021</td>
+      </tr>
     </table>
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;background:#1a1611;border:1px solid #c5a059;">
       <tr>
@@ -203,6 +157,7 @@ export function generateListingHtml(form: EbayListingFormState): string {
     </table>
   </div>
 
+  <!-- Store policies -->
   <div style="background:#0e0e0e;padding:40px;border-top:1px solid #2a2520;">
     <h2 style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Store Policies</h2>
     <div style="width:40px;height:2px;background:#c5a059;margin-bottom:28px;"></div>
@@ -232,6 +187,7 @@ export function generateListingHtml(form: EbayListingFormState): string {
     </table>
   </div>
 
+  <!-- Footer -->
   <div style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);padding:36px 40px;border-top:2px solid #c5a059;text-align:center;">
     <div style="font-family:Georgia,serif;font-size:18px;color:#e9c176;font-style:italic;letter-spacing:1px;margin-bottom:8px;">Thank you for shopping with us</div>
     <div style="font-family:Arial,sans-serif;font-size:10px;color:#8a8070;letter-spacing:4px;">&mdash; YOUR BUSINESS IS APPRECIATED &mdash;</div>
@@ -248,5 +204,4 @@ export function generateListingHtml(form: EbayListingFormState): string {
 
 </div>
 </body>
-</html>`;
-}
+</html>

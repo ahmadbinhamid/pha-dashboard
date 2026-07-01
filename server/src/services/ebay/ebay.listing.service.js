@@ -77,7 +77,7 @@ async function createListing(payload) {
 
 async function getListingById(id) {
   return MarketplaceListing.findById(id)
-    .populate("product", "title slug sku price brand attachments")
+    .populate("product", "title slug sku price brand attachments vehicle_make vehicle_model vehicle_model_code vehicle_year")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }
@@ -158,7 +158,7 @@ async function updateListing(id, payload) {
   }
 
   return MarketplaceListing.findByIdAndUpdate(id, { $set: update }, { new: true, strict: false })
-    .populate("product", "title slug sku price brand attachments")
+    .populate("product", "title slug sku price brand attachments vehicle_make vehicle_model vehicle_model_code vehicle_year")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }

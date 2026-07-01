@@ -32,6 +32,8 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
   const rawFitment = (listing as unknown as Record<string, unknown>).fitment;
   const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
+  const pExt = p as unknown as Record<string, unknown>;
+
   return {
     product_id: productId,
     variant_id: variantId,
@@ -41,6 +43,10 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       ? String(listing.price_override)
       : p?.price != null ? String(p.price) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
+    vehicle_make: typeof pExt?.vehicle_make === "string" ? pExt.vehicle_make : "",
+    vehicle_model: typeof pExt?.vehicle_model === "string" ? pExt.vehicle_model : "",
+    vehicle_model_code: typeof pExt?.vehicle_model_code === "string" ? pExt.vehicle_model_code : "",
+    vehicle_year: pExt?.vehicle_year != null ? String(pExt.vehicle_year) : "",
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",

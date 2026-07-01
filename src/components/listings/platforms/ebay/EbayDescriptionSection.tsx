@@ -10,12 +10,22 @@ interface Props {
 export function EbayDescriptionSection({ form }: Props) {
   const html = useMemo(() => generateListingHtml(form), [
     form.title_override,
+    form.vehicle_make,
+    form.vehicle_model,
+    form.vehicle_model_code,
+    form.vehicle_year,
     form.item_specifics.mpn,
     form.store_sku,
     form.condition,
     form.condition_notes,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     JSON.stringify(form.fitment),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    JSON.stringify(form.item_specifics.superseded_part_number),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    JSON.stringify(form.item_specifics.aspects),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    form.photo_overrides?.[0]?.url,
   ]);
 
   return (
