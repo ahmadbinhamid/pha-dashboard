@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
-import { EbayStoreCategorySelect } from "@/components/listings/platforms/ebay/EbayStoreCategorySelect";
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
 import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/EbayDescriptionSection";
@@ -208,7 +207,8 @@ export function ListingForm({
               error={errors.ebay_category_id}
             />
 
-            <EbayStoreCategorySelect
+            <EbayCategoryInput
+              label="Store Category"
               value={form.store_category_id}
               onChange={(id) => onChange({ store_category_id: id })}
             />

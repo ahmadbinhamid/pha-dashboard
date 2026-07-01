@@ -14,7 +14,6 @@ router.get("/category-suggestions", auth(), asyncHandler(ctrl.getCategorySuggest
 router.get("/condition-policies", auth(), asyncHandler(ctrl.getConditionPolicies));
 router.get("/business-policies", auth(), asyncHandler(ctrl.getBusinessPolicies));
 router.get("/category-aspects", auth(), asyncHandler(ctrl.getCategoryAspects));
-router.get("/store-categories", auth(), asyncHandler(ctrl.getStoreCategories));
 
 // ── eBay listings CRUD ────────────────────────────────────────────────────────
 router.post("/listings", auth(), asyncHandler(listingCtrl.createListing));

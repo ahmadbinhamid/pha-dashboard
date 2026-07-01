@@ -192,11 +192,3 @@ exports.getCategoryAspects = async (req, res) => {
   }
 };
 
-exports.getStoreCategories = async (req, res) => {
-  try {
-    const categories = await catalogService.getStoreCategories();
-    return success(res, { categories });
-  } catch (err) {
-    return systemfailure(res, err);
-  }
-};
