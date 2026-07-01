@@ -28,8 +28,8 @@ const CATEGORIES = [
     await User.syncIndexes();
 
     // ── Super Admin ────────────────────────────────────────────────────────
-    const email = process.env.SUPERADMIN_EMAIL || "superadmin@xyz.com";
-    const password = process.env.SUPERADMIN_PASSWORD || "dewdrops123";
+    const email = process.env.SUPERADMIN_EMAIL || "sales@partshubaustralia.com.au";
+    const password = process.env.SUPERADMIN_PASSWORD || "admin123";
     const phone = process.env.SUPERADMIN_PHONE || null;
 
     const existing = await User.findOne({ email });
