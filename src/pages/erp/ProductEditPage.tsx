@@ -9,15 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
 import { ProductStockCard } from "@/components/products/product-stock-card";
+import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
 import { SectionLabel } from "@/components/products/section-label";
 import { useToast } from "@/context";
 import {
@@ -27,7 +21,6 @@ import {
 import type {
   Product,
   ProductEditFormState,
-  ProductStatus,
 } from "@/types/product";
 import {
   Save,
@@ -37,6 +30,7 @@ import {
   Layers,
   Tag,
   Boxes,
+  Car,
   ShoppingBag,
 } from "lucide-react";
 
@@ -55,6 +49,10 @@ function productToForm(p: Product): ProductEditFormState {
     sku: p.sku ?? "",
     barcode: p.barcode ?? "",
     brand: p.brand ?? "",
+    vehicle_make: p.vehicle_make ?? "",
+    vehicle_model: p.vehicle_model ?? "",
+    vehicle_model_code: p.vehicle_model_code ?? "",
+    vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
@@ -80,6 +78,10 @@ function formToFD(form: ProductEditFormState): FormData {
   fd.append("sku", form.sku);
   fd.append("barcode", form.barcode);
   fd.append("brand", form.brand);
+  fd.append("vehicle_make", form.vehicle_make);
+  fd.append("vehicle_model", form.vehicle_model);
+  fd.append("vehicle_model_code", form.vehicle_model_code);
+  fd.append("vehicle_year", form.vehicle_year);
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
@@ -274,10 +276,9 @@ export default function ProductEditPage() {
 
       <form
         onSubmit={handleSave}
-        className="grid grid-cols-1 gap-5 lg:grid-cols-3"
+        className="flex flex-col gap-5"
       >
-        {/* ── Main Column ── */}
-        <div className="space-y-5 lg:col-span-2">
+        <div className="space-y-5">
 
           {/* Basic Info */}
           <Card>
@@ -318,6 +319,22 @@ export default function ProductEditPage() {
                 </div>
               </div>
 
+            </CardContent>
+          </Card>
+
+          {/* Vehicle */}
+          <Card>
+            <CardHeader title={<SectionLabel icon={Car}>Vehicle</SectionLabel>} description="Set the compatible vehicle for this part" />
+            <CardContent>
+              <ProductVehicleSection
+                values={{
+                  vehicle_make: form.vehicle_make,
+                  vehicle_model: form.vehicle_model,
+                  vehicle_model_code: form.vehicle_model_code,
+                  vehicle_year: form.vehicle_year,
+                }}
+                onChange={(patch) => setForm((prev) => prev ? { ...prev, ...patch } : null)}
+              />
             </CardContent>
           </Card>
 
@@ -462,43 +479,6 @@ export default function ProductEditPage() {
           */}
         </div>
 
-        {/* ── Sidebar ── */}
-        <div className="space-y-5">
-
-          {/* Status */}
-          <Card>
-            <CardHeader title="Status" />
-            <CardContent className="space-y-4">
-              {/* Status dropdown */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-fg/65">
-                  Product Status
-                </label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => set("status", v as ProductStatus)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Published toggle */}
-              <Switch
-                checked={form.is_published_online}
-                onCheckedChange={(v) => set("is_published_online", v)}
-                label="Published Online"
-                description="Visible on your storefront"
-              />
-            </CardContent>
-          </Card>
-
-        </div>
       </form>
     </div>
   );

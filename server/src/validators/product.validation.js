@@ -31,6 +31,10 @@ const createProduct = {
     stock_control: Joi.boolean().default(false),
     has_variants: Joi.boolean().default(false),
     brand: Joi.string().allow("", null).default(null),
+    vehicle_make: Joi.string().allow("", null).default(null),
+    vehicle_model: Joi.string().allow("", null).default(null),
+    vehicle_model_code: Joi.string().allow("", null).default(null),
+    vehicle_year: Joi.number().integer().allow(null).default(null),
     attachments: Joi.array().items(Joi.string()).default([]),
     categories: Joi.array().items(Joi.string()).default([]),
     tags: Joi.array().items(Joi.string()).default([]),
@@ -44,6 +48,7 @@ const createProduct = {
       )
       .default([]),
     digital_file: Joi.string().allow("", null).default(null),
+    stock_entries: Joi.string().allow("", null).default(null),
   }),
 };
 
@@ -65,6 +70,10 @@ const updateProduct = {
     stock_control: Joi.boolean(),
     has_variants: Joi.boolean(),
     brand: Joi.string().allow("", null),
+    vehicle_make: Joi.string().allow("", null),
+    vehicle_model: Joi.string().allow("", null),
+    vehicle_model_code: Joi.string().allow("", null),
+    vehicle_year: Joi.number().integer().allow(null),
     attachments: Joi.array().items(Joi.string()),
     categories: Joi.array().items(Joi.string()),
     tags: Joi.array().items(Joi.string()),

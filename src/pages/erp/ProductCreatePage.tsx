@@ -7,20 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { ProductImages } from "@/components/media/product-images";
 import { CreateStockSection } from "@/components/products/create-stock-section";
+import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
 import { useToast } from "@/context";
 import { createProduct } from "@/lib/api/products";
-import type { ProductCreateFormState, ProductStatus } from "@/types/product";
+import type { ProductCreateFormState } from "@/types/product";
 import { SectionLabel } from "@/components/products/section-label";
-import { Package2, Image, DollarSign, Boxes, Layers, Plus } from "lucide-react";
+import { Package2, Image, DollarSign, Boxes, Layers, Car, Plus } from "lucide-react";
 
 const INITIAL: ProductCreateFormState = {
   title: "",
@@ -33,9 +27,13 @@ const INITIAL: ProductCreateFormState = {
   barcode: "",
   stock_control: false,
   stock_entries: [],
+  vehicle_make: "",
+  vehicle_model: "",
+  vehicle_model_code: "",
+  vehicle_year: "",
   type: "physical",
   status: "active",
-  is_published_online: false,
+  is_published_online: true,
   categories: [],
   tags: [],
   images: [],
@@ -52,6 +50,10 @@ function formToFD(form: ProductCreateFormState): FormData {
   if (form.vat_rate) fd.append("vat_rate", form.vat_rate);
   fd.append("barcode", form.barcode);
   fd.append("stock_control", String(form.stock_control));
+  if (form.vehicle_make) fd.append("vehicle_make", form.vehicle_make);
+  if (form.vehicle_model) fd.append("vehicle_model", form.vehicle_model);
+  if (form.vehicle_model_code) fd.append("vehicle_model_code", form.vehicle_model_code);
+  if (form.vehicle_year) fd.append("vehicle_year", form.vehicle_year);
   if (form.stock_control && form.stock_entries.length > 0) {
     fd.append("stock_entries", JSON.stringify(form.stock_entries));
   }
@@ -147,10 +149,9 @@ export default function ProductCreatePage() {
       <form
         id="product-create-form"
         onSubmit={handleSubmit}
-        className="grid grid-cols-1 gap-5 lg:grid-cols-3"
+        className="flex flex-col gap-5"
       >
-        {/* ── Main Column ── */}
-        <div className="space-y-5 lg:col-span-2">
+        <div className="space-y-5">
 
           {/* Basic Info */}
           <Card>
@@ -178,6 +179,22 @@ export default function ProductCreatePage() {
                   maxLength={13}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Vehicle */}
+          <Card>
+            <CardHeader title={<SectionLabel icon={Car}>Vehicle</SectionLabel>} description="Set the compatible vehicle for this part" />
+            <CardContent>
+              <ProductVehicleSection
+                values={{
+                  vehicle_make: form.vehicle_make,
+                  vehicle_model: form.vehicle_model,
+                  vehicle_model_code: form.vehicle_model_code,
+                  vehicle_year: form.vehicle_year,
+                }}
+                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+              />
             </CardContent>
           </Card>
 
@@ -258,39 +275,6 @@ export default function ProductCreatePage() {
                   Tip: You can add images after creating the product too.
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-        </div>
-
-        {/* ── Sidebar ── */}
-        <div className="space-y-5">
-
-          {/* Status */}
-          <Card>
-            <CardHeader title="Status" />
-            <CardContent className="space-y-4">
-              <FormField label="Product Status">
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => set("status", v as ProductStatus)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-
-              <Switch
-                checked={form.is_published_online}
-                onCheckedChange={(v) => set("is_published_online", v)}
-                label="Published Online"
-                description="Visible on your storefront"
-              />
             </CardContent>
           </Card>
 

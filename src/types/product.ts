@@ -74,6 +74,10 @@ export interface Product {
   stock_control: boolean;
   has_variants: boolean;
   brand: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_model_code: string | null;
+  vehicle_year: number | null;
   attachments: Attachment[];
   categories: Category[];
   tags: string[];
@@ -107,6 +111,10 @@ export interface ProductCreateFormState {
   barcode: string;
   stock_control: boolean;
   stock_entries: StockEntry[];
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_model_code: string;
+  vehicle_year: string;
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;
@@ -127,6 +135,10 @@ export interface ProductEditFormState {
   sku: string;
   barcode: string;
   brand: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_model_code: string;
+  vehicle_year: string;
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;
