@@ -21,7 +21,8 @@ export function generateListingHtml(form: EbayListingFormState): string {
   const model = esc(form.vehicle_model?.trim() || "—");
   const series = esc(form.vehicle_model_code?.trim() || "—");
   const year = esc(form.vehicle_year?.trim() || "—");
-  const partNumber = esc(form.store_sku.trim() || form.item_specifics.mpn.trim() || "—");
+  const mpn = esc(form.item_specifics.mpn.trim() || "—");
+  const stockNumber = esc(form.store_sku.trim() || "—");
 
   const spnArr = (form.item_specifics.superseded_part_number || []).filter((s) => s.trim());
   const superseded = esc(spnArr.length > 0 ? spnArr.join(", ") : "—");
@@ -138,9 +139,15 @@ export function generateListingHtml(form: EbayListingFormState): string {
             <tr>
               <td style="padding:14px 18px;border-bottom:1px solid #2a2520;border-right:1px solid #2a2520;background:#1a1611;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#c5a059;letter-spacing:3px;margin-bottom:6px;">PART NUMBER</div>
-                <div style="font-family:'Courier New',monospace;font-size:16px;color:#f8e19b;font-weight:bold;letter-spacing:1px;">${partNumber}</div>
+                <div style="font-family:'Courier New',monospace;font-size:16px;color:#f8e19b;font-weight:bold;letter-spacing:1px;">${mpn}</div>
               </td>
-              <td style="padding:14px 18px;border-bottom:1px solid #2a2520;">
+              <td style="padding:14px 18px;border-bottom:1px solid #2a2520;background:#1a1611;">
+                <div style="font-family:Arial,sans-serif;font-size:9px;color:#c5a059;letter-spacing:3px;margin-bottom:6px;">STOCK NUMBER</div>
+                <div style="font-family:'Courier New',monospace;font-size:16px;color:#f8e19b;font-weight:bold;letter-spacing:1px;">${stockNumber}</div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding:14px 18px;border-bottom:1px solid #2a2520;">
                 <div style="font-family:Arial,sans-serif;font-size:9px;color:#8a8070;letter-spacing:3px;margin-bottom:6px;">SUPERSEDED PART NO.</div>
                 <div style="font-family:'Courier New',monospace;font-size:13px;color:#d1c5b4;">${superseded}</div>
               </td>
