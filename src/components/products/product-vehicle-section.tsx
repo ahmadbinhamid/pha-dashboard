@@ -1,4 +1,5 @@
 import { Combobox } from "@/components/ui/combobox";
+import { Input } from "@/components/ui/input";
 import { MAKES, getModels, getModelCodes, getYears } from "@/lib/data/vehicle-models";
 
 export interface VehicleFormState {
@@ -6,6 +7,7 @@ export interface VehicleFormState {
   vehicle_model: string;
   vehicle_model_code: string;
   vehicle_year: string;
+  vehicle_year_to: string;
 }
 
 interface ProductVehicleSectionProps {
@@ -21,11 +23,11 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
       : [];
 
   function handleMakeChange(make: string) {
-    onChange({ vehicle_make: make, vehicle_model: "", vehicle_model_code: "", vehicle_year: "" });
+    onChange({ vehicle_make: make, vehicle_model: "", vehicle_model_code: "", vehicle_year: "", vehicle_year_to: "" });
   }
 
   function handleModelChange(model: string) {
-    onChange({ vehicle_model: model, vehicle_model_code: "", vehicle_year: "" });
+    onChange({ vehicle_model: model, vehicle_model_code: "", vehicle_year: "", vehicle_year_to: "" });
   }
 
   function handleModelCodeChange(model_code: string) {
@@ -33,6 +35,7 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
     onChange({
       vehicle_model_code: model_code,
       vehicle_year: years ? String(years.year_from) : "",
+      vehicle_year_to: years?.year_to != null ? String(years.year_to) : "",
     });
   }
 
@@ -63,8 +66,8 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
         />
       </div>
 
-      {/* Model Code */}
-      <div className="flex flex-col gap-1.5">
+      {/* Model Code — full width */}
+      <div className="col-span-2 flex flex-col gap-1.5">
         <label className="text-xs font-medium text-fg/65">Model Code</label>
         <Combobox
           options={modelCodes}
@@ -76,17 +79,30 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
         />
       </div>
 
-      {/* Year Released — auto-populated from model code */}
+      {/* Year From */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-fg/65">Year Released</label>
-        <div
-          className={
-            "flex h-10 items-center rounded-xs border border-border bg-bg px-3 text-sm " +
-            (values.vehicle_year ? "text-fg" : "text-fg/40")
-          }
-        >
-          {values.vehicle_year || "Auto-filled on code selection"}
-        </div>
+        <label className="text-xs font-medium text-fg/65">Year From</label>
+        <Input
+          type="number"
+          min="1900"
+          max="2100"
+          value={values.vehicle_year}
+          onChange={(e) => onChange({ vehicle_year: e.target.value })}
+          placeholder="e.g. 2015"
+        />
+      </div>
+
+      {/* Year To */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-fg/65">Year To</label>
+        <Input
+          type="number"
+          min="1900"
+          max="2100"
+          value={values.vehicle_year_to}
+          onChange={(e) => onChange({ vehicle_year_to: e.target.value })}
+          placeholder="Present"
+        />
       </div>
     </div>
   );

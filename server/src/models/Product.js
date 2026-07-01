@@ -15,6 +15,7 @@ const choiceSchema = new Schema(
   { _id: false },
 );
 
+
 const productSchema = buildSchema({
   title: { type: String, required: true, trim: true },
   slug: { type: String, unique: true },
@@ -45,6 +46,7 @@ const productSchema = buildSchema({
   vehicle_model: { type: String, default: null },
   vehicle_model_code: { type: String, default: null },
   vehicle_year: { type: Number, default: null },
+  vehicle_year_to: { type: Number, default: null },
   attachments: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
   categories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
   tags: [{ type: String }],

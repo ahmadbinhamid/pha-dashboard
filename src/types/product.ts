@@ -78,6 +78,7 @@ export interface Product {
   vehicle_model: string | null;
   vehicle_model_code: string | null;
   vehicle_year: number | null;
+  vehicle_year_to: number | null;
   attachments: Attachment[];
   categories: Category[];
   tags: string[];
@@ -115,6 +116,7 @@ export interface ProductCreateFormState {
   vehicle_model: string;
   vehicle_model_code: string;
   vehicle_year: string;
+  vehicle_year_to: string;
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;
@@ -139,6 +141,7 @@ export interface ProductEditFormState {
   vehicle_model: string;
   vehicle_model_code: string;
   vehicle_year: string;
+  vehicle_year_to: string;
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;

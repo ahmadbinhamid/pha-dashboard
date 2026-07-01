@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
+import { Input } from "@/components/ui/input";
 import { MAKES, getModels, getModelCodes, getYears } from "@/lib/data/vehicle-models";
 import type { EbayListingFormState, FitmentRowFormState } from "@/types/marketplace";
 import { Plus, Trash2, Car } from "lucide-react";
@@ -111,19 +112,25 @@ function FitmentRow({
         </div>
         <div className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year From</span>
-          <div
-            className="flex h-10 w-full items-center rounded-xs border border-border bg-bg px-3 text-sm text-fg/70 shadow-sm"
-          >
-            {row.year_from || <span className="text-fg/35">—</span>}
-          </div>
+          <Input
+            type="number"
+            min="1900"
+            max="2100"
+            value={row.year_from}
+            onChange={(e) => onUpdate({ year_from: e.target.value })}
+            placeholder="e.g. 2015"
+          />
         </div>
         <div className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year To</span>
-          <div
-            className="flex h-10 w-full items-center rounded-xs border border-border bg-bg px-3 text-sm text-fg/70 shadow-sm"
-          >
-            {row.year_to ? row.year_to : <span className="text-fg/35">Present</span>}
-          </div>
+          <Input
+            type="number"
+            min="1900"
+            max="2100"
+            value={row.year_to}
+            onChange={(e) => onUpdate({ year_to: e.target.value })}
+            placeholder="Present"
+          />
         </div>
       </div>
     </div>

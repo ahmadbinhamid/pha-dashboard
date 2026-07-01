@@ -39,11 +39,11 @@ export function EbayDescriptionSection({ form }: Props) {
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-xs border border-border" style={{ height: 640 }}>
+      <div className="overflow-auto rounded-xs border border-border" style={{ height: 640 }}>
         <iframe
           srcDoc={html}
           title="eBay Listing Description Preview"
-          className="h-full w-full"
+          style={{ height: "100%", minHeight: 620, width: 1100, display: "block" }}
           sandbox="allow-same-origin"
         />
       </div>

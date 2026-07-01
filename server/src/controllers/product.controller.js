@@ -105,6 +105,7 @@ exports.createProduct = async (req, res) => {
       vehicle_model,
       vehicle_model_code,
       vehicle_year,
+      vehicle_year_to,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -137,6 +138,7 @@ exports.createProduct = async (req, res) => {
       vehicle_model: vehicle_model || null,
       vehicle_model_code: vehicle_model_code || null,
       vehicle_year: vehicle_year ? Number(vehicle_year) : null,
+      vehicle_year_to: vehicle_year_to ? Number(vehicle_year_to) : null,
       attachments,
       categories,
       tags,
@@ -206,6 +208,7 @@ exports.updateProduct = async (req, res) => {
       vehicle_model,
       vehicle_model_code,
       vehicle_year,
+      vehicle_year_to,
     } = body;
 
     if (title !== undefined && title !== product.title) {
@@ -247,6 +250,7 @@ exports.updateProduct = async (req, res) => {
     if (vehicle_model !== undefined) product.vehicle_model = vehicle_model || null;
     if (vehicle_model_code !== undefined) product.vehicle_model_code = vehicle_model_code || null;
     if (vehicle_year !== undefined) product.vehicle_year = vehicle_year ? Number(vehicle_year) : null;
+    if (vehicle_year_to !== undefined) product.vehicle_year_to = vehicle_year_to ? Number(vehicle_year_to) : null;
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);

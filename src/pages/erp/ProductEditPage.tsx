@@ -53,6 +53,7 @@ function productToForm(p: Product): ProductEditFormState {
     vehicle_model: p.vehicle_model ?? "",
     vehicle_model_code: p.vehicle_model_code ?? "",
     vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
+    vehicle_year_to: p.vehicle_year_to != null ? String(p.vehicle_year_to) : "",
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
@@ -82,6 +83,7 @@ function formToFD(form: ProductEditFormState): FormData {
   fd.append("vehicle_model", form.vehicle_model);
   fd.append("vehicle_model_code", form.vehicle_model_code);
   fd.append("vehicle_year", form.vehicle_year);
+  fd.append("vehicle_year_to", form.vehicle_year_to);
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
@@ -332,6 +334,7 @@ export default function ProductEditPage() {
                   vehicle_model: form.vehicle_model,
                   vehicle_model_code: form.vehicle_model_code,
                   vehicle_year: form.vehicle_year,
+                  vehicle_year_to: form.vehicle_year_to,
                 }}
                 onChange={(patch) => setForm((prev) => prev ? { ...prev, ...patch } : null)}
               />

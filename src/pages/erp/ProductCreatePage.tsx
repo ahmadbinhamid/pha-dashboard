@@ -31,6 +31,7 @@ const INITIAL: ProductCreateFormState = {
   vehicle_model: "",
   vehicle_model_code: "",
   vehicle_year: "",
+  vehicle_year_to: "",
   type: "physical",
   status: "active",
   is_published_online: true,
@@ -54,6 +55,7 @@ function formToFD(form: ProductCreateFormState): FormData {
   if (form.vehicle_model) fd.append("vehicle_model", form.vehicle_model);
   if (form.vehicle_model_code) fd.append("vehicle_model_code", form.vehicle_model_code);
   if (form.vehicle_year) fd.append("vehicle_year", form.vehicle_year);
+  if (form.vehicle_year_to) fd.append("vehicle_year_to", form.vehicle_year_to);
   if (form.stock_control && form.stock_entries.length > 0) {
     fd.append("stock_entries", JSON.stringify(form.stock_entries));
   }
@@ -192,6 +194,7 @@ export default function ProductCreatePage() {
                   vehicle_model: form.vehicle_model,
                   vehicle_model_code: form.vehicle_model_code,
                   vehicle_year: form.vehicle_year,
+                  vehicle_year_to: form.vehicle_year_to,
                 }}
                 onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               />
