@@ -491,19 +491,19 @@ export function ListingForm({
       )}
 
       {/* Sticky footer */}
-      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-md border border-border bg-card px-5 py-3 shadow-md">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 rounded-md border border-border bg-card px-4 py-3 shadow-md">
         {validated && errorCount > 0 && (
-          <span className="mr-auto text-xs text-danger">
+          <span className="mr-auto w-full text-xs text-danger sm:w-auto">
             {errorCount} issue{errorCount !== 1 ? "s" : ""} — fix errors before pushing
           </span>
         )}
-        <Button variant="outline" type="button" onClick={onSaveDraft} disabled={saving || pushing}>
+        <Button variant="outline" type="button" onClick={onSaveDraft} disabled={saving || pushing} className="flex-1 sm:flex-none">
           {saving ? "Saving…" : "Save Draft"}
         </Button>
-        <Button variant="outline" type="button" disabled>
+        <Button variant="outline" type="button" disabled className="flex-1 sm:flex-none">
           Preview Listing
         </Button>
-        <Button type="button" onClick={handlePush} disabled={saving || pushing} className="gap-2">
+        <Button type="button" onClick={handlePush} disabled={saving || pushing} className="w-full gap-2 sm:w-auto">
           <Cloud className="h-4 w-4" />
           {pushing ? "Pushing…" : "Save & Push to eBay"}
         </Button>
