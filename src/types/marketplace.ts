@@ -88,6 +88,7 @@ export interface EbayListingFormState {
   vehicle_model: string;
   vehicle_model_code: string;
   vehicle_year: string;
+  vehicle_year_to: string;
   // eBay-specific
   ebay_category_id: string;
   store_category_id: string;
@@ -132,6 +133,7 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   vehicle_model: "",
   vehicle_model_code: "",
   vehicle_year: "",
+  vehicle_year_to: "",
   ebay_category_id: "",
   store_category_id: "",
   store_sku: "",

@@ -14,6 +14,7 @@ export function EbayDescriptionSection({ form }: Props) {
     form.vehicle_model,
     form.vehicle_model_code,
     form.vehicle_year,
+    form.vehicle_year_to,
     form.item_specifics.mpn,
     form.store_sku,
     form.condition,

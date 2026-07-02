@@ -47,6 +47,7 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     vehicle_model: typeof pExt?.vehicle_model === "string" ? pExt.vehicle_model : "",
     vehicle_model_code: typeof pExt?.vehicle_model_code === "string" ? pExt.vehicle_model_code : "",
     vehicle_year: pExt?.vehicle_year != null ? String(pExt.vehicle_year) : "",
+    vehicle_year_to: pExt?.vehicle_year_to != null ? String(pExt.vehicle_year_to) : "",
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",

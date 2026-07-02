@@ -43,6 +43,7 @@ export default function ListingCreatePage() {
       vehicle_model: p.vehicle_model || "",
       vehicle_model_code: p.vehicle_model_code || "",
       vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
+      vehicle_year_to: p.vehicle_year_to != null ? String(p.vehicle_year_to) : "",
     }));
   }, [productData]);
 

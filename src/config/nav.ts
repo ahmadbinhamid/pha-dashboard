@@ -7,17 +7,17 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: Icons.Home },
+  // { label: "Dashboard", href: "/dashboard", icon: Icons.Home },
   { label: "Products", href: "/products", icon: Icons.Package },
-  { label: "Inventory", href: "/inventory", icon: Icons.Box },
-  { label: "Orders", href: "/orders", icon: Icons.Cart },
+  // { label: "Inventory", href: "/inventory", icon: Icons.Box },
+  // { label: "Orders", href: "/orders", icon: Icons.Cart },
   { label: "Listings", href: "/listings", icon: Icons.Tag },
-  { label: "Analytics", href: "/analytics", icon: Icons.Chart },
-  { label: "Customers", href: "/customers", icon: Icons.Users },
-  { label: "Suppliers", href: "/suppliers", icon: Icons.Truck },
-  { label: "Reports", href: "/reports", icon: Icons.Layers },
-  { label: "eBay Uploader", href: "/tools/ebay-uploader", icon: Icons.Upload },
-  { label: "Settings", href: "/settings", icon: Icons.Settings },
+  // { label: "Analytics", href: "/analytics", icon: Icons.Chart },
+  // { label: "Customers", href: "/customers", icon: Icons.Users },
+  // { label: "Suppliers", href: "/suppliers", icon: Icons.Truck },
+  // { label: "Reports", href: "/reports", icon: Icons.Layers },
+  // { label: "eBay Uploader", href: "/tools/ebay-uploader", icon: Icons.Upload },
+  // { label: "Settings", href: "/settings", icon: Icons.Settings },
 ];
 
 export function isNavItemActive(href: string, pathname: string): boolean {
