@@ -20,9 +20,8 @@ export function generateListingHtml(form: EbayListingFormState): string {
   const make = esc(form.vehicle_make?.trim() || "—");
   const model = esc(form.vehicle_model?.trim() || "—");
   const series = esc(form.vehicle_model_code?.trim() || "—");
-  const firstFitment = form.fitment.find((r) => r.make.trim() || r.year_from.trim());
-  const yrFrom = firstFitment?.year_from?.trim() || form.vehicle_year?.trim() || "";
-  const yrTo = firstFitment?.year_to?.trim() || form.vehicle_year_to?.trim() || "";
+  const yrFrom = form.vehicle_year?.trim() || "";
+  const yrTo = form.vehicle_year_to?.trim() || "";
   const yearRange = esc(yrFrom && yrTo ? `${yrFrom} – ${yrTo}` : yrFrom ? `${yrFrom} – Present` : "—");
   const mpn = esc(form.item_specifics.mpn.trim() || "—");
   const stockNumber = esc(form.store_sku.trim() || "—");
