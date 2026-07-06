@@ -13,7 +13,7 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const LOGO_SVG_INLINE = `<img src="/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">`;
+const LOGO_SVG_INLINE = `<img src="https://admin.partshubaustralia.com.au/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">`;
 
 export function generateListingHtml(form: EbayListingFormState): string {
   const title = esc(form.title_override.trim() || "Parts Hub Australia Product");
