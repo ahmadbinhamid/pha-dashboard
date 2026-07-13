@@ -6,6 +6,7 @@
 
 const { model, Schema } = require("mongoose");
 const softDeletePlugin = require("./plugins/softDelete.plugin");
+const { stripInternalFields } = require("./base.model");
 const {
   MARKETPLACE_PLATFORM,
   LISTING_STATE,
@@ -61,6 +62,8 @@ const baseSchema = new Schema(
 );
 
 baseSchema.plugin(softDeletePlugin);
+baseSchema.set("toJSON", { transform: stripInternalFields });
+baseSchema.set("toObject", { transform: stripInternalFields });
 
 // One listing per (product, variant, platform). A null variant is a distinct
 // value in MongoDB sparse compound indexes — we rely on partial filtering here

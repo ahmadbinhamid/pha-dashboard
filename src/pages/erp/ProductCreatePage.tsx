@@ -1,20 +1,32 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { NativeSelect } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
 import { ProductImages } from "@/components/media/product-images";
 import { CreateStockSection } from "@/components/products/create-stock-section";
 import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
 import { useToast } from "@/context";
-import { createProduct } from "@/lib/api/products";
+import { createProduct, getCategories } from "@/lib/api/products";
 import type { ProductCreateFormState } from "@/types/product";
 import { SectionLabel } from "@/components/products/section-label";
-import { Package2, Image, DollarSign, Boxes, Layers, Car, Plus } from "lucide-react";
+import { Package2, Image, DollarSign, Boxes, Layers, Car, Tag, Plus } from "lucide-react";
+
+const CONDITIONS = [
+  { value: "NEW", label: "New" },
+  { value: "USED", label: "Used" },
+];
+
+const AUTHENTICITY_OPTIONS = [
+  { value: "Genuine", label: "Genuine" },
+  { value: "Aftermarket", label: "Aftermarket" },
+];
 
 const INITIAL: ProductCreateFormState = {
   title: "",
@@ -23,10 +35,11 @@ const INITIAL: ProductCreateFormState = {
   compare_price: "",
   cost_price: "",
   is_taxable: false,
-  vat_rate: "",
   barcode: "",
   stock_control: false,
   stock_entries: [],
+  condition: "NEW",
+  authenticity: "",
   vehicle_make: "",
   vehicle_model: "",
   vehicle_model_code: "",
@@ -48,14 +61,20 @@ function formToFD(form: ProductCreateFormState): FormData {
   if (form.compare_price) fd.append("compare_price", form.compare_price);
   if (form.cost_price) fd.append("cost_price", form.cost_price);
   fd.append("is_taxable", String(form.is_taxable));
-  if (form.vat_rate) fd.append("vat_rate", form.vat_rate);
   fd.append("barcode", form.barcode);
   fd.append("stock_control", String(form.stock_control));
-  if (form.vehicle_make) fd.append("vehicle_make", form.vehicle_make);
-  if (form.vehicle_model) fd.append("vehicle_model", form.vehicle_model);
-  if (form.vehicle_model_code) fd.append("vehicle_model_code", form.vehicle_model_code);
-  if (form.vehicle_year) fd.append("vehicle_year", form.vehicle_year);
-  if (form.vehicle_year_to) fd.append("vehicle_year_to", form.vehicle_year_to);
+  fd.append("condition", form.condition);
+  if (form.authenticity) fd.append("authenticity", form.authenticity);
+  fd.append(
+    "vehicle",
+    JSON.stringify({
+      make: form.vehicle_make || null,
+      model: form.vehicle_model || null,
+      model_code: form.vehicle_model_code || null,
+      year_from: form.vehicle_year ? Number(form.vehicle_year) : null,
+      year_to: form.vehicle_year_to ? Number(form.vehicle_year_to) : null,
+    }),
+  );
   if (form.stock_control && form.stock_entries.length > 0) {
     fd.append("stock_entries", JSON.stringify(form.stock_entries));
   }
@@ -77,6 +96,16 @@ export default function ProductCreatePage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const { data: categoriesRes } = useQuery({
+    queryKey: ["categories"],
+    queryFn: getCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+    value: c._id,
+    label: c.name,
+  }));
 
   const clearError = (key: string) =>
     setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
@@ -180,6 +209,54 @@ export default function ProductCreatePage() {
                   placeholder="EAN / UPC"
                   maxLength={13}
                 />
+              </div>
+
+              <Switch
+                checked={form.is_published_online}
+                onCheckedChange={(v) => set("is_published_online", v)}
+                label="Show on storefront"
+                description="Make this product visible on the public storefront"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Classification */}
+          <Card>
+            <CardHeader title={<SectionLabel icon={Tag}>Classification</SectionLabel>} />
+            <CardContent className="space-y-4">
+              <FormField label="Categories">
+                <MultiSelect
+                  options={categoryOptions}
+                  value={form.categories}
+                  onChange={(v) => set("categories", v)}
+                  placeholder="Select categories…"
+                  searchPlaceholder="Search categories…"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Condition">
+                  <NativeSelect
+                    value={form.condition}
+                    onChange={(e) => set("condition", e.target.value as ProductCreateFormState["condition"])}
+                  >
+                    {CONDITIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+
+                <FormField label="Authenticity">
+                  <NativeSelect
+                    value={form.authenticity}
+                    onChange={(e) => set("authenticity", e.target.value as ProductCreateFormState["authenticity"])}
+                  >
+                    <option value="">Select authenticity…</option>
+                    {AUTHENTICITY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
               </div>
             </CardContent>
           </Card>

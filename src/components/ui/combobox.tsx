@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 interface ComboboxProps {
@@ -11,6 +11,8 @@ interface ComboboxProps {
   searchPlaceholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Allow the user to enter a value that isn't in `options`. */
+  allowCustom?: boolean;
 }
 
 export function Combobox({
@@ -21,6 +23,7 @@ export function Combobox({
   searchPlaceholder = "Search…",
   disabled = false,
   className,
+  allowCustom = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -31,6 +34,12 @@ export function Combobox({
     if (!q) return options;
     return options.filter((o) => o.toLowerCase().includes(q));
   }, [options, query]);
+
+  const trimmedQuery = query.trim();
+  const showCustomOption =
+    allowCustom &&
+    trimmedQuery.length > 0 &&
+    !options.some((o) => o.toLowerCase() === trimmedQuery.toLowerCase());
 
   function handleSelect(opt: string) {
     onChange(opt);
@@ -89,7 +98,20 @@ export function Combobox({
 
           {/* Option list */}
           <div className="max-h-60 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
+            {showCustomOption && (
+              <button
+                type="button"
+                onClick={() => handleSelect(trimmedQuery)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-sm transition-colors",
+                  "text-accent hover:bg-accent/10",
+                )}
+              >
+                <Plus className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1 truncate text-left">Use "{trimmedQuery}"</span>
+              </button>
+            )}
+            {filtered.length === 0 && !showCustomOption ? (
               <div className="py-4 text-center text-xs text-fg/45">No results</div>
             ) : (
               filtered.map((opt) => (

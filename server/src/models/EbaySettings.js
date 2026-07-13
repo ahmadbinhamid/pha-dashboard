@@ -11,7 +11,7 @@ const ebaySettingsSchema = new Schema(
     return_policy_id: { type: String, default: null },
     verification_token: { type: String, default: null },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } },
+  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" }, versionKey: false },
 );
 
 module.exports = model("EbaySettings", ebaySettingsSchema);

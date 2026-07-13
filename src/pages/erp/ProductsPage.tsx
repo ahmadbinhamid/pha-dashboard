@@ -12,8 +12,9 @@ import {
   ModalTitle,
   ModalDescription,
 } from "@/components/ui/modal";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { ProductRow } from "@/components/products/product-row";
-import { getProducts, deleteProduct } from "@/lib/api/products";
+import { getProducts, deleteProduct, getCategories } from "@/lib/api/products";
 import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
@@ -47,7 +48,9 @@ export default function ProductsPage() {
 
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
+  const categories = searchParams.get("categories") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const selectedCategories = categories ? categories.split(",") : [];
 
   const [inputValue, setInputValue] = useState(search);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -92,10 +95,33 @@ export default function ProductsPage() {
     [setSearchParams],
   );
 
+  const setCategories = useCallback(
+    (ids: string[]) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (ids.length) next.set("categories", ids.join(","));
+        else next.delete("categories");
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", { search, status, page }],
-    queryFn: () => getProducts({ search, status, page }),
+    queryKey: ["products", { search, status, categories, page }],
+    queryFn: () => getProducts({ search, status, categories, page }),
   });
+
+  const { data: categoriesRes } = useQuery({
+    queryKey: ["categories"],
+    queryFn: getCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+    value: c._id,
+    label: c.name,
+  }));
 
   const { data: listingsData } = useQuery({
     queryKey: ["listings-all-ids"],
@@ -172,6 +198,14 @@ export default function ProductsPage() {
             {isFetching && !isLoading && (
               <span className="text-xs text-fg/40">Updating…</span>
             )}
+            <MultiSelect
+              options={categoryOptions}
+              value={selectedCategories}
+              onChange={setCategories}
+              placeholder="All categories"
+              searchPlaceholder="Search categories…"
+              className="w-48"
+            />
             <div className="flex gap-1 rounded-xs bg-bg-2 p-1">
               {STATUS_FILTERS.map((f) => (
                 <button

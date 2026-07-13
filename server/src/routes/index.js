@@ -16,5 +16,6 @@ router.use("/product", require("./product.routes"));
 router.use("/inventory", require("./inventory.routes"));
 router.use("/ebay", require("./ebay.routes"));
 router.use("/inquiry", require("./inquiry.routes"));
+router.use("/vehicle-model", require("./vehicle-model.routes"));
 
 module.exports = router;

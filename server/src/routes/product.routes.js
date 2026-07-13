@@ -13,11 +13,12 @@ const formFields = upload.none();
 
 router.get(
   "/",
+  auth(false),
   pagination(),
   validate(v.listProducts),
   asyncHandler(ctrl.getProducts),
 );
-router.get("/:slug", validate(v.bySlugParam), asyncHandler(ctrl.getProduct));
+router.get("/:slug", auth(false), validate(v.bySlugParam), asyncHandler(ctrl.getProduct));
 
 router.post("/", auth(), formFields, asyncHandler(ctrl.createProduct));
 router.put(

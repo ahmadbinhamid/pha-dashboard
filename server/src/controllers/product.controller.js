@@ -24,6 +24,7 @@ const {
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
+  PRODUCT_CONDITION,
 } = require("../constants/product.constants");
 const {
   success,
@@ -44,7 +45,11 @@ exports.getProducts = async (req, res) => {
       const re = new RegExp(req.query.search.trim(), "i");
       filter.$or = [{ title: re }, { sku: re }, { brand: re }, { tags: re }];
     }
-    if (req.query.status !== undefined && req.query.status !== "") {
+    if (!req.user) {
+      // Unauthenticated (public/storefront) callers only ever see published, active products
+      filter.is_published_online = true;
+      filter.status = PRODUCT_STATUS.ACTIVE;
+    } else if (req.query.status !== undefined && req.query.status !== "") {
       filter.status = req.query.status;
     }
     if (req.query.type !== undefined && req.query.type !== "") {
@@ -73,6 +78,13 @@ exports.getProduct = async (req, res) => {
   try {
     const product = await getProductBySlug(req.params.slug);
     if (!product) return notFound(res, "Product not found");
+    // Unauthenticated callers can't see unpublished/draft products by slug either
+    if (
+      !req.user &&
+      (!product.is_published_online || product.status !== PRODUCT_STATUS.ACTIVE)
+    ) {
+      return notFound(res, "Product not found");
+    }
     return success(res, product);
   } catch (err) {
     return systemfailure(res, err);
@@ -92,26 +104,23 @@ exports.createProduct = async (req, res) => {
       compare_price,
       cost_price,
       is_taxable,
-      is_vat_inclusive,
-      vat_rate,
       sku,
       barcode,
       stock_control,
       has_variants,
       brand,
+      condition,
+      authenticity,
       digital_file,
       stock_entries,
-      vehicle_make,
-      vehicle_model,
-      vehicle_model_code,
-      vehicle_year,
-      vehicle_year_to,
+      vehicle,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
+    const parsedVehicle = parseField(vehicle, null);
 
     const slug = await ensureUniqueProductSlug(generateSlug(title));
     const autoSku = await generateNextSku();
@@ -127,18 +136,14 @@ exports.createProduct = async (req, res) => {
       compare_price: compare_price ? Number(compare_price) : null,
       cost_price: cost_price ? Number(cost_price) : null,
       is_taxable: toBool(is_taxable),
-      is_vat_inclusive: toBool(is_vat_inclusive),
-      vat_rate: vat_rate ? Number(vat_rate) : null,
       sku: autoSku,
       barcode: barcode || null,
       stock_control: toBool(stock_control),
       has_variants: toBool(has_variants),
       brand: brand || null,
-      vehicle_make: vehicle_make || null,
-      vehicle_model: vehicle_model || null,
-      vehicle_model_code: vehicle_model_code || null,
-      vehicle_year: vehicle_year ? Number(vehicle_year) : null,
-      vehicle_year_to: vehicle_year_to ? Number(vehicle_year_to) : null,
+      condition: condition || PRODUCT_CONDITION.NEW,
+      authenticity: authenticity || null,
+      vehicle: parsedVehicle,
       attachments,
       categories,
       tags,
@@ -196,19 +201,15 @@ exports.updateProduct = async (req, res) => {
       compare_price,
       cost_price,
       is_taxable,
-      is_vat_inclusive,
-      vat_rate,
       sku,
       barcode,
       stock_control,
       has_variants,
       brand,
+      condition,
+      authenticity,
       digital_file,
-      vehicle_make,
-      vehicle_model,
-      vehicle_model_code,
-      vehicle_year,
-      vehicle_year_to,
+      vehicle,
     } = body;
 
     if (title !== undefined && title !== product.title) {
@@ -234,23 +235,16 @@ exports.updateProduct = async (req, res) => {
       product.cost_price =
         cost_price === "" || cost_price === null ? null : Number(cost_price);
     if (is_taxable !== undefined) product.is_taxable = toBool(is_taxable);
-    if (is_vat_inclusive !== undefined)
-      product.is_vat_inclusive = toBool(is_vat_inclusive);
-    if (vat_rate !== undefined)
-      product.vat_rate =
-        vat_rate === "" || vat_rate === null ? null : Number(vat_rate);
     if (sku !== undefined) product.sku = sku || null;
     if (barcode !== undefined) product.barcode = barcode || null;
     if (stock_control !== undefined)
       product.stock_control = toBool(stock_control);
     if (has_variants !== undefined) product.has_variants = toBool(has_variants);
     if (brand !== undefined) product.brand = brand || null;
+    if (condition !== undefined) product.condition = condition || PRODUCT_CONDITION.NEW;
+    if (authenticity !== undefined) product.authenticity = authenticity || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
-    if (vehicle_make !== undefined) product.vehicle_make = vehicle_make || null;
-    if (vehicle_model !== undefined) product.vehicle_model = vehicle_model || null;
-    if (vehicle_model_code !== undefined) product.vehicle_model_code = vehicle_model_code || null;
-    if (vehicle_year !== undefined) product.vehicle_year = vehicle_year ? Number(vehicle_year) : null;
-    if (vehicle_year_to !== undefined) product.vehicle_year_to = vehicle_year_to ? Number(vehicle_year_to) : null;
+    if (vehicle !== undefined) product.vehicle = parseField(vehicle, null);
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
@@ -328,13 +322,14 @@ exports.duplicateProduct = async (req, res) => {
       compare_price: original.compare_price,
       cost_price: original.cost_price,
       is_taxable: original.is_taxable,
-      is_vat_inclusive: original.is_vat_inclusive,
-      vat_rate: original.vat_rate,
       sku: null,
       barcode: null,
       stock_control: original.stock_control,
       has_variants: original.has_variants,
       brand: original.brand,
+      condition: original.condition,
+      authenticity: original.authenticity,
+      vehicle: original.vehicle,
       attachments: original.attachments,
       categories: original.categories,
       tags: original.tags,

@@ -1,6 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { MAKES, getModels, getModelCodes, getYears } from "@/lib/data/vehicle-models";
+import {
+  getVehicleMakes,
+  getVehicleModels,
+  getVehicleModelCodes,
+  getVehicleYears,
+} from "@/lib/api/vehicle-models";
 
 export interface VehicleFormState {
   vehicle_make: string;
@@ -16,11 +22,28 @@ interface ProductVehicleSectionProps {
 }
 
 export function ProductVehicleSection({ values, onChange }: ProductVehicleSectionProps) {
-  const models = values.vehicle_make ? getModels(values.vehicle_make) : [];
+  const { data: makesRes } = useQuery({
+    queryKey: ["vehicle-makes"],
+    queryFn: getVehicleMakes,
+    staleTime: Infinity,
+  });
+  const { data: modelsRes } = useQuery({
+    queryKey: ["vehicle-models", values.vehicle_make],
+    queryFn: () => getVehicleModels(values.vehicle_make),
+    enabled: !!values.vehicle_make,
+    staleTime: Infinity,
+  });
+  const { data: modelCodesRes } = useQuery({
+    queryKey: ["vehicle-model-codes", values.vehicle_make, values.vehicle_model],
+    queryFn: () => getVehicleModelCodes(values.vehicle_make, values.vehicle_model),
+    enabled: !!values.vehicle_make && !!values.vehicle_model,
+    staleTime: Infinity,
+  });
+
+  const makes = makesRes?.data ?? [];
+  const models = values.vehicle_make ? (modelsRes?.data ?? []) : [];
   const modelCodes =
-    values.vehicle_make && values.vehicle_model
-      ? getModelCodes(values.vehicle_make, values.vehicle_model)
-      : [];
+    values.vehicle_make && values.vehicle_model ? (modelCodesRes?.data ?? []) : [];
 
   function handleMakeChange(make: string) {
     onChange({ vehicle_make: make, vehicle_model: "", vehicle_model_code: "", vehicle_year: "", vehicle_year_to: "" });
@@ -30,13 +53,17 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
     onChange({ vehicle_model: model, vehicle_model_code: "", vehicle_year: "", vehicle_year_to: "" });
   }
 
-  function handleModelCodeChange(model_code: string) {
-    const years = getYears(values.vehicle_make, values.vehicle_model, model_code);
-    onChange({
-      vehicle_model_code: model_code,
-      vehicle_year: years ? String(years.year_from) : "",
-      vehicle_year_to: years?.year_to != null ? String(years.year_to) : "",
-    });
+  async function handleModelCodeChange(model_code: string) {
+    try {
+      const res = await getVehicleYears(values.vehicle_make, values.vehicle_model, model_code);
+      onChange({
+        vehicle_model_code: model_code,
+        vehicle_year: String(res.data.year_from),
+        vehicle_year_to: res.data.year_to != null ? String(res.data.year_to) : "",
+      });
+    } catch {
+      onChange({ vehicle_model_code: model_code, vehicle_year: "", vehicle_year_to: "" });
+    }
   }
 
   return (
@@ -45,11 +72,12 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-fg/65">Make</label>
         <Combobox
-          options={MAKES}
+          options={makes}
           value={values.vehicle_make}
           onChange={handleMakeChange}
           placeholder="Select make…"
-          searchPlaceholder="Search makes…"
+          searchPlaceholder="Search or add a make…"
+          allowCustom
         />
       </div>
 
@@ -61,8 +89,9 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
           value={values.vehicle_model}
           onChange={handleModelChange}
           placeholder="Select model…"
-          searchPlaceholder="Search models…"
+          searchPlaceholder="Search or add a model…"
           disabled={!values.vehicle_make}
+          allowCustom
         />
       </div>
 
@@ -74,8 +103,9 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
           value={values.vehicle_model_code}
           onChange={handleModelCodeChange}
           placeholder="Select code…"
-          searchPlaceholder="Search codes…"
+          searchPlaceholder="Search or add a code…"
           disabled={!values.vehicle_model}
+          allowCustom
         />
       </div>
 
