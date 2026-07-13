@@ -10,4 +10,19 @@ const PRODUCT_STATUS = Object.freeze({
   ACTIVE: "active",
 });
 
-module.exports = { PRODUCT_TYPE, PRODUCT_STATUS };
+const PRODUCT_CONDITION = Object.freeze({
+  NEW: "NEW",
+  USED: "USED",
+});
+
+const PRODUCT_AUTHENTICITY = Object.freeze({
+  GENUINE: "Genuine",
+  AFTERMARKET: "Aftermarket",
+});
+
+module.exports = {
+  PRODUCT_TYPE,
+  PRODUCT_STATUS,
+  PRODUCT_CONDITION,
+  PRODUCT_AUTHENTICITY,
+};

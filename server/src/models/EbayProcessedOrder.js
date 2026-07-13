@@ -13,7 +13,7 @@ const schema = new mongoose.Schema(
     lineItems: [{ sku: String, quantity: Number }],
     processedAt: { type: Date, default: Date.now },
   },
-  { timestamps: false },
+  { timestamps: false, versionKey: false },
 );
 
 // Atomic uniqueness: one deduction + one restock allowed per platform + orderId

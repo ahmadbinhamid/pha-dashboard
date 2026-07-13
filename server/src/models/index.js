@@ -12,4 +12,5 @@ module.exports = {
   InventorySettings: require("./InventorySettings"),
   EbayProcessedOrder: require("./EbayProcessedOrder"),
   MarketplaceListing: require("./MarketplaceListing"),
+  VehicleModel: require("./VehicleModel"),
 };

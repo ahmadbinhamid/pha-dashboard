@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { NativeSelect } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { FormField } from "@/components/ui/form-field";
 import { ProductImages } from "@/components/media/product-images";
@@ -17,6 +19,7 @@ import { useToast } from "@/context";
 import {
   getProduct,
   updateProduct,
+  getCategories,
 } from "@/lib/api/products";
 import type {
   Product,
@@ -34,6 +37,16 @@ import {
   ShoppingBag,
 } from "lucide-react";
 
+const CONDITIONS = [
+  { value: "NEW", label: "New" },
+  { value: "USED", label: "Used" },
+];
+
+const AUTHENTICITY_OPTIONS = [
+  { value: "Genuine", label: "Genuine" },
+  { value: "Aftermarket", label: "Aftermarket" },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function productToForm(p: Product): ProductEditFormState {
@@ -44,16 +57,16 @@ function productToForm(p: Product): ProductEditFormState {
     compare_price: p.compare_price?.toString() ?? "",
     cost_price: p.cost_price?.toString() ?? "",
     is_taxable: p.is_taxable,
-    is_vat_inclusive: p.is_vat_inclusive,
-    vat_rate: p.vat_rate?.toString() ?? "",
     sku: p.sku ?? "",
     barcode: p.barcode ?? "",
     brand: p.brand ?? "",
-    vehicle_make: p.vehicle_make ?? "",
-    vehicle_model: p.vehicle_model ?? "",
-    vehicle_model_code: p.vehicle_model_code ?? "",
-    vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
-    vehicle_year_to: p.vehicle_year_to != null ? String(p.vehicle_year_to) : "",
+    condition: p.condition,
+    authenticity: p.authenticity ?? "",
+    vehicle_make: p.vehicle?.make ?? "",
+    vehicle_model: p.vehicle?.model ?? "",
+    vehicle_model_code: p.vehicle?.model_code ?? "",
+    vehicle_year: p.vehicle?.year_from != null ? String(p.vehicle.year_from) : "",
+    vehicle_year_to: p.vehicle?.year_to != null ? String(p.vehicle.year_to) : "",
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
@@ -74,16 +87,21 @@ function formToFD(form: ProductEditFormState): FormData {
   fd.append("compare_price", form.compare_price || "");
   fd.append("cost_price", form.cost_price || "");
   fd.append("is_taxable", String(form.is_taxable));
-  fd.append("is_vat_inclusive", String(form.is_vat_inclusive));
-  if (form.vat_rate) fd.append("vat_rate", form.vat_rate);
   fd.append("sku", form.sku);
   fd.append("barcode", form.barcode);
   fd.append("brand", form.brand);
-  fd.append("vehicle_make", form.vehicle_make);
-  fd.append("vehicle_model", form.vehicle_model);
-  fd.append("vehicle_model_code", form.vehicle_model_code);
-  fd.append("vehicle_year", form.vehicle_year);
-  fd.append("vehicle_year_to", form.vehicle_year_to);
+  fd.append("condition", form.condition);
+  fd.append("authenticity", form.authenticity);
+  fd.append(
+    "vehicle",
+    JSON.stringify({
+      make: form.vehicle_make || null,
+      model: form.vehicle_model || null,
+      model_code: form.vehicle_model_code || null,
+      year_from: form.vehicle_year ? Number(form.vehicle_year) : null,
+      year_to: form.vehicle_year_to ? Number(form.vehicle_year_to) : null,
+    }),
+  );
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
@@ -161,6 +179,16 @@ export default function ProductEditPage() {
   const [form, setForm] = useState<ProductEditFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const savedFormRef = useRef<string>("");
+
+  const { data: categoriesRes } = useQuery({
+    queryKey: ["categories"],
+    queryFn: getCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+    value: c._id,
+    label: c.name,
+  }));
 
   useEffect(() => {
     if (product) {
@@ -321,6 +349,53 @@ export default function ProductEditPage() {
                 </div>
               </div>
 
+              <Switch
+                checked={form.is_published_online}
+                onCheckedChange={(v) => set("is_published_online", v)}
+                label="Show on storefront"
+                description="Make this product visible on the public storefront"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Classification */}
+          <Card>
+            <CardHeader title={<SectionLabel icon={Tag}>Classification</SectionLabel>} />
+            <CardContent className="space-y-4">
+              <FormField label="Categories">
+                <MultiSelect
+                  options={categoryOptions}
+                  value={form.categories}
+                  onChange={(v) => set("categories", v)}
+                  placeholder="Select categories…"
+                  searchPlaceholder="Search categories…"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Condition">
+                  <NativeSelect
+                    value={form.condition}
+                    onChange={(e) => set("condition", e.target.value as ProductEditFormState["condition"])}
+                  >
+                    {CONDITIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+
+                <FormField label="Authenticity">
+                  <NativeSelect
+                    value={form.authenticity}
+                    onChange={(e) => set("authenticity", e.target.value as ProductEditFormState["authenticity"])}
+                  >
+                    <option value="">Select authenticity…</option>
+                    {AUTHENTICITY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              </div>
             </CardContent>
           </Card>
 

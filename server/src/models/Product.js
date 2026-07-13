@@ -5,6 +5,8 @@ const { buildSchema } = require("./base.model");
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
+  PRODUCT_CONDITION,
+  PRODUCT_AUTHENTICITY,
 } = require("../constants/product.constants");
 
 const choiceSchema = new Schema(
@@ -15,6 +17,16 @@ const choiceSchema = new Schema(
   { _id: false },
 );
 
+const vehicleSchema = new Schema(
+  {
+    make: { type: String, default: null },
+    model: { type: String, default: null },
+    model_code: { type: String, default: null },
+    year_from: { type: Number, default: null },
+    year_to: { type: Number, default: null },
+  },
+  { _id: false },
+);
 
 const productSchema = buildSchema({
   title: { type: String, required: true, trim: true },
@@ -35,18 +47,22 @@ const productSchema = buildSchema({
   compare_price: { type: Number, default: null },
   cost_price: { type: Number, default: null },
   is_taxable: { type: Boolean, default: false },
-  is_vat_inclusive: { type: Boolean, default: false },
-  vat_rate: { type: Number, default: null },
   sku: { type: String, default: null },
   barcode: { type: String, default: null },
   stock_control: { type: Boolean, default: false },
   has_variants: { type: Boolean, default: false },
   brand: { type: String, default: null },
-  vehicle_make: { type: String, default: null },
-  vehicle_model: { type: String, default: null },
-  vehicle_model_code: { type: String, default: null },
-  vehicle_year: { type: Number, default: null },
-  vehicle_year_to: { type: Number, default: null },
+  condition: {
+    type: String,
+    enum: Object.values(PRODUCT_CONDITION),
+    default: PRODUCT_CONDITION.NEW,
+  },
+  authenticity: {
+    type: String,
+    enum: Object.values(PRODUCT_AUTHENTICITY),
+    default: null,
+  },
+  vehicle: { type: vehicleSchema, default: () => ({}) },
   attachments: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
   categories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
   tags: [{ type: String }],

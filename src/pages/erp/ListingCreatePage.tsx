@@ -39,11 +39,16 @@ export default function ListingCreatePage() {
       store_sku: p.sku || "",
       price_override: p.price != null ? String(p.price) : "",
       photo_overrides: p.attachments ?? [],
-      vehicle_make: p.vehicle_make || "",
-      vehicle_model: p.vehicle_model || "",
-      vehicle_model_code: p.vehicle_model_code || "",
-      vehicle_year: p.vehicle_year != null ? String(p.vehicle_year) : "",
-      vehicle_year_to: p.vehicle_year_to != null ? String(p.vehicle_year_to) : "",
+      vehicle_make: p.vehicle?.make || "",
+      vehicle_model: p.vehicle?.model || "",
+      vehicle_model_code: p.vehicle?.model_code || "",
+      vehicle_year: p.vehicle?.year_from != null ? String(p.vehicle.year_from) : "",
+      vehicle_year_to: p.vehicle?.year_to != null ? String(p.vehicle.year_to) : "",
+      condition: p.condition || prev.condition,
+      item_specifics: {
+        ...prev.item_specifics,
+        authenticity: p.authenticity || prev.item_specifics.authenticity,
+      },
     }));
   }, [productData]);
 

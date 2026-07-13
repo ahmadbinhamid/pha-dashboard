@@ -4,6 +4,8 @@ const Joi = require("joi");
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
+  PRODUCT_CONDITION,
+  PRODUCT_AUTHENTICITY,
 } = require("../constants/product.constants");
 
 const createProduct = {
@@ -24,17 +26,20 @@ const createProduct = {
     compare_price: Joi.number().min(0).allow(null).default(null),
     cost_price: Joi.number().min(0).allow(null).default(null),
     is_taxable: Joi.boolean().default(false),
-    is_vat_inclusive: Joi.boolean().default(false),
-    vat_rate: Joi.number().min(0).allow(null).default(null),
     sku: Joi.string().allow("", null).default(null),
     barcode: Joi.string().allow("", null).default(null),
     stock_control: Joi.boolean().default(false),
     has_variants: Joi.boolean().default(false),
     brand: Joi.string().allow("", null).default(null),
-    vehicle_make: Joi.string().allow("", null).default(null),
-    vehicle_model: Joi.string().allow("", null).default(null),
-    vehicle_model_code: Joi.string().allow("", null).default(null),
-    vehicle_year: Joi.number().integer().allow(null).default(null),
+    condition: Joi.string()
+      .valid(...Object.values(PRODUCT_CONDITION))
+      .default(PRODUCT_CONDITION.NEW),
+    authenticity: Joi.string()
+      .valid(...Object.values(PRODUCT_AUTHENTICITY))
+      .allow("", null)
+      .default(null),
+    // Sent as a JSON-stringified object: { make, model, model_code, year_from, year_to }
+    vehicle: Joi.string().allow("", null).default(null),
     attachments: Joi.array().items(Joi.string()).default([]),
     categories: Joi.array().items(Joi.string()).default([]),
     tags: Joi.array().items(Joi.string()).default([]),
@@ -63,17 +68,16 @@ const updateProduct = {
     compare_price: Joi.number().min(0).allow(null),
     cost_price: Joi.number().min(0).allow(null),
     is_taxable: Joi.boolean(),
-    is_vat_inclusive: Joi.boolean(),
-    vat_rate: Joi.number().min(0).allow(null),
     sku: Joi.string().allow("", null),
     barcode: Joi.string().allow("", null),
     stock_control: Joi.boolean(),
     has_variants: Joi.boolean(),
     brand: Joi.string().allow("", null),
-    vehicle_make: Joi.string().allow("", null),
-    vehicle_model: Joi.string().allow("", null),
-    vehicle_model_code: Joi.string().allow("", null),
-    vehicle_year: Joi.number().integer().allow(null),
+    condition: Joi.string().valid(...Object.values(PRODUCT_CONDITION)),
+    authenticity: Joi.string()
+      .valid(...Object.values(PRODUCT_AUTHENTICITY))
+      .allow("", null),
+    vehicle: Joi.string().allow("", null),
     attachments: Joi.array().items(Joi.string()),
     categories: Joi.array().items(Joi.string()),
     tags: Joi.array().items(Joi.string()),

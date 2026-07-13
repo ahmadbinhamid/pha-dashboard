@@ -54,6 +54,17 @@ export interface ProductVariant {
   ebay_sync_status: EbaySyncStatus;
 }
 
+export type ProductCondition = "NEW" | "USED";
+export type ProductAuthenticity = "Genuine" | "Aftermarket";
+
+export interface ProductVehicle {
+  make: string | null;
+  model: string | null;
+  model_code: string | null;
+  year_from: number | null;
+  year_to: number | null;
+}
+
 export interface Product {
   _id: string;
   id: string;
@@ -67,30 +78,20 @@ export interface Product {
   compare_price: number | null;
   cost_price: number | null;
   is_taxable: boolean;
-  is_vat_inclusive: boolean;
-  vat_rate: number | null;
   sku: string | null;
   barcode: string | null;
   stock_control: boolean;
   has_variants: boolean;
   brand: string | null;
-  vehicle_make: string | null;
-  vehicle_model: string | null;
-  vehicle_model_code: string | null;
-  vehicle_year: number | null;
-  vehicle_year_to: number | null;
+  condition: ProductCondition;
+  authenticity: ProductAuthenticity | null;
+  vehicle: ProductVehicle;
   attachments: Attachment[];
   categories: Category[];
   tags: string[];
   related_products: Product[];
   choices: Choice[];
   digital_file: Attachment | null;
-  ebay_listing_id: string | null;
-  ebay_offer_id: string | null;
-  ebay_category_id: string | null;
-  ebay_condition: string;
-  ebay_sync_status: EbaySyncStatus;
-  ebay_synced_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -108,10 +109,11 @@ export interface ProductCreateFormState {
   compare_price: string;
   cost_price: string;
   is_taxable: boolean;
-  vat_rate: string;
   barcode: string;
   stock_control: boolean;
   stock_entries: StockEntry[];
+  condition: ProductCondition;
+  authenticity: ProductAuthenticity | "";
   vehicle_make: string;
   vehicle_model: string;
   vehicle_model_code: string;
@@ -132,11 +134,11 @@ export interface ProductEditFormState {
   compare_price: string;
   cost_price: string;
   is_taxable: boolean;
-  is_vat_inclusive: boolean;
-  vat_rate: string;
   sku: string;
   barcode: string;
   brand: string;
+  condition: ProductCondition;
+  authenticity: ProductAuthenticity | "";
   vehicle_make: string;
   vehicle_model: string;
   vehicle_model_code: string;

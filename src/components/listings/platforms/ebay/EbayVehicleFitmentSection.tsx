@@ -1,7 +1,13 @@
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { MAKES, getModels, getModelCodes, getYears } from "@/lib/data/vehicle-models";
+import {
+  getVehicleMakes,
+  getVehicleModels,
+  getVehicleModelCodes,
+  getVehicleYears,
+} from "@/lib/api/vehicle-models";
 import type { EbayListingFormState, FitmentRowFormState } from "@/types/marketplace";
 import { Plus, Trash2, Car } from "lucide-react";
 
@@ -29,8 +35,27 @@ function FitmentRow({
   onUpdate: (patch: Partial<FitmentRowFormState>) => void;
   onRemove: () => void;
 }) {
-  const models = row.make ? getModels(row.make) : [];
-  const modelCodes = row.make && row.model ? getModelCodes(row.make, row.model) : [];
+  const { data: makesRes } = useQuery({
+    queryKey: ["vehicle-makes"],
+    queryFn: getVehicleMakes,
+    staleTime: Infinity,
+  });
+  const { data: modelsRes } = useQuery({
+    queryKey: ["vehicle-models", row.make],
+    queryFn: () => getVehicleModels(row.make),
+    enabled: !!row.make,
+    staleTime: Infinity,
+  });
+  const { data: modelCodesRes } = useQuery({
+    queryKey: ["vehicle-model-codes", row.make, row.model],
+    queryFn: () => getVehicleModelCodes(row.make, row.model),
+    enabled: !!row.make && !!row.model,
+    staleTime: Infinity,
+  });
+
+  const makes = makesRes?.data ?? [];
+  const models = row.make ? (modelsRes?.data ?? []) : [];
+  const modelCodes = row.make && row.model ? (modelCodesRes?.data ?? []) : [];
 
   function handleMakeChange(make: string) {
     // Reset everything downstream when make changes
@@ -42,15 +67,15 @@ function FitmentRow({
     onUpdate({ model, model_code: "", year_from: "", year_to: "" });
   }
 
-  function handleModelCodeChange(model_code: string) {
-    const years = getYears(row.make, row.model, model_code);
-    if (years) {
+  async function handleModelCodeChange(model_code: string) {
+    try {
+      const res = await getVehicleYears(row.make, row.model, model_code);
       onUpdate({
         model_code,
-        year_from: String(years.year_from),
-        year_to: years.year_to != null ? String(years.year_to) : "",
+        year_from: String(res.data.year_from),
+        year_to: res.data.year_to != null ? String(res.data.year_to) : "",
       });
-    } else {
+    } catch {
       onUpdate({ model_code, year_from: "", year_to: "" });
     }
   }
@@ -77,11 +102,12 @@ function FitmentRow({
         <div className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Make</span>
           <Combobox
-            options={MAKES}
+            options={makes}
             value={row.make}
             onChange={handleMakeChange}
             placeholder="Select make…"
-            searchPlaceholder="Search makes…"
+            searchPlaceholder="Search or add a make…"
+            allowCustom
           />
         </div>
         <div className="space-y-1">
@@ -91,8 +117,9 @@ function FitmentRow({
             value={row.model}
             onChange={handleModelChange}
             placeholder={row.make ? "Select model…" : "Select make first"}
-            searchPlaceholder="Search models…"
+            searchPlaceholder="Search or add a model…"
             disabled={!row.make}
+            allowCustom
           />
         </div>
       </div>
@@ -106,8 +133,9 @@ function FitmentRow({
             value={row.model_code}
             onChange={handleModelCodeChange}
             placeholder={row.model ? "Select code…" : "Select model first"}
-            searchPlaceholder="Search codes…"
+            searchPlaceholder="Search or add a code…"
             disabled={!row.model}
+            allowCustom
           />
         </div>
         <div className="space-y-1">
