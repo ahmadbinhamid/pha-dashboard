@@ -19,6 +19,8 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  description: string;
+  thumbnail: Attachment | null;
   parent: string | null;
   sort_order: number;
 }

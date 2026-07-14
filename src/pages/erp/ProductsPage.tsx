@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/modal";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { ProductRow } from "@/components/products/product-row";
-import { getProducts, deleteProduct, getCategories } from "@/lib/api/products";
+import { getProducts, deleteProduct } from "@/lib/api/products";
+import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
@@ -114,11 +115,11 @@ export default function ProductsPage() {
   });
 
   const { data: categoriesRes } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
+    queryKey: ["categories", "all"],
+    queryFn: () => getCategories({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
   });
-  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+  const categoryOptions = (categoriesRes?.data?.items ?? []).map((c) => ({
     value: c._id,
     label: c.name,
   }));

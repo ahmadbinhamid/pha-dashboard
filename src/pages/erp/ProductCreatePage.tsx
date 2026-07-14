@@ -13,7 +13,8 @@ import { ProductImages } from "@/components/media/product-images";
 import { CreateStockSection } from "@/components/products/create-stock-section";
 import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
 import { useToast } from "@/context";
-import { createProduct, getCategories } from "@/lib/api/products";
+import { createProduct } from "@/lib/api/products";
+import { getCategories } from "@/lib/api/categories";
 import type { ProductCreateFormState } from "@/types/product";
 import { SectionLabel } from "@/components/products/section-label";
 import { Package2, Image, DollarSign, Boxes, Layers, Car, Tag, Plus } from "lucide-react";
@@ -98,11 +99,11 @@ export default function ProductCreatePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: categoriesRes } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
+    queryKey: ["categories", "all"],
+    queryFn: () => getCategories({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
   });
-  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+  const categoryOptions = (categoriesRes?.data?.items ?? []).map((c) => ({
     value: c._id,
     label: c.name,
   }));

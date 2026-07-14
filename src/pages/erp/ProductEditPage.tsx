@@ -19,8 +19,8 @@ import { useToast } from "@/context";
 import {
   getProduct,
   updateProduct,
-  getCategories,
 } from "@/lib/api/products";
+import { getCategories } from "@/lib/api/categories";
 import type {
   Product,
   ProductEditFormState,
@@ -181,11 +181,11 @@ export default function ProductEditPage() {
   const savedFormRef = useRef<string>("");
 
   const { data: categoriesRes } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
+    queryKey: ["categories", "all"],
+    queryFn: () => getCategories({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
   });
-  const categoryOptions = (categoriesRes?.data ?? []).map((c) => ({
+  const categoryOptions = (categoriesRes?.data?.items ?? []).map((c) => ({
     value: c._id,
     label: c.name,
   }));
