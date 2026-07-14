@@ -4,7 +4,6 @@ const {
   generateNextSku,
   generateVariantsForProduct,
   ensureInventoryForProduct,
-  ensureUniqueProductSlug,
   getProducts,
   findProductById,
   getProductBySlug,
@@ -15,6 +14,7 @@ const {
   getPopulatedVariant,
   hasMarketplaceListings,
   saveProduct,
+  saveProductWithUniqueSlug,
   softDeleteProduct,
   saveVariant,
   applyStockEntries,
@@ -238,11 +238,9 @@ exports.updateProduct = async (req, res) => {
       vehicle,
     } = body;
 
+    let pendingSlugBase = null;
     if (title !== undefined && title !== product.title) {
-      product.slug = await ensureUniqueProductSlug(
-        generateSlug(title),
-        product._id.toString(),
-      );
+      pendingSlugBase = generateSlug(title);
       product.title = title;
     }
 
@@ -289,7 +287,11 @@ exports.updateProduct = async (req, res) => {
 
     if (bodyKeys.includes("choices")) product.choices = choices;
 
-    await saveProduct(product);
+    if (pendingSlugBase) {
+      await saveProductWithUniqueSlug(product, pendingSlugBase);
+    } else {
+      await saveProduct(product);
+    }
 
     if (choicesChanged && product.has_variants && product.choices.length > 0) {
       const newVariants = await generateVariantsForProduct(product);

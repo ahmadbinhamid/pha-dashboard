@@ -45,6 +45,12 @@ const config = {
     pass: get("SMTP_PASS"),
     alertsTo: get("ALERTS_TO"),
     salesEmail: get("SALES_EMAIL", "sales@partshubaustralia.com.au"),
+    // Conservative defaults for shared/free SMTP sandboxes (e.g. Mailtrap
+    // testing plans) that throttle to a handful of messages per second.
+    // Bump these via env once on a real provider with higher limits.
+    maxConnections: getNum("SMTP_MAX_CONNECTIONS", 1),
+    rateLimit: getNum("SMTP_RATE_LIMIT", 1),
+    rateDeltaMs: getNum("SMTP_RATE_DELTA_MS", 1000),
   },
 
   emailBrand: {

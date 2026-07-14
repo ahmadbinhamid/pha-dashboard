@@ -12,6 +12,14 @@ const transporter = nodemailer.createTransport({
     user: config.smtp.user,
     pass: config.smtp.pass,
   },
+  // Pooled + rate-limited: without this, concurrent worker jobs each open
+  // their own SMTP connection and blast sends at once, which trips
+  // "too many emails per second" on throttled sandboxes. Pooling paces
+  // sends through the configured limit instead of firing them all at once.
+  pool: true,
+  maxConnections: config.smtp.maxConnections,
+  rateLimit: config.smtp.rateLimit,
+  rateDelta: config.smtp.rateDeltaMs,
 });
 
 async function sendEmail({ from, to, subject, html, text }) {

@@ -46,4 +46,21 @@ async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5
   }
 }
 
-module.exports = { generateSlug, ensureUniqueSlug, createWithUniqueSlug };
+// Same race as createWithUniqueSlug, but for renaming an existing document:
+// two concurrent renames landing on the same target slug can both pass the
+// check before either commits. Retries the slug-then-save cycle on a
+// genuine conflict so the loser converges on the next free suffix instead
+// of surfacing a confusing "slug already exists" error.
+async function saveWithUniqueSlug(doc, Model, baseSlug, excludeId, { maxAttempts = 5 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    doc.slug = await ensureUniqueSlug(Model, baseSlug, excludeId);
+    try {
+      return await doc.save();
+    } catch (err) {
+      const isSlugConflict = err.code === 11000 && err.keyPattern && "slug" in err.keyPattern;
+      if (!isSlugConflict || attempt === maxAttempts - 1) throw err;
+    }
+  }
+}
+
+module.exports = { generateSlug, ensureUniqueSlug, createWithUniqueSlug, saveWithUniqueSlug };

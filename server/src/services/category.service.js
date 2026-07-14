@@ -1,7 +1,11 @@
 // services/category.service.js
 
 const Category = require("../models/Category");
-const { generateSlug, ensureUniqueSlug, createWithUniqueSlug } = require("../utils/slug");
+const {
+  generateSlug,
+  createWithUniqueSlug,
+  saveWithUniqueSlug,
+} = require("../utils/slug");
 const { escapeRegex } = require("../utils/regex");
 
 async function listCategories({ skip = 0, limit = 0, search = "" } = {}) {
@@ -43,16 +47,12 @@ async function updateCategory(id, { name, description, thumbnail, parent, sort_o
   const category = await Category.findById(id);
   if (!category) return null;
 
+  let pendingSlugBase = null;
   if (name && name !== category.name) {
-    const baseSlug = slugOverride ? generateSlug(slugOverride) : generateSlug(name);
-    category.slug = await ensureUniqueSlug(Category, baseSlug, category._id.toString());
+    pendingSlugBase = slugOverride ? generateSlug(slugOverride) : generateSlug(name);
     category.name = name;
   } else if (slugOverride) {
-    category.slug = await ensureUniqueSlug(
-      Category,
-      generateSlug(slugOverride),
-      category._id.toString(),
-    );
+    pendingSlugBase = generateSlug(slugOverride);
   }
 
   if (description !== undefined) category.description = description;
@@ -60,7 +60,13 @@ async function updateCategory(id, { name, description, thumbnail, parent, sort_o
   if (parent !== undefined) category.parent = parent || null;
   if (sort_order !== undefined) category.sort_order = sort_order;
 
-  await category.save();
+  // Race-safe: retries on a genuine slug conflict instead of trusting a
+  // single check-then-save (see utils/slug.js for why).
+  if (pendingSlugBase) {
+    await saveWithUniqueSlug(category, Category, pendingSlugBase, category._id.toString());
+  } else {
+    await category.save();
+  }
   return category;
 }
 

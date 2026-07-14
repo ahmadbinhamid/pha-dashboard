@@ -5,7 +5,7 @@ const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
 const MarketplaceListing = require("../models/MarketplaceListing");
-const { ensureUniqueSlug, createWithUniqueSlug } = require("../utils/slug");
+const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
@@ -137,10 +137,6 @@ async function createProductRecordWithSlug(data, baseSlug) {
   return createWithUniqueSlug(Product, baseSlug, (slug) => ({ ...data, slug }));
 }
 
-async function ensureUniqueProductSlug(baseSlug, excludeId = null) {
-  return ensureUniqueSlug(Product, baseSlug, excludeId);
-}
-
 // ── Variant CRUD ──────────────────────────────────────────────────────────────
 
 async function findVariantsByProductId(productId) {
@@ -172,6 +168,12 @@ async function saveProduct(product) {
   return product.save();
 }
 
+// For renames: retries on a genuine slug conflict instead of trusting a
+// single check-then-save (see utils/slug.js for why).
+async function saveProductWithUniqueSlug(product, baseSlug) {
+  return saveWithUniqueSlug(product, Product, baseSlug, product._id.toString());
+}
+
 async function softDeleteProduct(product) {
   return product.softDelete();
 }
@@ -194,7 +196,6 @@ async function applyStockEntries(productId, stockEntries) {
 module.exports = {
   cartesian,
   generateNextSku,
-  ensureUniqueProductSlug,
   generateVariantsForProduct,
   ensureInventoryForProduct,
   getProducts,
@@ -208,6 +209,7 @@ module.exports = {
   getPopulatedVariant,
   hasMarketplaceListings,
   saveProduct,
+  saveProductWithUniqueSlug,
   softDeleteProduct,
   saveVariant,
   applyStockEntries,

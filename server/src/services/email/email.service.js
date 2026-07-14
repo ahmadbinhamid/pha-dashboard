@@ -75,19 +75,6 @@ async function sendInquiryNotification({ customerName, customerEmail, customerPh
 }
 
 /**
- * Send welcome email to a newsletter subscriber
- */
-async function sendNewsletterWelcome({ to }) {
-  return enqueueEmailJob({
-    from: defaultFrom(),
-    to,
-    subject: `You're subscribed! - ${config.emailBrand.appName}`,
-    template: "newsletterWelcome",
-    variables: {},
-  });
-}
-
-/**
  * Notify the sales inbox of a new newsletter subscriber
  */
 async function sendNewsletterSignupNotification({ subscriberEmail }) {
@@ -107,6 +94,5 @@ module.exports = {
   accountVerified,
   sendPasswordReset,
   sendInquiryNotification,
-  sendNewsletterWelcome,
   sendNewsletterSignupNotification,
 };
