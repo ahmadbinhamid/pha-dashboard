@@ -25,6 +25,16 @@ export interface Category {
   sort_order: number;
 }
 
+// The /category endpoint now returns a paginated payload (matching
+// ProductListData) instead of a bare Category[] array.
+export interface CategoryListData {
+  items: Category[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface Location {
   _id: string;
   id: string;

@@ -3,6 +3,8 @@ import type { BeResponse } from "./base";
 import type {
   Product,
   ProductVariant,
+  Category,
+  CategoryListData,
   Location,
   Attachment,
 } from "@/types/product";
@@ -87,6 +89,11 @@ export const updateVariant = async (
     payload,
     { headers: { "Content-Type": "multipart/form-data" } },
   );
+  return data;
+};
+
+export const getCategories = async () => {
+  const { data } = await apiClient.get<BeResponse<CategoryListData>>("/category");
   return data;
 };
 
