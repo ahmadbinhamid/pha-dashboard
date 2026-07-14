@@ -41,15 +41,24 @@ exports.getListing = async (req, res) => {
 
 exports.getListings = async (req, res) => {
   try {
-    const { product, state, sync_status, page = 1, limit = 20 } = req.query;
-    const result = await listingService.listListings({
-      page: Number(page),
-      limit: Number(limit),
+    const { page, limit, skip } = req.pagination;
+    const { product, state, sync_status } = req.query;
+
+    const { items, total } = await listingService.listListings({
+      skip,
+      limit,
       product,
       state,
       sync_status,
     });
-    return success(res, result);
+
+    return success(res, {
+      items,
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     return systemfailure(res, err);
   }

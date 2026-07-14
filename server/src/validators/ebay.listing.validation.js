@@ -1,3 +1,16 @@
+const Joi = require("joi");
+const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../constants/marketplace.constants");
+
+const listListings = {
+  query: Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(100).default(20),
+    product: Joi.string(),
+    state: Joi.string().valid(...Object.values(LISTING_STATE)),
+    sync_status: Joi.string().valid(...Object.values(LISTING_SYNC_STATUS)),
+  }),
+};
+
 // Validates a fully-populated listing document before enqueuing for eBay sync
 function validateListingForPush(listing, product) {
   const errors = [];
@@ -78,4 +91,4 @@ function validateListingForPush(listing, product) {
   return errors;
 }
 
-module.exports = { validateListingForPush };
+module.exports = { validateListingForPush, listListings };

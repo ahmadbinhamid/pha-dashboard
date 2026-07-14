@@ -6,6 +6,12 @@ const { buildSchema } = require("./base.model");
 const categorySchema = buildSchema({
   name: { type: String, required: true, trim: true },
   slug: { type: String, unique: true },
+  description: { type: String, default: "" },
+  thumbnail: {
+    type: Schema.Types.ObjectId,
+    ref: "Attachment",
+    default: null,
+  },
   parent: {
     type: Schema.Types.ObjectId,
     ref: "Category",

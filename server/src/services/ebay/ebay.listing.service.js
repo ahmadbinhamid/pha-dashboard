@@ -91,8 +91,7 @@ async function getListingsByProduct(productId) {
     .sort({ created_at: -1 });
 }
 
-async function listListings({ page = 1, limit = 20, product, state, sync_status } = {}) {
-  const skip = (page - 1) * limit;
+async function listListings({ skip, limit, product, state, sync_status } = {}) {
   const filter = { platform: MARKETPLACE_PLATFORM.EBAY };
   if (product) filter.product = product;
   if (state) filter.state = state;
@@ -108,7 +107,7 @@ async function listListings({ page = 1, limit = 20, product, state, sync_status 
     MarketplaceListing.countDocuments(filter),
   ]);
 
-  return { items, total, page, pageSize: limit, totalPages: Math.ceil(total / limit) };
+  return { items, total };
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────

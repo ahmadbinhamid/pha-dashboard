@@ -3,6 +3,9 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth } = require("../middlewares/auth");
+const validate = require("../middlewares/validate");
+const pagination = require("../middlewares/pagination");
+const v = require("../validators/ebay.listing.validation");
 const ctrl = require("../controllers/ebay.controller");
 const listingCtrl = require("../controllers/ebay.listing.controller");
 
@@ -17,7 +20,13 @@ router.get("/category-aspects", auth(), asyncHandler(ctrl.getCategoryAspects));
 
 // ── eBay listings CRUD ────────────────────────────────────────────────────────
 router.post("/listings", auth(), asyncHandler(listingCtrl.createListing));
-router.get("/listings", auth(), asyncHandler(listingCtrl.getListings));
+router.get(
+  "/listings",
+  auth(),
+  pagination(),
+  validate(v.listListings),
+  asyncHandler(listingCtrl.getListings),
+);
 router.get("/listings/:id", auth(), asyncHandler(listingCtrl.getListing));
 router.put("/listings/:id", auth(), asyncHandler(listingCtrl.updateListing));
 router.delete("/listings/:id", auth(), asyncHandler(listingCtrl.deleteListing));
