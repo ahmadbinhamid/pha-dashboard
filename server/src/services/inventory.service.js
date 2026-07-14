@@ -8,6 +8,7 @@ const ProductVariant = require("../models/ProductVariant");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
+const { escapeRegex } = require("../utils/regex");
 
 // ── List / aggregation ────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ async function listInventory({ page = 1, limit = 20, search, location, product, 
   ];
 
   if (search) {
-    const re = new RegExp(search.trim(), "i");
+    const re = new RegExp(escapeRegex(search.trim()), "i");
     pipeline.push({
       $match: {
         $or: [

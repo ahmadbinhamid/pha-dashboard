@@ -11,8 +11,17 @@ const {
 
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await categoryService.listCategories();
-    return success(res, categories);
+    const { page, limit, skip } = req.pagination;
+
+    const { items, total } = await categoryService.listCategories({ skip, limit });
+
+    return success(res, {
+      items,
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     return systemfailure(res, err);
   }

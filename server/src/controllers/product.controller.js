@@ -20,6 +20,7 @@ const {
   applyStockEntries,
 } = require("../services/product.service");
 const { generateSlug } = require("../utils/slug");
+const { escapeRegex } = require("../utils/regex");
 const {
   parseField,
   parseFormDataArrays,
@@ -48,7 +49,7 @@ exports.getProducts = async (req, res) => {
     const and = [];
 
     if (req.query.search) {
-      const re = new RegExp(req.query.search.trim(), "i");
+      const re = new RegExp(escapeRegex(req.query.search.trim()), "i");
       and.push({ $or: [{ title: re }, { sku: re }, { brand: re }, { tags: re }] });
     }
     if (!req.user) {
@@ -73,14 +74,18 @@ exports.getProducts = async (req, res) => {
       if (req.query.price_min !== undefined) filter.price.$gte = req.query.price_min;
       if (req.query.price_max !== undefined) filter.price.$lte = req.query.price_max;
     }
+    // vehicle.make/model/model_code are canonical values sourced from the same
+    // VehicleModel picker list the frontend uses to build fitment dropdowns,
+    // so an exact match is correct here and lets Mongo use the compound index
+    // instead of falling back to a regex scan.
     if (req.query.make) {
-      filter["vehicle.make"] = new RegExp(`^${req.query.make.trim()}$`, "i");
+      filter["vehicle.make"] = req.query.make.trim();
     }
     if (req.query.model) {
-      filter["vehicle.model"] = new RegExp(`^${req.query.model.trim()}$`, "i");
+      filter["vehicle.model"] = req.query.model.trim();
     }
     if (req.query.model_code) {
-      filter["vehicle.model_code"] = new RegExp(`^${req.query.model_code.trim()}$`, "i");
+      filter["vehicle.model_code"] = req.query.model_code.trim();
     }
     if (req.query.year !== undefined) {
       const year = req.query.year;

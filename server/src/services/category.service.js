@@ -3,8 +3,12 @@
 const Category = require("../models/Category");
 const { generateSlug, ensureUniqueSlug } = require("../utils/slug");
 
-async function listCategories() {
-  return Category.find({}).sort({ sort_order: 1, name: 1 });
+async function listCategories({ skip = 0, limit = 0 } = {}) {
+  const [items, total] = await Promise.all([
+    Category.find({}).sort({ sort_order: 1, name: 1 }).skip(skip).limit(limit),
+    Category.countDocuments({}),
+  ]);
+  return { items, total };
 }
 
 async function getCategoryById(id) {

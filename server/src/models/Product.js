@@ -80,6 +80,6 @@ const productSchema = buildSchema({
 productSchema.index({ sku: 1 }, { sparse: true });
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
-productSchema.index({ "vehicle.make": 1, "vehicle.model": 1 });
+productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });
 
 module.exports = model("Product", productSchema);
