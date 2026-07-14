@@ -101,10 +101,10 @@ function withBasePopulate(query) {
     .populate("categories", "name slug");
 }
 
-async function getProducts(filter, { skip, limit }) {
+async function getProducts(filter, { skip, limit, sort = { created_at: -1 } }) {
   const [items, total] = await Promise.all([
     withBasePopulate(Product.find(filter))
-      .sort({ created_at: -1 })
+      .sort(sort)
       .skip(skip)
       .limit(limit),
     Product.countDocuments(filter),
@@ -166,6 +166,29 @@ async function hasMarketplaceListings(productId) {
   return MarketplaceListing.exists({ product: productId });
 }
 
+async function saveProduct(product) {
+  return product.save();
+}
+
+async function softDeleteProduct(product) {
+  return product.softDelete();
+}
+
+async function saveVariant(variant) {
+  return variant.save();
+}
+
+async function applyStockEntries(productId, stockEntries) {
+  for (const entry of stockEntries) {
+    if (entry.qty > 0) {
+      await Inventory.updateOne(
+        { product: productId, variant: null, location: entry.location_id },
+        { $set: { stock_count: entry.qty } },
+      );
+    }
+  }
+}
+
 module.exports = {
   cartesian,
   generateNextSku,
@@ -182,4 +205,8 @@ module.exports = {
   findVariant,
   getPopulatedVariant,
   hasMarketplaceListings,
+  saveProduct,
+  softDeleteProduct,
+  saveVariant,
+  applyStockEntries,
 };

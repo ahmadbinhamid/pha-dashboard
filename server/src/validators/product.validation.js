@@ -6,6 +6,7 @@ const {
   PRODUCT_STATUS,
   PRODUCT_CONDITION,
   PRODUCT_AUTHENTICITY,
+  PRODUCT_SORT,
 } = require("../constants/product.constants");
 
 const createProduct = {
@@ -119,9 +120,20 @@ const listProducts = {
     status: Joi.string()
       .valid(...Object.values(PRODUCT_STATUS), "")
       .default(""),
-    categories: Joi.string().allow("").default(""),
+    categories: Joi.alternatives()
+      .try(Joi.string().allow(""), Joi.array().items(Joi.string()))
+      .default(""),
     type: Joi.string()
       .valid(...Object.values(PRODUCT_TYPE), "")
+      .default(""),
+    price_min: Joi.number().min(0),
+    price_max: Joi.number().min(0),
+    make: Joi.string().allow("").default(""),
+    model: Joi.string().allow("").default(""),
+    model_code: Joi.string().allow("").default(""),
+    year: Joi.number().integer(),
+    sort: Joi.string()
+      .valid(...Object.values(PRODUCT_SORT), "")
       .default(""),
   }),
 };

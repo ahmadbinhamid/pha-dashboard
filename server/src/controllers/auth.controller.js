@@ -1,4 +1,12 @@
-const User = require("../models/User");
+const {
+  findUserByEmail,
+  createUser,
+  findUserByEmailWithPassword,
+  findUserByEmailWithOtp,
+  findUserByIdWithPassword,
+  findUserByResetToken,
+  saveUser,
+} = require("../services/user.service");
 const { comparePassword } = require("../utils/auth/crypto");
 const { signJwt } = require("../utils/auth/jwt");
 const {
@@ -36,11 +44,11 @@ exports.register = async (req, res) => {
   try {
     const { first_name, last_name, email, password, role } = req.body || {};
 
-    const existing = await User.findOne({ email });
+    const existing = await findUserByEmail(email);
     if (existing)
       return requestConflict(res, "User with this email already exists");
 
-    const user = new User({
+    const user = await createUser({
       first_name,
       last_name,
       email,
@@ -49,8 +57,6 @@ exports.register = async (req, res) => {
       status: USER_STATUS.INACTIVE,
       verified_at: null,
     });
-
-    await user.save();
 
     return success(
       res,
@@ -66,7 +72,7 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await findUserByEmailWithPassword(email);
     if (!user) return unauthorized(res, "Invalid email or password");
 
     const ok = await comparePassword(password, user.password);
@@ -104,7 +110,7 @@ exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body || {};
 
-    const user = await User.findOne({ email }).select("+otp +otp_expiry");
+    const user = await findUserByEmailWithOtp(email);
     if (!user) return unauthorized(res, "Invalid email");
 
     if (!user.otp) {
@@ -114,7 +120,7 @@ exports.verifyOTP = async (req, res) => {
     if (isOTPExpired(user.otp_expiry)) {
       user.otp = null;
       user.otp_expiry = null;
-      await user.save();
+      await saveUser(user);
       return unauthorized(res, "OTP has expired. Please request a new OTP.");
     }
 
@@ -124,7 +130,7 @@ exports.verifyOTP = async (req, res) => {
 
     user.otp = null;
     user.otp_expiry = null;
-    await user.save();
+    await saveUser(user);
 
     const token = signJwt({
       sub: user._id.toString(),
@@ -143,12 +149,12 @@ exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
 
-    const user = await User.findOne({ email });
+    const user = await findUserByEmail(email);
     if (!user) return unauthorized(res, "Invalid email");
 
     user.status = status;
     user.verified_at = status === USER_STATUS.ACTIVE ? new Date() : null;
-    await user.save();
+    await saveUser(user);
 
     if (status === USER_STATUS.ACTIVE) {
       await accountVerified({
@@ -178,7 +184,7 @@ exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body || {};
 
-    const user = await User.findOne({ email });
+    const user = await findUserByEmail(email);
     if (!user) {
       return success(
         res,
@@ -197,7 +203,7 @@ exports.forgotPassword = async (req, res) => {
     const resetToken = generateResetToken();
     user.password_reset_token = hashResetToken(resetToken);
     user.password_reset_expiry = generateResetTokenExpiry();
-    await user.save();
+    await saveUser(user);
 
     await sendPasswordReset({
       to: user.email,
@@ -224,9 +230,7 @@ exports.resetPassword = async (req, res) => {
       return badRequest(res, "Invalid or expired reset token.");
     }
 
-    const user = await User.findOne({
-      password_reset_token: hashResetToken(token),
-    }).select("+password_reset_token");
+    const user = await findUserByResetToken(hashResetToken(token));
 
     if (!user) {
       return badRequest(res, "Invalid or expired reset token.");
@@ -235,7 +239,7 @@ exports.resetPassword = async (req, res) => {
     if (isResetTokenExpired(user.password_reset_expiry)) {
       user.password_reset_token = null;
       user.password_reset_expiry = null;
-      await user.save();
+      await saveUser(user);
       return badRequest(
         res,
         "Reset token has expired. Please request a new password reset.",
@@ -249,7 +253,7 @@ exports.resetPassword = async (req, res) => {
     user.password = new_password;
     user.password_reset_token = null;
     user.password_reset_expiry = null;
-    await user.save();
+    await saveUser(user);
 
     return success(
       res,
@@ -268,14 +272,14 @@ exports.changePassword = async (req, res) => {
 
     if (!userId) return unauthorized(res, "Unauthorized");
 
-    const user = await User.findById(userId).select("+password");
+    const user = await findUserByIdWithPassword(userId);
     if (!user) return unauthorized(res, "Unauthorized");
 
     const ok = await comparePassword(current_password, user.password);
     if (!ok) return unauthorized(res, "Current password is incorrect");
 
     user.password = new_password;
-    await user.save();
+    await saveUser(user);
 
     return success(res, null, "Password changed");
   } catch (err) {
@@ -287,7 +291,7 @@ exports.resendOTP = async (req, res) => {
   try {
     const { email } = req.body || {};
 
-    const user = await User.findOne({ email });
+    const user = await findUserByEmail(email);
     if (!user) return unauthorized(res, "Invalid email");
 
     if (user.status !== USER_STATUS.ACTIVE) {
@@ -300,7 +304,7 @@ exports.resendOTP = async (req, res) => {
     const otp = generateOTP();
     user.otp = hashOTP(otp);
     user.otp_expiry = generateOTPExpiry();
-    await user.save();
+    await saveUser(user);
 
     await sendOTP({
       to: user.email,

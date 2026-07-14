@@ -14,6 +14,10 @@ const {
   findVariant,
   getPopulatedVariant,
   hasMarketplaceListings,
+  saveProduct,
+  softDeleteProduct,
+  saveVariant,
+  applyStockEntries,
 } = require("../services/product.service");
 const { generateSlug } = require("../utils/slug");
 const {
@@ -25,6 +29,7 @@ const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
   PRODUCT_CONDITION,
+  PRODUCT_SORT_OPTIONS,
 } = require("../constants/product.constants");
 const {
   success,
@@ -40,10 +45,11 @@ exports.getProducts = async (req, res) => {
     const { page, limit, skip } = req.pagination;
 
     const filter = {};
+    const and = [];
 
     if (req.query.search) {
       const re = new RegExp(req.query.search.trim(), "i");
-      filter.$or = [{ title: re }, { sku: re }, { brand: re }, { tags: re }];
+      and.push({ $or: [{ title: re }, { sku: re }, { brand: re }, { tags: re }] });
     }
     if (!req.user) {
       // Unauthenticated (public/storefront) callers only ever see published, active products
@@ -56,11 +62,36 @@ exports.getProducts = async (req, res) => {
       filter.type = req.query.type;
     }
     if (req.query.categories) {
-      const cats = req.query.categories.split(",").filter(Boolean);
-      if (cats.length) filter.categories = { $in: cats };
+      const cats = Array.isArray(req.query.categories)
+        ? req.query.categories
+        : req.query.categories.split(",");
+      const filtered = cats.map((c) => c.trim()).filter(Boolean);
+      if (filtered.length) filter.categories = { $in: filtered };
     }
+    if (req.query.price_min !== undefined || req.query.price_max !== undefined) {
+      filter.price = {};
+      if (req.query.price_min !== undefined) filter.price.$gte = req.query.price_min;
+      if (req.query.price_max !== undefined) filter.price.$lte = req.query.price_max;
+    }
+    if (req.query.make) {
+      filter["vehicle.make"] = new RegExp(`^${req.query.make.trim()}$`, "i");
+    }
+    if (req.query.model) {
+      filter["vehicle.model"] = new RegExp(`^${req.query.model.trim()}$`, "i");
+    }
+    if (req.query.model_code) {
+      filter["vehicle.model_code"] = new RegExp(`^${req.query.model_code.trim()}$`, "i");
+    }
+    if (req.query.year !== undefined) {
+      const year = req.query.year;
+      and.push({ $or: [{ "vehicle.year_from": null }, { "vehicle.year_from": { $lte: year } }] });
+      and.push({ $or: [{ "vehicle.year_to": null }, { "vehicle.year_to": { $gte: year } }] });
+    }
+    if (and.length) filter.$and = and;
 
-    const { items, total } = await getProducts(filter, { skip, limit });
+    const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
+
+    const { items, total } = await getProducts(filter, { skip, limit, sort });
 
     return success(res, {
       items,
@@ -165,15 +196,7 @@ exports.createProduct = async (req, res) => {
     } else if (product.stock_control) {
       await ensureInventoryForProduct(product._id, null);
       if (parsedStockEntries.length > 0) {
-        const Inventory = require("../models/Inventory");
-        for (const entry of parsedStockEntries) {
-          if (entry.qty > 0) {
-            await Inventory.updateOne(
-              { product: product._id, variant: null, location: entry.location_id },
-              { $set: { stock_count: entry.qty } },
-            );
-          }
-        }
+        await applyStockEntries(product._id, parsedStockEntries);
       }
     }
 
@@ -263,7 +286,7 @@ exports.updateProduct = async (req, res) => {
 
     if (bodyKeys.includes("choices")) product.choices = choices;
 
-    await product.save();
+    await saveProduct(product);
 
     if (choicesChanged && product.has_variants && product.choices.length > 0) {
       const newVariants = await generateVariantsForProduct(product);
@@ -295,7 +318,7 @@ exports.deleteProduct = async (req, res) => {
       return requestConflict(res, "Cannot delete a product that has a marketplace listing. Remove the listing first.");
     }
 
-    await product.softDelete();
+    await softDeleteProduct(product);
     return success(res, null, "Product deleted");
   } catch (err) {
     return systemfailure(res, err);
@@ -393,7 +416,7 @@ exports.updateVariant = async (req, res) => {
       variant.attachments = parseField(body.attachments);
     }
 
-    await variant.save();
+    await saveVariant(variant);
 
     return success(res, await getPopulatedVariant(variant._id), "Variant updated");
   } catch (err) {

@@ -1,6 +1,10 @@
-const User = require("../models/User");
+const {
+  listUsers,
+  getPublicUserById,
+  updateUserProfile,
+  deleteUser,
+} = require("../services/user.service");
 const { success, notFound, unauthorized, systemfailure } = require("../utils/http/response");
-const { PUBLIC_SELECT } = require("../utils/user");
 const { USER_STATUS } = require("../constants/user.constants");
 
 exports.getUsers = async (req, res) => {
@@ -12,10 +16,7 @@ exports.getUsers = async (req, res) => {
     if (status === USER_STATUS.ACTIVE) filter.status = USER_STATUS.ACTIVE;
     if (status === USER_STATUS.INACTIVE) filter.status = USER_STATUS.INACTIVE;
 
-    const [items, total] = await Promise.all([
-      User.find(filter).select(PUBLIC_SELECT).skip(skip).limit(limit).sort({ created_at: -1 }),
-      User.countDocuments(filter),
-    ]);
+    const { items, total } = await listUsers(filter, { skip, limit });
 
     const totalPages = Math.ceil(total / limit) || 1;
     return success(res, { items, total, page, pageSize: limit, totalPages });
@@ -30,7 +31,7 @@ exports.getProfile = async (req, res) => {
     const id = req.user?._id || req.user?.sub;
     if (!id) return unauthorized(res, "Unauthorized");
 
-    const profile = await User.findById(id).select(PUBLIC_SELECT);
+    const profile = await getPublicUserById(id);
     if (!profile) return unauthorized(res, "Account not found");
 
     return success(res, profile, "Profile");
@@ -44,11 +45,7 @@ exports.updateUser = async (req, res) => {
     const id = req.user?._id || req.user?.sub;
     const { first_name, last_name } = req.body;
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { first_name, last_name },
-      { new: true, runValidators: true, select: PUBLIC_SELECT },
-    );
+    const user = await updateUserProfile(id, { first_name, last_name });
 
     if (!user) return notFound(res, "User not found");
 
@@ -60,9 +57,8 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
-    const doc = await User.findById(req.params.id);
+    const doc = await deleteUser(req.params.id);
     if (!doc) return notFound(res, "User not found");
-    await doc.softDelete();
     return success(res, null, "User deleted");
   } catch (err) {
     return systemfailure(res, err);

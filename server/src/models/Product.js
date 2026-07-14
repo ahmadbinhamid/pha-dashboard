@@ -63,6 +63,8 @@ const productSchema = buildSchema({
     default: null,
   },
   vehicle: { type: vehicleSchema, default: () => ({}) },
+  rating: { type: Number, default: 0, min: 0, max: 5 },
+  rating_count: { type: Number, default: 0, min: 0 },
   attachments: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
   categories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
   tags: [{ type: String }],
@@ -76,5 +78,8 @@ const productSchema = buildSchema({
 });
 
 productSchema.index({ sku: 1 }, { sparse: true });
+productSchema.index({ price: 1 });
+productSchema.index({ rating: -1 });
+productSchema.index({ "vehicle.make": 1, "vehicle.model": 1 });
 
 module.exports = model("Product", productSchema);
