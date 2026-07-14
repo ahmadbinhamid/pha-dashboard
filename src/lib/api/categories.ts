@@ -5,6 +5,7 @@ import type { Category } from "@/types/product";
 export interface CategoryListParams {
   page?: number;
   limit?: number;
+  search?: string;
 }
 
 export interface CategoryPayload {

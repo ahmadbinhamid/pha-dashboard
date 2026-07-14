@@ -9,7 +9,7 @@ const {
   findProductById,
   getProductBySlug,
   getPopulatedProduct,
-  createProductRecord,
+  createProductRecordWithSlug,
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,
@@ -158,12 +158,10 @@ exports.createProduct = async (req, res) => {
       parseFormDataArrays(body);
     const parsedVehicle = parseField(vehicle, null);
 
-    const slug = await ensureUniqueProductSlug(generateSlug(title));
     const autoSku = await generateNextSku();
 
-    const product = await createProductRecord({
+    const product = await createProductRecordWithSlug({
       title,
-      slug,
       description: description || "",
       type: type !== undefined ? type : PRODUCT_TYPE.PHYSICAL,
       status: status !== undefined ? status : PRODUCT_STATUS.DRAFT,
@@ -186,7 +184,7 @@ exports.createProduct = async (req, res) => {
       related_products,
       choices,
       digital_file: digital_file || null,
-    });
+    }, generateSlug(title));
 
     const parsedStockEntries = stock_entries
       ? JSON.parse(stock_entries)
@@ -335,13 +333,8 @@ exports.duplicateProduct = async (req, res) => {
     const original = await findProductById(req.params.id);
     if (!original) return notFound(res, "Product not found");
 
-    const slug = await ensureUniqueProductSlug(
-      generateSlug(`${original.title} copy`),
-    );
-
-    const clone = await createProductRecord({
+    const clone = await createProductRecordWithSlug({
       title: `${original.title} (Copy)`,
-      slug,
       description: original.description,
       type: original.type,
       status: PRODUCT_STATUS.DRAFT,
@@ -363,7 +356,7 @@ exports.duplicateProduct = async (req, res) => {
       tags: original.tags,
       choices: original.choices,
       digital_file: original.digital_file,
-    });
+    }, generateSlug(`${original.title} copy`));
 
     if (clone.has_variants && clone.choices.length > 0) {
       await generateVariantsForProduct(clone);

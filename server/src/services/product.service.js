@@ -5,7 +5,7 @@ const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
 const Location = require("../models/Location");
 const MarketplaceListing = require("../models/MarketplaceListing");
-const { ensureUniqueSlug } = require("../utils/slug");
+const { ensureUniqueSlug, createWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
@@ -131,8 +131,10 @@ async function getPopulatedProduct(id) {
     .populate("digital_file");
 }
 
-async function createProductRecord(data) {
-  return Product.create(data);
+// Retries on a genuine slug conflict instead of trusting a single
+// check-then-insert (see utils/slug.js for why).
+async function createProductRecordWithSlug(data, baseSlug) {
+  return createWithUniqueSlug(Product, baseSlug, (slug) => ({ ...data, slug }));
 }
 
 async function ensureUniqueProductSlug(baseSlug, excludeId = null) {
@@ -199,7 +201,7 @@ module.exports = {
   findProductById,
   getProductBySlug,
   getPopulatedProduct,
-  createProductRecord,
+  createProductRecordWithSlug,
   findVariantsByProductId,
   getVariantsByProduct,
   findVariant,

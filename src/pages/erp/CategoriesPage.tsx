@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -25,7 +25,7 @@ import {
 import type { CategoryPayload } from "@/lib/api/categories";
 import { uploadAttachments } from "@/lib/api/products";
 import type { Category, Attachment } from "@/types/product";
-import { Plus, Layers, Pencil, Trash2, AlertTriangle, Image as ImageIcon, X, Loader2 } from "lucide-react";
+import { Plus, Layers, Pencil, Trash2, AlertTriangle, Image as ImageIcon, X, Loader2, Search } from "lucide-react";
 
 interface CategoryFormState {
   name: string;
@@ -124,7 +124,9 @@ export default function CategoriesPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const search = searchParams.get("search") ?? "";
 
+  const [inputValue, setInputValue] = useState(search);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CategoryFormState>(EMPTY_FORM);
@@ -139,9 +141,25 @@ export default function CategoriesPage() {
     });
   };
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchParams((prev) => {
+        const current = prev.get("search") ?? "";
+        if (inputValue === current) return prev; // no change — don't reset page
+        const next = new URLSearchParams(prev);
+        if (inputValue) next.set("search", inputValue);
+        else next.delete("search");
+        next.set("page", "1");
+        return next;
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearchParams]);
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["categories", page],
-    queryFn: () => getCategories({ page }),
+    queryKey: ["categories", { page, search }],
+    queryFn: () => getCategories({ page, search }),
   });
 
   const categories: Category[] = data?.data?.items ?? [];
@@ -246,11 +264,27 @@ export default function CategoriesPage() {
       </div>
 
       <Card>
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40 pointer-events-none" />
+            <Input
+              placeholder="Search categories…"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {isFetching && !isLoading && (
+            <span className="text-xs text-fg/40">Updating…</span>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           {isLoading ? (
             <LoadingSkeleton />
           ) : categories.length === 0 ? (
-            <EmptyState onNew={openCreate} />
+            <EmptyState search={search} onNew={openCreate} />
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -437,20 +471,28 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState({ onNew }: { onNew: () => void }) {
+function EmptyState({ search, onNew }: { search: string; onNew: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
         <Layers className="h-8 w-8 text-fg/30" />
       </div>
       <div>
-        <p className="font-medium text-fg">No categories yet</p>
-        <p className="mt-1 text-sm text-fg/50">Create your first category to get started</p>
+        <p className="font-medium text-fg">
+          {search ? "No categories found" : "No categories yet"}
+        </p>
+        <p className="mt-1 text-sm text-fg/50">
+          {search
+            ? `No results for "${search}" — try a different term`
+            : "Create your first category to get started"}
+        </p>
       </div>
-      <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
-        <Plus className="h-3.5 w-3.5" />
-        New Category
-      </Button>
+      {!search && (
+        <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
+          <Plus className="h-3.5 w-3.5" />
+          New Category
+        </Button>
+      )}
     </div>
   );
 }

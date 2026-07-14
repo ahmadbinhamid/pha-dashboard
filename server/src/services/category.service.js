@@ -1,16 +1,22 @@
 // services/category.service.js
 
 const Category = require("../models/Category");
-const { generateSlug, ensureUniqueSlug } = require("../utils/slug");
+const { generateSlug, ensureUniqueSlug, createWithUniqueSlug } = require("../utils/slug");
+const { escapeRegex } = require("../utils/regex");
 
-async function listCategories({ skip = 0, limit = 0 } = {}) {
+async function listCategories({ skip = 0, limit = 0, search = "" } = {}) {
+  const filter = {};
+  if (search) {
+    filter.name = new RegExp(escapeRegex(search.trim()), "i");
+  }
+
   const [items, total] = await Promise.all([
-    Category.find({})
+    Category.find(filter)
       .populate("thumbnail")
       .sort({ sort_order: 1, name: 1 })
       .skip(skip)
       .limit(limit),
-    Category.countDocuments({}),
+    Category.countDocuments(filter),
   ]);
   return { items, total };
 }
@@ -21,15 +27,16 @@ async function getCategoryById(id) {
 
 async function createCategory({ name, description, thumbnail, parent, sort_order }) {
   const baseSlug = generateSlug(name);
-  const slug = await ensureUniqueSlug(Category, baseSlug);
-  return Category.create({
+  // Race-safe: retries on a genuine slug conflict instead of trusting a
+  // single check-then-insert (see utils/slug.js for why).
+  return createWithUniqueSlug(Category, baseSlug, (slug) => ({
     name,
     slug,
     description: description || "",
     thumbnail: thumbnail || null,
     parent: parent || null,
     sort_order: sort_order || 0,
-  });
+  }));
 }
 
 async function updateCategory(id, { name, description, thumbnail, parent, sort_order, slug: slugOverride }) {

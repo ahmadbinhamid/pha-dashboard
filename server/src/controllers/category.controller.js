@@ -13,7 +13,11 @@ exports.getCategories = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const { items, total } = await categoryService.listCategories({ skip, limit });
+    const { items, total } = await categoryService.listCategories({
+      skip,
+      limit,
+      search: req.query.search,
+    });
 
     return success(res, {
       items,

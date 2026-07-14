@@ -27,4 +27,23 @@ async function ensureUniqueSlug(Model, baseSlug, excludeId = null) {
   }
 }
 
-module.exports = { generateSlug, ensureUniqueSlug };
+// ensureUniqueSlug checks then the caller inserts — not atomic, so two
+// near-simultaneous creates for the same base slug (double-submit, retry,
+// concurrent requests) can both pass the check before either commits, and
+// the loser hits a duplicate-key error on the real unique index. Instead of
+// trusting the pre-check alone, retry the whole check-then-create cycle on
+// a genuine slug conflict — ensureUniqueSlug will see the just-committed
+// competitor on the next attempt and bump the suffix further.
+async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const slug = await ensureUniqueSlug(Model, baseSlug);
+    try {
+      return await Model.create(buildDoc(slug));
+    } catch (err) {
+      const isSlugConflict = err.code === 11000 && err.keyPattern && "slug" in err.keyPattern;
+      if (!isSlugConflict || attempt === maxAttempts - 1) throw err;
+    }
+  }
+}
+
+module.exports = { generateSlug, ensureUniqueSlug, createWithUniqueSlug };
