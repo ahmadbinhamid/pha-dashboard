@@ -232,7 +232,7 @@ async function getTotalStockForProductVariant(productId, variantId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
-// ── SKU-based stock adjustment (used by eBay webhook) ────────────────────────
+// ── SKU-based stock adjustment (used by eBay webhook and Stripe payment/refund) ─
 
 const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
 
@@ -255,7 +255,17 @@ async function resolveSkuToIds(sku) {
   return null;
 }
 
-async function adjustStockBySku(sku, delta) {
+// Generic core: deducts/credits stock for a SKU across its location records
+// (largest-stock-first for deductions, same as before), under a caller-supplied
+// reason/type/userId. Unlike the old eBay-only version, this:
+//   - returns stock_before/stock_after per adjustment (previously computed by
+//     adjustStock() but silently discarded)
+//   - returns `shortfall` — how much of a deduction could NOT be covered by
+//     available stock, instead of silently clamping to 0 and hiding an oversell
+//   - returns `totalStockAfter` — the SKU's new total across all locations,
+//     which callers pushing quantity to a marketplace need as the absolute
+//     value to send (eBay's inventory API takes an absolute quantity, not a delta)
+async function adjustStockForSku(sku, delta, { reason, type, userId = null } = {}) {
   const ids = await resolveSkuToIds(sku);
   if (!ids) {
     logger.warn(`[inventory.service] SKU not found: ${sku}`);
@@ -274,6 +284,7 @@ async function adjustStockBySku(sku, delta) {
   }
 
   const adjustments = [];
+  let shortfall = 0;
 
   if (delta < 0) {
     let remaining = Math.abs(delta);
@@ -281,26 +292,52 @@ async function adjustStockBySku(sku, delta) {
       if (remaining <= 0) break;
       const deduct = Math.min(remaining, record.stock_count);
       if (deduct === 0) continue;
-      await adjustStock(record, {
+      const { stock_before, stock_after } = await adjustStock(record, {
         adjustment: -deduct,
-        reason: `eBay sale (SKU: ${sku})`,
-        type: ADJUSTMENT_TYPE.EBAY_SALE,
-        userId: null,
+        reason,
+        type,
+        userId,
       });
       remaining -= deduct;
-      adjustments.push({ recordId: record._id, adjustment: -deduct });
+      adjustments.push({ recordId: record._id, adjustment: -deduct, stock_before, stock_after });
+    }
+    shortfall = remaining;
+    if (shortfall > 0) {
+      logger.warn(`[inventory.service] oversold SKU ${sku} by ${shortfall}`);
     }
   } else {
-    await adjustStock(records[0], {
+    const { stock_before, stock_after } = await adjustStock(records[0], {
       adjustment: delta,
-      reason: `eBay cancellation/return (SKU: ${sku})`,
-      type: ADJUSTMENT_TYPE.EBAY_SALE,
-      userId: null,
+      reason,
+      type,
+      userId,
     });
-    adjustments.push({ recordId: records[0]._id, adjustment: delta });
+    adjustments.push({ recordId: records[0]._id, adjustment: delta, stock_before, stock_after });
   }
 
-  return { productId, variantId, adjustments };
+  const totalStockAfter = await getTotalStockForProductVariant(productId, variantId);
+
+  return { productId, variantId, adjustments, shortfall, totalStockAfter };
+}
+
+// Thin, backward-compatible wrapper preserving the original eBay behavior
+// and return shape exactly, so existing eBay call sites need no changes.
+async function adjustStockBySku(sku, delta) {
+  const result = await adjustStockForSku(sku, delta, {
+    reason:
+      delta < 0
+        ? `eBay sale (SKU: ${sku})`
+        : `eBay cancellation/return (SKU: ${sku})`,
+    type: ADJUSTMENT_TYPE.EBAY_SALE,
+    userId: null,
+  });
+  if (!result) return null;
+
+  return {
+    productId: result.productId,
+    variantId: result.variantId,
+    adjustments: result.adjustments.map(({ recordId, adjustment }) => ({ recordId, adjustment })),
+  };
 }
 
 module.exports = {
@@ -314,5 +351,6 @@ module.exports = {
   getHistory,
   getTotalStockForProductVariant,
   resolveSkuToIds,
+  adjustStockForSku,
   adjustStockBySku,
 };
