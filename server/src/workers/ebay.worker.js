@@ -5,6 +5,7 @@ const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { ebayQueue } = require("../queues/ebay.queue");
 const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
+const { updateInventoryQuantity } = require("../services/ebay/ebay.api.service");
 const { logger } = require("../loaders/logging");
 
 // Register marketplace adapters
@@ -31,6 +32,16 @@ ebayQueue.process("sync_listing", 2, async (job) => {
 ebayQueue.process("poll_orders", 1, async () => {
   logger.info("[ebayQueue] poll_orders starting");
   return pollAndProcessOrders();
+});
+
+// Retry target for eBay quantity pushes that failed inline from
+// order-stock-sync.service.js (Stripe payment success / refund restock).
+ebayQueue.process("push_quantity", 2, async (job) => {
+  const { sku, quantity } = job.data;
+  logger.info(`[ebayQueue] push_quantity sku=${sku} quantity=${quantity}`);
+  const result = await updateInventoryQuantity(sku, quantity);
+  if (result && result.error) throw new Error(result.error);
+  return result;
 });
 
 ebayQueue.on("ready", () => {

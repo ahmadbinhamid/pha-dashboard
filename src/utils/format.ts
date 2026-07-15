@@ -13,3 +13,10 @@ export function formatCurrency(amount: number, currency: string = "AUD") {
 export function formatCompactNumber(n: number) {
   return _compactFmt.format(n);
 }
+
+// Payment/Refund amounts are stored as integer cents in the backend —
+// unlike Product.price, which is dollars. Keep the cents/dollars boundary
+// explicit rather than dividing by 100 ad hoc at each call site.
+export function formatCurrencyFromCents(cents: number, currency: string = "AUD") {
+  return formatCurrency(cents / 100, currency);
+}

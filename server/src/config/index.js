@@ -99,6 +99,15 @@ const config = {
     warehouseCountry: get("EBAY_WAREHOUSE_COUNTRY", "AU"),
     warehousePhone: get("EBAY_WAREHOUSE_PHONE", null),
   },
+
+  stripe: {
+    secretKey: get("STRIPE_SECRET_KEY", null),
+    webhookSecret: get("STRIPE_WEBHOOK_SECRET", null),
+    // Only used server-side as a documented default; the storefront reads its
+    // own VITE_STRIPE_PUBLISHABLE_KEY directly and never calls this API for it.
+    publishableKey: get("STRIPE_PUBLISHABLE_KEY", null),
+    currency: get("STRIPE_CURRENCY", "aud"),
+  },
 };
 
 module.exports = config;

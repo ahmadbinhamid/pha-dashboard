@@ -20,6 +20,7 @@ import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
+import PaymentsPage from "@/pages/erp/PaymentsPage";
 // import InventoryBundlesPage from "@/pages/erp/InventoryBundlesPage";
 // import ProductPage from "@/pages/erp/ProductPage";
 // import OrdersPage from "@/pages/erp/OrdersPage";
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/payments" element={<PaymentsPage />} />
             {/* <Route path="/products/:id" element={<ProductPage />} /> */}
             {/* <Route path="/orders" element={<OrdersPage />} /> */}
             {/* <Route path="/orders/new" element={<OrdersNewPage />} /> */}
