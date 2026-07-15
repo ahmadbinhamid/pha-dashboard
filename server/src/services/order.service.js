@@ -117,7 +117,9 @@ function safeTokenMatch(a, b) {
 // a generic 404 (not 401/403) on a bad token so a guessed order ID doesn't
 // even confirm the order exists.
 async function getOrderForGuest(orderId, token) {
-  const order = await Order.findById(orderId).select("+guest_access_token");
+  const order = await Order.findById(orderId)
+    .select("+guest_access_token")
+    .populate("payment", "status card_brand card_last4 amount amount_refunded paid_at");
   if (!order || !safeTokenMatch(order.guest_access_token, token)) {
     throw httpError("Order not found", 404);
   }
