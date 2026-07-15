@@ -10,7 +10,8 @@
     "worker:email": "node src/workers/email.worker.js",
     "worker:ebay": "node src/workers/ebay.worker.js",
     "seed:superadmin": "node scripts/seedSuperAdmin.js",
-    "seed:categories": "node scripts/seedCategories.js"
+    "seed:categories": "node scripts/seedCategories.js",
+    "seed:vehicle-models": "node scripts/seedVehicleModels.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
