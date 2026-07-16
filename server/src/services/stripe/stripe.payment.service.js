@@ -3,6 +3,7 @@
 const Payment = require("../../models/Payment");
 const { getStripeClient } = require("./stripe.client.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
+const { ORDER_STATUS } = require("../../constants/order.constants");
 const config = require("../../config");
 
 // Creates (or reuses) a PaymentIntent for an order. Reuses an existing
@@ -11,6 +12,10 @@ const config = require("../../config");
 // idempotency key additionally protects the very first create call against
 // duplicate network retries.
 async function createPaymentIntentForOrder(order) {
+  if (order.status !== ORDER_STATUS.PENDING_PAYMENT) {
+    throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
+  }
+
   const stripe = getStripeClient();
 
   let payment = await Payment.findOne({ order: order._id }).sort({ created_at: -1 });

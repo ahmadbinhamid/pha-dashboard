@@ -42,15 +42,23 @@ async function handleEvent(event) {
     return;
   }
 
-  switch (event.type) {
-    case "payment_intent.succeeded":
-      return handlePaymentSucceeded(event.data.object);
-    case "payment_intent.payment_failed":
-      return handlePaymentFailed(event.data.object);
-    case "charge.refunded":
-      return handleChargeRefunded(event.data.object);
-    default:
-      logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
+  try {
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        return await handlePaymentSucceeded(event.data.object);
+      case "payment_intent.payment_failed":
+        return await handlePaymentFailed(event.data.object);
+      case "charge.refunded":
+        return await handleChargeRefunded(event.data.object);
+      default:
+        logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
+    }
+  } catch (err) {
+    // Processing failed after the claim was already made — release it so
+    // the 500 we return causes Stripe to retry this same event instead of
+    // it being silently treated as "already handled" forever.
+    await StripeProcessedEvent.deleteOne({ stripe_event_id: event.id });
+    throw err;
   }
 }
 
@@ -71,12 +79,21 @@ async function handlePaymentSucceeded(intent) {
   // Trust nothing from the intent except what Stripe says was actually
   // captured — verify it matches what we billed for before marking paid.
   const amountReceived = intent.amount_received ?? intent.amount;
-  if (amountReceived !== order.total) {
-    payment.status = PAYMENT_STATUS.FAILED;
-    payment.failure_reason = `Amount mismatch: received ${amountReceived}, expected ${order.total}`;
+  const amountMismatch = amountReceived !== order.total;
+  const currencyMismatch = intent.currency !== order.currency;
+  if (amountMismatch || currencyMismatch) {
+    // Funds were captured (this event only fires on success) — FAILED would
+    // wrongly imply no money moved, so flag for manual review instead.
+    payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
+    payment.failure_reason = [
+      amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${order.total}` : null,
+      currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
+    ]
+      .filter(Boolean)
+      .join("; ");
     await payment.save();
     logger.error(
-      `[stripe.webhook] AMOUNT MISMATCH order ${order.order_number}: received ${amountReceived}, expected ${order.total} — needs manual review`,
+      `[stripe.webhook] MISMATCH order ${order.order_number}: ${payment.failure_reason} — needs manual review`,
     );
     return; // do not mark paid, do not touch stock
   }
@@ -155,9 +172,15 @@ async function handleChargeRefunded(charge) {
   const order = await Order.findById(payment.order);
   if (!order) return;
 
-  // charge.refunds is a list of up to the most recent refunds on this charge
-  // (present by default on the Charge object, no expand needed).
-  const stripeRefunds = charge.refunds?.data || [];
+  // charge.refunds is NOT auto-expanded on the Charge object as of Stripe API
+  // version 2022-11-15+ — and the payload shape follows the API version
+  // configured on the Stripe account/webhook endpoint, not our SDK-pinned
+  // apiVersion, so charge.refunds?.data can be silently absent here even
+  // though our code is pinned to a version that (in the SDK docs) still
+  // shows it. Never rely on optional sub-objects being present in webhook
+  // payloads — re-fetch explicitly instead.
+  const stripe = getStripeClient();
+  const { data: stripeRefunds } = await stripe.refunds.list({ payment_intent: charge.payment_intent });
 
   for (const sr of stripeRefunds) {
     const existing = await Refund.findOne({ stripe_refund_id: sr.id });

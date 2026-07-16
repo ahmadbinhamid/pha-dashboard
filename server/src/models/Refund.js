@@ -38,6 +38,18 @@ const refundSchema = buildSchema({
   initiated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
 });
 
-refundSchema.index({ payment: 1 });
+refundSchema.index({ payment: 1 }, { name: "payment_1" });
+
+// Backstops the read-then-act pending check in stripe.refund.service.js
+// (createRefund) against a genuine concurrent double-submit race — at most
+// one "pending" Refund per payment can exist at the database level.
+refundSchema.index(
+  { payment: 1 },
+  {
+    name: "payment_1_pending_unique",
+    unique: true,
+    partialFilterExpression: { status: REFUND_STATUS.PENDING },
+  },
+);
 
 module.exports = model("Refund", refundSchema);

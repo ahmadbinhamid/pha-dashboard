@@ -54,15 +54,26 @@ async function createRefund({ paymentId, amount, reason, initiatedBy, restock = 
     throw httpError("A refund is already pending for this payment", 409);
   }
 
-  const refund = await Refund.create({
-    payment: payment._id,
-    order: payment.order,
-    amount,
-    reason,
-    status: REFUND_STATUS.PENDING,
-    initiated_via: "admin_api",
-    initiated_by: initiatedBy,
-  });
+  let refund;
+  try {
+    refund = await Refund.create({
+      payment: payment._id,
+      order: payment.order,
+      amount,
+      reason,
+      status: REFUND_STATUS.PENDING,
+      initiated_via: "admin_api",
+      initiated_by: initiatedBy,
+    });
+  } catch (err) {
+    // Lost a race with a concurrent refund request for the same payment —
+    // the findOne check above is read-then-act, so this partial unique
+    // index (see Refund model) is what actually closes the race.
+    if (err.code === 11000) {
+      throw httpError("A refund is already pending for this payment", 409);
+    }
+    throw err;
+  }
 
   const stripe = getStripeClient();
 

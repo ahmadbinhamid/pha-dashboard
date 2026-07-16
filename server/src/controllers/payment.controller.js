@@ -78,14 +78,21 @@ exports.handleWebhook = async (req, res) => {
     return badRequest(res, "Invalid signature");
   }
 
-  // Respond immediately — Stripe retries on non-2xx, and processing (which
-  // may call out to eBay) shouldn't hold the webhook response open.
-  success(res, { received: true });
-
-  handleEvent(event).catch((err) => {
+  // Process synchronously and only ack after it actually succeeds — the
+  // eBay push inside order-stock-sync is already queued/fire-and-forget, so
+  // this is just fast DB writes plus one Stripe retrieve. A 200 here is a
+  // durability promise: Stripe won't retry a 200, so if we ack before
+  // processing finishes and then crash, the event is lost forever even
+  // though the idempotency ledger says it was handled. Returning 500 on
+  // failure makes Stripe retry instead.
+  try {
+    await handleEvent(event);
+    return success(res, { received: true });
+  } catch (err) {
     logger.error("[payment.controller] webhook processing error", {
       error: err.message,
       stack: err.stack,
     });
-  });
+    return systemfailure(res, err);
+  }
 };
