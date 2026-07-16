@@ -200,6 +200,17 @@ async function handleChargeRefunded(charge) {
     // user in our system initiated it, and no restock option was presented
     // to anyone, so stock is deliberately left untouched here — an admin can
     // restock manually via the inventory screen if the return applies.
+    //
+    // Edge case: if sr.status is not yet "succeeded" here (status=PENDING
+    // below) while one of our own admin refunds for this same payment is
+    // also mid-flight, this create() can collide with the partial unique
+    // index on Refund{payment, status:pending} (see Refund model) and throw
+    // E11000. handleEvent releases the processed-event claim on any thrown
+    // error, so Stripe simply retries this charge.refunded delivery — it
+    // self-heals once our own admin refund finishes and stops holding the
+    // "pending" slot. If you see repeated retries of the same charge.refunded
+    // event in the Stripe dashboard, check for a concurrent admin-initiated
+    // refund on the same payment before assuming something is actually broken.
     await Refund.create({
       payment: payment._id,
       order: order._id,

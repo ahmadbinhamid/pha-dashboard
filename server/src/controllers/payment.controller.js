@@ -85,6 +85,14 @@ exports.handleWebhook = async (req, res) => {
   // processing finishes and then crash, the event is lost forever even
   // though the idempotency ledger says it was handled. Returning 500 on
   // failure makes Stripe retry instead.
+  //
+  // Residual gap: release-on-error (see handleEvent's catch) only fires for
+  // errors actually thrown during processing. A hard process kill (OOM kill,
+  // deploy restart, host crash) between the claim succeeding and processing
+  // finishing can still strand a claimed-but-unprocessed event with no
+  // release and no thrown error to trigger one. That window is only the
+  // handful of DB writes' worth of wall-clock time (low hundreds of ms) —
+  // accepted as-is at current volume rather than adding a claim-expiry sweep.
   try {
     await handleEvent(event);
     return success(res, { received: true });
