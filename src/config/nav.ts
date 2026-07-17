@@ -1,4 +1,4 @@
-import { Icons } from "@/components/ui/icons";
+import { Icons } from "@/components/ui/Icons";
 
 export type NavItem = {
   label: string;
@@ -7,7 +7,7 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  // { label: "Dashboard", href: "/dashboard", icon: Icons.Home },
+  { label: "Dashboard", href: "/dashboard", icon: Icons.Home },
   { label: "Products", href: "/products", icon: Icons.Package },
   { label: "Categories", href: "/categories", icon: Icons.Layers },
   // { label: "Inventory", href: "/inventory", icon: Icons.Box },

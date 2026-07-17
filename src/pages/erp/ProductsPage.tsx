@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   Modal,
   ModalContent,
@@ -11,20 +11,22 @@ import {
   ModalFooter,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { ProductRow } from "@/components/products/product-row";
+} from "@/components/ui/Modal";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { ProductRow } from "@/components/products/ProductRow";
 import { getProducts, deleteProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { EbayListing } from "@/types/marketplace";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@/components/ui/Pagination";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [
-  { label: "All", value: "" },
+  { label: "All Status", value: "" },
   { label: "Active", value: "active" },
   { label: "Draft", value: "draft" },
 ];
@@ -126,7 +128,7 @@ export default function ProductsPage() {
 
   const { data: listingsData } = useQuery({
     queryKey: ["listings-all-ids"],
-    queryFn: () => getListings({ limit: 500 }),
+    queryFn: () => getListings({ limit: 100 }),
     staleTime: 30_000,
   });
 
@@ -161,26 +163,19 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Products</h1>
-          <p className="mt-1 text-sm text-fg/55">
-            {total > 0
-              ? `${total} product${total !== 1 ? "s" : ""} in your catalogue`
-              : "Manage your product catalogue"}
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="md"
-          className="gap-2 self-start sm:self-auto"
-          onClick={() => navigate("/products/new")}
-        >
+      <PageHeader
+        title="Products"
+        description={
+          total > 0
+            ? `${total} product${total !== 1 ? "s" : ""} in your catalogue`
+            : "Manage your product catalogue"
+        }
+      >
+        <Button variant="primary" size="md" className="gap-2" onClick={() => navigate("/products/new")}>
           <Plus className="h-4 w-4" />
           New Product
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         {/* Toolbar */}
@@ -199,6 +194,7 @@ export default function ProductsPage() {
             {isFetching && !isLoading && (
               <span className="text-xs text-fg/40">Updating…</span>
             )}
+            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}
@@ -207,22 +203,6 @@ export default function ProductsPage() {
               searchPlaceholder="Search categories…"
               className="w-48"
             />
-            <div className="flex gap-1 rounded-xs bg-bg-2 p-1">
-              {STATUS_FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setStatus(f.value)}
-                  className={`rounded-xs px-3 py-1.5 text-xs font-medium transition ${
-                    status === f.value
-                      ? "bg-bg text-fg shadow-sm ring-1 ring-inset ring-border"
-                      : "text-fg/55 hover:text-fg"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 

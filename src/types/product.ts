@@ -25,6 +25,12 @@ export interface Category {
   sort_order: number;
 }
 
+export interface CategoryFormState {
+  name: string;
+  description: string;
+  thumbnail: Attachment | null;
+}
+
 // The /category endpoint now returns a paginated payload (matching
 // ProductListData) instead of a bare Category[] array.
 export interface CategoryListData {
@@ -75,6 +81,14 @@ export interface ProductVehicle {
   model_code: string | null;
   year_from: number | null;
   year_to: number | null;
+}
+
+export interface VehicleFormState {
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_model_code: string;
+  vehicle_year: string;
+  vehicle_year_to: string;
 }
 
 export interface Product {

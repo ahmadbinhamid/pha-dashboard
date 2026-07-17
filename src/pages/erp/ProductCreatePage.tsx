@@ -1,33 +1,24 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { NativeSelect } from "@/components/ui/select";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
-import { FormField } from "@/components/ui/form-field";
-import { ProductImages } from "@/components/media/product-images";
-import { CreateStockSection } from "@/components/products/create-stock-section";
-import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
+import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Switch } from "@/components/ui/Switch";
+import { NativeSelect } from "@/components/ui/Select";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
+import { FormField } from "@/components/ui/FormField";
+import { ProductImages } from "@/components/media/ProductImages";
+import { CreateStockSection } from "@/components/products/CreateStockSection";
+import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
 import { useToast } from "@/context";
 import { createProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import type { ProductCreateFormState } from "@/types/product";
-import { SectionLabel } from "@/components/products/section-label";
+import { SectionLabel } from "@/components/products/SectionLabel";
 import { Package2, Image, DollarSign, Boxes, Layers, Car, Tag, Plus } from "lucide-react";
-
-const CONDITIONS = [
-  { value: "NEW", label: "New" },
-  { value: "USED", label: "Used" },
-];
-
-const AUTHENTICITY_OPTIONS = [
-  { value: "Genuine", label: "Genuine" },
-  { value: "Aftermarket", label: "Aftermarket" },
-];
+import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 
 const INITIAL: ProductCreateFormState = {
   title: "",

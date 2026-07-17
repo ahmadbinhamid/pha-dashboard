@@ -1,24 +1,8 @@
-import { FormField } from "@/components/ui/form-field";
-import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect } from "@/components/ui/select";
+import { FormField } from "@/components/ui/FormField";
+import { Textarea } from "@/components/ui/Textarea";
+import { NativeSelect } from "@/components/ui/Select";
 import type { EbayListingFormState } from "@/types/marketplace";
-
-const CONDITIONS = [
-  { value: "NEW", label: "New" },
-  { value: "USED", label: "Used" },
-];
-
-const AUTHENTICITY_OPTIONS = [
-  { value: "Genuine", label: "Genuine" },
-  { value: "Aftermarket", label: "Aftermarket" },
-];
-
-const WARRANTY_OPTIONS = [
-  { value: "1 Month", label: "1 Month" },
-  { value: "3 Months", label: "3 Months" },
-  { value: "6 Months", label: "6 Months" },
-  { value: "12 Months", label: "12 Months" },
-];
+import { CONDITIONS, AUTHENTICITY_OPTIONS, WARRANTY_OPTIONS } from "@/config/productOptions";
 
 interface Props {
   form: EbayListingFormState;

@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { NativeSelect } from "@/components/ui/select";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
-import { FormField } from "@/components/ui/form-field";
-import { ProductImages } from "@/components/media/product-images";
-import { ProductStockCard } from "@/components/products/product-stock-card";
-import { ProductVehicleSection } from "@/components/products/product-vehicle-section";
-import { SectionLabel } from "@/components/products/section-label";
+import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
+import { NativeSelect } from "@/components/ui/Select";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
+import { FormField } from "@/components/ui/FormField";
+import { ProductImages } from "@/components/media/ProductImages";
+import { ProductStockCard } from "@/components/products/ProductStockCard";
+import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { SectionLabel } from "@/components/products/SectionLabel";
 import { useToast } from "@/context";
 import {
   getProduct,
@@ -36,16 +36,7 @@ import {
   Car,
   ShoppingBag,
 } from "lucide-react";
-
-const CONDITIONS = [
-  { value: "NEW", label: "New" },
-  { value: "USED", label: "Used" },
-];
-
-const AUTHENTICITY_OPTIONS = [
-  { value: "Genuine", label: "Genuine" },
-  { value: "Aftermarket", label: "Aftermarket" },
-];
+import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { FormField } from "@/components/ui/form-field";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { FormField } from "@/components/ui/FormField";
 import {
   Modal,
   ModalContent,
@@ -13,8 +13,8 @@ import {
   ModalFooter,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
+} from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/context";
 import {
   getCategories,
@@ -23,15 +23,10 @@ import {
   deleteCategory,
 } from "@/lib/api/categories";
 import type { CategoryPayload } from "@/lib/api/categories";
-import { uploadAttachments } from "@/lib/api/products";
-import type { Category, Attachment } from "@/types/product";
-import { Plus, Layers, Pencil, Trash2, AlertTriangle, Image as ImageIcon, X, Loader2, Search } from "lucide-react";
-
-interface CategoryFormState {
-  name: string;
-  description: string;
-  thumbnail: Attachment | null;
-}
+import { ThumbnailPicker } from "@/components/categories/ThumbnailPicker";
+import { PageHeader } from "@/components/shared/PageHeader";
+import type { Category, CategoryFormState } from "@/types/product";
+import { Plus, Layers, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 
 const EMPTY_FORM: CategoryFormState = { name: "", description: "", thumbnail: null };
 
@@ -41,81 +36,6 @@ function categoryToForm(c: Category): CategoryFormState {
     description: c.description ?? "",
     thumbnail: c.thumbnail ?? null,
   };
-}
-
-// ── Thumbnail picker ─────────────────────────────────────────────────────────
-function ThumbnailPicker({
-  value,
-  onChange,
-}: {
-  value: Attachment | null;
-  onChange: (attachment: Attachment | null) => void;
-}) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadAttachments([file]),
-    onSuccess: (res) => {
-      const uploaded = res.data?.[0];
-      if (uploaded) onChange(uploaded);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Upload failed", description: err.message, tone: "danger" });
-    },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadMutation.mutate(file);
-    e.target.value = "";
-  };
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
-        {uploadMutation.isPending ? (
-          <div className="flex h-full w-full items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-fg/40" />
-          </div>
-        ) : value?.url ? (
-          <img src={value.url} alt="Thumbnail" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageIcon className="h-6 w-6 text-fg/25" />
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={uploadMutation.isPending}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {value ? "Replace image" : "Upload image"}
-        </Button>
-        {value && (
-          <button
-            type="button"
-            className="flex items-center gap-1 text-xs text-fg/50 hover:text-danger"
-            onClick={() => onChange(null)}
-          >
-            <X className="h-3 w-3" />
-            Remove
-          </button>
-        )}
-      </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-    </div>
-  );
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -247,21 +167,19 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Categories</h1>
-          <p className="mt-1 text-sm text-fg/55">
-            {total > 0
-              ? `${total} categor${total !== 1 ? "ies" : "y"} in your catalogue`
-              : "Organise your products into categories"}
-          </p>
-        </div>
-        <Button variant="primary" size="md" className="gap-2 self-start sm:self-auto" onClick={openCreate}>
+      <PageHeader
+        title="Categories"
+        description={
+          total > 0
+            ? `${total} categor${total !== 1 ? "ies" : "y"} in your catalogue`
+            : "Organise your products into categories"
+        }
+      >
+        <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           New Category
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         {/* Toolbar */}

@@ -1,14 +1,14 @@
-import Link from "@/components/ui/link";
+import Link from "@/components/ui/Link";
 import { Suspense, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Icons } from "@/components/ui/icons";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/ui/Icons";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Button } from "@/components/ui/Button";
 import { useOrgSettings } from "@/context";
 import { cn } from "@/utils/cn";
 import { useCounterCartData } from "@/context";
-import { CounterCartDrawer } from "@/components/counter/counter-cart-drawer";
-import { InventorySearchDialog } from "@/components/inventory/inventory-search-dialog";
+import { CounterCartDrawer } from "@/components/counter/CounterCartDrawer";
+import { InventorySearchDialog } from "@/components/inventory/InventorySearchDialog";
 import { useAuth } from "@/context/auth";
 
 function profileInitials(name: string) {
@@ -41,8 +41,8 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
       <header className="sticky top-0 z-20 border-b border-border/80 bg-bg/80 backdrop-blur-xl supports-backdrop-filter:bg-bg/70">
         <div
           className={cn(
-            "flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-2.5",
-            "pt-[max(0.75rem,env(safe-area-inset-top))]",
+            "flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8",
+            "pt-[max(0.5rem,env(safe-area-inset-top))]",
             "ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))]",
           )}
         >

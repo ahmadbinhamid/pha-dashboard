@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
-import { Skeleton } from "@/components/ui/skeleton";
+import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
 import { getListing, updateListing, pushListing } from "@/lib/api/listings";
 import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
-import type { EbayListingErrors } from "@/lib/validation/ebay-listing";
+import type { EbayListingErrors } from "@/lib/validation/ebayListing";
 
 function normaliseSpn(raw: unknown): string[] {
   if (Array.isArray(raw)) {

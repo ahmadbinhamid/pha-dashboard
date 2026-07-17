@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { ProductImages } from "@/components/media/product-images";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/ui/FormField";
+import { Switch } from "@/components/ui/Switch";
+import { Button } from "@/components/ui/Button";
+import { ProductImages } from "@/components/media/ProductImages";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/Select";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
@@ -25,60 +24,16 @@ import {
   validateEbayListing,
   hasEbayErrors,
   type EbayListingErrors,
-} from "@/lib/validation/ebay-listing";
+} from "@/lib/validation/ebayListing";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/Textarea";
 import { AlertCircle, Cloud } from "lucide-react";
-
-// Auction durations — GTC is Fixed Price only
-const LISTING_DURATIONS_FIXED = [
-  { value: "GTC", label: "Good 'Til Cancelled" },
-  { value: "DAYS_3", label: "3 Days" },
-  { value: "DAYS_5", label: "5 Days" },
-  { value: "DAYS_7", label: "7 Days" },
-  { value: "DAYS_10", label: "10 Days" },
-  { value: "DAYS_30", label: "30 Days" },
-];
-
-const LISTING_DURATIONS_AUCTION = [
-  { value: "DAYS_1", label: "1 Day" },
-  { value: "DAYS_3", label: "3 Days" },
-  { value: "DAYS_5", label: "5 Days" },
-  { value: "DAYS_7", label: "7 Days" },
-  { value: "DAYS_10", label: "10 Days" },
-];
-
-interface SectionProps {
-  number: number;
-  title: string;
-  children: React.ReactNode;
-  hasError?: boolean;
-}
-
-function Section({ number, title, children, hasError }: SectionProps) {
-  return (
-    <Card className={hasError ? "ring-1 ring-danger/40" : ""}>
-      <CardHeader
-        title={
-          <div className="flex items-center gap-2">
-            <span
-              className={[
-                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                hasError ? "bg-danger text-danger-fg" : "bg-accent text-accent-fg",
-              ].join(" ")}
-            >
-              {number}
-            </span>
-            <span className="text-sm font-semibold uppercase tracking-wide">{title}</span>
-            {hasError && <AlertCircle className="ml-auto h-4 w-4 text-danger" />}
-          </div>
-        }
-      />
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
+import { Section } from "@/components/listings/listing-form/Section";
+import {
+  LISTING_DURATIONS_FIXED,
+  LISTING_DURATIONS_AUCTION,
+} from "@/config/ebayListingOptions";
 
 interface ListingFormProps {
   form: EbayListingFormState;

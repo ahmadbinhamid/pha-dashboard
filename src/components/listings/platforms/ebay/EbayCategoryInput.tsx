@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/ui/FormField";
 import { getCategorySuggestions } from "@/lib/api/ebay";
 import type { CategorySuggestion } from "@/types/ebay";
 

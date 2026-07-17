@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { EbayListingFormState } from "@/types/marketplace";
-import { generateListingHtml } from "./ebay-description-generator";
+import { generateListingHtml } from "./ebayDescriptionGenerator";
 import { Eye } from "lucide-react";
 
 interface Props {

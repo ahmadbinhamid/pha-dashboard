@@ -1,22 +1,13 @@
-import { Badge } from "@/components/ui/badge";
-import type { EbayListing, ListingSyncStatus } from "@/types/marketplace";
-
-type BadgeVariant = "default" | "ok" | "warn" | "danger" | "muted" | "outline";
-
-const STATUS_CONFIG: Record<ListingSyncStatus, { label: string; variant: BadgeVariant }> = {
-  not_listed: { label: "Not Listed", variant: "muted" },
-  pending: { label: "Pending", variant: "warn" },
-  synced: { label: "Live", variant: "ok" },
-  out_of_stock: { label: "Out of Stock", variant: "warn" },
-  error: { label: "Error", variant: "danger" },
-};
+import { Badge } from "@/components/ui/Badge";
+import type { EbayListing } from "@/types/marketplace";
+import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 
 interface Props {
   listing?: EbayListing | null;
 }
 
 export function EbaySyncStatusSection({ listing }: Props) {
-  const statusCfg = STATUS_CONFIG[listing?.sync_status ?? "not_listed"];
+  const statusCfg = LISTING_SYNC_STATUS_CONFIG[listing?.sync_status ?? "not_listed"];
 
   return (
     <div className="space-y-4">
