@@ -1,11 +1,11 @@
 
 import { Suspense } from "react";
 import { cn } from "@/utils/cn";
-import { Icons } from "@/components/ui/icons";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/ui/Icons";
+import { Button } from "@/components/ui/Button";
 import { useOrgSettings } from "@/context";
-import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
-import { NavItemsList } from "@/components/shell/nav-items-list";
+import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
+import { NavItemsList } from "@/components/shell/NavItemsList";
 
 export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings } = useOrgSettings();

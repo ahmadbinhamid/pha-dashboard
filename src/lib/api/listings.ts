@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
-import { generateListingHtml } from "@/components/listings/platforms/ebay/ebay-description-generator";
+import { generateListingHtml } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 export interface ListingListParams {
   page?: number;

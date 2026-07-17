@@ -1,14 +1,14 @@
-import Link from "@/components/ui/link";
+import Link from "@/components/ui/Link";
 import { Suspense, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Icons } from "@/components/ui/icons";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/ui/Icons";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Button } from "@/components/ui/Button";
 import { useOrgSettings } from "@/context";
 import { cn } from "@/utils/cn";
 import { useCounterCartData } from "@/context";
-import { CounterCartDrawer } from "@/components/counter/counter-cart-drawer";
-import { InventorySearchDialog } from "@/components/inventory/inventory-search-dialog";
+import { CounterCartDrawer } from "@/components/counter/CounterCartDrawer";
+import { InventorySearchDialog } from "@/components/inventory/InventorySearchDialog";
 import { useAuth } from "@/context/auth";
 
 function profileInitials(name: string) {

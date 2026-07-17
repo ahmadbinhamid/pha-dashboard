@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import type { EbayListingFormState, FitmentRowFormState } from "@/types/marketplace";
 import { Plus, Car } from "lucide-react";
-import { FitmentRow } from "@/components/listings/platforms/ebay/ebay-fitment-row";
+import { FitmentRow } from "@/components/listings/platforms/ebay/FitmentRow";
 
 interface Props {
   form: EbayListingFormState;

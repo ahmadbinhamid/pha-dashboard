@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AppProviders } from "@/components/providers/app-providers";
-import { ProtectedRoute } from "@/components/auth/protected-route";
-import { GuestRoute } from "@/components/auth/guest-route";
-import { ErpLayout } from "@/components/layouts/erp-layout";
+import { AppProviders } from "@/components/providers/AppProviders";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { GuestRoute } from "@/components/auth/GuestRoute";
+import { ErpLayout } from "@/components/layouts/ErpLayout";
 import { useAuth } from "@/context/auth";
 
 // Auth pages

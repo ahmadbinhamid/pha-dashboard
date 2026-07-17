@@ -2,8 +2,8 @@
 import { Suspense } from "react";
 import { cn } from "@/utils/cn";
 import { useOrgSettings } from "@/context";
-import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
-import { NavItemsList } from "@/components/shell/nav-items-list";
+import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
+import { NavItemsList } from "@/components/shell/NavItemsList";
 
 type SidebarProps = {
   collapsed: boolean;

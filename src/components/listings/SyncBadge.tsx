@@ -1,6 +1,6 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import type { ListingSyncStatus } from "@/types/marketplace";
-import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listing-status";
+import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 
 interface SyncBadgeProps {
   status: ListingSyncStatus;

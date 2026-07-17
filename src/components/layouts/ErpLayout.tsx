@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { AppShell } from "@/components/shell/app-shell";
+import { AppShell } from "@/components/shell/AppShell";
 
 export function ErpLayout() {
   return (

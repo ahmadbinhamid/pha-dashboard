@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import type { PaymentStatus } from "@/types/payment";
 
 const VARIANT: Record<PaymentStatus, "ok" | "warn" | "danger" | "muted"> = {

@@ -1,9 +1,9 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { cn } from "@/utils/cn";
-import { Sidebar } from "@/components/shell/sidebar";
-import { Topbar } from "@/components/shell/topbar";
-import { MobileSidebar } from "@/components/shell/mobile-sidebar";
+import { Sidebar } from "@/components/shell/Sidebar";
+import { Topbar } from "@/components/shell/Topbar";
+import { MobileSidebar } from "@/components/shell/MobileSidebar";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_KEY = "pha-erp-sidebar-collapsed";

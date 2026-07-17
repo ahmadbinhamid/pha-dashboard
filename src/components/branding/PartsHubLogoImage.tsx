@@ -1,5 +1,5 @@
 import { cn } from "@/utils/cn";
-import { Image } from "@/components/ui/image";
+import { Image } from "@/components/ui/Image";
 
 export const PARTS_HUB_LOGO_PATH = "/branding/parts-hub-australia-logo.png";
 

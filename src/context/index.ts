@@ -1,5 +1,5 @@
 export * from "./auth";
-export * from "./org-settings";
+export * from "./orgSettings";
 export * from "./toast";
 export * from "./inventory";
-export * from "./counter-cart";
+export * from "./counterCart";

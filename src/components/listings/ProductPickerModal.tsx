@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/Input";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
+} from "@/components/ui/Modal";
 import { getProducts } from "@/lib/api/products";
 import { getListings } from "@/lib/api/listings";
 import type { Product } from "@/types/product";

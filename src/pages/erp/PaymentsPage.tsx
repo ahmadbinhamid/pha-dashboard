@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Pagination } from "@/components/ui/pagination";
-import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
-import { PaymentDetailDrawer } from "@/components/payments/payment-detail-drawer";
+import { Card } from "@/components/ui/Card";
+import { Pagination } from "@/components/ui/Pagination";
+import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
+import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { getPayments } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment, PaymentStatus } from "@/types/payment";

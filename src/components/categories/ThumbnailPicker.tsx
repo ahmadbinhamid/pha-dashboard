@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import { useToast } from "@/context";
 import { uploadAttachments } from "@/lib/api/products";
 import type { Attachment } from "@/types/product";

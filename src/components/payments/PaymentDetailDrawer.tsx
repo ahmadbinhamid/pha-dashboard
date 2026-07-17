@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, RotateCcw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
-import { RefundDialog } from "@/components/payments/refund-dialog";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
+import { RefundDialog } from "@/components/payments/RefundDialog";
 import { getPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Refund, RefundStatus } from "@/types/payment";
-import { REFUND_REASON_LABEL } from "@/config/refund-reasons";
+import { REFUND_REASON_LABEL } from "@/config/refundReasons";
 
 interface PaymentDetailDrawerProps {
   paymentId: string;

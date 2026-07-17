@@ -2,16 +2,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "@/hooks";
 import { useSearchParams } from "react-router-dom";
-import { Dialog } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
+import { Dialog } from "@/components/ui/Dialog";
+import { Button } from "@/components/ui/Button";
+import { Icons } from "@/components/ui/Icons";
 import { useInventoryData } from "@/context";
 import {
   buildInventoryListUrl,
   inventoryFiltersFromSearchParams,
   type InventorySearchQuery,
-} from "@/config/inventory-filters";
-import { InventorySearchFields } from "@/components/inventory/inventory-search-fields";
+} from "@/config/inventoryFilters";
+import { InventorySearchFields } from "@/components/inventory/InventorySearchFields";
 
 const EMPTY: InventorySearchQuery = {
   q: "",

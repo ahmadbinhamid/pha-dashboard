@@ -1,9 +1,9 @@
 
-import { Input } from "@/components/ui/input";
-import { NativeSelect as Select } from "@/components/ui/select";
-import { Icons } from "@/components/ui/icons";
-import { MAKES } from "@/config/vehicle-makes";
-import type { EbayFilter, InventorySearchQuery } from "@/config/inventory-filters";
+import { Input } from "@/components/ui/Input";
+import { NativeSelect as Select } from "@/components/ui/Select";
+import { Icons } from "@/components/ui/Icons";
+import { MAKES } from "@/config/vehicleMakes";
+import type { EbayFilter, InventorySearchQuery } from "@/config/inventoryFilters";
 
 type Props = {
   value: InventorySearchQuery;

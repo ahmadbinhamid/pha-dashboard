@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/ui/FormField";
+import { Button } from "@/components/ui/Button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/Select";
 import { getCategoryAspects } from "@/lib/api/ebay";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { CategoryAspect } from "@/types/ebay";

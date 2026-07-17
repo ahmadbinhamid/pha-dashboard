@@ -1,8 +1,8 @@
-import { FormField } from "@/components/ui/form-field";
-import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect } from "@/components/ui/select";
+import { FormField } from "@/components/ui/FormField";
+import { Textarea } from "@/components/ui/Textarea";
+import { NativeSelect } from "@/components/ui/Select";
 import type { EbayListingFormState } from "@/types/marketplace";
-import { CONDITIONS, AUTHENTICITY_OPTIONS, WARRANTY_OPTIONS } from "@/config/product-options";
+import { CONDITIONS, AUTHENTICITY_OPTIONS, WARRANTY_OPTIONS } from "@/config/productOptions";
 
 interface Props {
   form: EbayListingFormState;

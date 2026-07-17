@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   Modal,
   ModalContent,
@@ -11,16 +11,16 @@ import {
   ModalFooter,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { ProductRow } from "@/components/products/product-row";
+} from "@/components/ui/Modal";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { ProductRow } from "@/components/products/ProductRow";
 import { getProducts, deleteProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { EbayListing } from "@/types/marketplace";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@/components/ui/Pagination";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [

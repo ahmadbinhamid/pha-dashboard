@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/select";
-import { SetStockDialogFull } from "@/components/inventory/set-stock-dialog";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { NativeSelect } from "@/components/ui/Select";
+import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
 import { useToast } from "@/context";
 import { getInventory, ensureInventoryRecord, setStock } from "@/lib/api/inventory";
 import { getLocations } from "@/lib/api/products";

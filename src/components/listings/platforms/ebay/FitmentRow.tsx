@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Combobox } from "@/components/ui/combobox";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/Combobox";
+import { Input } from "@/components/ui/Input";
 import {
   getVehicleMakes,
   getVehicleModels,
   getVehicleModelCodes,
   getVehicleYears,
-} from "@/lib/api/vehicle-models";
+} from "@/lib/api/vehicleModels";
 import type { FitmentRowFormState } from "@/types/marketplace";
 import { Trash2 } from "lucide-react";
 

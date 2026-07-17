@@ -1,8 +1,8 @@
 
 import { startTransition, useEffect, useState } from "react";
 import { cn } from "@/utils/cn";
-import { Icons } from "@/components/ui/icons";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/ui/Icons";
+import { Button } from "@/components/ui/Button";
 
 type Theme = "light" | "dark" | "system";
 const STORAGE_KEY = "ppg-theme";

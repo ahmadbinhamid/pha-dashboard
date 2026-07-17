@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { NativeSelect } from "@/components/ui/Select";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { useToast } from "@/context";
 import { refundPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment, RefundReason } from "@/types/payment";
-import { REFUND_REASONS } from "@/config/refund-reasons";
+import { REFUND_REASONS } from "@/config/refundReasons";
 
 interface RefundDialogProps {
   payment: Payment;

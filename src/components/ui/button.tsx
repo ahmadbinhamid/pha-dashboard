@@ -1,7 +1,7 @@
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
-import { buttonClassName, type ButtonSize, type ButtonVariant } from "@/components/ui/button-styles";
+import { buttonClassName, type ButtonSize, type ButtonVariant } from "@/components/ui/buttonStyles";
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;

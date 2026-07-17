@@ -1,8 +1,8 @@
 
 import { useEffect } from "react";
 import { cn } from "@/utils/cn";
-import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
+import { Icons } from "@/components/ui/Icons";
 
 export function Dialog({
   open,

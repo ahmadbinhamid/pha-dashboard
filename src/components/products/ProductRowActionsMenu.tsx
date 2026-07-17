@@ -4,7 +4,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/actions-menu";
+} from "@/components/ui/ActionsMenu";
 import { Pencil, Trash2 } from "lucide-react";
 
 export function ProductRowActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {

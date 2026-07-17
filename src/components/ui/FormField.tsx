@@ -1,5 +1,5 @@
 import { cn } from "@/utils/cn";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/Label";
 
 type FormFieldProps = {
   label?: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
 import { createListing, pushListing } from "@/lib/api/listings";

@@ -5,4 +5,4 @@ export * from "./invoice";
 export * from "./ebay";
 export * from "./counter";
 export * from "./listing";
-export * from "./org-settings";
+export * from "./orgSettings";

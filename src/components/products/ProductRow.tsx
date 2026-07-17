@@ -1,9 +1,9 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
 import { Package } from "lucide-react";
-import { ProductRowActionsMenu } from "@/components/products/product-row-actions-menu";
-import { PLATFORM_LABEL } from "@/config/marketplace-platforms";
+import { ProductRowActionsMenu } from "@/components/products/ProductRowActionsMenu";
+import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 
 interface ProductRowProps {
   product: Product;

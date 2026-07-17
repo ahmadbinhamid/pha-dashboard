@@ -1,15 +1,15 @@
-import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/ui/FormField";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
+} from "@/components/ui/Select";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
-import type { EbayListingErrors } from "@/lib/validation/ebay-listing";
+import type { EbayListingErrors } from "@/lib/validation/ebayListing";
 
 interface Props {
   form: EbayListingFormState;

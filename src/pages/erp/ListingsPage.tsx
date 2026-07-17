@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import {
   Modal,
   ModalContent,
@@ -11,14 +11,14 @@ import {
   ModalFooter,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
+} from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import { getListings, pushListing, deleteListing } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { EbayListing } from "@/types/marketplace";
 import type { Product } from "@/types/product";
-import { SyncBadge } from "@/components/listings/sync-badge";
-import { ProductPickerModal } from "@/components/listings/product-picker-modal";
+import { SyncBadge } from "@/components/listings/SyncBadge";
+import { ProductPickerModal } from "@/components/listings/ProductPickerModal";
 import { Plus, Cloud, Pencil, Trash2 } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────

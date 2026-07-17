@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { FormField } from "@/components/ui/form-field";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { FormField } from "@/components/ui/FormField";
 import {
   Modal,
   ModalContent,
@@ -13,8 +13,8 @@ import {
   ModalFooter,
   ModalTitle,
   ModalDescription,
-} from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
+} from "@/components/ui/Modal";
+import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/context";
 import {
   getCategories,
@@ -23,7 +23,7 @@ import {
   deleteCategory,
 } from "@/lib/api/categories";
 import type { CategoryPayload } from "@/lib/api/categories";
-import { ThumbnailPicker } from "@/components/categories/thumbnail-picker";
+import { ThumbnailPicker } from "@/components/categories/ThumbnailPicker";
 import type { Category, CategoryFormState } from "@/types/product";
 import { Plus, Layers, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 

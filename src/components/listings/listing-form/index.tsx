@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { FormField } from "@/components/ui/form-field";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { ProductImages } from "@/components/media/product-images";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/ui/FormField";
+import { Switch } from "@/components/ui/Switch";
+import { Button } from "@/components/ui/Button";
+import { ProductImages } from "@/components/media/ProductImages";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/Select";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { EbayConditionSection } from "@/components/listings/platforms/ebay/EbayConditionSection";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
@@ -24,16 +24,16 @@ import {
   validateEbayListing,
   hasEbayErrors,
   type EbayListingErrors,
-} from "@/lib/validation/ebay-listing";
+} from "@/lib/validation/ebayListing";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/Textarea";
 import { AlertCircle, Cloud } from "lucide-react";
-import { Section } from "@/components/listings/listing-form/section";
+import { Section } from "@/components/listings/listing-form/Section";
 import {
   LISTING_DURATIONS_FIXED,
   LISTING_DURATIONS_AUCTION,
-} from "@/config/ebay-listing-options";
+} from "@/config/ebayListingOptions";
 
 interface ListingFormProps {
   form: EbayListingFormState;

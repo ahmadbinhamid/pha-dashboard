@@ -1,8 +1,8 @@
 
-import Link from "@/components/ui/link";
+import Link from "@/components/ui/Link";
 import { usePathname } from "@/hooks";
 import { NAV_ITEMS, isNavItemActive } from "@/config/nav";
-import { erpNavIconClass, erpNavRowClass } from "@/config/nav-styles";
+import { erpNavIconClass, erpNavRowClass } from "@/config/navStyles";
 
 export function NavItemsList({
   collapsed = false,

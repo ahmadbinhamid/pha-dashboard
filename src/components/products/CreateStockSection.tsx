@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { getLocations } from "@/lib/api/products";
 import type { StockEntry } from "@/types/product";
 import { MapPin, Plus, X } from "lucide-react";

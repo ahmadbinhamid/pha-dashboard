@@ -6,13 +6,13 @@ import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
 import { useOrgSettings } from "@/context";
 
-import { PartsHubLogoImage } from "@/components/branding/parts-hub-logo-image";
-import { Icons } from "@/components/ui/icons";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import Link from "@/components/ui/link";
-import { LoginCheckbox } from "@/components/auth/login-checkbox";
+import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
+import { Icons } from "@/components/ui/Icons";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import Link from "@/components/ui/Link";
+import { LoginCheckbox } from "@/components/auth/LoginCheckbox";
 
 type Step = "credentials" | "otp";
 
