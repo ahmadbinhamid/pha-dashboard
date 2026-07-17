@@ -9,6 +9,7 @@ import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { PaymentRowActionsMenu } from "@/components/payments/PaymentRowActionsMenu";
 import { getPayments } from "@/lib/api/payments";
+import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment, PaymentStatus } from "@/types/payment";
 import { CreditCard } from "lucide-react";
@@ -35,6 +36,7 @@ export default function PaymentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get("status") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
   const [selected, setSelected] = useState<Payment | null>(null);
 
@@ -62,9 +64,21 @@ export default function PaymentsPage() {
     [setSearchParams],
   );
 
+  const setLimit = useCallback(
+    (l: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("limit", String(l));
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["payments", { status, page }],
-    queryFn: () => getPayments({ status, page }),
+    queryKey: ["payments", { status, page, limit }],
+    queryFn: () => getPayments({ status, page, limit }),
   });
 
   const payments: Payment[] = data?.data?.items ?? [];
@@ -142,7 +156,15 @@ export default function PaymentsPage() {
           )}
         </div>
 
-        <Pagination currentPage={page} totalPages={totalPages} totalItems={total} isLoading={isFetching} onPageChange={setPage} />
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={total}
+          itemsPerPage={limit}
+          onLimitChange={setLimit}
+          isLoading={isFetching}
+          onPageChange={setPage}
+        />
       </Card>
 
       {selected && <PaymentDetailDrawer paymentId={selected._id} onClose={() => setSelected(null)} />}

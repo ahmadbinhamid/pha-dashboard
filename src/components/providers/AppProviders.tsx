@@ -4,7 +4,6 @@ import {
   ToastProvider,
   OrgSettingsProvider,
   InventoryProvider,
-  CounterCartProvider,
 } from "@/context";
 
 const queryClient = new QueryClient({
@@ -23,9 +22,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <OrgSettingsProvider>
           <InventoryProvider>
-            <CounterCartProvider>
-              <ToastProvider>{children}</ToastProvider>
-            </CounterCartProvider>
+            <ToastProvider>{children}</ToastProvider>
           </InventoryProvider>
         </OrgSettingsProvider>
       </AuthProvider>

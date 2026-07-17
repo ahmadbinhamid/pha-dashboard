@@ -15,6 +15,7 @@ import {
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getListings, pushListing, deleteListing } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { EbayListing } from "@/types/marketplace";
@@ -25,8 +26,6 @@ import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMe
 import { Plus, Cloud } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 20;
 
 const SYNC_STATUS_FILTERS = [
   { label: "All", value: "" },
@@ -56,6 +55,7 @@ export default function ListingsPage() {
   // URL-synced state (survives refresh/back navigation)
   const syncStatus = searchParams.get("sync_status") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
   // Local UI state (doesn't need to be in URL)
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -85,10 +85,22 @@ export default function ListingsPage() {
     [setSearchParams],
   );
 
+  const setLimit = useCallback(
+    (l: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("limit", String(l));
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["listings", { page, sync_status: syncStatus }],
+    queryKey: ["listings", { page, limit, sync_status: syncStatus }],
     queryFn: () =>
-      getListings({ page, limit: PAGE_SIZE, ...(syncStatus ? { sync_status: syncStatus } : {}) }),
+      getListings({ page, limit, ...(syncStatus ? { sync_status: syncStatus } : {}) }),
   });
 
   const listings: EbayListing[] = (data?.data?.items ?? []) as EbayListing[];
@@ -224,7 +236,8 @@ export default function ListingsPage() {
           currentPage={page}
           totalPages={totalPages}
           totalItems={total}
-          itemsPerPage={PAGE_SIZE}
+          itemsPerPage={limit}
+          onLimitChange={setLimit}
           isLoading={isFetching}
           onPageChange={setPage}
         />

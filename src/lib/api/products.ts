@@ -11,6 +11,7 @@ import type {
 
 export interface ProductListParams {
   page?: number;
+  limit?: number;
   search?: string;
   status?: string;
   categories?: string;

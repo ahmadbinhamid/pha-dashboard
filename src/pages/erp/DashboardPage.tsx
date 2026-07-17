@@ -9,10 +9,19 @@ import { getListings } from "@/lib/api/listings";
 import { getPayments } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment } from "@/types/payment";
+import type { EbayListing, ListingSyncStatus } from "@/types/marketplace";
+import type { Product } from "@/types/product";
 import type { RevenueTrendPoint, SyncStatusBreakdownItem } from "@/types/dashboard";
 import { Package, Cloud, DollarSign, Clock } from "lucide-react";
 
 const TREND_DAYS = 14;
+
+// Fetched once per resource, capped generously — fine for this store's actual
+// scale today. Revisit with a real backend aggregate endpoint if any of these
+// counts grow past ~100.
+const DASHBOARD_FETCH_LIMIT = 100;
+
+const SYNC_STATUSES: ListingSyncStatus[] = ["synced", "pending", "error", "not_listed"];
 
 function buildRevenueTrend(payments: Payment[]): RevenueTrendPoint[] {
   const byDate = new Map<string, number>();
@@ -33,66 +42,40 @@ function buildRevenueTrend(payments: Payment[]): RevenueTrendPoint[] {
 }
 
 export default function DashboardPage() {
-  const { data: productsTotal, isLoading: productsLoading } = useQuery({
-    queryKey: ["dashboard", "products-total"],
-    queryFn: () => getProducts({ page: 1 }),
+  const { data: productsRes, isLoading: productsLoading } = useQuery({
+    queryKey: ["dashboard", "products"],
+    queryFn: () => getProducts({ page: 1, limit: DASHBOARD_FETCH_LIMIT }),
   });
 
-  const { data: activeProducts } = useQuery({
-    queryKey: ["dashboard", "products-active"],
-    queryFn: () => getProducts({ page: 1, status: "active" }),
+  const { data: listingsRes, isLoading: listingsLoading } = useQuery({
+    queryKey: ["dashboard", "listings"],
+    queryFn: () => getListings({ page: 1, limit: DASHBOARD_FETCH_LIMIT }),
   });
 
-  const { data: listingsTotal, isLoading: listingsLoading } = useQuery({
-    queryKey: ["dashboard", "listings-total"],
-    queryFn: () => getListings({ page: 1, limit: 1 }),
+  const { data: paymentsRes, isLoading: paymentsLoading } = useQuery({
+    queryKey: ["dashboard", "payments"],
+    queryFn: () => getPayments({ page: 1, limit: DASHBOARD_FETCH_LIMIT }),
   });
 
-  const syncedQuery = useQuery({
-    queryKey: ["dashboard", "listings-sync", "synced"],
-    queryFn: () => getListings({ page: 1, limit: 1, sync_status: "synced" }),
-  });
-  const pendingSyncQuery = useQuery({
-    queryKey: ["dashboard", "listings-sync", "pending"],
-    queryFn: () => getListings({ page: 1, limit: 1, sync_status: "pending" }),
-  });
-  const errorSyncQuery = useQuery({
-    queryKey: ["dashboard", "listings-sync", "error"],
-    queryFn: () => getListings({ page: 1, limit: 1, sync_status: "error" }),
-  });
-  const notListedQuery = useQuery({
-    queryKey: ["dashboard", "listings-sync", "not_listed"],
-    queryFn: () => getListings({ page: 1, limit: 1, sync_status: "not_listed" }),
-  });
+  const products = (productsRes?.data?.items ?? []) as Product[];
+  const listings = (listingsRes?.data?.items ?? []) as EbayListing[];
+  const payments = (paymentsRes?.data?.items ?? []) as Payment[];
 
-  const { data: pendingPayments } = useQuery({
-    queryKey: ["dashboard", "payments-pending"],
-    queryFn: () => getPayments({ page: 1, limit: 1, status: "pending" }),
-  });
+  const productsTotal = productsRes?.data?.total ?? 0;
+  const activeProductsCount = products.filter((p) => p.status === "active").length;
 
-  const { data: recentPaymentsRes, isLoading: recentLoading } = useQuery({
-    queryKey: ["dashboard", "payments-recent"],
-    queryFn: () => getPayments({ page: 1, limit: 8 }),
-  });
+  const listingsTotal = listingsRes?.data?.total ?? 0;
+  const syncBreakdown: SyncStatusBreakdownItem[] = SYNC_STATUSES.map((status) => ({
+    status,
+    count: listings.filter((l) => l.sync_status === status).length,
+  }));
+  const liveListingsCount = syncBreakdown.find((s) => s.status === "synced")?.count ?? 0;
 
-  const { data: succeededPaymentsRes, isLoading: revenueLoading } = useQuery({
-    queryKey: ["dashboard", "payments-succeeded-trend"],
-    queryFn: () => getPayments({ page: 1, limit: 200, status: "succeeded" }),
-  });
-
-  const succeededPayments = (succeededPaymentsRes?.data?.items ?? []) as Payment[];
-  const recentPayments = (recentPaymentsRes?.data?.items ?? []) as Payment[];
+  const succeededPayments = payments.filter((p) => p.status === "succeeded");
+  const pendingPaymentsCount = payments.filter((p) => p.status === "pending").length;
   const revenueTotalCents = succeededPayments.reduce((sum, p) => sum + p.amount, 0);
-  const trendPoints = buildRevenueTrend(succeededPayments);
-
-  const syncBreakdown: SyncStatusBreakdownItem[] = [
-    { status: "synced", count: syncedQuery.data?.data?.total ?? 0 },
-    { status: "pending", count: pendingSyncQuery.data?.data?.total ?? 0 },
-    { status: "error", count: errorSyncQuery.data?.data?.total ?? 0 },
-    { status: "not_listed", count: notListedQuery.data?.data?.total ?? 0 },
-  ];
-  const syncBreakdownLoading =
-    syncedQuery.isLoading || pendingSyncQuery.isLoading || errorSyncQuery.isLoading || notListedQuery.isLoading;
+  const trendPoints = buildRevenueTrend(payments);
+  const recentPayments = payments.slice(0, 8);
 
   return (
     <div className="space-y-6">
@@ -101,23 +84,15 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Total Products"
-          value={productsTotal?.data?.total ?? 0}
-          subLabel={
-            activeProducts?.data?.total != null
-              ? `${activeProducts.data.total} active`
-              : undefined
-          }
+          value={productsTotal}
+          subLabel={`${activeProductsCount} active`}
           icon={<Package className="h-4 w-4" />}
           loading={productsLoading}
         />
         <MetricCard
           label="Live Listings"
-          value={syncBreakdown.find((s) => s.status === "synced")?.count ?? 0}
-          subLabel={
-            listingsTotal?.data?.total != null
-              ? `${listingsTotal.data.total} total listings`
-              : undefined
-          }
+          value={liveListingsCount}
+          subLabel={`${listingsTotal} total listings`}
           icon={<Cloud className="h-4 w-4" />}
           loading={listingsLoading}
         />
@@ -126,23 +101,24 @@ export default function DashboardPage() {
           value={formatCurrencyFromCents(revenueTotalCents)}
           subLabel={`from ${succeededPayments.length} succeeded payment${succeededPayments.length !== 1 ? "s" : ""}`}
           icon={<DollarSign className="h-4 w-4" />}
-          loading={revenueLoading}
+          loading={paymentsLoading}
         />
         <MetricCard
           label="Pending Payments"
-          value={pendingPayments?.data?.total ?? 0}
+          value={pendingPaymentsCount}
           icon={<Clock className="h-4 w-4" />}
+          loading={paymentsLoading}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueTrendCard points={trendPoints} loading={revenueLoading} />
+          <RevenueTrendCard points={trendPoints} loading={paymentsLoading} />
         </div>
-        <ListingSyncBreakdownCard items={syncBreakdown} loading={syncBreakdownLoading} />
+        <ListingSyncBreakdownCard items={syncBreakdown} loading={listingsLoading} />
       </div>
 
-      <RecentPaymentsCard payments={recentPayments} loading={recentLoading} />
+      <RecentPaymentsCard payments={recentPayments} loading={paymentsLoading} />
     </div>
   );
 }

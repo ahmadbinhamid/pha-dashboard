@@ -23,6 +23,7 @@ import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { EbayListing } from "@/types/marketplace";
 import { Pagination } from "@/components/ui/Pagination";
+import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [
@@ -53,6 +54,7 @@ export default function ProductsPage() {
   const status = searchParams.get("status") ?? "";
   const categories = searchParams.get("categories") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
   const selectedCategories = categories ? categories.split(",") : [];
 
   const [inputValue, setInputValue] = useState(search);
@@ -98,6 +100,18 @@ export default function ProductsPage() {
     [setSearchParams],
   );
 
+  const setLimit = useCallback(
+    (l: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("limit", String(l));
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const setCategories = useCallback(
     (ids: string[]) => {
       setSearchParams((prev) => {
@@ -112,8 +126,8 @@ export default function ProductsPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", { search, status, categories, page }],
-    queryFn: () => getProducts({ search, status, categories, page }),
+    queryKey: ["products", { search, status, categories, page, limit }],
+    queryFn: () => getProducts({ search, status, categories, page, limit }),
   });
 
   const { data: categoriesRes } = useQuery({
@@ -251,6 +265,8 @@ export default function ProductsPage() {
           currentPage={page}
           totalPages={totalPages}
           totalItems={total}
+          itemsPerPage={limit}
+          onLimitChange={setLimit}
           isLoading={isFetching}
           onPageChange={setPage}
         />

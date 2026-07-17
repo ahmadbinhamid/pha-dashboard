@@ -25,6 +25,7 @@ import {
 import type { CategoryPayload } from "@/lib/api/categories";
 import { ThumbnailPicker } from "@/components/categories/ThumbnailPicker";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { Category, CategoryFormState } from "@/types/product";
 import { Plus, Layers, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 
@@ -44,6 +45,7 @@ export default function CategoriesPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
   const search = searchParams.get("search") ?? "";
 
   const [inputValue, setInputValue] = useState(search);
@@ -57,6 +59,15 @@ export default function CategoriesPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("page", String(p));
+      return next;
+    });
+  };
+
+  const setLimit = (l: number) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("limit", String(l));
+      next.set("page", "1");
       return next;
     });
   };
@@ -78,8 +89,8 @@ export default function CategoriesPage() {
   }, [inputValue, setSearchParams]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["categories", { page, search }],
-    queryFn: () => getCategories({ page, search }),
+    queryKey: ["categories", { page, search, limit }],
+    queryFn: () => getCategories({ page, search, limit }),
   });
 
   const categories: Category[] = data?.data?.items ?? [];
@@ -266,6 +277,8 @@ export default function CategoriesPage() {
           currentPage={page}
           totalPages={totalPages}
           totalItems={total}
+          itemsPerPage={limit}
+          onLimitChange={setLimit}
           isLoading={isFetching}
           onPageChange={setPage}
         />
