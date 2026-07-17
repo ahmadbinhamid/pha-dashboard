@@ -3,13 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getLocations } from "@/lib/api/products";
+import type { StockEntry } from "@/types/product";
 import { MapPin, Plus, X } from "lucide-react";
-
-export interface StockEntry {
-  location_id: string;
-  location_name: string;
-  qty: number;
-}
 
 interface CreateStockSectionProps {
   entries: StockEntry[];

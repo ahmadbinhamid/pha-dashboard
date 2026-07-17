@@ -7,14 +7,7 @@ import {
   getVehicleModelCodes,
   getVehicleYears,
 } from "@/lib/api/vehicle-models";
-
-export interface VehicleFormState {
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_model_code: string;
-  vehicle_year: string;
-  vehicle_year_to: string;
-}
+import type { VehicleFormState } from "@/types/product";
 
 interface ProductVehicleSectionProps {
   values: VehicleFormState;

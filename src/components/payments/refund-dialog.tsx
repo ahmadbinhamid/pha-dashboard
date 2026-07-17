@@ -9,14 +9,7 @@ import { useToast } from "@/context";
 import { refundPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment, RefundReason } from "@/types/payment";
-
-const REFUND_REASONS: { value: RefundReason; label: string }[] = [
-  { value: "customer_request", label: "Customer Request" },
-  { value: "duplicate_payment", label: "Duplicate Payment" },
-  { value: "fraud_suspected", label: "Fraud Suspected" },
-  { value: "payment_error", label: "Payment Error" },
-  { value: "order_cancelled", label: "Order Cancelled" },
-];
+import { REFUND_REASONS } from "@/config/refund-reasons";
 
 interface RefundDialogProps {
   payment: Payment;

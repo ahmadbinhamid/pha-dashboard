@@ -8,6 +8,7 @@ import { RefundDialog } from "@/components/payments/refund-dialog";
 import { getPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Refund, RefundStatus } from "@/types/payment";
+import { REFUND_REASON_LABEL } from "@/config/refund-reasons";
 
 interface PaymentDetailDrawerProps {
   paymentId: string;
@@ -18,15 +19,6 @@ const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger"> = {
   succeeded: "ok",
   pending: "warn",
   failed: "danger",
-};
-
-const REFUND_REASON_LABEL: Record<string, string> = {
-  customer_request: "Customer Request",
-  duplicate_payment: "Duplicate Payment",
-  fraud_suspected: "Fraud Suspected",
-  payment_error: "Payment Error",
-  order_cancelled: "Order Cancelled",
-  other: "Other (Stripe Dashboard)",
 };
 
 export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerProps) {

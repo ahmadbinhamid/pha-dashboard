@@ -36,16 +36,7 @@ import {
   Car,
   ShoppingBag,
 } from "lucide-react";
-
-const CONDITIONS = [
-  { value: "NEW", label: "New" },
-  { value: "USED", label: "Used" },
-];
-
-const AUTHENTICITY_OPTIONS = [
-  { value: "Genuine", label: "Genuine" },
-  { value: "Aftermarket", label: "Aftermarket" },
-];
+import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/product-options";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

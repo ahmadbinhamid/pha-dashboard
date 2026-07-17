@@ -4,9 +4,6 @@ import {
   ToastProvider,
   OrgSettingsProvider,
   InventoryProvider,
-  OrdersProvider,
-  BundlesProvider,
-  ListingQueueProvider,
   CounterCartProvider,
 } from "@/context";
 
@@ -26,15 +23,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <OrgSettingsProvider>
           <InventoryProvider>
-            <OrdersProvider>
-              <BundlesProvider>
-                <ListingQueueProvider>
-                  <CounterCartProvider>
-                    <ToastProvider>{children}</ToastProvider>
-                  </CounterCartProvider>
-                </ListingQueueProvider>
-              </BundlesProvider>
-            </OrdersProvider>
+            <CounterCartProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </CounterCartProvider>
           </InventoryProvider>
         </OrgSettingsProvider>
       </AuthProvider>

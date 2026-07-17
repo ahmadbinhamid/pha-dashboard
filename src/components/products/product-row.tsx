@@ -1,39 +1,9 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  ActionsMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/actions-menu";
 import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
-import { Package, Pencil, Trash2 } from "lucide-react";
-
-function ActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
-  return (
-    <DropdownMenu>
-      <ActionsMenuTrigger />
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={onEdit}>
-          <Pencil className="h-3.5 w-3.5 text-fg/50" />
-          Edit
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem destructive onSelect={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-const PLATFORM_LABEL: Record<string, string> = {
-  ebay: "eBay",
-  amazon: "Amazon",
-  shopify: "Shopify",
-};
+import { Package } from "lucide-react";
+import { ProductRowActionsMenu } from "@/components/products/product-row-actions-menu";
+import { PLATFORM_LABEL } from "@/config/marketplace-platforms";
 
 interface ProductRowProps {
   product: Product;
@@ -128,7 +98,7 @@ export function ProductRow({ product, listingPlatforms = [], onClick, onEdit, on
       {/* Actions */}
       <td className="w-px whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end">
-          <ActionsMenu onEdit={onEdit} onDelete={onDelete} />
+          <ProductRowActionsMenu onEdit={onEdit} onDelete={onDelete} />
         </div>
       </td>
     </tr>
