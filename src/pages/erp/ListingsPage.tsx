@@ -13,13 +13,16 @@ import {
   ModalDescription,
 } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { getListings, pushListing, deleteListing } from "@/lib/api/listings";
 import { useToast } from "@/context";
 import type { EbayListing } from "@/types/marketplace";
 import type { Product } from "@/types/product";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { ProductPickerModal } from "@/components/listings/ProductPickerModal";
-import { Plus, Cloud, Pencil, Trash2 } from "lucide-react";
+import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMenu";
+import { Plus, Cloud } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -125,46 +128,24 @@ export default function ListingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Listings</h1>
-          <p className="mt-1 text-sm text-fg/55">
-            {total > 0
-              ? `${total} listing${total !== 1 ? "s" : ""} across your channels`
-              : "Manage your channel listings"}
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="md"
-          className="gap-2 self-start sm:self-auto"
-          onClick={() => setPickerOpen(true)}
-        >
+      <PageHeader
+        title="Listings"
+        description={
+          total > 0
+            ? `${total} listing${total !== 1 ? "s" : ""} across your channels`
+            : "Manage your channel listings"
+        }
+      >
+        <Button variant="primary" size="md" className="gap-2" onClick={() => setPickerOpen(true)}>
           <Plus className="h-4 w-4" />
           New Listing
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-1 rounded-xs bg-bg-2 p-1">
-            {SYNC_STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setSyncStatus(f.value)}
-                className={`rounded-xs px-3 py-1.5 text-xs font-medium transition ${
-                  syncStatus === f.value
-                    ? "bg-bg text-fg shadow-sm ring-1 ring-inset ring-border"
-                    : "text-fg/55 hover:text-fg"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <FilterSelect options={SYNC_STATUS_FILTERS} value={syncStatus} onChange={setSyncStatus} />
           {isFetching && !isLoading && (
             <span className="text-xs text-fg/40">Updating…</span>
           )}
@@ -221,36 +202,14 @@ export default function ListingsPage() {
                         <SyncBadge status={listing.sync_status} />
                       </td>
                       <td className="px-4 py-3 text-fg/60">{syncedAt}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div
-                          className="flex items-center justify-end gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            title="Push to eBay"
-                            onClick={() => pushMutation.mutate(listing._id)}
-                            disabled={pushMutation.isPending}
-                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-primary"
-                          >
-                            <Cloud className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Edit"
-                            onClick={() => navigate(`/listings/${listing._id}/edit`)}
-                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-fg"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Delete"
-                            onClick={() => setDeleteTarget(listing)}
-                            className="rounded p-1.5 text-fg/50 transition-colors hover:bg-bg-2 hover:text-danger"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end">
+                          <ListingRowActionsMenu
+                            onPush={() => pushMutation.mutate(listing._id)}
+                            pushDisabled={pushMutation.isPending}
+                            onEdit={() => navigate(`/listings/${listing._id}/edit`)}
+                            onDelete={() => setDeleteTarget(listing)}
+                          />
                         </div>
                       </td>
                     </tr>

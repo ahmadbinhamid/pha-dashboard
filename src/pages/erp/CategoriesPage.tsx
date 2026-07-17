@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/categories";
 import type { CategoryPayload } from "@/lib/api/categories";
 import { ThumbnailPicker } from "@/components/categories/ThumbnailPicker";
+import { PageHeader } from "@/components/shared/PageHeader";
 import type { Category, CategoryFormState } from "@/types/product";
 import { Plus, Layers, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 
@@ -166,21 +167,19 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Categories</h1>
-          <p className="mt-1 text-sm text-fg/55">
-            {total > 0
-              ? `${total} categor${total !== 1 ? "ies" : "y"} in your catalogue`
-              : "Organise your products into categories"}
-          </p>
-        </div>
-        <Button variant="primary" size="md" className="gap-2 self-start sm:self-auto" onClick={openCreate}>
+      <PageHeader
+        title="Categories"
+        description={
+          total > 0
+            ? `${total} categor${total !== 1 ? "ies" : "y"} in your catalogue`
+            : "Organise your products into categories"
+        }
+      >
+        <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           New Category
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         {/* Toolbar */}

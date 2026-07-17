@@ -41,8 +41,8 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
       <header className="sticky top-0 z-20 border-b border-border/80 bg-bg/80 backdrop-blur-xl supports-backdrop-filter:bg-bg/70">
         <div
           className={cn(
-            "flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-2.5",
-            "pt-[max(0.75rem,env(safe-area-inset-top))]",
+            "flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8",
+            "pt-[max(0.5rem,env(safe-area-inset-top))]",
             "ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))]",
           )}
         >

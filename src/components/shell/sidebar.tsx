@@ -15,11 +15,11 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
   return (
     <div className="flex h-dvh max-h-dvh flex-col border-r border-border bg-card/55">
-      {/* Logo / brand */}
+      {/* Logo / brand — height matches Topbar so the border seam lines up */}
       <div
         className={cn(
-          "flex items-center gap-3 px-3 py-4",
-          collapsed ? "flex-col justify-center gap-2.5 py-5" : "sm:px-4",
+          "flex min-h-16 items-center gap-3 border-b border-border/80 px-3",
+          collapsed ? "flex-col justify-center gap-2 py-3" : "sm:px-4",
         )}
       >
         <div

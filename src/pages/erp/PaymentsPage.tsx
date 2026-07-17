@@ -3,8 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
+import { PaymentRowActionsMenu } from "@/components/payments/PaymentRowActionsMenu";
 import { getPayments } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Payment, PaymentStatus } from "@/types/payment";
@@ -25,6 +28,7 @@ const TABLE_HEADERS = [
   { label: "Refunded", align: "right" },
   { label: "Status", align: "left" },
   { label: "Date", align: "right" },
+  { label: "Actions", align: "right" },
 ];
 
 export default function PaymentsPage() {
@@ -69,33 +73,14 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Payments</h1>
-          <p className="mt-1 text-sm text-fg/55">
-            {total > 0 ? `${total} payment${total !== 1 ? "s" : ""}` : "Stripe payments and refunds"}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Payments"
+        description={total > 0 ? `${total} payment${total !== 1 ? "s" : ""}` : "Stripe payments and refunds"}
+      />
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-1 rounded-xs bg-bg-2 p-1">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setStatus(f.value)}
-                className={`rounded-xs px-3 py-1.5 text-xs font-medium transition ${
-                  status === f.value
-                    ? "bg-bg text-fg shadow-sm ring-1 ring-inset ring-border"
-                    : "text-fg/55 hover:text-fg"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
           {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
         </div>
 
@@ -143,6 +128,11 @@ export default function PaymentsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-right text-fg/60">
                         {new Date(payment.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end">
+                          <PaymentRowActionsMenu onView={() => setSelected(payment)} />
+                        </div>
                       </td>
                     </tr>
                   );

@@ -24,7 +24,7 @@ export function LoginCard() {
 
   const redirectTo =
     (location.state as { from?: { pathname: string } } | null)?.from
-      ?.pathname ?? "/products";
+      ?.pathname ?? "/dashboard";
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");

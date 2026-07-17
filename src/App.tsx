@@ -9,6 +9,7 @@ import { useAuth } from "@/context/auth";
 import LoginPage from "@/pages/LoginPage";
 
 // ERP pages
+import DashboardPage from "@/pages/erp/DashboardPage";
 import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
@@ -27,7 +28,7 @@ function HomeRedirect() {
       </div>
     );
   }
-  return <Navigate to={isAuthenticated ? "/products" : "/login"} replace />;
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />;
 }
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
