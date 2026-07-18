@@ -64,7 +64,7 @@ exports.getProducts = async (req, res) => {
 
     if (req.query.search) {
       const re = new RegExp(escapeRegex(req.query.search.trim()), "i");
-      and.push({ $or: [{ title: re }, { sku: re }, { brand: re }, { tags: re }] });
+      and.push({ $or: [{ title: re }, { sku: re }, { brand: re }, { tags: re }, { mpn: re }] });
     }
     if (!req.user) {
       // Unauthenticated (public/storefront) callers only ever see published, active products
