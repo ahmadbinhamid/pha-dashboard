@@ -16,6 +16,7 @@ const {
   credentialsConfigured,
   getAccessToken,
   buildInventoryItemFromResolved,
+  normalizeCondition,
   buildOfferFromResolved,
   upsertInventoryItem,
   createOffer,
@@ -25,12 +26,50 @@ const {
   deleteProduct,
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
+const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
 const { getTotalStockForProductVariant } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
 const Product = require("../../../models/Product");
 const ProductVariant = require("../../../models/ProductVariant");
 
 const key = "ebay";
+
+// Preferred fallback order when the stored condition isn't accepted for the
+// listing's category — e.g. "USED_GOOD" is invalid for a primary category
+// that only allows "USED_ACCEPTABLE" (eBay error 25021). We stay within the
+// same condition family (new-like vs. used-like) rather than jumping across.
+const CONDITION_FALLBACK_ORDER = {
+  new: ["NEW", "NEW_OTHER", "LIKE_NEW", "CERTIFIED_REFURBISHED", "EXCELLENT_REFURBISHED", "VERY_GOOD_REFURBISHED", "GOOD_REFURBISHED", "SELLER_REFURBISHED"],
+  used: ["USED_GOOD", "USED_VERY_GOOD", "USED_EXCELLENT", "USED_ACCEPTABLE", "FOR_PARTS_OR_NOT_WORKING"],
+};
+
+// Resolves the stored listing condition to one eBay actually accepts for the
+// listing's primary category, cross-checking against the Sell Metadata API's
+// per-category condition policy instead of assuming a static mapping is
+// always valid (it isn't — accepted conditions vary by category).
+async function resolveCategoryCondition(rawCondition, categoryId) {
+  const fallback = normalizeCondition(rawCondition);
+  if (!categoryId) return fallback;
+
+  try {
+    const { conditions } = await getConditionPolicies(categoryId);
+    const validIds = conditions.map((c) => c.conditionId);
+    if (validIds.length === 0 || validIds.includes(fallback)) return fallback;
+
+    const family = fallback === "NEW" ? "new" : "used";
+    const preferred = CONDITION_FALLBACK_ORDER[family].find((c) => validIds.includes(c));
+    if (preferred) {
+      logger.warn(`[EbayAdapter] condition "${fallback}" invalid for category ${categoryId} — using "${preferred}" instead`);
+      return preferred;
+    }
+
+    logger.warn(`[EbayAdapter] condition "${fallback}" invalid for category ${categoryId} and no same-family match — using "${validIds[0]}" instead`);
+    return validIds[0];
+  } catch (err) {
+    logger.warn(`[EbayAdapter] could not verify condition policies for category ${categoryId}: ${err.message}`);
+    return fallback;
+  }
+}
 
 async function resolveQuantity(resolved) {
   const { product, variant } = resolved;
@@ -59,7 +98,8 @@ async function publish(resolved, settings) {
   }
 
   // Step 1 — inventory item
-  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity);
+  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id);
+  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
   await upsertInventoryItem(token, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity})`);
 
@@ -121,7 +161,8 @@ async function update(resolved, settings) {
   }
 
   // Step 1 — sync inventory item
-  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity);
+  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id);
+  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
   await upsertInventoryItem(token, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku}`);
 

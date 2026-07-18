@@ -26,10 +26,12 @@ const INITIAL: ProductCreateFormState = {
   price: "",
   compare_price: "",
   cost_price: "",
+  shipping_cost: "",
   is_taxable: false,
   barcode: "",
   stock_control: false,
   stock_entries: [],
+  mpn: "",
   condition: "NEW",
   authenticity: "",
   vehicle_make: "",
@@ -52,9 +54,11 @@ function formToFD(form: ProductCreateFormState): FormData {
   fd.append("price", form.price || "0");
   if (form.compare_price) fd.append("compare_price", form.compare_price);
   if (form.cost_price) fd.append("cost_price", form.cost_price);
+  if (form.shipping_cost) fd.append("shipping_cost", form.shipping_cost);
   fd.append("is_taxable", String(form.is_taxable));
   fd.append("barcode", form.barcode);
   fd.append("stock_control", String(form.stock_control));
+  if (form.mpn) fd.append("mpn", form.mpn.trim());
   fd.append("condition", form.condition);
   if (form.authenticity) fd.append("authenticity", form.authenticity);
   fd.append(
@@ -250,6 +254,14 @@ export default function ProductCreatePage() {
                   </NativeSelect>
                 </FormField>
               </div>
+
+              <FormField label="Manufacturer Part Number (MPN)">
+                <Input
+                  value={form.mpn}
+                  onChange={(e) => set("mpn", e.target.value)}
+                  placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+                />
+              </FormField>
             </CardContent>
           </Card>
 
@@ -296,6 +308,16 @@ export default function ProductCreatePage() {
                   />
                 </FormField>
               </div>
+              <FormField label="Shipping cost (A$)">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.shipping_cost}
+                  onChange={(e) => set("shipping_cost", e.target.value)}
+                  placeholder="0.00"
+                />
+              </FormField>
             </CardContent>
           </Card>
 

@@ -19,6 +19,8 @@ const {
   saveVariant,
   applyStockEntries,
 } = require("../services/product.service");
+const vehicleModelService = require("../services/vehicle-model.service");
+const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
 const { escapeRegex } = require("../utils/regex");
 const {
@@ -40,6 +42,18 @@ const {
   requestConflict,
   systemfailure,
 } = require("../utils/http/response");
+
+// Best-effort: adds this make/model/model_code/year combo to the shared
+// VehicleModel catalog (covers custom values typed into the vehicle Combobox)
+// without letting a catalog write failure block the product save.
+async function syncVehicleModelCatalog(vehicle) {
+  if (!vehicle) return;
+  try {
+    await vehicleModelService.upsertVehicleModel(vehicle);
+  } catch (err) {
+    logger.warn(`[product.controller] failed to sync vehicle model catalog: ${err.message}`);
+  }
+}
 
 exports.getProducts = async (req, res) => {
   try {
@@ -145,11 +159,13 @@ exports.createProduct = async (req, res) => {
       stock_control,
       has_variants,
       brand,
+      mpn,
       condition,
       authenticity,
       digital_file,
       stock_entries,
       vehicle,
+      shipping_cost,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -169,12 +185,14 @@ exports.createProduct = async (req, res) => {
       price: price !== undefined ? Number(price) : 0,
       compare_price: compare_price ? Number(compare_price) : null,
       cost_price: cost_price ? Number(cost_price) : null,
+      shipping_cost: shipping_cost ? Number(shipping_cost) : null,
       is_taxable: toBool(is_taxable),
       sku: autoSku,
       barcode: barcode || null,
       stock_control: toBool(stock_control),
       has_variants: toBool(has_variants),
       brand: brand || null,
+      mpn: mpn || null,
       condition: condition || PRODUCT_CONDITION.NEW,
       authenticity: authenticity || null,
       vehicle: parsedVehicle,
@@ -185,6 +203,8 @@ exports.createProduct = async (req, res) => {
       choices,
       digital_file: digital_file || null,
     }, generateSlug(title));
+
+    await syncVehicleModelCatalog(parsedVehicle);
 
     const parsedStockEntries = stock_entries
       ? JSON.parse(stock_entries)
@@ -232,10 +252,12 @@ exports.updateProduct = async (req, res) => {
       stock_control,
       has_variants,
       brand,
+      mpn,
       condition,
       authenticity,
       digital_file,
       vehicle,
+      shipping_cost,
     } = body;
 
     let pendingSlugBase = null;
@@ -258,6 +280,9 @@ exports.updateProduct = async (req, res) => {
     if (cost_price !== undefined)
       product.cost_price =
         cost_price === "" || cost_price === null ? null : Number(cost_price);
+    if (shipping_cost !== undefined)
+      product.shipping_cost =
+        shipping_cost === "" || shipping_cost === null ? null : Number(shipping_cost);
     if (is_taxable !== undefined) product.is_taxable = toBool(is_taxable);
     if (sku !== undefined) product.sku = sku || null;
     if (barcode !== undefined) product.barcode = barcode || null;
@@ -265,6 +290,7 @@ exports.updateProduct = async (req, res) => {
       product.stock_control = toBool(stock_control);
     if (has_variants !== undefined) product.has_variants = toBool(has_variants);
     if (brand !== undefined) product.brand = brand || null;
+    if (mpn !== undefined) product.mpn = mpn || null;
     if (condition !== undefined) product.condition = condition || PRODUCT_CONDITION.NEW;
     if (authenticity !== undefined) product.authenticity = authenticity || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
@@ -292,6 +318,8 @@ exports.updateProduct = async (req, res) => {
     } else {
       await saveProduct(product);
     }
+
+    if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle);
 
     if (choicesChanged && product.has_variants && product.choices.length > 0) {
       const newVariants = await generateVariantsForProduct(product);
@@ -344,12 +372,14 @@ exports.duplicateProduct = async (req, res) => {
       price: original.price,
       compare_price: original.compare_price,
       cost_price: original.cost_price,
+      shipping_cost: original.shipping_cost,
       is_taxable: original.is_taxable,
       sku: null,
       barcode: null,
       stock_control: original.stock_control,
       has_variants: original.has_variants,
       brand: original.brand,
+      mpn: original.mpn,
       condition: original.condition,
       authenticity: original.authenticity,
       vehicle: original.vehicle,

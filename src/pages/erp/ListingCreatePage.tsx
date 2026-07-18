@@ -47,6 +47,7 @@ export default function ListingCreatePage() {
       condition: p.condition || prev.condition,
       item_specifics: {
         ...prev.item_specifics,
+        mpn: p.mpn || prev.item_specifics.mpn,
         authenticity: p.authenticity || prev.item_specifics.authenticity,
       },
     }));

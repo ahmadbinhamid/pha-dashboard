@@ -3,6 +3,20 @@
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
+const vehicleModelService = require("../vehicle-model.service");
+const { logger } = require("../../loaders/logging");
+
+// Best-effort: adds each fitment row's make/model/model_code/year combo to the
+// shared VehicleModel catalog (covers custom values typed into the fitment
+// row Combobox) without letting a catalog write failure block the listing save.
+async function syncFitmentCatalog(fitment) {
+  if (!Array.isArray(fitment) || fitment.length === 0) return;
+  try {
+    await vehicleModelService.upsertVehicleModelsFromRows(fitment);
+  } catch (err) {
+    logger.warn(`[ebay.listing.service] failed to sync fitment catalog: ${err.message}`);
+  }
+}
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +84,8 @@ async function createListing(payload) {
     },
   });
 
+  await syncFitmentCatalog(fitment);
+
   return listing;
 }
 
@@ -77,7 +93,7 @@ async function createListing(payload) {
 
 async function getListingById(id) {
   return MarketplaceListing.findById(id)
-    .populate("product", "title slug sku price brand attachments vehicle_make vehicle_model vehicle_model_code vehicle_year vehicle_year_to")
+    .populate("product", "title slug sku price brand mpn attachments vehicle")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }
@@ -158,8 +174,10 @@ async function updateListing(id, payload) {
     delete update.item_specifics;
   }
 
+  if (update.fitment) await syncFitmentCatalog(update.fitment);
+
   return MarketplaceListing.findByIdAndUpdate(id, { $set: update }, { new: true, strict: false })
-    .populate("product", "title slug sku price brand attachments vehicle_make vehicle_model vehicle_model_code vehicle_year vehicle_year_to")
+    .populate("product", "title slug sku price brand mpn attachments vehicle")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }

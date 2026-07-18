@@ -47,10 +47,12 @@ function productToForm(p: Product): ProductEditFormState {
     price: p.price?.toString() ?? "",
     compare_price: p.compare_price?.toString() ?? "",
     cost_price: p.cost_price?.toString() ?? "",
+    shipping_cost: p.shipping_cost?.toString() ?? "",
     is_taxable: p.is_taxable,
     sku: p.sku ?? "",
     barcode: p.barcode ?? "",
     brand: p.brand ?? "",
+    mpn: p.mpn ?? "",
     condition: p.condition,
     authenticity: p.authenticity ?? "",
     vehicle_make: p.vehicle?.make ?? "",
@@ -77,10 +79,12 @@ function formToFD(form: ProductEditFormState): FormData {
   fd.append("price", form.price || "0");
   fd.append("compare_price", form.compare_price || "");
   fd.append("cost_price", form.cost_price || "");
+  fd.append("shipping_cost", form.shipping_cost || "");
   fd.append("is_taxable", String(form.is_taxable));
   fd.append("sku", form.sku);
   fd.append("barcode", form.barcode);
   fd.append("brand", form.brand);
+  fd.append("mpn", form.mpn);
   fd.append("condition", form.condition);
   fd.append("authenticity", form.authenticity);
   fd.append(
@@ -387,6 +391,14 @@ export default function ProductEditPage() {
                   </NativeSelect>
                 </FormField>
               </div>
+
+              <FormField label="Manufacturer Part Number (MPN)">
+                <Input
+                  value={form.mpn}
+                  onChange={(e) => set("mpn", e.target.value)}
+                  placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+                />
+              </FormField>
             </CardContent>
           </Card>
 
@@ -433,6 +445,16 @@ export default function ProductEditPage() {
                   />
                 </FormField>
               </div>
+              <FormField label="Shipping cost (A$)">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.shipping_cost}
+                  onChange={(e) => set("shipping_cost", e.target.value)}
+                  placeholder="0.00"
+                />
+              </FormField>
             </CardContent>
           </Card>
 

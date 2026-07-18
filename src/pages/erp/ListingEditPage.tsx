@@ -33,6 +33,9 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
   const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
   const pExt = p as unknown as Record<string, unknown>;
+  const pVehicle = pExt?.vehicle as
+    | { make?: string | null; model?: string | null; model_code?: string | null; year_from?: number | null; year_to?: number | null }
+    | undefined;
 
   return {
     product_id: productId,
@@ -43,11 +46,11 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       ? String(listing.price_override)
       : p?.price != null ? String(p.price) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
-    vehicle_make: typeof pExt?.vehicle_make === "string" ? pExt.vehicle_make : "",
-    vehicle_model: typeof pExt?.vehicle_model === "string" ? pExt.vehicle_model : "",
-    vehicle_model_code: typeof pExt?.vehicle_model_code === "string" ? pExt.vehicle_model_code : "",
-    vehicle_year: pExt?.vehicle_year != null ? String(pExt.vehicle_year) : "",
-    vehicle_year_to: pExt?.vehicle_year_to != null ? String(pExt.vehicle_year_to) : "",
+    vehicle_make: pVehicle?.make || "",
+    vehicle_model: pVehicle?.model || "",
+    vehicle_model_code: pVehicle?.model_code || "",
+    vehicle_year: pVehicle?.year_from != null ? String(pVehicle.year_from) : "",
+    vehicle_year_to: pVehicle?.year_to != null ? String(pVehicle.year_to) : "",
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",
@@ -55,7 +58,7 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
     condition_notes: listing.condition_notes || "",
     item_specifics: {
       brand: listing.item_specifics?.brand || "",
-      mpn: listing.item_specifics?.mpn || "",
+      mpn: listing.item_specifics?.mpn || (typeof pExt?.mpn === "string" ? pExt.mpn : "") || "",
       superseded_part_number: normaliseSpn(
         (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
       ),

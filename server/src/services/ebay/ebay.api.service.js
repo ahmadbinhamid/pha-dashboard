@@ -284,10 +284,54 @@ function normalizeCondition(condition) {
   return condition;
 }
 
-function buildInventoryItemFromResolved(resolved, quantity = 0) {
-  const { sku, title, description, brand, photos, listing } = resolved;
+// Builds Make/Model/Series/Year aspects from the listing's vehicle fitment
+// rows so custom-typed vehicle values (not just catalog ones) reach eBay as
+// item specifics. Falls back to the product's own vehicle field when no
+// fitment rows have been added yet (e.g. a listing just prefilled from a
+// product). Multiple fitment rows contribute multiple values per aspect and a
+// combined year range, matching how "Superseded Part Number" already handles
+// multi-value aspects below.
+function buildVehicleAspects(listing, product) {
+  const fitmentRows = Array.isArray(listing.fitment) ? listing.fitment : [];
+  const rows = fitmentRows.length > 0
+    ? fitmentRows
+    : product?.vehicle && (product.vehicle.make || product.vehicle.model)
+      ? [product.vehicle]
+      : [];
+
+  const makes = new Set();
+  const models = new Set();
+  const series = new Set();
+  let minYear = null;
+  let maxYear = null;
+
+  for (const row of rows) {
+    if (row?.make) makes.add(String(row.make).trim());
+    if (row?.model) models.add(String(row.model).trim());
+    if (row?.model_code) series.add(String(row.model_code).trim());
+    if (row?.year_from != null) {
+      minYear = minYear == null ? row.year_from : Math.min(minYear, row.year_from);
+    }
+    const upperYear = row?.year_to != null ? row.year_to : row?.year_from;
+    if (upperYear != null) {
+      maxYear = maxYear == null ? upperYear : Math.max(maxYear, upperYear);
+    }
+  }
+
+  const aspects = {};
+  if (makes.size > 0) aspects["Make"] = [...makes];
+  if (models.size > 0) aspects["Model"] = [...models];
+  if (series.size > 0) aspects["Series"] = [...series];
+  if (minYear != null) {
+    aspects["Year"] = [maxYear != null && maxYear !== minYear ? `${minYear}-${maxYear}` : String(minYear)];
+  }
+  return aspects;
+}
+
+function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null) {
+  const { sku, title, description, brand, photos, listing, product } = resolved;
   const imageUrls = resolveImageUrls(photos);
-  const condition = normalizeCondition(listing.condition);
+  const condition = conditionOverride || normalizeCondition(listing.condition);
 
   // Resolve brand/mpn once — used for both aspects and the product-level fields.
   // eBay validates Brand/MPN as a pair at the product level (error 25002 if one
@@ -314,6 +358,12 @@ function buildInventoryItemFromResolved(resolved, quantity = 0) {
   // Dedicated authenticity / warranty fields (override dynamic aspects of same name)
   if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
   if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
+
+  // Make/Model/Series/Year from vehicle fitment (or the product's vehicle as fallback)
+  const vehicleAspects = buildVehicleAspects(listing, product);
+  for (const [name, value] of Object.entries(vehicleAspects)) {
+    if (!aspects[name]) aspects[name] = value;
+  }
 
   // Dynamic aspects from Taxonomy API (stored as Map on listing document)
   const dynamicAspects = specs.aspects instanceof Map
@@ -706,6 +756,7 @@ module.exports = {
   loadSettings,
   ebayHeaders,
   buildInventoryItemFromResolved,
+  normalizeCondition,
   upsertInventoryItem,
   buildOfferFromResolved,
   createOffer,
