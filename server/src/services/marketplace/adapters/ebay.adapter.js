@@ -5,11 +5,15 @@
 // (upsert inventory item → create/recover offer → publish) is unchanged.
 //
 // Interface:
-//   key                                   -> "ebay"
-//   publish(resolved, settings)           -> { external_listing_id, external_offer_id }
-//   update(resolved, settings)            -> { external_listing_id, external_offer_id }
-//   end(listing)                          -> void
-//   pushInventory(sku, quantity)          -> void
+//   key                                            -> "ebay"
+//   publish(resolved, settings, hooks?)            -> { external_listing_id, external_offer_id }
+//   update(resolved, settings, hooks?)             -> { external_listing_id, external_offer_id }
+//   end(listing)                                   -> void
+//   pushInventory(sku, quantity)                   -> void
+//
+// hooks.onOfferCreated(offerId) is invoked as soon as an offer ID is known,
+// before the (separate, failure-prone) publish call — lets the caller persist
+// it immediately so a later failure doesn't cause a retry to recreate the offer.
 
 const { logger } = require("../../../loaders/logging");
 const {
@@ -81,7 +85,7 @@ async function resolveQuantity(resolved) {
   return product.stock_control ? total : Math.max(total, 1);
 }
 
-async function publish(resolved, settings) {
+async function publish(resolved, settings, hooks = {}) {
   if (!credentialsConfigured()) {
     throw new Error("[EbayAdapter] eBay credentials not configured");
   }
@@ -135,6 +139,12 @@ async function publish(resolved, settings) {
     }
   }
 
+  // Persist the offer ID immediately, before the publish call — otherwise a
+  // publishOffer() failure/timeout leaves the local doc unaware the offer
+  // already exists, and a retry would call createOffer() again for the same
+  // SKU, producing a second offer on eBay.
+  await hooks.onOfferCreated?.(offerId);
+
   // Step 5 — publish
   const listingId = await publishOffer(token, offerId);
   logger.info(`[EbayAdapter] offer published, listingId: ${listingId}`);
@@ -145,7 +155,7 @@ async function publish(resolved, settings) {
   };
 }
 
-async function update(resolved, settings) {
+async function update(resolved, settings, hooks = {}) {
   if (!credentialsConfigured()) {
     throw new Error("[EbayAdapter] eBay credentials not configured");
   }
@@ -157,7 +167,8 @@ async function update(resolved, settings) {
   const quantity = await resolveQuantity(resolved);
 
   if (quantity === 0) {
-    logger.warn(`[EbayAdapter] ${resolved.sku}: stock is 0 — syncing zero quantity`);
+    logger.warn(`[EbayAdapter] ${resolved.sku}: stock is 0 — skipping update`);
+    return { skipped: true, reason: "out_of_stock" };
   }
 
   // Step 1 — sync inventory item
@@ -194,6 +205,9 @@ async function update(resolved, settings) {
         throw createErr;
       }
     }
+    // Persist immediately — see the comment in publish() for why this can't
+    // wait until after publishOffer() succeeds.
+    await hooks.onOfferCreated?.(offerId);
     const listingId = await publishOffer(token, offerId);
     return { external_listing_id: listingId, external_offer_id: offerId };
   }

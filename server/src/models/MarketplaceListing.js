@@ -76,6 +76,13 @@ baseSchema.index(
   },
 );
 
+// Safety net against duplicate eBay offers/listings ending up attached to two
+// different MarketplaceListing docs (e.g. a retried sync recreating an offer
+// whose ID was never persisted) — sparse so docs with no external ID yet
+// don't collide on null.
+baseSchema.index({ external_listing_id: 1 }, { unique: true, sparse: true });
+baseSchema.index({ external_offer_id: 1 }, { unique: true, sparse: true });
+
 const MarketplaceListing = model("MarketplaceListing", baseSchema);
 
 // ── eBay discriminator ───────────────────────────────────────────────────────

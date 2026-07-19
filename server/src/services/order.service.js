@@ -68,6 +68,7 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
     name,
     sku,
     unit_price: Math.round(unitPriceDollars * 100), // dollars -> cents
+    shipping_cost: product.shipping_cost ?? 0, // dollars, per-unit freight cost
     quantity,
   };
 }
@@ -83,7 +84,9 @@ async function createOrder({ items, customer, shipping_address, billing_address 
   }
 
   const subtotal = resolvedItems.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
-  const shipping_cost = 0; // free shipping for now — kept as a real field for future rates
+  const shipping_cost = Math.round(
+    resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
+  );
   const total = subtotal + shipping_cost;
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
 

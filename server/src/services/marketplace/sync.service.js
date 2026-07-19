@@ -45,9 +45,15 @@ async function syncListing(listingId) {
 
   try {
     const isUpdate = !!listing.external_listing_id;
+    const hooks = {
+      // Persist the offer ID as soon as it's known, not just at the end of
+      // the whole call chain — otherwise a failure downstream (e.g. publish)
+      // leaves this listing looking un-synced and a retry recreates the offer.
+      onOfferCreated: (offerId) => listing.updateOne({ external_offer_id: offerId }),
+    };
     const ids = isUpdate
-      ? await adapter.update(resolved, settings)
-      : await adapter.publish(resolved, settings);
+      ? await adapter.update(resolved, settings, hooks)
+      : await adapter.publish(resolved, settings, hooks);
 
     if (ids.skipped && ids.reason === "out_of_stock") {
       await listing.updateOne({
