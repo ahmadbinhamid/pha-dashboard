@@ -8,8 +8,10 @@ const MarketplaceListing = require("../models/MarketplaceListing");
 const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 const { getStockStatus } = require("../utils/stock");
+const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
 const { getTotalStockForProduct } = require("./inventory.service");
 const { STOCK_STATUS } = require("../constants/product.constants");
+const { LISTING_STATE } = require("../constants/marketplace.constants");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
 
@@ -192,6 +194,25 @@ async function getProductBySlug(slug) {
     ? await getTotalStockForProduct(product._id)
     : null;
   product.stock_status = getStockStatus(product.stock_count, product.stock_control);
+
+  // Active marketplace listings (currently only eBay) carry storefront-useful
+  // content — warranty, condition notes, fitment — layered on top of the
+  // product record. A product can have more than one (per platform/variant),
+  // so this is always an array, even though today it's usually 0 or 1 item.
+  const listings = await MarketplaceListing.find({
+    product: product._id,
+    state: LISTING_STATE.ACTIVE,
+  })
+    .populate("photo_overrides", "url")
+    .lean();
+
+  // `display` resolves the "which value wins" precedence (listing override
+  // vs. the product's own value) and merges/dedupes vehicle fitment — the
+  // frontend renders this as-is rather than re-deriving it. `listings` stays
+  // available too, for fields with no product-level counterpart to resolve
+  // against (superseded part numbers, raw item specifics, photos).
+  product.display = buildProductDisplay(product, listings);
+  product.listings = listings.map(toPublicListing);
 
   return product;
 }
