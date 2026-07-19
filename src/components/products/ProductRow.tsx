@@ -1,9 +1,16 @@
 import { Badge } from "@/components/ui/Badge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/ActionsMenu";
 import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
-import { Package } from "lucide-react";
+import { Package, ChevronDown, Globe, EyeOff } from "lucide-react";
 import { ProductRowActionsMenu } from "@/components/products/ProductRowActionsMenu";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
+import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 
 interface ProductRowProps {
   product: Product;
@@ -11,9 +18,17 @@ interface ProductRowProps {
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onTogglePublish: (published: boolean) => void;
 }
 
-export function ProductRow({ product, listingPlatforms = [], onClick, onEdit, onDelete }: ProductRowProps) {
+export function ProductRow({
+  product,
+  listingPlatforms = [],
+  onClick,
+  onEdit,
+  onDelete,
+  onTogglePublish,
+}: ProductRowProps) {
   const coverImage = product.attachments?.[0];
 
   return (
@@ -59,10 +74,32 @@ export function ProductRow({ product, listingPlatforms = [], onClick, onEdit, on
         </Badge>
       </td>
 
-      {/* Type */}
+      {/* Online */}
+      <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="inline-flex h-auto w-auto items-center gap-1 rounded-full px-0 py-0 text-fg/40 hover:bg-transparent hover:text-fg/40 data-[state=open]:bg-transparent data-[state=open]:text-fg/40">
+            <Badge variant={product.is_published_online ? "ok" : "muted"} className="cursor-pointer">
+              {product.is_published_online ? "Published" : "Hidden"}
+              <ChevronDown className="h-3 w-3" />
+            </Badge>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => onTogglePublish(true)}>
+              <Globe className="h-3.5 w-3.5 text-fg/50" />
+              Publish
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onTogglePublish(false)}>
+              <EyeOff className="h-3.5 w-3.5 text-fg/50" />
+              Hide
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
+
+      {/* Stock */}
       <td className="whitespace-nowrap px-4 py-3">
-        <Badge variant="default">
-          {product.type === "digital" ? "Digital" : "Physical"}
+        <Badge variant={STOCK_STATUS_CONFIG[product.stock_status]?.variant ?? "muted"}>
+          {STOCK_STATUS_CONFIG[product.stock_status]?.label ?? product.stock_status}
         </Badge>
       </td>
 

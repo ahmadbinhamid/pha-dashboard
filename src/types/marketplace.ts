@@ -49,6 +49,7 @@ export interface MarketplaceListing {
   sync_error: string | null;
   external_listing_id: string | null;
   external_offer_id: string | null;
+  ebay_item_url: string | null;
   created_at: string;
   updated_at: string;
 }

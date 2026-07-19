@@ -5,6 +5,24 @@ const MarketplaceListing = require("../../models/MarketplaceListing");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
+const config = require("../../config");
+
+// Production eBay item URLs are marketplace-specific; sandbox uses one shared
+// domain regardless of marketplace. Extend this map as new marketplaces are enabled.
+const EBAY_SITE_DOMAINS = {
+  EBAY_US: "ebay.com",
+  EBAY_AU: "ebay.com.au",
+  EBAY_GB: "ebay.co.uk",
+  EBAY_CA: "ebay.ca",
+  EBAY_DE: "ebay.de",
+};
+
+function buildEbayItemUrl(externalListingId) {
+  if (!externalListingId) return null;
+  if (config.ebay.sandbox) return `https://sandbox.ebay.com/itm/${externalListingId}`;
+  const domain = EBAY_SITE_DOMAINS[config.ebay.marketplaceId] || "ebay.com";
+  return `https://www.${domain}/itm/${externalListingId}`;
+}
 
 // Best-effort: adds each fitment row's make/model/model_code/year combo to the
 // shared VehicleModel catalog (covers custom values typed into the fitment
@@ -123,7 +141,13 @@ async function listListings({ skip, limit, product, state, sync_status } = {}) {
     MarketplaceListing.countDocuments(filter),
   ]);
 
-  return { items, total };
+  const shapedItems = items.map((item) => {
+    const obj = item.toJSON();
+    obj.ebay_item_url = buildEbayItemUrl(item.external_listing_id);
+    return obj;
+  });
+
+  return { items: shapedItems, total };
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────

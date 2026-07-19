@@ -1,6 +1,9 @@
+import type { StockStatus } from "./inventory";
+
 export type ProductType = "physical" | "digital";
 export type ProductStatus = "draft" | "active";
 export type EbaySyncStatus = "not_listed" | "pending" | "synced" | "error";
+export type { StockStatus };
 
 export interface Attachment {
   id: string;
@@ -120,6 +123,8 @@ export interface Product {
   related_products: Product[];
   choices: Choice[];
   digital_file: Attachment | null;
+  stock_count: number | null;
+  stock_status: StockStatus;
   created_at: string;
   updated_at: string;
 }

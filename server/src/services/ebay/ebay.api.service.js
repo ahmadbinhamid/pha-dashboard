@@ -288,9 +288,13 @@ function normalizeCondition(condition) {
 // rows so custom-typed vehicle values (not just catalog ones) reach eBay as
 // item specifics. Falls back to the product's own vehicle field when no
 // fitment rows have been added yet (e.g. a listing just prefilled from a
-// product). Multiple fitment rows contribute multiple values per aspect and a
-// combined year range, matching how "Superseded Part Number" already handles
-// multi-value aspects below.
+// product).
+//
+// eBay's Make/Model/Series aspects are single-value (cardinality SINGLE) in
+// motor-parts categories — sending more than one value is rejected with
+// errorId 25002 ("Model should contain only one value"). So only the first
+// fitment row supplies Make/Model/Series; Year is still combined into a
+// min-max range across all rows, since that's already a single string value.
 function buildVehicleAspects(listing, product) {
   const fitmentRows = Array.isArray(listing.fitment) ? listing.fitment : [];
   const rows = fitmentRows.length > 0
@@ -299,16 +303,13 @@ function buildVehicleAspects(listing, product) {
       ? [product.vehicle]
       : [];
 
-  const makes = new Set();
-  const models = new Set();
-  const series = new Set();
+  if (rows.length === 0) return {};
+
+  const primary = rows[0];
   let minYear = null;
   let maxYear = null;
 
   for (const row of rows) {
-    if (row?.make) makes.add(String(row.make).trim());
-    if (row?.model) models.add(String(row.model).trim());
-    if (row?.model_code) series.add(String(row.model_code).trim());
     if (row?.year_from != null) {
       minYear = minYear == null ? row.year_from : Math.min(minYear, row.year_from);
     }
@@ -319,9 +320,9 @@ function buildVehicleAspects(listing, product) {
   }
 
   const aspects = {};
-  if (makes.size > 0) aspects["Make"] = [...makes];
-  if (models.size > 0) aspects["Model"] = [...models];
-  if (series.size > 0) aspects["Series"] = [...series];
+  if (primary?.make) aspects["Make"] = [String(primary.make).trim()];
+  if (primary?.model) aspects["Model"] = [String(primary.model).trim()];
+  if (primary?.model_code) aspects["Series"] = [String(primary.model_code).trim()];
   if (minYear != null) {
     aspects["Year"] = [maxYear != null && maxYear !== minYear ? `${minYear}-${maxYear}` : String(minYear)];
   }

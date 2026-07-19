@@ -221,6 +221,7 @@ export default function ListingsPage() {
                             pushDisabled={pushMutation.isPending}
                             onEdit={() => navigate(`/listings/${listing._id}/edit`)}
                             onDelete={() => setDeleteTarget(listing)}
+                            ebayItemUrl={listing.ebay_item_url}
                           />
                         </div>
                       </td>

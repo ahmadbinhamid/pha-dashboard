@@ -16,7 +16,7 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ProductRow } from "@/components/products/ProductRow";
-import { getProducts, deleteProduct } from "@/lib/api/products";
+import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { useToast } from "@/context";
@@ -35,7 +35,8 @@ const STATUS_FILTERS = [
 const TABLE_HEADERS = [
   { label: "Product", align: "left" },
   { label: "Status", align: "left" },
-  { label: "Type", align: "left" },
+  { label: "Online", align: "left" },
+  { label: "Stock", align: "left" },
   { label: "Channels", align: "left" },
   { label: "Price", align: "right" },
   { label: "Created", align: "right" },
@@ -170,6 +171,19 @@ export default function ProductsPage() {
     },
   });
 
+  const publishMutation = useMutation({
+    mutationFn: ({ id, published }: { id: string; published: boolean }) => {
+      const form = new FormData();
+      form.append("is_published_online", String(published));
+      return updateProduct(id, form);
+    },
+    onSuccess: (_data, { published }) => {
+      toast({ title: published ? "Product published" : "Product hidden", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, tone: "danger" }),
+  });
+
   const products: Product[] = data?.data?.items ?? [];
   const total = data?.data?.total ?? 0;
   const totalPages = data?.data?.totalPages ?? 1;
@@ -254,6 +268,9 @@ export default function ProductsPage() {
                     onClick={() => navigate(`/products/${product.slug}/edit`)}
                     onEdit={() => navigate(`/products/${product.slug}/edit`)}
                     onDelete={() => setDeleteTarget(product)}
+                    onTogglePublish={(published) =>
+                      publishMutation.mutate({ id: product._id, published })
+                    }
                   />
                 ))}
               </tbody>
