@@ -9,6 +9,7 @@ const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
+const { withAttachmentUrls } = require("../utils/attachment");
 const { getTotalStockForProduct } = require("./inventory.service");
 const { STOCK_STATUS } = require("../constants/product.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
@@ -147,8 +148,10 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
         localField: "attachments",
         foreignField: "_id",
         as: "attachments",
+        // `url` is a Mongoose virtual, not a stored field — projecting it
+        // here is a no-op; it's backfilled below via withAttachmentUrls().
         pipeline: [
-          { $project: { url: 1, original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
+          { $project: { original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
         ],
       },
     },
@@ -171,6 +174,9 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   return {
     items: items.map((p) => ({
       ...p,
+      // $lookup fetches raw attachment docs, bypassing the Attachment
+      // model's `url` virtual entirely — backfill it explicitly.
+      attachments: withAttachmentUrls(p.attachments),
       stock_status: getStockStatus(p.stock_count, p.stock_control),
     })),
     total: countResult[0]?.total || 0,
@@ -190,6 +196,10 @@ async function getProductBySlug(slug) {
     .lean();
   if (!product) return null;
 
+  // .lean() returns a plain object, so the Attachment model's `url` virtual
+  // never runs here either — backfill it explicitly, same as the list endpoint.
+  product.attachments = withAttachmentUrls(product.attachments);
+
   product.stock_count = product.stock_control
     ? await getTotalStockForProduct(product._id)
     : null;
@@ -203,8 +213,12 @@ async function getProductBySlug(slug) {
     product: product._id,
     state: LISTING_STATE.ACTIVE,
   })
-    .populate("photo_overrides", "url")
+    .populate("photo_overrides", "file_name")
     .lean();
+  // Same .lean()-strips-virtuals issue as above, for each listing's photos.
+  listings.forEach((listing) => {
+    listing.photo_overrides = withAttachmentUrls(listing.photo_overrides);
+  });
 
   // `display` resolves the "which value wins" precedence (listing override
   // vs. the product's own value) and merges/dedupes vehicle fitment — the

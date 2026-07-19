@@ -31,4 +31,24 @@ function buildAttachmentUrl(fileName) {
   return `${config.uploads.url}/${fileName}`;
 }
 
-module.exports = { IMAGE_MIMES, getAttachmentType, buildAttachmentUrl };
+// `url` is a Mongoose virtual on the Attachment model (derived from
+// file_name) — it's only computed automatically when a full Mongoose
+// document is serialized. Anywhere attachments come back as plain objects
+// instead (aggregation $lookup, or a query using .lean()), the virtual never
+// runs and `url` is silently missing. Use this to backfill it explicitly.
+function withAttachmentUrl(attachment) {
+  if (!attachment) return attachment;
+  return { ...attachment, url: attachment.url ?? buildAttachmentUrl(attachment.file_name) };
+}
+
+function withAttachmentUrls(attachments) {
+  return (attachments || []).map(withAttachmentUrl);
+}
+
+module.exports = {
+  IMAGE_MIMES,
+  getAttachmentType,
+  buildAttachmentUrl,
+  withAttachmentUrl,
+  withAttachmentUrls,
+};
