@@ -19,6 +19,7 @@ const {
   saveVariant,
   applyStockEntries,
 } = require("../services/product.service");
+const mongoose = require("mongoose");
 const vehicleModelService = require("../services/vehicle-model.service");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
@@ -80,7 +81,14 @@ exports.getProducts = async (req, res) => {
       const cats = Array.isArray(req.query.categories)
         ? req.query.categories
         : req.query.categories.split(",");
-      const filtered = cats.map((c) => c.trim()).filter(Boolean);
+      // getProducts runs this filter through an aggregation pipeline, which
+      // (unlike Model.find()) does not auto-cast query values against the
+      // schema — ids must be real ObjectIds or they'll never match the
+      // ObjectId[] `categories` field.
+      const filtered = cats
+        .map((c) => c.trim())
+        .filter((c) => mongoose.Types.ObjectId.isValid(c))
+        .map((c) => new mongoose.Types.ObjectId(c));
       if (filtered.length) filter.categories = { $in: filtered };
     }
     if (req.query.price_min !== undefined || req.query.price_max !== undefined) {
@@ -109,8 +117,9 @@ exports.getProducts = async (req, res) => {
     if (and.length) filter.$and = and;
 
     const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
+    const stockFilter = req.query.stock || undefined;
 
-    const { items, total } = await getProducts(filter, { skip, limit, sort });
+    const { items, total } = await getProducts(filter, { skip, limit, sort, stockFilter });
 
     return success(res, {
       items,

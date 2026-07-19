@@ -232,6 +232,13 @@ async function getTotalStockForProductVariant(productId, variantId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
+// Product-level rollup across all variants/locations — used for the
+// product detail page's stock badge, unlike the variant-scoped helper above.
+async function getTotalStockForProduct(productId) {
+  const records = await Inventory.find({ product: productId }).lean();
+  return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
+}
+
 // ── SKU-based stock adjustment (used by eBay webhook and Stripe payment/refund) ─
 
 const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
@@ -350,6 +357,7 @@ module.exports = {
   setStock,
   getHistory,
   getTotalStockForProductVariant,
+  getTotalStockForProduct,
   resolveSkuToIds,
   adjustStockForSku,
   adjustStockBySku,

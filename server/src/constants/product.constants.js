@@ -35,6 +35,17 @@ const PRODUCT_SORT_OPTIONS = Object.freeze({
   [PRODUCT_SORT.TOP_RATED]: { rating: -1, rating_count: -1 },
 });
 
+const STOCK_STATUS = Object.freeze({
+  IN_STOCK: "in_stock",
+  LOW_STOCK: "low_stock",
+  OUT_OF_STOCK: "out_of_stock",
+});
+
+// Display-only threshold for the computed stock_status label: >3 => in_stock,
+// 1-3 => low_stock, 0 => out_of_stock. Deliberately separate from
+// InventorySettings.low_stock_threshold, which only drives restock email alerts.
+const STOCK_LOW_THRESHOLD = 3;
+
 module.exports = {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
@@ -42,4 +53,6 @@ module.exports = {
   PRODUCT_AUTHENTICITY,
   PRODUCT_SORT,
   PRODUCT_SORT_OPTIONS,
+  STOCK_STATUS,
+  STOCK_LOW_THRESHOLD,
 };

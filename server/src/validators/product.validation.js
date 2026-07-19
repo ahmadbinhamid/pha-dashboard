@@ -7,6 +7,7 @@ const {
   PRODUCT_CONDITION,
   PRODUCT_AUTHENTICITY,
   PRODUCT_SORT,
+  STOCK_STATUS,
 } = require("../constants/product.constants");
 
 const createProduct = {
@@ -134,6 +135,9 @@ const listProducts = {
     year: Joi.number().integer(),
     sort: Joi.string()
       .valid(...Object.values(PRODUCT_SORT), "")
+      .default(""),
+    stock: Joi.string()
+      .valid(STOCK_STATUS.IN_STOCK, STOCK_STATUS.OUT_OF_STOCK, "")
       .default(""),
   }),
 };

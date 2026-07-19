@@ -7,6 +7,9 @@ const Location = require("../models/Location");
 const MarketplaceListing = require("../models/MarketplaceListing");
 const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
+const { getStockStatus } = require("../utils/stock");
+const { getTotalStockForProduct } = require("./inventory.service");
+const { STOCK_STATUS } = require("../constants/product.constants");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
 
@@ -95,21 +98,81 @@ async function ensureInventoryForProduct(productId, variantId = null) {
 
 // ── Product CRUD ──────────────────────────────────────────────────────────────
 
-function withBasePopulate(query) {
-  return query
-    .populate("attachments", "url original_name mime_type type uid file_name")
-    .populate("categories", "name slug");
-}
+// Stock is joined in from the separate Inventory collection (aggregation
+// can't use Mongoose .populate()), so the whole list query is an aggregation
+// pipeline rather than Product.find() — this also lets `stockFilter` match
+// against the just-computed stock_count in the same query.
+async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, stockFilter } = {}) {
+  const basePipeline = [
+    { $match: filter },
+    {
+      $lookup: {
+        from: "inventories",
+        localField: "_id",
+        foreignField: "product",
+        as: "_inventory",
+      },
+    },
+    {
+      $addFields: {
+        stock_count: {
+          $cond: ["$stock_control", { $sum: "$_inventory.stock_count" }, null],
+        },
+      },
+    },
+    { $project: { _inventory: 0 } },
+  ];
 
-async function getProducts(filter, { skip, limit, sort = { created_at: -1 } }) {
-  const [items, total] = await Promise.all([
-    withBasePopulate(Product.find(filter))
-      .sort(sort)
-      .skip(skip)
-      .limit(limit),
-    Product.countDocuments(filter),
+  if (stockFilter === STOCK_STATUS.IN_STOCK) {
+    basePipeline.push({
+      $match: { $or: [{ stock_control: false }, { stock_count: { $gt: 0 } }] },
+    });
+  } else if (stockFilter === STOCK_STATUS.OUT_OF_STOCK) {
+    basePipeline.push({
+      $match: { stock_control: true, stock_count: { $lte: 0 } },
+    });
+  }
+
+  const countPipeline = [...basePipeline, { $count: "total" }];
+  const pipeline = [
+    ...basePipeline,
+    { $sort: sort },
+    { $skip: skip },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: "attachments",
+        localField: "attachments",
+        foreignField: "_id",
+        as: "attachments",
+        pipeline: [
+          { $project: { url: 1, original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: "categories",
+        localField: "categories",
+        foreignField: "_id",
+        as: "categories",
+        pipeline: [{ $project: { name: 1, slug: 1 } }],
+      },
+    },
+  ];
+
+  const [items, countResult] = await Promise.all([
+    Product.aggregate(pipeline),
+    Product.aggregate(countPipeline),
   ]);
-  return { items, total };
+
+  return {
+    items: items.map((p) => ({
+      ...p,
+      stock_status: getStockStatus(p.stock_count, p.stock_control),
+    })),
+    total: countResult[0]?.total || 0,
+  };
 }
 
 async function findProductById(id) {
@@ -117,11 +180,20 @@ async function findProductById(id) {
 }
 
 async function getProductBySlug(slug) {
-  return Product.findOne({ slug })
+  const product = await Product.findOne({ slug })
     .populate("attachments")
     .populate("categories")
     .populate("digital_file")
-    .populate("related_products", "title slug price attachments");
+    .populate("related_products", "title slug price attachments")
+    .lean();
+  if (!product) return null;
+
+  product.stock_count = product.stock_control
+    ? await getTotalStockForProduct(product._id)
+    : null;
+  product.stock_status = getStockStatus(product.stock_count, product.stock_control);
+
+  return product;
 }
 
 async function getPopulatedProduct(id) {

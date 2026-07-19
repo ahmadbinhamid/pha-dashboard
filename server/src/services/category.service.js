@@ -1,12 +1,35 @@
 // services/category.service.js
 
 const Category = require("../models/Category");
+const Product = require("../models/Product");
 const {
   generateSlug,
   createWithUniqueSlug,
   saveWithUniqueSlug,
 } = require("../utils/slug");
 const { escapeRegex } = require("../utils/regex");
+const { PRODUCT_STATUS } = require("../constants/product.constants");
+
+// Product counts reflect only what a storefront shopper could ever find
+// (published + active) — not the raw/admin-visible product count.
+async function getProductCountsByCategory(categoryIds) {
+  if (!categoryIds.length) return new Map();
+
+  const counts = await Product.aggregate([
+    {
+      $match: {
+        categories: { $in: categoryIds },
+        is_published_online: true,
+        status: PRODUCT_STATUS.ACTIVE,
+      },
+    },
+    { $unwind: "$categories" },
+    { $match: { categories: { $in: categoryIds } } },
+    { $group: { _id: "$categories", count: { $sum: 1 } } },
+  ]);
+
+  return new Map(counts.map((c) => [c._id.toString(), c.count]));
+}
 
 async function listCategories({ skip = 0, limit = 0, search = "" } = {}) {
   const filter = {};
@@ -22,7 +45,14 @@ async function listCategories({ skip = 0, limit = 0, search = "" } = {}) {
       .limit(limit),
     Category.countDocuments(filter),
   ]);
-  return { items, total };
+
+  const countMap = await getProductCountsByCategory(items.map((c) => c._id));
+  const withCounts = items.map((c) => ({
+    ...c.toObject(),
+    product_count: countMap.get(c._id.toString()) || 0,
+  }));
+
+  return { items: withCounts, total };
 }
 
 async function getCategoryById(id) {
