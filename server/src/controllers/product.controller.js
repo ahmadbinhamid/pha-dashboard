@@ -77,6 +77,21 @@ exports.getProducts = async (req, res) => {
     if (req.query.type !== undefined && req.query.type !== "") {
       filter.type = req.query.type;
     }
+    // condition/authenticity are closed enums (see PRODUCT_CONDITION /
+    // PRODUCT_AUTHENTICITY) so an exact match is correct; mpn/sku are
+    // free-text identifiers, matched case-insensitively like `search`.
+    if (req.query.condition) {
+      filter.condition = req.query.condition;
+    }
+    if (req.query.authenticity) {
+      filter.authenticity = req.query.authenticity;
+    }
+    if (req.query.mpn) {
+      filter.mpn = new RegExp(escapeRegex(req.query.mpn.trim()), "i");
+    }
+    if (req.query.sku) {
+      filter.sku = new RegExp(escapeRegex(req.query.sku.trim()), "i");
+    }
     if (req.query.categories) {
       const cats = Array.isArray(req.query.categories)
         ? req.query.categories

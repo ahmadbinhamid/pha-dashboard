@@ -139,6 +139,14 @@ const listProducts = {
     stock: Joi.string()
       .valid(STOCK_STATUS.IN_STOCK, STOCK_STATUS.OUT_OF_STOCK, "")
       .default(""),
+    condition: Joi.string()
+      .valid(...Object.values(PRODUCT_CONDITION), "")
+      .default(""),
+    authenticity: Joi.string()
+      .valid(...Object.values(PRODUCT_AUTHENTICITY), "")
+      .default(""),
+    mpn: Joi.string().allow("").default(""),
+    sku: Joi.string().allow("").default(""),
   }),
 };
 

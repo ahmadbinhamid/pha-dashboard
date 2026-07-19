@@ -23,6 +23,7 @@ function toPublicListing(listing) {
     condition: listing.condition ?? null,
     condition_notes: listing.condition_notes || null,
     warranty: listing.item_specifics?.warranty ?? null,
+    mpn: listing.item_specifics?.mpn ?? null,
     superseded_part_number: listing.item_specifics?.superseded_part_number ?? [],
     authenticity: listing.item_specifics?.authenticity ?? null,
     aspects,
@@ -73,6 +74,7 @@ function buildProductDisplay(product, listings) {
     authenticity: primaryListing?.authenticity ?? product.authenticity ?? null,
     warranty: primaryListing?.item_specifics?.warranty ?? null,
     condition_notes: primaryListing?.condition_notes || null,
+    mpn: primaryListing?.item_specifics?.mpn ?? product.mpn ?? null,
     vehicle_fitments: fitments,
   };
 }
