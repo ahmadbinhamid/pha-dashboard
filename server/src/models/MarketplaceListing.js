@@ -121,6 +121,13 @@ const ebaySchema = new Schema({
   },
   // null => derive from live inventory at publish time
   quantity_available: { type: Number, default: null },
+  // Last quantity we know eBay actually has for this SKU — set whenever we
+  // push a quantity (publish/update/pushInventory) or reconcile from a poll.
+  // null until the first push/reconcile establishes a baseline. Comparing
+  // eBay's live quantity against this value (not against local stock
+  // directly) is what lets the inventory-sync poller tell "eBay changed
+  // since we last touched it" apart from "we're the ones who changed it".
+  ebay_synced_quantity: { type: Number, default: null },
   listing_duration: { type: String, default: "GTC" },
   accept_best_offer: { type: Boolean, default: false },
   min_best_offer: { type: Number, default: null },

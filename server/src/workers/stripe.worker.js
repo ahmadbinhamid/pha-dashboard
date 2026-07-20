@@ -17,7 +17,9 @@ stripeQueue.process("cleanup_abandoned_orders", 1, async () => {
   return cleanupAbandonedOrders();
 });
 
-stripeQueue.on("ready", () => {
+// Bull's Queue never emits a "ready" event (only the underlying redis client
+// does, internally) — isReady() is the real API for this.
+stripeQueue.isReady().then(() => {
   logger.info("[stripeQueue] ready");
 
   // Schedule abandoned-order cleanup hourly — single repeatable job.

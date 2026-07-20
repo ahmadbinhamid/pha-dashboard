@@ -692,6 +692,38 @@ async function getOrders({ limit = 50, offset = 0 } = {}) {
   return res.json();
 }
 
+// Bulk-fetches every inventory item on the account (paginated) so the
+// inventory-sync poller can diff eBay's live quantities against ours in a
+// handful of calls instead of one GET per SKU.
+async function getAllInventoryItems({ pageSize = 100 } = {}) {
+  const token = await getAccessToken();
+  if (!token) throw new Error("[eBay] getAllInventoryItems: could not obtain access token");
+
+  const items = [];
+  let offset = 0;
+
+  while (true) {
+    const res = await fetch(
+      `${INVENTORY_BASE}/inventory_item?limit=${pageSize}&offset=${offset}`,
+      { headers: ebayHeaders(token) },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`[eBay] getAllInventoryItems failed: ${res.status} ${text}`);
+    }
+
+    const data = await res.json();
+    const batch = data.inventoryItems || [];
+    items.push(...batch);
+
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return items;
+}
+
 // ── Taxonomy ──────────────────────────────────────────────────────────────────
 
 const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
@@ -750,6 +782,7 @@ module.exports = {
   getAppToken,
   getCatalogToken,
   getOrders,
+  getAllInventoryItems,
   loadSettings,
   ebayHeaders,
   buildInventoryItemFromResolved,

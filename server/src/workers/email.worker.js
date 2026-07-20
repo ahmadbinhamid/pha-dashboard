@@ -17,7 +17,9 @@ emailQueue.process("send", 5, async (job) => {
   return true;
 });
 
-emailQueue.on("ready", () => logger.info("[emailQueue] ready"));
+// Bull's Queue never emits a "ready" event (only the underlying redis client
+// does, internally) — isReady() is the real API for this.
+emailQueue.isReady().then(() => logger.info("[emailQueue] ready"));
 emailQueue.on("completed", (job) =>
   logger.info(`[emailQueue] completed ${job.id}`)
 );

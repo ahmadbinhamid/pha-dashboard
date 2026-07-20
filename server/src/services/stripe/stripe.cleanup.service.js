@@ -12,16 +12,6 @@ const { logger } = require("../../loaders/logging");
 
 const ABANDONED_AFTER_MS = 24 * 60 * 60 * 1000;
 
-// Errors Stripe returns when the intent is already in a terminal state —
-// nothing left for us to cancel, so treat these as a no-op rather than a
-// failure of this run.
-function isAlreadyFinalized(err) {
-  return (
-    err.code === "payment_intent_unexpected_state" ||
-    /already been captured|already succeeded|already canceled/i.test(err.message || "")
-  );
-}
-
 async function cleanupAbandonedOrders() {
   const cutoff = new Date(Date.now() - ABANDONED_AFTER_MS);
 
@@ -51,17 +41,32 @@ async function cleanupAbandonedOrders() {
       }
 
       if (payment && payment.stripe_payment_intent_id) {
+        let intentStatus = null;
         try {
           const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-          if (cancelled.status === "succeeded") {
-            // Paid right as we were cancelling it — leave it for the
-            // payment_intent.succeeded webhook to mark the order paid.
-            summary.skippedPaid += 1;
-            continue;
-          }
+          intentStatus = cancelled.status;
         } catch (err) {
-          if (!isAlreadyFinalized(err)) throw err;
+          if (err.code !== "payment_intent_unexpected_state") throw err;
+          // Cancel was rejected because the intent is already in a terminal
+          // state — fetch the real status rather than guessing from the
+          // error text, since "already succeeded" and "already canceled"
+          // require opposite handling below.
+          const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+          intentStatus = intent.status;
         }
+
+        if (intentStatus === "succeeded") {
+          // The charge actually went through but our local Payment record
+          // never caught up (e.g. a missed webhook). Never cancel a paid
+          // order — flag it for manual reconciliation instead.
+          logger.error(
+            `[stripe.cleanup] order ${order.order_number} has a succeeded PaymentIntent but local records show it unpaid — skipping cancellation, needs manual reconciliation.`,
+          );
+          summary.skippedPaid += 1;
+          continue;
+        }
+        // Any other terminal status (already canceled, etc.) — safe to
+        // cancel the order locally below.
       }
 
       order.status = ORDER_STATUS.CANCELLED;

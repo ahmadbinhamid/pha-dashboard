@@ -31,12 +31,25 @@ const {
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
 const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
-const { getTotalStockForProductVariant } = require("../../inventory.service");
+const { getTotalStockForProductVariant, resolveSkuToIds } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
 const Product = require("../../../models/Product");
 const ProductVariant = require("../../../models/ProductVariant");
+const MarketplaceListing = require("../../../models/MarketplaceListing");
 
 const key = "ebay";
+
+// Keeps MarketplaceListing.ebay_synced_quantity current whenever WE push a
+// quantity to eBay, so the inventory-sync poller (ebay.inventory-sync.service.js)
+// can tell "eBay changed since we last touched it" apart from "we're the ones
+// who just changed it" — without this, our own push would look identical to
+// a manual edit on eBay's side and get redundantly (and confusingly) diffed.
+async function updateSyncBaseline(productId, variantId, quantity) {
+  await MarketplaceListing.updateOne(
+    { product: productId, variant: variantId || null, platform: key },
+    { $set: { ebay_synced_quantity: quantity } },
+  );
+}
 
 // Preferred fallback order when the stored condition isn't accepted for the
 // listing's category — e.g. "USED_GOOD" is invalid for a primary category
@@ -106,6 +119,7 @@ async function publish(resolved, settings, hooks = {}) {
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
   await upsertInventoryItem(token, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity})`);
+  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
 
   if (!listing.ebay_category_id) {
     throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
@@ -176,6 +190,7 @@ async function update(resolved, settings, hooks = {}) {
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
   await upsertInventoryItem(token, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku}`);
+  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
 
   if (!listing.ebay_category_id) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);
@@ -246,6 +261,9 @@ async function end(listing) {
 async function pushInventory(sku, quantity) {
   const result = await updateInventoryQuantity(sku, quantity);
   if (result.error) throw new Error(result.error);
+
+  const ids = await resolveSkuToIds(sku);
+  if (ids) await updateSyncBaseline(ids.productId, ids.variantId, quantity);
 }
 
 module.exports = { key, publish, update, end, pushInventory };

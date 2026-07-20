@@ -5,7 +5,7 @@ const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { ebayQueue } = require("../queues/ebay.queue");
 const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
-const { updateInventoryQuantity } = require("../services/ebay/ebay.api.service");
+const { reconcileEbayInventory } = require("../services/ebay/ebay.inventory-sync.service");
 const { logger } = require("../loaders/logging");
 
 // Register marketplace adapters
@@ -34,23 +34,44 @@ ebayQueue.process("poll_orders", 1, async () => {
   return pollAndProcessOrders();
 });
 
+// Reconciles eBay-side quantity edits (e.g. a seller manually changing
+// "Available quantity" in Seller Hub) back into local stock — see
+// ebay.inventory-sync.service.js for the diff/apply logic.
+ebayQueue.process("poll_inventory", 1, async () => {
+  logger.info("[ebayQueue] poll_inventory starting");
+  return reconcileEbayInventory();
+});
+
 // Retry target for eBay quantity pushes that failed inline from
 // order-stock-sync.service.js (Stripe payment success / refund restock).
+// Goes through the adapter (not updateInventoryQuantity directly) so a
+// retried push also updates the inventory-sync baseline, same as an
+// inline-successful push would.
 ebayQueue.process("push_quantity", 2, async (job) => {
   const { sku, quantity } = job.data;
   logger.info(`[ebayQueue] push_quantity sku=${sku} quantity=${quantity}`);
-  const result = await updateInventoryQuantity(sku, quantity);
-  if (result && result.error) throw new Error(result.error);
-  return result;
+  await ebayAdapter.pushInventory(sku, quantity);
 });
 
-ebayQueue.on("ready", () => {
+// Bull's Queue never emits a "ready" event (only the underlying redis client
+// does, internally) — isReady() is the real API for this.
+ebayQueue.isReady().then(() => {
   logger.info("[ebayQueue] ready");
 
   // Schedule order polling every 60 seconds — single repeatable job
   ebayQueue.add("poll_orders", {}, {
     repeat: { every: 60_000 },
     jobId: "poll_orders_repeat",
+    removeOnComplete: true,
+    removeOnFail: false,
+  });
+
+  // Schedule inventory reconciliation every 5 minutes — single repeatable job.
+  // Less frequent than order polling since it fetches every active listing's
+  // quantity from eBay rather than reacting to a single event.
+  ebayQueue.add("poll_inventory", {}, {
+    repeat: { every: 5 * 60_000 },
+    jobId: "poll_inventory_repeat",
     removeOnComplete: true,
     removeOnFail: false,
   });
