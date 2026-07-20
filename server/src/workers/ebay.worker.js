@@ -58,12 +58,16 @@ ebayQueue.process("push_quantity", 2, async (job) => {
 ebayQueue.isReady().then(() => {
   logger.info("[ebayQueue] ready");
 
-  // Schedule order polling every 60 seconds — single repeatable job
+  // Schedule order polling every 60 seconds — single repeatable job.
+  // attempts/backoff cover a transient eBay-side error (e.g. a momentary 503)
+  // with a quick retry instead of waiting a full 60s for the next scheduled tick.
   ebayQueue.add("poll_orders", {}, {
     repeat: { every: 60_000 },
     jobId: "poll_orders_repeat",
     removeOnComplete: true,
     removeOnFail: false,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5_000 },
   });
 
   // Schedule inventory reconciliation every 5 minutes — single repeatable job.
@@ -74,6 +78,8 @@ ebayQueue.isReady().then(() => {
     jobId: "poll_inventory_repeat",
     removeOnComplete: true,
     removeOnFail: false,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5_000 },
   });
 });
 

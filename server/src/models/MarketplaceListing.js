@@ -128,6 +128,12 @@ const ebaySchema = new Schema({
   // directly) is what lets the inventory-sync poller tell "eBay changed
   // since we last touched it" apart from "we're the ones who changed it".
   ebay_synced_quantity: { type: Number, default: null },
+  // Consecutive inventory-sync polls where this listing's SKU was absent
+  // from eBay's own inventory list — i.e. it was deleted/ended directly on
+  // eBay, not through this app. Reset to 0 whenever it's seen again; a small
+  // streak (not a single miss) is required before we auto-delete locally, so
+  // one transient eBay API hiccup can't wrongly delete a live listing.
+  ebay_missing_polls: { type: Number, default: 0 },
   listing_duration: { type: String, default: "GTC" },
   accept_best_offer: { type: Boolean, default: false },
   min_best_offer: { type: Number, default: null },

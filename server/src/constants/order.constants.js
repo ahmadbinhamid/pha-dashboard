@@ -9,4 +9,11 @@ const ORDER_STATUS = Object.freeze({
   PARTIALLY_REFUNDED: "partially_refunded",
 });
 
-module.exports = { ORDER_STATUS };
+// Where an order originated. Orders are a single unified collection
+// regardless of channel — this just tags where each one came from.
+const ORDER_CHANNEL = Object.freeze({
+  STOREFRONT: "storefront",
+  EBAY: "ebay",
+});
+
+module.exports = { ORDER_STATUS, ORDER_CHANNEL };

@@ -5,7 +5,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
-const { ORDER_STATUS } = require("../constants/order.constants");
+const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
 
 const orderItemSchema = new Schema(
   {
@@ -70,6 +70,23 @@ const orderSchema = buildSchema({
     default: ORDER_STATUS.PENDING_PAYMENT,
   },
 
+  // Which channel this order came from — orders live in one unified
+  // collection regardless of origin, this just tags where each one is from.
+  channel: {
+    type: String,
+    enum: Object.values(ORDER_CHANNEL),
+    default: ORDER_CHANNEL.STOREFRONT,
+  },
+  // The channel's own order ID (e.g. eBay's orderId) — null for storefront
+  // orders. Used to detect an order we've already imported on re-poll.
+  external_order_id: { type: String, default: null },
+  // The channel's buyer identifier (e.g. eBay username) when the channel
+  // doesn't expose a real name/email the way our own checkout requires.
+  external_buyer_username: { type: String, default: null },
+  // Full snapshot of the raw payload the channel sent us, for audit/debugging
+  // when the mapped fields above don't look right. Not returned by default.
+  external_raw_payload: { type: Schema.Types.Mixed, default: null, select: false },
+
   payment: { type: Schema.Types.ObjectId, ref: "Payment", default: null },
 
   // Set once at creation, required to fetch this order from the public
@@ -84,5 +101,8 @@ const orderSchema = buildSchema({
 
 orderSchema.index({ "customer.email": 1 });
 orderSchema.index({ status: 1 });
+// Sparse so storefront orders (no external_order_id) don't collide on null;
+// unique so a re-poll of the same eBay order can never create a duplicate.
+orderSchema.index({ external_order_id: 1 }, { unique: true, sparse: true });
 
 module.exports = model("Order", orderSchema);

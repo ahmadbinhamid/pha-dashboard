@@ -1,27 +1,30 @@
 // scripts/simulateEbayOrder.js
 //
-// Tests the "eBay → App" direction (a sale on eBay reduces your app's stock)
-// WITHOUT needing eBay's flaky sandbox checkout.
+// Tests the "eBay → App" direction (a sale on eBay reduces your app's stock
+// AND gets imported as an Order) WITHOUT needing eBay's flaky sandbox checkout.
 //
 // How: it runs your REAL poller (pollAndProcessOrders) but replaces only the
 // one eBay network call (getOrders) with a canned order. Everything else —
-// adjustStockBySku, the multi-location deduction, InventoryHistory writes, and
-// the EbayProcessedOrder idempotency guard — is your actual production code.
+// order import, adjustStockBySku, the multi-location deduction,
+// InventoryHistory writes, and the EbayProcessedOrder idempotency guard —
+// is your actual production code.
 //
-// It runs the poll TWICE with the same order to prove two things at once:
+// It runs the poll TWICE with the same order to prove three things at once:
 //   1) Run 1 deducts stock by the sold quantity   → cross-sync works
-//   2) Run 2 changes nothing                       → idempotency holds (no double-count)
+//   2) Run 1 imports exactly one Order             → order import works
+//   3) Run 2 changes nothing                       → idempotency holds (no double-count)
 //
-// By default it RESTORES your stock and removes the test records afterwards,
-// so you can run it as many times as you like without draining real inventory.
-// Pass --keep to leave the deduction in place.
+// By default it RESTORES your stock and removes the test records (including
+// the imported test Order) afterwards, so you can run it as many times as
+// you like without draining real inventory or littering test orders.
+// Pass --keep to leave everything in place.
 //
 // Usage:
 //   node scripts/simulateEbayOrder.js --sku <SKU> [--qty 1] [--keep]
 //
 //   --sku   (required) the SKU to "sell"
 //   --qty   quantity sold (default 1)
-//   --keep  do NOT restore stock / cleanup — leave the deduction in the DB
+//   --keep  do NOT restore stock / cleanup — leave the deduction and order in the DB
 
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const mongoose = require("mongoose");
@@ -33,7 +36,9 @@ const ProductVariant = require("../src/models/ProductVariant");
 const Inventory = require("../src/models/Inventory");
 const InventoryHistory = require("../src/models/InventoryHistory");
 const EbayProcessedOrder = require("../src/models/EbayProcessedOrder");
+const Order = require("../src/models/Order");
 const { ADJUSTMENT_TYPE } = require("../src/constants/inventory.constants");
+const { ORDER_CHANNEL } = require("../src/constants/order.constants");
 
 const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
 
@@ -131,7 +136,30 @@ async function main() {
   const testOrderId = `TEST-${Date.now()}`;
   const testStart = new Date();
   const cannedOrder = {
-    orders: [{ orderId: testOrderId, lineItems: [{ sku, quantity: qty }] }],
+    orders: [{
+      orderId: testOrderId,
+      orderFulfillmentStatus: "NOT_STARTED",
+      buyer: { username: "test_buyer" },
+      fulfillmentStartInstructions: [{
+        shippingStep: {
+          shipTo: {
+            fullName: "Test Buyer",
+            contactAddress: {
+              addressLine1: "123 Test Street",
+              city: "Sydney",
+              stateOrProvince: "NSW",
+              postalCode: "2000",
+            },
+          },
+        },
+      }],
+      pricingSummary: {
+        priceSubtotal: { value: (10 * qty).toFixed(2) },
+        deliveryCost: { value: "5.00" },
+        total: { value: (10 * qty + 5).toFixed(2) },
+      },
+      lineItems: [{ sku, quantity: qty, title: "Test Item", lineItemCost: { value: "10.00" } }],
+    }],
   };
 
   // Stub ONLY getOrders, then load the real poller so it picks up the stub ───
@@ -161,10 +189,15 @@ async function main() {
     type: ADJUSTMENT_TYPE.EBAY_SALE,
     created_at: { $gte: testStart },
   }).lean();
+  const importedOrders = await Order.find({
+    channel: ORDER_CHANNEL.EBAY,
+    external_order_id: testOrderId,
+  }).lean();
 
   console.log(`\n${c.bold}Evidence${c.reset}`);
   console.log(`  EbayProcessedOrder records for ${testOrderId}: ${epo.length} ${epo.map((e) => `(${e.action}/${e.source})`).join(" ")}`);
   console.log(`  InventoryHistory ebay_sale rows written:      ${histRows.length}`);
+  console.log(`  Order records imported:                       ${importedOrders.length} ${importedOrders.map((o) => o.order_number).join(" ")}`);
 
   // Verdict (plain English) ────────────────────────────────────────────────────
   console.log(`\n${c.bold}Verdict${c.reset}`);
@@ -190,6 +223,12 @@ async function main() {
     problems.push(`Expected 1 deduction record, found ${deductionRecords}.`);
   }
 
+  if (importedOrders.length === 1) {
+    console.log(`  ${ok("•")} Exactly one Order was imported for this eBay sale.`);
+  } else {
+    problems.push(`Expected 1 imported Order, found ${importedOrders.length} — order import may be broken.`);
+  }
+
   problems.forEach((p) => console.log(`  ${bad("✗")} ${p}`));
 
   // Cleanup (default) or keep ──────────────────────────────────────────────────
@@ -204,10 +243,15 @@ async function main() {
       created_at: { $gte: testStart },
     });
     await EbayProcessedOrder.deleteMany({ orderId: testOrderId });
+    await Order.deleteMany({ channel: ORDER_CHANNEL.EBAY, external_order_id: testOrderId });
     const restored = await snapshotStock(productId, variantId);
-    console.log(`\n${c.dim}Cleanup: stock restored to ${restored.total}, ${histRows.length} test history row(s) and ${epo.length} test order record(s) removed. (Use --keep to skip cleanup.)${c.reset}`);
+    console.log(
+      `\n${c.dim}Cleanup: stock restored to ${restored.total}, ${histRows.length} test history row(s), ` +
+        `${epo.length} test order-processed record(s), and ${importedOrders.length} imported test Order(s) removed. ` +
+        `(Use --keep to skip cleanup.)${c.reset}`,
+    );
   } else {
-    console.log(`\n${c.dim}--keep set: deduction left in place. Test order id = ${testOrderId}.${c.reset}`);
+    console.log(`\n${c.dim}--keep set: deduction and imported order left in place. Test order id = ${testOrderId}.${c.reset}`);
   }
 
   const failed = problems.length > 0;
