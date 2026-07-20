@@ -5,6 +5,7 @@
 const EBAY_SCOPES = Object.freeze({
   SELL_INVENTORY: "https://api.ebay.com/oauth/api_scope/sell.inventory",
   SELL_ACCOUNT: "https://api.ebay.com/oauth/api_scope/sell.account",
+  SELL_FULFILLMENT: "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
   NOTIFICATION_SUBSCRIPTION: "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription",
   BASE: "https://api.ebay.com/oauth/api_scope",
 });

@@ -64,7 +64,7 @@ async function getAccessToken() {
     grant_type: "refresh_token",
     refresh_token: config.ebay.refreshToken,
     scope:
-      `${EBAY_SCOPES.SELL_INVENTORY} ${EBAY_SCOPES.SELL_ACCOUNT}`,
+      `${EBAY_SCOPES.SELL_INVENTORY} ${EBAY_SCOPES.SELL_ACCOUNT} ${EBAY_SCOPES.SELL_FULFILLMENT}`,
   });
 
   const res = await fetch(TOKEN_ENDPOINT, {
@@ -670,30 +670,26 @@ async function ensureLocation(token) {
 
 async function getOrders({ limit = 50, offset = 0 } = {}) {
   const token = await getAccessToken();
-  if (!token) return { orders: [] };
+  if (!token) throw new Error("[eBay] getOrders: could not obtain access token");
 
   const url = `${FULFILLMENT_BASE}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
-      },
-    });
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
+    },
+  });
 
-    if (!res.ok) {
-      const text = await res.text();
-      logger.error(`[eBay] getOrders failed: ${res.status} ${text}`);
-      return { orders: [] };
-    }
-
-    return res.json();
-  } catch (err) {
-    logger.error(`[eBay] getOrders error: ${err.message}`);
-    return { orders: [] };
+  if (!res.ok) {
+    const text = await res.text();
+    // Thrown (not swallowed) so an auth/scope failure surfaces as a failed
+    // Bull job instead of silently looking like "no new orders".
+    throw new Error(`[eBay] getOrders failed: ${res.status} ${text}`);
   }
+
+  return res.json();
 }
 
 // ── Taxonomy ──────────────────────────────────────────────────────────────────
