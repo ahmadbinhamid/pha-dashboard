@@ -11,7 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Products", href: "/products", icon: Icons.Package },
   { label: "Categories", href: "/categories", icon: Icons.Layers },
   // { label: "Inventory", href: "/inventory", icon: Icons.Box },
-  // { label: "Orders", href: "/orders", icon: Icons.Cart },
+  { label: "Orders", href: "/orders", icon: Icons.Cart },
   { label: "Listings", href: "/listings", icon: Icons.Tag },
   { label: "Payments", href: "/payments", icon: Icons.CreditCard },
   // { label: "Analytics", href: "/analytics", icon: Icons.Chart },

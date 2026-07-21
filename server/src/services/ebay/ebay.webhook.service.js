@@ -3,9 +3,11 @@
 const crypto = require("crypto");
 const { getAppToken } = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
+const { updateEbayOrderStatus } = require("../order.service");
 const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
+const { ORDER_STATUS } = require("../../constants/order.constants");
 const config = require("../../config");
 
 const EBAY_NOTIFICATION_API = `${config.ebay.apiBaseUrl}/commerce/notification/v1`;
@@ -119,12 +121,24 @@ async function processNotification(payload) {
 
       await adjustStockBySku(sku, qty);
 
+      // Isolated from the stock adjustment above: eBay never retries this
+      // webhook (we already respond 200 before processNotification runs —
+      // see ebay.controller.js), so a throw here would permanently skip
+      // the bookkeeping update below with no chance to recover. The stock
+      // correction is the critical side effect and has already committed.
+      const localStatus = status === "CANCELLED" ? ORDER_STATUS.CANCELLED : ORDER_STATUS.REFUNDED;
+      try {
+        await updateEbayOrderStatus(orderId, { sku, quantity: qty, status: localStatus });
+      } catch (err) {
+        logger.error(`[ebay.webhook] Failed to update order status for ${orderId}: ${err.message}`);
+      }
+
       await EbayProcessedOrder.updateOne(
         { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "restock" },
         { $set: { lineItems: [{ sku, quantity: qty }] } },
       );
 
-      logger.info(`[ebay.webhook] Restored ${qty} × ${sku} for order ${orderId} (${status})`);
+      logger.info(`[ebay.webhook] Restored ${qty} × ${sku} for order ${orderId} (${status}), order status → ${localStatus}`);
       return { processed: true, topic, sku, qty };
     }
 

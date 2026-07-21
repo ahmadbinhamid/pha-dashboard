@@ -5,6 +5,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Counter = require("../models/Counter");
+const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
@@ -196,6 +197,41 @@ async function createOrderFromEbayOrder(rawEbayOrder) {
   return order;
 }
 
+// Reflects an eBay order-level cancellation/return notification onto the
+// matching local Order. No-op (returns null) if that eBay order was never
+// imported here, e.g. its line items didn't match any known product —
+// consistent with createOrderFromEbayOrder() treating that as "nothing to
+// do" rather than an error. Doesn't create a Refund record: eBay-side
+// refunds for these are settled through eBay's own managed payments, not
+// our Stripe/Payment pipeline, so there's no Payment to link one to.
+//
+// eBay sends one LINE_ITEMS_UPDATED event per SKU, so a multi-item order
+// can have just one line cancelled while the rest still ship — only flip
+// the whole order's status when this notification covers every item on it;
+// otherwise it's a partial cancellation and the status is left alone for
+// manual reconciliation (the stock adjustment for that SKU still applies
+// regardless, via the caller).
+async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status }) {
+  const order = await Order.findOne({
+    channel: ORDER_CHANNEL.EBAY,
+    external_order_id: externalOrderId,
+  });
+  if (!order) return null;
+
+  const isFullOrderCancellation =
+    order.items.length === 1 && order.items[0].sku === sku && order.items[0].quantity === quantity;
+  if (!isFullOrderCancellation) {
+    logger.warn(
+      `[order.service] eBay order ${externalOrderId}: partial cancellation/return (${sku} x${quantity}) — leaving status "${order.status}" as-is for manual review`,
+    );
+    return order;
+  }
+
+  order.status = status;
+  await order.save();
+  return order;
+}
+
 function safeTokenMatch(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const bufA = Buffer.from(a);
@@ -217,4 +253,52 @@ async function getOrderForGuest(orderId, token) {
   return order;
 }
 
-module.exports = { createOrder, getOrderForGuest, createOrderFromEbayOrder };
+// ── Admin ────────────────────────────────────────────────────────────────
+
+async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, search } = {}) {
+  const filter = {};
+  if (status) filter.status = status;
+  if (channel) filter.channel = channel;
+  if (search) {
+    const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    filter.$or = [{ order_number: re }, { "customer.name": re }, { "customer.email": re }];
+  }
+
+  const [items, total] = await Promise.all([
+    Order.find(filter)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("payment", "status amount amount_refunded card_brand card_last4 paid_at"),
+    Order.countDocuments(filter),
+  ]);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+// Full order record for the admin detail/invoice view — unlike
+// getOrderForGuest, this isn't token-gated (route requires admin JWT auth
+// instead) and includes the order's refund history for display alongside
+// the populated payment.
+async function getOrderDetailForAdmin(orderId) {
+  const order = await Order.findById(orderId).populate("payment");
+  if (!order) throw httpError("Order not found", 404);
+
+  const refunds = await Refund.find({ order: order._id }).sort({ created_at: -1 });
+  return { ...order.toObject(), refunds };
+}
+
+module.exports = {
+  createOrder,
+  getOrderForGuest,
+  createOrderFromEbayOrder,
+  updateEbayOrderStatus,
+  listOrders,
+  getOrderDetailForAdmin,
+};

@@ -1,6 +1,7 @@
 // validators/order.validation.js
 
 const Joi = require("joi");
+const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
 
 const addressSchema = Joi.object({
   address: Joi.string().trim().min(1).required(),
@@ -36,4 +37,22 @@ const byIdParam = {
   query: Joi.object({ token: Joi.string().required() }),
 };
 
-module.exports = { createOrder, byIdParam };
+// ── Admin ──────────────────────────────────────────────────────────────────
+
+const listOrders = {
+  query: Joi.object({
+    search: Joi.string().trim().allow(""),
+    status: Joi.string()
+      .valid(...Object.values(ORDER_STATUS))
+      .allow(""),
+    channel: Joi.string()
+      .valid(...Object.values(ORDER_CHANNEL))
+      .allow(""),
+  }),
+};
+
+const adminByIdParam = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+};
+
+module.exports = { createOrder, byIdParam, listOrders, adminByIdParam };

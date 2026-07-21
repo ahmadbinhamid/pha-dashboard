@@ -39,14 +39,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar — fixed, never scrolls */}
       <aside
         className={cn(
-          "hidden h-dvh shrink-0 transition-[width] duration-200 ease-out lg:block",
+          "hidden h-dvh shrink-0 transition-[width] duration-200 ease-out lg:block print:hidden",
           sidebarCollapsed ? "w-18" : "w-65",
         )}
       >
         <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
       </aside>
 
-      <MobileSidebar open={mobileOpen} onClose={close} />
+      <div className="print:hidden">
+        <MobileSidebar open={mobileOpen} onClose={close} />
+      </div>
 
       {/*
         Outer column: NOT overflow-y-auto — so the toggle button (which uses
@@ -60,7 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={toggleSidebar}
           aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
-            "absolute left-0 top-5 z-30 hidden -translate-x-1/2 lg:flex",
+            "absolute left-0 top-5 z-30 hidden -translate-x-1/2 lg:flex print:hidden",
             "h-6 w-6 items-center justify-center",
             "rounded-xs border border-border bg-bg shadow-sm",
             "text-fg/40 transition hover:bg-bg-2 hover:text-fg",
@@ -72,14 +74,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           }
         </button>
 
-        <Topbar onOpenMobile={() => setMobileOpen(true)} />
+        <div className="print:hidden">
+          <Topbar onOpenMobile={() => setMobileOpen(true)} />
+        </div>
 
         {/* Inner scroll container — only this scrolls */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto print:h-auto print:overflow-visible">
           <main
             className={cn(
               "w-full min-w-0 px-4 py-section sm:px-6 lg:px-10",
               "pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+              "print:px-0 print:py-0",
             )}
           >
             <div className="w-full min-w-0">{children}</div>

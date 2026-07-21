@@ -27,3 +27,33 @@ exports.getOrder = async (req, res) => {
     return systemfailure(res, err);
   }
 };
+
+// ── Admin ──────────────────────────────────────────────────────────────────
+
+exports.listOrders = async (req, res) => {
+  try {
+    const { page, limit, skip } = req.pagination;
+    const result = await orderService.listOrders({
+      page,
+      limit,
+      skip,
+      status: req.query.status,
+      channel: req.query.channel,
+      search: req.query.search,
+    });
+    return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getOrderDetail = async (req, res) => {
+  try {
+    const order = await orderService.getOrderDetailForAdmin(req.params.id);
+    return success(res, order);
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
