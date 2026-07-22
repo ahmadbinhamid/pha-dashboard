@@ -8,10 +8,10 @@ const { logger } = require("../loaders/logging");
 
 // NOTE: use the *named* processor: 'send'
 emailQueue.process("send", 5, async (job) => {
-  const { to, subject, template, variables, from, text } = job.data;
+  const { to, subject, template, variables, from, text, attachments } = job.data;
 
   const html = render(template, variables);
-  const ok = await sendEmail({ from, to, subject, html, text });
+  const ok = await sendEmail({ from, to, subject, html, text, attachments });
   if (!ok) throw new Error("Failed to send email");
 
   return true;

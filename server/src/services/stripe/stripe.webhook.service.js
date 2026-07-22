@@ -12,6 +12,7 @@ const Refund = require("../../models/Refund");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
+const emailService = require("../email/email.service");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
@@ -70,7 +71,9 @@ async function handlePaymentSucceeded(intent) {
   }
   if (payment.status === PAYMENT_STATUS.SUCCEEDED) return; // already handled
 
-  const order = await Order.findById(payment.order);
+  // +guest_access_token: needed to build the customer-facing "view order"
+  // link in the confirmation email below — excluded by default (select: false).
+  const order = await Order.findById(payment.order).select("+guest_access_token");
   if (!order) {
     logger.error(`[stripe.webhook] order ${payment.order} missing for intent ${intent.id}`);
     return;
@@ -131,6 +134,24 @@ async function handlePaymentSucceeded(intent) {
   await order.save();
 
   logger.info(`[stripe.webhook] order ${order.order_number} marked paid (intent ${intent.id})`);
+
+  // Best-effort — never let an email hiccup fail this webhook. Throwing here
+  // would make handleEvent release the processed-event claim and cause
+  // Stripe to redeliver, but payment.status is already SUCCEEDED by then, so
+  // the retry would short-circuit above and this email would never resend
+  // anyway. Log and move on instead.
+  try {
+    await emailService.sendOrderConfirmation({
+      to: order.customer.email,
+      name: order.customer.name,
+      orderNumber: order.order_number,
+      viewOrderUrl: `${config.emailBrand.storefrontUrl}/checkout/confirmation?order_id=${order._id}&token=${order.guest_access_token}`,
+    });
+  } catch (err) {
+    logger.error(`[stripe.webhook] failed to send order confirmation email for ${order.order_number}`, {
+      error: err.message,
+    });
+  }
 }
 
 async function handlePaymentFailed(intent) {

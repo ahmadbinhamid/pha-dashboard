@@ -10,6 +10,8 @@ export type OrderStatus =
 
 export type OrderChannel = "storefront" | "ebay";
 
+export type OrderDeliveryMethod = "delivery" | "pickup";
+
 export interface OrderCustomer {
   name: string;
   email: string;
@@ -50,7 +52,9 @@ export interface Order {
   order_number: string;
   items: OrderItem[];
   customer: OrderCustomer;
-  shipping_address: OrderAddress;
+  delivery_method: OrderDeliveryMethod;
+  // null when delivery_method is "pickup" — there's nowhere to ship.
+  shipping_address: OrderAddress | null;
   billing_address: OrderAddress | null;
   subtotal: number; // cents, GST-inclusive
   shipping_cost: number; // cents
@@ -63,6 +67,10 @@ export interface Order {
   external_buyer_username: string | null;
   has_stock_issue: boolean;
   stock_issue_note: string | null;
+  // Set together when an admin fulfils a DELIVERY order — null until then,
+  // always null for PICKUP orders.
+  tracking_number: string | null;
+  carrier_name: string | null;
   payment: OrderPaymentSummary | null;
   created_at: string;
   updated_at: string;

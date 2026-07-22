@@ -19,3 +19,13 @@ export const getOrderDetail = async (id: string) => {
   const { data } = await apiClient.get<BeResponse<OrderDetail>>(`/order/${id}/detail`);
   return data;
 };
+
+export interface SendOrderEmailPayload {
+  tracking_number?: string;
+  carrier_name?: string;
+}
+
+export const sendOrderEmail = async (id: string, payload: SendOrderEmailPayload = {}) => {
+  const { data } = await apiClient.post<BeResponse<Order>>(`/order/${id}/send-email`, payload);
+  return data;
+};

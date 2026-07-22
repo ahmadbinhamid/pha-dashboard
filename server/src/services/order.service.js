@@ -7,9 +7,11 @@ const ProductVariant = require("../models/ProductVariant");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
-const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
+const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { logger } = require("../loaders/logging");
+const emailService = require("./email/email.service");
+const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
 
 // GST-inclusive AU retail pricing: GST component = price / 11, never added on top.
 const GST_DIVISOR = 11;
@@ -76,7 +78,13 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
   };
 }
 
-async function createOrder({ items, customer, shipping_address, billing_address }) {
+async function createOrder({
+  items,
+  customer,
+  shipping_address,
+  billing_address,
+  delivery_method = ORDER_DELIVERY_METHOD.DELIVERY,
+}) {
   if (!Array.isArray(items) || !items.length) {
     throw httpError("Order must contain at least one item", 400);
   }
@@ -86,10 +94,15 @@ async function createOrder({ items, customer, shipping_address, billing_address 
     resolvedItems.push(await resolveOrderItem(item));
   }
 
+  const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const subtotal = resolvedItems.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
-  const shipping_cost = Math.round(
-    resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
-  );
+  // Nothing to ship for pickup — skip the per-item shipping cost entirely
+  // rather than charging for shipping that never happens.
+  const shipping_cost = isPickup
+    ? 0
+    : Math.round(
+        resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
+      );
   const total = subtotal + shipping_cost;
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
 
@@ -97,8 +110,9 @@ async function createOrder({ items, customer, shipping_address, billing_address 
     order_number: await nextOrderNumber(),
     items: resolvedItems,
     customer,
-    shipping_address,
-    billing_address: billing_address || null,
+    delivery_method,
+    shipping_address: isPickup ? null : shipping_address,
+    billing_address: isPickup ? null : billing_address || null,
     subtotal,
     shipping_cost,
     tax_amount,
@@ -294,6 +308,57 @@ async function getOrderDetailForAdmin(orderId) {
   return { ...order.toObject(), refunds };
 }
 
+// Admin action triggered by the "Send Email" button on the order detail
+// page. DELIVERY orders require tracking info — capturing it here IS the
+// fulfilment step, so the order transitions to FULFILLED in the same write.
+// Both paths attach the same tax invoice PDF; only the accompanying email
+// (shipped-with-tracking vs ready-for-pickup) differs.
+async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}) {
+  const order = await Order.findById(orderId).populate("payment");
+  if (!order) throw httpError("Order not found", 404);
+
+  const isDelivery = order.delivery_method === ORDER_DELIVERY_METHOD.DELIVERY;
+
+  if (isDelivery) {
+    const trimmedTracking = tracking_number?.trim();
+    const trimmedCarrier = carrier_name?.trim();
+    if (!trimmedTracking || !trimmedCarrier) {
+      throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);
+    }
+
+    order.tracking_number = trimmedTracking;
+    order.carrier_name = trimmedCarrier;
+    order.status = ORDER_STATUS.FULFILLED;
+    await order.save();
+  }
+
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject());
+  const pdfBase64 = pdfBuffer.toString("base64");
+  const pdfFilename = `${order.order_number}-invoice.pdf`;
+
+  if (isDelivery) {
+    await emailService.sendOrderShipped({
+      to: order.customer.email,
+      name: order.customer.name,
+      orderNumber: order.order_number,
+      trackingNumber: order.tracking_number,
+      carrierName: order.carrier_name,
+      pdfBase64,
+      pdfFilename,
+    });
+  } else {
+    await emailService.sendOrderReadyForPickup({
+      to: order.customer.email,
+      name: order.customer.name,
+      orderNumber: order.order_number,
+      pdfBase64,
+      pdfFilename,
+    });
+  }
+
+  return order;
+}
+
 module.exports = {
   createOrder,
   getOrderForGuest,
@@ -301,4 +366,5 @@ module.exports = {
   updateEbayOrderStatus,
   listOrders,
   getOrderDetailForAdmin,
+  sendOrderNotification,
 };

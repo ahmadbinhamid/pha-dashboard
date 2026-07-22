@@ -1,16 +1,21 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Printer, PackageX } from "lucide-react";
+import { Printer, Mail, PackageX } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
+import { OrderDeliveryMethodBadge } from "@/components/orders/OrderDeliveryMethodBadge";
 import { OrderItemsTable } from "@/components/orders/OrderItemsTable";
 import { OrderPaymentSummaryCard } from "@/components/orders/OrderPaymentSummaryCard";
+import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
+import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
 import { getOrderDetail } from "@/lib/api/orders";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { COMPANY_INFO } from "@/config/company";
 import type { OrderAddress } from "@/types/orders";
 
 function AddressBlock({ address }: { address: OrderAddress }) {
@@ -69,6 +74,7 @@ function NotFoundState() {
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["order", id],
@@ -89,21 +95,38 @@ export default function OrderDetailPage() {
         <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: order.order_number }]} />
       </div>
 
+      {/* Print-only letterhead — the on-screen header below already shows the
+          order number/status, so this only needs to add what print is missing. */}
+      <div className="hidden items-center gap-3 print:flex">
+        <PartsHubLogoImage sizeClass="h-10" maxWidthClass="max-w-[40px]" priority />
+        <div>
+          <h2 className="font-display text-lg font-bold">{COMPANY_INFO.name}</h2>
+          <p className="text-xs text-fg/60">ABN {COMPANY_INFO.abn}</p>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-semibold tracking-tight">{order.order_number}</h1>
             <OrderStatusBadge status={order.status} />
+            <OrderDeliveryMethodBadge method={order.delivery_method} />
             <span className="print:hidden">
               <OrderChannelBadge channel={order.channel} />
             </span>
           </div>
           <p className="mt-1 text-sm text-fg/55">Placed {new Date(order.created_at).toLocaleString()}</p>
         </div>
-        <Button variant="secondary" size="md" className="gap-2 self-start print:hidden" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" />
-          Print Invoice
-        </Button>
+        <div className="flex gap-2 self-start print:hidden">
+          <Button variant="secondary" size="md" className="gap-2" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            Print Invoice
+          </Button>
+          <Button variant="primary" size="md" className="gap-2" onClick={() => setEmailModalOpen(true)}>
+            <Mail className="h-4 w-4" />
+            Send Email
+          </Button>
+        </div>
       </div>
 
       {order.has_stock_issue && (
@@ -143,9 +166,22 @@ export default function OrderDetailPage() {
                 <div className="text-xs text-fg/55">{order.customer.phone}</div>
               </div>
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Shipping Address</div>
-                <AddressBlock address={order.shipping_address} />
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">
+                  {order.delivery_method === "pickup" ? "Collection" : "Shipping Address"}
+                </div>
+                {order.shipping_address ? (
+                  <AddressBlock address={order.shipping_address} />
+                ) : (
+                  <div className="text-sm text-fg/70">Customer will collect this order in-store.</div>
+                )}
               </div>
+              {order.tracking_number && (
+                <div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Tracking</div>
+                  <div className="text-sm text-fg">{order.carrier_name}</div>
+                  <div className="text-xs text-fg/55">{order.tracking_number}</div>
+                </div>
+              )}
               {order.billing_address && (
                 <div>
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">
@@ -183,6 +219,23 @@ export default function OrderDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Print-only condensed payment info — the full OrderPaymentSummaryCard
+          above is print:hidden since its refund history/"View in Payments"
+          link are admin-only and don't belong on a customer-facing invoice. */}
+      {order.payment && (
+        <div className="hidden text-sm print:block">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-fg/45">Payment Information</div>
+          <div className="text-fg">
+            {order.payment.card_brand
+              ? `${order.payment.card_brand.charAt(0).toUpperCase()}${order.payment.card_brand.slice(1)} Ending in ${order.payment.card_last4}`
+              : "Card"}
+          </div>
+          <div className="text-xs text-fg/55">Processed via Secure Gateway</div>
+        </div>
+      )}
+
+      <SendOrderEmailModal order={order} open={emailModalOpen} onOpenChange={setEmailModalOpen} />
     </div>
   );
 }

@@ -5,7 +5,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
-const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
+const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
 
 const orderItemSchema = new Schema(
   {
@@ -52,7 +52,22 @@ const orderSchema = buildSchema({
     email: { type: String, required: true, lowercase: true, trim: true },
     phone: { type: String, required: true },
   },
-  shipping_address: { type: addressSchema, required: true },
+  // How the order reaches the customer. eBay orders are always DELIVERY
+  // (imported with a real shipping_address); only storefront checkout lets
+  // the customer choose PICKUP.
+  delivery_method: {
+    type: String,
+    enum: Object.values(ORDER_DELIVERY_METHOD),
+    default: ORDER_DELIVERY_METHOD.DELIVERY,
+  },
+  // Required for DELIVERY, null for PICKUP — there's nowhere to ship.
+  shipping_address: {
+    type: addressSchema,
+    default: null,
+    required: function () {
+      return this.delivery_method !== ORDER_DELIVERY_METHOD.PICKUP;
+    },
+  },
   billing_address: { type: addressSchema, default: null }, // null => same as shipping
 
   // Cents, GST-inclusive prices throughout (AU retail convention):
@@ -79,7 +94,7 @@ const orderSchema = buildSchema({
   },
   // The channel's own order ID (e.g. eBay's orderId) — null for storefront
   // orders. Used to detect an order we've already imported on re-poll.
-  external_order_id: { type: String, default: null },
+  external_order_id: { type: String },
   // The channel's buyer identifier (e.g. eBay username) when the channel
   // doesn't expose a real name/email the way our own checkout requires.
   external_buyer_username: { type: String, default: null },
@@ -97,6 +112,13 @@ const orderSchema = buildSchema({
   // point of decrement; surfaced to admins for manual reconciliation.
   has_stock_issue: { type: Boolean, default: false },
   stock_issue_note: { type: String, default: null },
+
+  // Set together when an admin fulfils a DELIVERY order — capturing one
+  // without the other isn't meaningful, so both are written in the same
+  // update (see order.service.js#sendOrderNotification). Always null for
+  // PICKUP orders, which have nothing to hand off to a carrier.
+  tracking_number: { type: String, default: null },
+  carrier_name: { type: String, default: null },
 });
 
 orderSchema.index({ "customer.email": 1 });

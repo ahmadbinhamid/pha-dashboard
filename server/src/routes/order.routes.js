@@ -20,5 +20,6 @@ router.get("/:id", validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 // semantics (token-gated, no JWT).
 router.get("/", auth(), admin, pagination(), validate(v.listOrders), asyncHandler(ctrl.listOrders));
 router.get("/:id/detail", auth(), admin, validate(v.adminByIdParam), asyncHandler(ctrl.getOrderDetail));
+router.post("/:id/send-email", auth(), admin, validate(v.sendOrderEmail), asyncHandler(ctrl.sendOrderEmail));
 
 module.exports = router;

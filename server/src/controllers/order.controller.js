@@ -57,3 +57,14 @@ exports.getOrderDetail = async (req, res) => {
     return systemfailure(res, err);
   }
 };
+
+exports.sendOrderEmail = async (req, res) => {
+  try {
+    const order = await orderService.sendOrderNotification(req.params.id, req.body);
+    return success(res, order);
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};

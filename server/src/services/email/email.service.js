@@ -89,10 +89,86 @@ async function sendNewsletterSignupNotification({ subscriberEmail }) {
   });
 }
 
+/**
+ * Notify a customer that their DELIVERY order has shipped, with tracking
+ * details and the tax invoice attached as a PDF (base64-encoded — Bull job
+ * payloads are JSON over Redis, so a raw Buffer wouldn't round-trip to the
+ * worker intact).
+ */
+async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `Your order ${orderNumber} has shipped — ${config.emailBrand.appName}`,
+    template: "orderShipped",
+    variables: {
+      name,
+      order_number: orderNumber,
+      tracking_number: trackingNumber,
+      carrier_name: carrierName,
+    },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
+  });
+}
+
+/**
+ * Notify a customer that their PICKUP order is ready for collection, with
+ * the tax invoice attached as a PDF (base64-encoded — Bull job payloads are
+ * JSON over Redis, so a raw Buffer wouldn't round-trip to the worker intact).
+ */
+async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `Your order ${orderNumber} is ready for pickup — ${config.emailBrand.appName}`,
+    template: "orderReadyForPickup",
+    variables: {
+      name,
+      order_number: orderNumber,
+    },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
+  });
+}
+
+/**
+ * Notify a customer their storefront order was placed and paid — sent
+ * automatically once payment succeeds (see stripe.webhook.service.js). No
+ * invoice attached here; that's sent manually later via the admin's
+ * "Send Email" action (sendOrderShipped / sendOrderReadyForPickup above).
+ */
+async function sendOrderConfirmation({ to, name, orderNumber, viewOrderUrl }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `Order Confirmed — ${orderNumber} — ${config.emailBrand.appName}`,
+    template: "orderConfirmation",
+    variables: {
+      name,
+      order_number: orderNumber,
+      view_order_url: viewOrderUrl,
+    },
+  });
+}
+
 module.exports = {
   sendOTP,
   accountVerified,
   sendPasswordReset,
   sendInquiryNotification,
   sendNewsletterSignupNotification,
+  sendOrderShipped,
+  sendOrderReadyForPickup,
+  sendOrderConfirmation,
 };

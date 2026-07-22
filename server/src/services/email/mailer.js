@@ -22,7 +22,7 @@ const transporter = nodemailer.createTransport({
   rateDelta: config.smtp.rateDeltaMs,
 });
 
-async function sendEmail({ from, to, subject, html, text }) {
+async function sendEmail({ from, to, subject, html, text, attachments }) {
   const mail = {
     from:
       from ||
@@ -31,6 +31,7 @@ async function sendEmail({ from, to, subject, html, text }) {
     subject,
     html,
     text,
+    attachments,
   };
   try {
     await transporter.sendMail(mail);
