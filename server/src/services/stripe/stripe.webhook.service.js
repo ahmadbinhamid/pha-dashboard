@@ -14,7 +14,7 @@ const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
 const emailService = require("../email/email.service");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
-const { ORDER_STATUS } = require("../../constants/order.constants");
+const { ORDER_STATUS, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
@@ -141,12 +141,20 @@ async function handlePaymentSucceeded(intent) {
   // the retry would short-circuit above and this email would never resend
   // anyway. Log and move on instead.
   try {
-    await emailService.sendOrderConfirmation({
-      to: order.customer.email,
-      name: order.customer.name,
-      orderNumber: order.order_number,
-      viewOrderUrl: `${config.emailBrand.storefrontUrl}/checkout/confirmation?order_id=${order._id}&token=${order.guest_access_token}`,
-    });
+    const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+    if (isPickup) {
+      await emailService.sendOrderReceivedPickup({
+        to: order.customer.email,
+        name: order.customer.name,
+        orderNumber: order.order_number,
+      });
+    } else {
+      await emailService.sendOrderConfirmation({
+        to: order.customer.email,
+        name: order.customer.name,
+        orderNumber: order.order_number,
+      });
+    }
   } catch (err) {
     logger.error(`[stripe.webhook] failed to send order confirmation email for ${order.order_number}`, {
       error: err.message,

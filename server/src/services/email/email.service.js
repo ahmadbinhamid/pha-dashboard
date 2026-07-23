@@ -1,5 +1,6 @@
 const { enqueueEmailJob } = require("../../queues/email.queue");
 const config = require("../../config");
+const { PICKUP_LOCATION } = require("../../constants/company.constants");
 
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
@@ -99,7 +100,7 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
   return enqueueEmailJob({
     from: defaultFrom(),
     to,
-    subject: `Your order ${orderNumber} has shipped — ${config.emailBrand.appName}`,
+    subject: "Your Order Has Been Shipped",
     template: "orderShipped",
     variables: {
       name,
@@ -126,11 +127,15 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
   return enqueueEmailJob({
     from: defaultFrom(),
     to,
-    subject: `Your order ${orderNumber} is ready for pickup — ${config.emailBrand.appName}`,
+    subject: "Your Order Is Ready for Pickup",
     template: "orderReadyForPickup",
     variables: {
       name,
       order_number: orderNumber,
+      pickup_location_name: PICKUP_LOCATION.name,
+      pickup_address: PICKUP_LOCATION.address,
+      pickup_country: PICKUP_LOCATION.country,
+      trading_hours: PICKUP_LOCATION.tradingHours,
     },
     attachments: [
       {
@@ -143,21 +148,39 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
 }
 
 /**
- * Notify a customer their storefront order was placed and paid — sent
- * automatically once payment succeeds (see stripe.webhook.service.js). No
- * invoice attached here; that's sent manually later via the admin's
- * "Send Email" action (sendOrderShipped / sendOrderReadyForPickup above).
+ * Notify a customer their DELIVERY storefront order was placed and paid —
+ * sent automatically once payment succeeds for delivery_method = delivery
+ * (see stripe.webhook.service.js). No invoice attached here; that's sent
+ * manually later via the admin's "Send Email" action (sendOrderShipped above).
  */
-async function sendOrderConfirmation({ to, name, orderNumber, viewOrderUrl }) {
+async function sendOrderConfirmation({ to, name, orderNumber }) {
   return enqueueEmailJob({
     from: defaultFrom(),
     to,
-    subject: `Order Confirmed — ${orderNumber} — ${config.emailBrand.appName}`,
+    subject: "Order Confirmation",
     template: "orderConfirmation",
     variables: {
       name,
       order_number: orderNumber,
-      view_order_url: viewOrderUrl,
+    },
+  });
+}
+
+/**
+ * Notify a customer their PICKUP storefront order was placed and paid — sent
+ * automatically once payment succeeds for delivery_method = pickup (see
+ * stripe.webhook.service.js). No invoice attached here; that's sent manually
+ * later via the admin's "Send Email" action (sendOrderReadyForPickup above).
+ */
+async function sendOrderReceivedPickup({ to, name, orderNumber }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: "Your Order Has Been Received",
+    template: "orderReceivedPickup",
+    variables: {
+      name,
+      order_number: orderNumber,
     },
   });
 }
@@ -171,4 +194,5 @@ module.exports = {
   sendOrderShipped,
   sendOrderReadyForPickup,
   sendOrderConfirmation,
+  sendOrderReceivedPickup,
 };

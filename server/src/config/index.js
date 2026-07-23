@@ -60,7 +60,7 @@ const config = {
     appName: get("APP_NAME", "Vision Dock"),
     // Admin dashboard — used by internal-account emails (e.g. accountVerified's login link).
     clientUrl: get("CLIENT_URL", "http://localhost:3000"),
-    // Storefront — used by customer-facing emails (e.g. sendOrderConfirmation's view-order link).
+    // Storefront base URL, for any customer-facing email that needs to link back to it.
     storefrontUrl: get("STOREFRONT_URL", "http://localhost:5174"),
   },
 

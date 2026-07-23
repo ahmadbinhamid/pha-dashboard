@@ -1,32 +1,38 @@
 {{> _header}}
 
 <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
-  <h2 style="color: #28a745; text-align: center;">Your Order Has Shipped!</h2>
-
   <p style="color: #666; font-size: 16px; line-height: 1.5;">
-    Hello {{name}},
+    Hi {{name}},
   </p>
 
   <p style="color: #666; font-size: 16px; line-height: 1.5;">
-    Good news — order <strong>{{order_number}}</strong> is on its way to you.
+    Your order has now been dispatched.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Your shipping details are below:
   </p>
 
   <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-    <h3 style="color: #155724; margin: 0 0 10px 0;">Shipment Details</h3>
     <p style="color: #155724; margin: 0 0 6px 0; font-size: 14px;">
-      Carrier: <strong>{{carrier_name}}</strong>
+      Courier: <strong>{{carrier_name}}</strong>
     </p>
     <p style="color: #155724; margin: 0; font-size: 14px;">
       Tracking Number: <strong>{{tracking_number}}</strong>
     </p>
   </div>
 
-  <p style="color: #666; font-size: 14px; line-height: 1.5;">
-    Track your shipment directly with {{carrier_name}} using the tracking number above.
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    A copy of your invoice has been attached to this email for your records.
   </p>
 
-  <p style="color: #666; font-size: 14px; line-height: 1.5;">
-    Your tax invoice is attached to this email for your records.
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Thank you for choosing Parts Hub Australia. We appreciate your business and hope to serve you again soon.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Kind regards,<br />
+    Parts Hub Australia
   </p>
 </div>
 
