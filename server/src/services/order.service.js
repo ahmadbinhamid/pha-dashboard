@@ -309,9 +309,12 @@ async function getOrderDetailForAdmin(orderId) {
 }
 
 // Admin action triggered by the "Send Email" button on the order detail
-// page. DELIVERY orders require tracking info — capturing it here IS the
-// fulfilment step, so the order transitions to FULFILLED in the same write.
-// Both paths attach the same tax invoice PDF; only the accompanying email
+// page. DELIVERY orders require tracking info the first time — capturing it
+// here IS the fulfilment step, so the order transitions to FULFILLED in the
+// same write. Once tracking is on file, re-sending (e.g. the customer says
+// they missed the email) reuses it instead of asking again; passing new
+// tracking_number/carrier_name always overwrites what's on file. Both paths
+// attach the same tax invoice PDF; only the accompanying email
 // (shipped-with-tracking vs ready-for-pickup) differs.
 async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}) {
   const order = await Order.findById(orderId).populate("payment");
@@ -322,14 +325,15 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   if (isDelivery) {
     const trimmedTracking = tracking_number?.trim();
     const trimmedCarrier = carrier_name?.trim();
-    if (!trimmedTracking || !trimmedCarrier) {
+
+    if (trimmedTracking && trimmedCarrier) {
+      order.tracking_number = trimmedTracking;
+      order.carrier_name = trimmedCarrier;
+      order.status = ORDER_STATUS.FULFILLED;
+      await order.save();
+    } else if (!order.tracking_number || !order.carrier_name) {
       throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);
     }
-
-    order.tracking_number = trimmedTracking;
-    order.carrier_name = trimmedCarrier;
-    order.status = ORDER_STATUS.FULFILLED;
-    await order.save();
   }
 
   const pdfBuffer = await buildInvoicePdfBuffer(order.toObject());

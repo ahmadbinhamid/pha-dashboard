@@ -30,10 +30,15 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isDelivery = order.delivery_method === "delivery";
+  // Tracking is captured once (the first "Send Email" fulfils the order) —
+  // re-sending afterwards (e.g. the customer says they missed the email)
+  // should reuse what's on file instead of asking again.
+  const hasSavedTracking = isDelivery && !!order.tracking_number && !!order.carrier_name;
+  const needsTrackingInput = isDelivery && !hasSavedTracking;
 
   const mutation = useMutation({
     mutationFn: () =>
-      sendOrderEmail(order._id, isDelivery ? { tracking_number: form.tracking_number, carrier_name: form.carrier_name } : {}),
+      sendOrderEmail(order._id, needsTrackingInput ? { tracking_number: form.tracking_number, carrier_name: form.carrier_name } : {}),
     onSuccess: () => {
       toast({
         title: isDelivery ? "Shipment email sent" : "Invoice email sent",
@@ -52,7 +57,7 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (isDelivery) {
+    if (needsTrackingInput) {
       const nextErrors: Record<string, string> = {};
       if (!form.tracking_number.trim()) nextErrors.tracking_number = "Tracking number is required";
       if (!form.carrier_name.trim()) nextErrors.carrier_name = "Carrier name is required";
@@ -78,15 +83,17 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
       <ModalContent>
         <form onSubmit={handleSubmit}>
           <ModalHeader>
-            <ModalTitle>{isDelivery ? "Mark as shipped" : "Send invoice email"}</ModalTitle>
+            <ModalTitle>{needsTrackingInput ? "Mark as shipped" : isDelivery ? "Resend shipping email" : "Send invoice email"}</ModalTitle>
             <ModalDescription>
-              {isDelivery
+              {needsTrackingInput
                 ? `Enter the carrier and tracking number — this marks the order fulfilled and emails ${order.customer.email} with tracking details.`
-                : `This will email the tax invoice (PDF attached) to ${order.customer.email}.`}
+                : isDelivery
+                  ? `This will resend the shipping confirmation (with tax invoice attached) to ${order.customer.email}, using the tracking details already on file.`
+                  : `This will email the tax invoice (PDF attached) to ${order.customer.email}.`}
             </ModalDescription>
           </ModalHeader>
 
-          {isDelivery && (
+          {needsTrackingInput && (
             <div className="space-y-4">
               <FormField label="Carrier Name" required error={errors.carrier_name}>
                 <Input
@@ -103,6 +110,13 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
                   placeholder="e.g. 1234567890AU"
                 />
               </FormField>
+            </div>
+          )}
+
+          {hasSavedTracking && (
+            <div className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm">
+              <div className="text-fg">{order.carrier_name}</div>
+              <div className="text-xs text-fg/55">{order.tracking_number}</div>
             </div>
           )}
 

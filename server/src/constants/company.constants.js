@@ -15,6 +15,4 @@ const PICKUP_LOCATION = Object.freeze({
   tradingHours: Object.freeze(["Monday – Friday: 8:30 AM – 5:00 PM", "Saturday: 9:00 AM – 1:00 PM"]),
 });
 
-const INVOICE_NOTE = "Please ensure installation is performed by a certified technician to maintain fitment guarantee.";
-
-module.exports = { COMPANY_INFO, PICKUP_LOCATION, INVOICE_NOTE };
+module.exports = { COMPANY_INFO, PICKUP_LOCATION };

@@ -29,8 +29,8 @@ export function BreadcrumbNav({ items, className }: BreadcrumbNavProps) {
             {isLast || !item.href ? (
               <span
                 className={cn(
-                  "truncate",
-                  isLast ? "font-medium text-fg" : "hover:text-fg transition",
+                  "min-w-0 truncate",
+                  isLast ? "font-medium text-fg" : "shrink hover:text-fg transition",
                 )}
               >
                 {item.label}
@@ -38,7 +38,7 @@ export function BreadcrumbNav({ items, className }: BreadcrumbNavProps) {
             ) : (
               <Link
                 to={item.href}
-                className="truncate transition hover:text-fg"
+                className="min-w-0 shrink truncate transition hover:text-fg"
               >
                 {item.label}
               </Link>

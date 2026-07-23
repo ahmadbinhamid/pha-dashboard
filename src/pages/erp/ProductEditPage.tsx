@@ -11,6 +11,7 @@ import { NativeSelect } from "@/components/ui/Select";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { FormField } from "@/components/ui/FormField";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { ProductImages } from "@/components/media/ProductImages";
 import { ProductStockCard } from "@/components/products/ProductStockCard";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
@@ -266,9 +267,14 @@ export default function ProductEditPage() {
           ]}
         />
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{product.title}</h1>
-            <p className="mt-0.5 text-sm text-fg/45">/{product.slug}</p>
+          <div className="min-w-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <h1 className="truncate text-xl font-semibold tracking-tight">{product.title}</h1>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{product.title}</TooltipContent>
+            </Tooltip>
+            <p className="mt-0.5 truncate text-sm text-fg/45">/{product.slug}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">

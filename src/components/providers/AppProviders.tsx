@@ -5,6 +5,7 @@ import {
   OrgSettingsProvider,
   InventoryProvider,
 } from "@/context";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +23,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <OrgSettingsProvider>
           <InventoryProvider>
-            <ToastProvider>{children}</ToastProvider>
+            <ToastProvider>
+              <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+            </ToastProvider>
           </InventoryProvider>
         </OrgSettingsProvider>
       </AuthProvider>
