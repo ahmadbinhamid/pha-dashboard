@@ -19,11 +19,10 @@ const {
   saveVariant,
   applyStockEntries,
 } = require("../services/product.service");
-const mongoose = require("mongoose");
 const vehicleModelService = require("../services/vehicle-model.service");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
-const { escapeRegex } = require("../utils/regex");
+const { buildProductFilter } = require("../utils/productFilter");
 const {
   parseField,
   parseFormDataArrays,
@@ -60,76 +59,7 @@ exports.getProducts = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const filter = {};
-    const and = [];
-
-    if (req.query.search) {
-      const re = new RegExp(escapeRegex(req.query.search.trim()), "i");
-      and.push({ $or: [{ title: re }, { sku: re }, { brand: re }, { tags: re }, { mpn: re }] });
-    }
-    if (!req.user) {
-      // Unauthenticated (public/storefront) callers only ever see published, active products
-      filter.is_published_online = true;
-      filter.status = PRODUCT_STATUS.ACTIVE;
-    } else if (req.query.status !== undefined && req.query.status !== "") {
-      filter.status = req.query.status;
-    }
-    if (req.query.type !== undefined && req.query.type !== "") {
-      filter.type = req.query.type;
-    }
-    // condition/authenticity are closed enums (see PRODUCT_CONDITION /
-    // PRODUCT_AUTHENTICITY) so an exact match is correct; mpn/sku are
-    // free-text identifiers, matched case-insensitively like `search`.
-    if (req.query.condition) {
-      filter.condition = req.query.condition;
-    }
-    if (req.query.authenticity) {
-      filter.authenticity = req.query.authenticity;
-    }
-    if (req.query.mpn) {
-      filter.mpn = new RegExp(escapeRegex(req.query.mpn.trim()), "i");
-    }
-    if (req.query.sku) {
-      filter.sku = new RegExp(escapeRegex(req.query.sku.trim()), "i");
-    }
-    if (req.query.categories) {
-      const cats = Array.isArray(req.query.categories)
-        ? req.query.categories
-        : req.query.categories.split(",");
-      // getProducts runs this filter through an aggregation pipeline, which
-      // (unlike Model.find()) does not auto-cast query values against the
-      // schema — ids must be real ObjectIds or they'll never match the
-      // ObjectId[] `categories` field.
-      const filtered = cats
-        .map((c) => c.trim())
-        .filter((c) => mongoose.Types.ObjectId.isValid(c))
-        .map((c) => new mongoose.Types.ObjectId(c));
-      if (filtered.length) filter.categories = { $in: filtered };
-    }
-    if (req.query.price_min !== undefined || req.query.price_max !== undefined) {
-      filter.price = {};
-      if (req.query.price_min !== undefined) filter.price.$gte = req.query.price_min;
-      if (req.query.price_max !== undefined) filter.price.$lte = req.query.price_max;
-    }
-    // vehicle.make/model/model_code are canonical values sourced from the same
-    // VehicleModel picker list the frontend uses to build fitment dropdowns,
-    // so an exact match is correct here and lets Mongo use the compound index
-    // instead of falling back to a regex scan.
-    if (req.query.make) {
-      filter["vehicle.make"] = req.query.make.trim();
-    }
-    if (req.query.model) {
-      filter["vehicle.model"] = req.query.model.trim();
-    }
-    if (req.query.model_code) {
-      filter["vehicle.model_code"] = req.query.model_code.trim();
-    }
-    if (req.query.year !== undefined) {
-      const year = req.query.year;
-      and.push({ $or: [{ "vehicle.year_from": null }, { "vehicle.year_from": { $lte: year } }] });
-      and.push({ $or: [{ "vehicle.year_to": null }, { "vehicle.year_to": { $gte: year } }] });
-    }
-    if (and.length) filter.$and = and;
+    const filter = buildProductFilter(req.query, { authenticated: !!req.user });
 
     const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
     const stockFilter = req.query.stock || undefined;

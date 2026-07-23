@@ -16,7 +16,7 @@ exports.getCategories = async (req, res) => {
     const { items, total } = await categoryService.listCategories({
       skip,
       limit,
-      search: req.query.search,
+      productFilters: req.query,
     });
 
     return success(res, {
