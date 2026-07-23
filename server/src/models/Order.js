@@ -52,6 +52,12 @@ const orderSchema = buildSchema({
     email: { type: String, required: true, lowercase: true, trim: true },
     phone: { type: String, required: true },
   },
+  // Link to the Customer collection, when this order belongs to a known
+  // customer record — null for guest storefront checkouts, which only ever
+  // populate the snapshot above. `customer` above stays the source of truth
+  // for what was actually shown/emailed at order time even if the linked
+  // Customer record is later edited.
+  customer_id: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
   // How the order reaches the customer. eBay orders are always DELIVERY
   // (imported with a real shipping_address); only storefront checkout lets
   // the customer choose PICKUP.
@@ -122,6 +128,7 @@ const orderSchema = buildSchema({
 });
 
 orderSchema.index({ "customer.email": 1 });
+orderSchema.index({ customer_id: 1 });
 orderSchema.index({ status: 1 });
 // Sparse so storefront orders (no external_order_id) don't collide on null;
 // unique so a re-poll of the same eBay order can never create a duplicate.

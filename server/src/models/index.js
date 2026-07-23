@@ -4,6 +4,7 @@ module.exports = {
   User: require("./User"),
   Attachment: require("./Attachment"),
   Category: require("./Category"),
+  Customer: require("./Customer"),
   Location: require("./Location"),
   Product: require("./Product"),
   ProductVariant: require("./ProductVariant"),

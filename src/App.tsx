@@ -14,6 +14,8 @@ import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
+import CustomersPage from "@/pages/erp/CustomersPage";
+import CustomerDetailPage from "@/pages/erp/CustomerDetailPage";
 import OrdersPage from "@/pages/erp/OrdersPage";
 import OrderDetailPage from "@/pages/erp/OrderDetailPage";
 import PaymentsPage from "@/pages/erp/PaymentsPage";
@@ -61,6 +63,8 @@ export default function App() {
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />

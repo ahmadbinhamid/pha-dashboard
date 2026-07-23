@@ -52,6 +52,9 @@ export interface Order {
   order_number: string;
   items: OrderItem[];
   customer: OrderCustomer;
+  // Linked Customer record, when this order belongs to a known customer —
+  // null for guest storefront checkouts.
+  customer_id: string | null;
   delivery_method: OrderDeliveryMethod;
   // null when delivery_method is "pickup" — there's nowhere to ship.
   shipping_address: OrderAddress | null;
