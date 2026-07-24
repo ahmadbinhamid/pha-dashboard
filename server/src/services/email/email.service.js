@@ -185,6 +185,33 @@ async function sendOrderReceivedPickup({ to, name, orderNumber }) {
   });
 }
 
+/**
+ * Send the tax invoice/receipt for an in-person/manual sale created from the
+ * admin dashboard — no shipped/pickup framing (the sale is already
+ * complete), just the invoice and, if the customer still owes money, the
+ * outstanding balance called out up front.
+ */
+async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `Your Invoice — Order ${orderNumber}`,
+    template: "manualOrderReceipt",
+    variables: {
+      name,
+      order_number: orderNumber,
+      amount_due: amountDue || null,
+    },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
+  });
+}
+
 module.exports = {
   sendOTP,
   accountVerified,
@@ -195,4 +222,5 @@ module.exports = {
   sendOrderReadyForPickup,
   sendOrderConfirmation,
   sendOrderReceivedPickup,
+  sendManualOrderReceipt,
 };

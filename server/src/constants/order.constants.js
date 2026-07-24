@@ -14,6 +14,8 @@ const ORDER_STATUS = Object.freeze({
 const ORDER_CHANNEL = Object.freeze({
   STOREFRONT: "storefront",
   EBAY: "ebay",
+  // In-person/counter sale created by staff from the admin dashboard.
+  MANUAL: "manual",
 });
 
 // How a storefront order reaches the customer. Pickup orders carry no

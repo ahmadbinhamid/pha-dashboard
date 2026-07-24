@@ -1,9 +1,23 @@
 export type PaymentStatus = "pending" | "requires_action" | "succeeded" | "failed" | "canceled";
 
+// "stripe" = the API/webhook is the source of truth; "manual" = a staff
+// member typed in what they collected — see PaymentMethod for the human
+// detail on *how* a manual payment was taken.
+export type PaymentProvider = "stripe" | "manual";
+
+// Only meaningful when provider is "manual" — always null for Stripe, which
+// is inherently a card.
+export type PaymentMethod = "cash" | "online_transfer";
+
+// The three choices staff see when creating a manual order. "payment_link"
+// is not a PaymentMethod (no Payment doc is created with it as the method) —
+// it means "generate a Stripe Checkout link instead of collecting now".
+export type OrderPaymentChoice = PaymentMethod | "payment_link";
+
 export interface PaymentOrderSummary {
   _id: string;
   order_number: string;
-  customer: { name: string; email: string; phone: string };
+  customer: { name: string; email: string | null; phone: string | null };
   total: number; // cents
   status: string;
 }
@@ -11,8 +25,9 @@ export interface PaymentOrderSummary {
 export interface Payment {
   _id: string;
   order: PaymentOrderSummary | string;
-  provider: string;
-  stripe_payment_intent_id: string;
+  provider: PaymentProvider;
+  payment_method: PaymentMethod | null;
+  stripe_payment_intent_id: string | null;
   amount: number; // cents
   amount_refunded: number; // cents
   currency: string;

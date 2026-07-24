@@ -15,7 +15,12 @@ const DIRECTION = { DEDUCT: "deduct", RESTOCK: "restock" };
 // Mutates each order.items[i] with ebay_sync_status/ebay_sync_error. Caller
 // is responsible for order.save() afterwards. Returns whether any line item
 // couldn't be fully covered locally (oversell) so the caller can flag the order.
-async function syncOrderStock(order, direction) {
+//
+// `reasonPrefix`/`saleType`/`refundType` let non-Stripe callers (e.g. a
+// manual/in-store sale) label the InventoryHistory audit trail accurately —
+// they default to the original Stripe wording so existing call sites are
+// unaffected.
+async function syncOrderStock(order, direction, { reasonPrefix, saleType, refundType } = {}) {
   let hasShortfall = false;
   const notes = [];
 
@@ -29,15 +34,15 @@ async function syncOrderStock(order, direction) {
     const delta = sign * item.quantity;
     const reason =
       direction === DIRECTION.DEDUCT
-        ? `Stripe sale (order ${order.order_number})`
-        : `Stripe refund/cancellation restock (order ${order.order_number})`;
+        ? `${reasonPrefix ?? "Stripe sale"} (order ${order.order_number})`
+        : `${reasonPrefix ?? "Stripe refund/cancellation restock"} (order ${order.order_number})`;
 
     const result = await adjustStockForSku(item.sku, delta, {
       reason,
       type:
         direction === DIRECTION.DEDUCT
-          ? ADJUSTMENT_TYPE.STRIPE_SALE
-          : ADJUSTMENT_TYPE.STRIPE_REFUND,
+          ? (saleType ?? ADJUSTMENT_TYPE.STRIPE_SALE)
+          : (refundType ?? ADJUSTMENT_TYPE.STRIPE_REFUND),
       userId: null,
     });
 

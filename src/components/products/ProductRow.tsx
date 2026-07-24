@@ -9,6 +9,7 @@ import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
 import { Package, ChevronDown, Globe, EyeOff } from "lucide-react";
 import { ProductRowActionsMenu } from "@/components/products/ProductRowActionsMenu";
+import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 
@@ -134,7 +135,8 @@ export function ProductRow({
 
       {/* Actions */}
       <td className="w-px whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1">
+          <AddToCartButton product={product} display="icon" />
           <ProductRowActionsMenu onEdit={onEdit} onDelete={onDelete} />
         </div>
       </td>

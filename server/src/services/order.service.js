@@ -4,10 +4,15 @@ const crypto = require("crypto");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
+const Customer = require("../models/Customer");
+const Payment = require("../models/Payment");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
+const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
+const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
+const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
@@ -18,6 +23,10 @@ const GST_DIVISOR = 11;
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
+}
+
+function formatCentsAsDollars(cents) {
+  return `A$${(cents / 100).toFixed(2)}`;
 }
 
 async function nextOrderNumber() {
@@ -76,6 +85,179 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
     shipping_cost: product.shipping_cost ?? 0, // dollars, per-unit freight cost
     quantity,
   };
+}
+
+// Resolves one line for a manual/in-store sale created from the admin
+// dashboard. Unlike resolveOrderItem (storefront), doesn't require
+// is_published_online — staff can sell draft/unlisted stock — and accepts a
+// per-line discount entered by the staff member.
+async function resolveManualOrderItem({
+  product: productId,
+  variant: variantId,
+  quantity,
+  discount_amount = 0,
+  note = null,
+}) {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw httpError("Invalid quantity", 400);
+  }
+
+  const product = await Product.findById(productId);
+  if (!product) {
+    throw httpError("Product not found", 400);
+  }
+
+  let variant = null;
+  let unitPriceDollars = product.price;
+  let sku = product.sku;
+  let name = product.title;
+
+  if (variantId) {
+    variant = await ProductVariant.findOne({ _id: variantId, product: productId });
+    if (!variant) {
+      throw httpError("Product variant not found", 400);
+    }
+    unitPriceDollars = variant.price ?? unitPriceDollars;
+    sku = variant.sku || sku;
+    name = `${product.title} — ${variant.display_name}`;
+  }
+
+  if (product.stock_control) {
+    const available = await getTotalStockForProductVariant(productId, variantId || null);
+    if (available < quantity) {
+      throw httpError(`Insufficient stock for "${name}" — only ${available} left`, 400);
+    }
+  }
+
+  const unitPriceCents = Math.round(unitPriceDollars * 100);
+  const lineSubtotalCents = unitPriceCents * quantity;
+  const discountCents = Math.round(discount_amount * 100);
+  if (discountCents < 0 || discountCents > lineSubtotalCents) {
+    throw httpError(`Discount for "${name}" cannot exceed the line subtotal`, 400);
+  }
+
+  return {
+    product: product._id,
+    variant: variant ? variant._id : null,
+    name,
+    sku,
+    unit_price: unitPriceCents,
+    quantity,
+    discount_amount: discountCents,
+    note: note || null,
+  };
+}
+
+// Admin-created in-person/counter sale — always linked to a known Customer
+// record (found via search or just created on the fly by the caller), always
+// channel MANUAL, and settled with whatever the staff member collected at
+// the register rather than a Stripe payment intent. Stock is decremented
+// immediately (unlike storefront, which waits for the Stripe webhook)
+// because the goods leave with the customer now regardless of how much of
+// the invoice is actually paid.
+async function createManualOrder({
+  customer_id,
+  items,
+  delivery_method = ORDER_DELIVERY_METHOD.PICKUP,
+  shipping_address,
+  billing_address,
+  note,
+  amount_paid = 0,
+  payment_method,
+}) {
+  const customer = await Customer.findById(customer_id);
+  if (!customer) {
+    throw httpError("Customer not found", 400);
+  }
+  if (!Array.isArray(items) || !items.length) {
+    throw httpError("Order must contain at least one item", 400);
+  }
+
+  const resolvedItems = [];
+  for (const item of items) {
+    resolvedItems.push(await resolveManualOrderItem(item));
+  }
+
+  const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  const subtotal = resolvedItems.reduce(
+    (sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount),
+    0,
+  );
+  const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
+  const total = subtotal; // manual/counter sales carry no separate shipping charge
+
+  // "payment_link" means nothing is collected now — the customer pays later
+  // via a Stripe-hosted link generated separately (see
+  // createPaymentLinkForOrder) — so any amount_paid sent alongside it is
+  // ignored rather than trusted.
+  const isPaymentLink = payment_method === ORDER_PAYMENT_CHOICE.PAYMENT_LINK;
+  const amountPaidCents = isPaymentLink ? 0 : Math.round(amount_paid * 100);
+  if (amountPaidCents < 0 || amountPaidCents > total) {
+    throw httpError("Amount paid cannot exceed the order total", 400);
+  }
+
+  const order = await Order.create({
+    order_number: await nextOrderNumber(),
+    items: resolvedItems,
+    customer: {
+      name: customer.name,
+      email: customer.email || null,
+      phone: customer.phone || null,
+    },
+    customer_id: customer._id,
+    delivery_method,
+    shipping_address: isPickup ? null : shipping_address,
+    billing_address: isPickup ? null : billing_address || null,
+    note: note || null,
+    subtotal,
+    shipping_cost: 0,
+    tax_amount,
+    total,
+    currency: "aud",
+    status: amountPaidCents >= total ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING_PAYMENT,
+    channel: ORDER_CHANNEL.MANUAL,
+    guest_access_token: generateGuestAccessToken(),
+  });
+
+  const { hasShortfall, note: stockIssueNote } = await syncOrderStock(order, DIRECTION.DEDUCT, {
+    reasonPrefix: "Manual sale",
+    saleType: ADJUSTMENT_TYPE.MANUAL_SALE,
+  });
+  if (hasShortfall) {
+    order.has_stock_issue = true;
+    order.stock_issue_note = stockIssueNote;
+  }
+
+  // No Payment record at all when nothing was collected yet (invoice due in
+  // full, or a payment link was chosen instead) — a Payment doc represents
+  // money actually received, not an outstanding balance.
+  if (amountPaidCents > 0) {
+    const payment = await Payment.create({
+      order: order._id,
+      provider: PAYMENT_PROVIDER.MANUAL,
+      payment_method,
+      amount: amountPaidCents,
+      currency: "aud",
+      status: PAYMENT_STATUS.SUCCEEDED,
+      paid_at: new Date(),
+    });
+    order.payment = payment._id;
+  }
+
+  await order.save();
+  return order;
+}
+
+// Adds a staff comment to an order's internal notes thread — distinct from
+// the customer-facing `note` captured once at creation.
+async function addOrderNote(orderId, { text, userId }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+  order.internal_notes.push({ text, author: userId || null, created_at: new Date() });
+  await order.save();
+  return order;
 }
 
 async function createOrder({
@@ -260,7 +442,7 @@ function safeTokenMatch(a, b) {
 async function getOrderForGuest(orderId, token) {
   const order = await Order.findById(orderId)
     .select("+guest_access_token")
-    .populate("payment", "status card_brand card_last4 amount amount_refunded paid_at");
+    .populate("payment", "provider payment_method status card_brand card_last4 amount amount_refunded paid_at");
   if (!order || !safeTokenMatch(order.guest_access_token, token)) {
     throw httpError("Order not found", 404);
   }
@@ -283,7 +465,7 @@ async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, sea
       .sort({ created_at: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("payment", "status amount amount_refunded card_brand card_last4 paid_at"),
+      .populate("payment", "provider payment_method status amount amount_refunded card_brand card_last4 paid_at"),
     Order.countDocuments(filter),
   ]);
 
@@ -319,6 +501,26 @@ async function getOrderDetailForAdmin(orderId) {
 async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}) {
   const order = await Order.findById(orderId).populate("payment");
   if (!order) throw httpError("Order not found", 404);
+
+  // In-person sales are already complete when created — no shipped/pickup
+  // framing applies, just the invoice (with the outstanding balance called
+  // out, if any) attached to a plain receipt email.
+  if (order.channel === ORDER_CHANNEL.MANUAL) {
+    if (!order.customer.email) {
+      throw httpError("This customer has no email on file — add one before sending an invoice", 400);
+    }
+    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject());
+    const amountDueCents = order.total - (order.payment?.amount || 0);
+    await emailService.sendManualOrderReceipt({
+      to: order.customer.email,
+      name: order.customer.name,
+      orderNumber: order.order_number,
+      amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
+      pdfBase64: pdfBuffer.toString("base64"),
+      pdfFilename: `${order.order_number}-invoice.pdf`,
+    });
+    return order;
+  }
 
   const isDelivery = order.delivery_method === ORDER_DELIVERY_METHOD.DELIVERY;
 
@@ -365,10 +567,12 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
 
 module.exports = {
   createOrder,
+  createManualOrder,
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,
   listOrders,
   getOrderDetailForAdmin,
   sendOrderNotification,
+  addOrderNote,
 };

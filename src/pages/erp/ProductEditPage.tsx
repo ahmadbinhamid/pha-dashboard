@@ -14,6 +14,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { ProductImages } from "@/components/media/ProductImages";
 import { ProductStockCard } from "@/components/products/ProductStockCard";
+import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
 import { SectionLabel } from "@/components/products/SectionLabel";
 import { useToast } from "@/context";
@@ -280,6 +281,7 @@ export default function ProductEditPage() {
             <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">
               {product.status === "active" ? "Active" : "Draft"}
             </Badge>
+            <AddToCartButton product={product} display="labeled" />
             <Button
               type="button"
               variant="secondary"

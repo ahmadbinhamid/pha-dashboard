@@ -6,7 +6,7 @@ const Order = require("../../models/Order");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
-const { PAYMENT_STATUS } = require("../../constants/payment.constants");
+const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
 const { logger } = require("../../loaders/logging");
 
@@ -31,6 +31,9 @@ async function createRefund({ paymentId, amount, reason, initiatedBy, restock = 
   }
   if (payment.status !== PAYMENT_STATUS.SUCCEEDED) {
     throw httpError("Only a succeeded payment can be refunded", 400);
+  }
+  if (payment.provider !== PAYMENT_PROVIDER.STRIPE) {
+    throw httpError("This payment was collected manually and cannot be refunded via Stripe", 400);
   }
 
   const remaining = payment.amount - payment.amount_refunded;

@@ -8,14 +8,16 @@ export type OrderStatus =
   | "refunded"
   | "partially_refunded";
 
-export type OrderChannel = "storefront" | "ebay";
+export type OrderChannel = "storefront" | "ebay" | "manual";
 
 export type OrderDeliveryMethod = "delivery" | "pickup";
 
 export interface OrderCustomer {
   name: string;
-  email: string;
-  phone: string;
+  // Optional for "manual" orders — a walk-in Customer record may have
+  // neither on file. Always present for storefront/eBay orders.
+  email: string | null;
+  phone: string | null;
 }
 
 export interface OrderAddress {
@@ -32,13 +34,30 @@ export interface OrderItem {
   sku: string | null;
   unit_price: number; // cents, GST-inclusive
   quantity: number;
+  // Per-line discount (cents) — only ever set on manual/admin-created orders.
+  discount_amount: number;
+  // Customer-facing note for this specific line — only ever set on
+  // manual/admin-created orders.
+  note: string | null;
   ebay_sync_status: "not_applicable" | "pending" | "synced" | "failed";
   ebay_sync_error: string | null;
+}
+
+// Internal staff comment thread — distinct from Order.note (customer-facing,
+// captured once at creation).
+export interface OrderInternalNote {
+  _id: string;
+  text: string;
+  author: string | null;
+  created_at: string;
 }
 
 // Populated by the backend from the linked Payment doc.
 export interface OrderPaymentSummary {
   _id: string;
+  provider: "stripe" | "manual";
+  // Only set for provider "manual" — how the customer actually paid.
+  payment_method: "cash" | "online_transfer" | null;
   status: PaymentStatus;
   amount: number; // cents
   amount_refunded: number; // cents
@@ -59,6 +78,9 @@ export interface Order {
   // null when delivery_method is "pickup" — there's nowhere to ship.
   shipping_address: OrderAddress | null;
   billing_address: OrderAddress | null;
+  // Customer-facing note for the whole order, captured once at creation.
+  note: string | null;
+  internal_notes: OrderInternalNote[];
   subtotal: number; // cents, GST-inclusive
   shipping_cost: number; // cents
   tax_amount: number; // cents — GST component of subtotal, display-only

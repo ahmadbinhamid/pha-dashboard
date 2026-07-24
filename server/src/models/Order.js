@@ -17,6 +17,12 @@ const orderItemSchema = new Schema(
     sku: { type: String, default: null },
     unit_price: { type: Number, required: true }, // cents, GST-inclusive
     quantity: { type: Number, required: true, min: 1 },
+    // Per-line discount (cents) — only ever set by admin-created manual
+    // orders today; storefront/eBay orders always leave this at 0.
+    discount_amount: { type: Number, default: 0 },
+    // Customer-facing note about this specific line (e.g. "no engine oil
+    // included") — captured by staff when building a manual order.
+    note: { type: String, default: null },
 
     // Tracks whether this line item's quantity change (sale or restock) has
     // been pushed to eBay. "not_applicable" covers SKUs with no inventory
@@ -43,14 +49,29 @@ const addressSchema = new Schema(
   { _id: false },
 );
 
+// Internal staff comment thread — distinct from `note` (customer-facing,
+// captured once at order creation): these accumulate over time, each
+// attributed to whichever admin wrote it.
+const internalNoteSchema = new Schema(
+  {
+    text: { type: String, required: true, trim: true },
+    author: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    created_at: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
 const orderSchema = buildSchema({
   order_number: { type: String, required: true, unique: true }, // e.g. "PHA-00001"
   items: { type: [orderItemSchema], required: true },
 
+  // Required for storefront/eBay orders (enforced by their own request
+  // validation) but optional here — a manual/walk-in Customer record may
+  // have no email or phone on file.
   customer: {
     name: { type: String, required: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
-    phone: { type: String, required: true },
+    email: { type: String, lowercase: true, trim: true, default: null },
+    phone: { type: String, trim: true, default: null },
   },
   // Link to the Customer collection, when this order belongs to a known
   // customer record — null for guest storefront checkouts, which only ever
@@ -75,6 +96,12 @@ const orderSchema = buildSchema({
     },
   },
   billing_address: { type: addressSchema, default: null }, // null => same as shipping
+
+  // Customer-facing note for the whole order (e.g. a special request called
+  // out at checkout) — captured once, at creation. Distinct from
+  // `internal_notes` below, which is an ongoing staff comment thread.
+  note: { type: String, default: null },
+  internal_notes: { type: [internalNoteSchema], default: [] },
 
   // Cents, GST-inclusive prices throughout (AU retail convention):
   // subtotal already includes GST; tax_amount is informational (subtotal / 11),

@@ -4,6 +4,7 @@ import {
   ToastProvider,
   OrgSettingsProvider,
   InventoryProvider,
+  CartProvider,
 } from "@/context";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 
@@ -24,7 +25,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <OrgSettingsProvider>
           <InventoryProvider>
             <ToastProvider>
-              <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+              <CartProvider>
+                <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+              </CartProvider>
             </ToastProvider>
           </InventoryProvider>
         </OrgSettingsProvider>

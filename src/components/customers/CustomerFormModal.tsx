@@ -35,11 +35,18 @@ interface CustomerFormModalProps {
   onOpenChange: (open: boolean) => void;
   // null => create mode
   customer: Customer | null;
+  // Prefills the Name field in create mode — e.g. carrying over what staff
+  // already typed into a customer search that came up empty.
+  initialName?: string;
+  // Called with the newly created customer, in addition to the default
+  // toast/invalidate/close — lets callers (e.g. the POS create-order flow)
+  // auto-select the customer they just created.
+  onCreated?: (customer: Customer) => void;
 }
 
 // Shared create/edit form — rendered from both the customer list page and
 // the customer profile page so the two never drift out of sync.
-export function CustomerFormModal({ open, onOpenChange, customer }: CustomerFormModalProps) {
+export function CustomerFormModal({ open, onOpenChange, customer, initialName, onCreated }: CustomerFormModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CustomerFormState>(EMPTY_FORM);
@@ -47,9 +54,10 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
 
   useEffect(() => {
     if (open) {
-      setForm(customer ? customerToForm(customer) : EMPTY_FORM);
+      setForm(customer ? customerToForm(customer) : { ...EMPTY_FORM, name: initialName ?? "" });
       setErrors({});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customer]);
 
   const invalidate = () => {
@@ -59,10 +67,11 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
 
   const createMutation = useMutation({
     mutationFn: createCustomer,
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast({ title: "Customer created", tone: "success" });
       invalidate();
       onOpenChange(false);
+      if (res.data) onCreated?.(res.data);
     },
     onError: (err: Error) => {
       toast({ title: "Create failed", description: err.message, tone: "danger" });

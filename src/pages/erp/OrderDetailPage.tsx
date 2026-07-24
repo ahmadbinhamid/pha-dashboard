@@ -11,6 +11,7 @@ import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderDeliveryMethodBadge } from "@/components/orders/OrderDeliveryMethodBadge";
 import { OrderItemsTable } from "@/components/orders/OrderItemsTable";
 import { OrderPaymentSummaryCard } from "@/components/orders/OrderPaymentSummaryCard";
+import { OrderNotesSection } from "@/components/orders/OrderNotesSection";
 import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
 import { getOrderDetail } from "@/lib/api/orders";
@@ -87,6 +88,7 @@ export default function OrderDetailPage() {
   if (isError || !order) return <NotFoundState />;
 
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
+  const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24">
@@ -131,8 +133,14 @@ export default function OrderDetailPage() {
               <div className="space-y-1.5 border-t border-border px-5 py-4 text-sm">
                 <div className="flex justify-between text-fg/60">
                   <span>Subtotal</span>
-                  <span>{formatCurrencyFromCents(order.subtotal)}</span>
+                  <span>{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
                 </div>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between text-fg/60">
+                    <span>Discount</span>
+                    <span>-{formatCurrencyFromCents(totalDiscount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-fg/60">
                   <span>Shipping</span>
                   <span>{formatCurrencyFromCents(order.shipping_cost)}</span>
@@ -143,6 +151,15 @@ export default function OrderDetailPage() {
                 </div>
               </div>
             </Card>
+
+            {order.note && (
+              <Card>
+                <CardHeader title="Customer Note" />
+                <CardContent>
+                  <p className="text-sm text-fg/70">{order.note}</p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader title="Customer & Addresses" />
@@ -202,11 +219,20 @@ export default function OrderDetailPage() {
             <Card>
               <CardHeader title="Payment" />
               <CardContent>
-                <OrderPaymentSummaryCard payment={order.payment} refunds={order.refunds} />
+                <OrderPaymentSummaryCard
+                  orderId={order._id}
+                  orderStatus={order.status}
+                  payment={order.payment}
+                  refunds={order.refunds}
+                  total={order.total}
+                  channel={order.channel}
+                />
               </CardContent>
             </Card>
           </div>
         </div>
+
+        <OrderNotesSection orderId={order._id} notes={order.internal_notes} />
       </div>
 
       <div className="hidden print:block">

@@ -1,6 +1,7 @@
 import { Building2, MapPin, Mail } from "lucide-react";
 import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
 import { COMPANY_INFO, PICKUP_LOCATION, INVOICE_NOTE } from "@/config/company";
+import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { cn } from "@/utils/cn";
 import type { OrderDetail } from "@/types/orders";
@@ -58,7 +59,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             {isPaid ? "Paid & Secured" : "Pending Payment"}
           </span>
           <p className="mt-2 text-xs uppercase tracking-wide" style={{ color: MUTED }}>
-            Channel: {order.channel === "ebay" ? "eBay" : "Storefront"}
+            Channel: {order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront"}
           </p>
         </div>
       </div>
@@ -138,7 +139,14 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               </td>
               <td className="px-3 py-3 text-right">{item.quantity}</td>
               <td className="px-3 py-3 text-right">{formatCurrencyFromCents(item.unit_price)}</td>
-              <td className="px-3 py-3 text-right">{formatCurrencyFromCents(item.unit_price * item.quantity)}</td>
+              <td className="px-3 py-3 text-right">
+                {formatCurrencyFromCents(item.unit_price * item.quantity - item.discount_amount)}
+                {item.discount_amount > 0 && (
+                  <div className="mt-0.5 text-xs" style={{ color: ACCENT }}>
+                    Discount: -{formatCurrencyFromCents(item.discount_amount)}
+                  </div>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -150,7 +158,17 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             Payment Information
           </div>
           <div className="mt-2 text-sm">
-            {order.payment ? (
+            {order.payment?.provider === "manual" ? (
+              <>
+                <div>
+                  {order.payment.payment_method ? PAYMENT_METHOD_LABEL[order.payment.payment_method] : "Manual"} —{" "}
+                  {formatCurrencyFromCents(order.payment.amount)} received
+                </div>
+                <div className="text-xs" style={{ color: MUTED }}>
+                  Collected at time of sale
+                </div>
+              </>
+            ) : order.payment ? (
               <>
                 <div>
                   {order.payment.card_brand
@@ -161,6 +179,8 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                   Processed via Secure Gateway
                 </div>
               </>
+            ) : order.channel === "manual" ? (
+              <div style={{ color: MUTED }}>Invoice due in full — no payment collected yet.</div>
             ) : (
               <div style={{ color: MUTED }}>No payment recorded yet.</div>
             )}
@@ -191,6 +211,24 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               {formatCurrencyFromCents(order.total)}
             </span>
           </div>
+          {order.channel === "manual" &&
+            (() => {
+              const amountPaid = order.payment?.amount || 0;
+              const amountDue = order.total - amountPaid;
+              if (amountDue <= 0) return null;
+              return (
+                <>
+                  <div className="flex justify-between">
+                    <span style={{ color: MUTED }}>Amount Paid</span>
+                    <span className="font-semibold">{formatCurrencyFromCents(amountPaid)}</span>
+                  </div>
+                  <div className="flex justify-between text-base">
+                    <span className="font-bold text-amber-600">Balance Due</span>
+                    <span className="font-bold text-amber-600">{formatCurrencyFromCents(amountDue)}</span>
+                  </div>
+                </>
+              );
+            })()}
         </div>
       </div>
     </div>

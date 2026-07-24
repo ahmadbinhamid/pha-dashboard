@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icons } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/Button";
@@ -6,9 +7,12 @@ import { UserMenu } from "@/components/shell/UserMenu";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { cn } from "@/utils/cn";
 import { InventorySearchDialog } from "@/components/inventory/InventorySearchDialog";
-import { PackageSearch } from "lucide-react";
+import { useCart } from "@/context/cart";
+import { PackageSearch, ShoppingCart } from "lucide-react";
 
 export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
+  const navigate = useNavigate();
+  const { totalItems } = useCart();
   const [inventorySearchOpen, setInventorySearchOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -83,6 +87,22 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               title="Search inventory (make, model, year)"
             >
               <PackageSearch className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="relative h-9 w-9 shrink-0 rounded-xs p-0"
+              onClick={() => navigate("/create-order")}
+              aria-label="Create order"
+              title="Create Order"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {totalItems > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
             </Button>
             <div className="flex items-center gap-0.5 rounded-xs border border-border/60 bg-bg-2/25 p-0.5">
               <ThemeToggle />

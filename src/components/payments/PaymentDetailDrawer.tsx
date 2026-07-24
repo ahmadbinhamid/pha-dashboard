@@ -9,6 +9,7 @@ import { getPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Refund, RefundStatus } from "@/types/payment";
 import { REFUND_REASON_LABEL } from "@/config/refundReasons";
+import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 
 interface PaymentDetailDrawerProps {
   paymentId: string;
@@ -33,7 +34,10 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   const payment = data?.data;
   const order = payment && typeof payment.order === "object" ? payment.order : null;
   const remaining = payment ? payment.amount - payment.amount_refunded : 0;
-  const canRefund = payment?.status === "succeeded" && remaining > 0;
+  // Manual payments have no Stripe charge to reverse — refunding those has
+  // to happen outside this flow (e.g. handing back cash), so the action
+  // simply isn't offered rather than erroring out against the Stripe API.
+  const canRefund = payment?.status === "succeeded" && payment?.provider === "stripe" && remaining > 0;
 
   function handleRefunded() {
     queryClient.invalidateQueries({ queryKey: ["payment", paymentId] });
@@ -80,9 +84,13 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                     <span className="text-fg">{order?.customer.email ?? "—"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Card</span>
+                    <span>{payment.provider === "manual" ? "Payment Method" : "Card"}</span>
                     <span className="text-fg">
-                      {payment.card_brand ? `${payment.card_brand} •••• ${payment.card_last4}` : "—"}
+                      {payment.provider === "manual"
+                        ? (payment.payment_method ? PAYMENT_METHOD_LABEL[payment.payment_method] : "—")
+                        : payment.card_brand
+                          ? `${payment.card_brand} •••• ${payment.card_last4}`
+                          : "—"}
                     </span>
                   </div>
                   <div className="flex justify-between">

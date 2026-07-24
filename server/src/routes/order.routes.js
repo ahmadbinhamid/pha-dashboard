@@ -19,7 +19,16 @@ router.get("/:id", validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 // guest route above, which owns that exact path with different auth
 // semantics (token-gated, no JWT).
 router.get("/", auth(), admin, pagination(), validate(v.listOrders), asyncHandler(ctrl.listOrders));
+router.post("/manual", auth(), admin, validate(v.createManualOrder), asyncHandler(ctrl.createManualOrder));
 router.get("/:id/detail", auth(), admin, validate(v.adminByIdParam), asyncHandler(ctrl.getOrderDetail));
 router.post("/:id/send-email", auth(), admin, validate(v.sendOrderEmail), asyncHandler(ctrl.sendOrderEmail));
+router.post(
+  "/:id/payment-link",
+  auth(),
+  admin,
+  validate(v.generatePaymentLink),
+  asyncHandler(ctrl.generatePaymentLink),
+);
+router.post("/:id/notes", auth(), admin, validate(v.addOrderNote), asyncHandler(ctrl.addOrderNote));
 
 module.exports = router;

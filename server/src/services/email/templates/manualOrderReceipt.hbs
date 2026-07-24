@@ -1,0 +1,35 @@
+{{> _header}}
+
+<div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Hi {{name}},
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Thank you for your purchase! Please find attached the tax invoice for your order <strong>{{order_number}}</strong>.
+  </p>
+
+  {{#if amount_due}}
+  <div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 20px; margin: 20px 0;">
+    <h3 style="color: #856404; margin: 0 0 10px 0;">Balance Due: {{amount_due}}</h3>
+    <p style="color: #856404; margin: 0; font-size: 14px;">
+      Please see the attached invoice for full payment details.
+    </p>
+  </div>
+  {{/if}}
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    If you have any questions about your order, please don't hesitate to contact us.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Thank you for choosing Parts Hub Australia.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Kind regards,<br />
+    Parts Hub Australia
+  </p>
+</div>
+
+{{> _footer}}

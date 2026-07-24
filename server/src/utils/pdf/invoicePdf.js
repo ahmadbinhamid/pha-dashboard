@@ -47,6 +47,13 @@ const COLORS = {
   statusPendingText: "#d97706",
 };
 
+const PAYMENT_METHOD_LABEL = {
+  cash: "Cash",
+  card_terminal: "Card (Terminal)",
+  bank_transfer: "Bank Transfer",
+  other: "Other",
+};
+
 function formatMoney(cents) {
   return `A$${(cents / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -132,7 +139,8 @@ function drawHeader(doc, order) {
   doc.roundedRect(pillX, pillY, pillWidth, pillHeight, pillHeight / 2).lineWidth(1).strokeColor(pillBorder).stroke();
   doc.fillColor(pillText).text(pillLabel, pillX, pillY + 6, { width: pillWidth, align: "center" });
 
-  const channelLabel = `CHANNEL: ${order.channel === "ebay" ? "EBAY" : "STOREFRONT"}`;
+  const CHANNEL_LABEL = { ebay: "EBAY", manual: "IN-STORE" };
+  const channelLabel = `CHANNEL: ${CHANNEL_LABEL[order.channel] ?? "STOREFRONT"}`;
   const channelBoxWidth = Math.max(pillWidth, doc.widthOfString(channelLabel) + 4);
   doc
     .font(FONT)
@@ -258,12 +266,30 @@ function drawItemsTable(doc, order) {
     doc.font(FONT).fontSize(10).fillColor(COLORS.text);
     doc.text(String(item.quantity), PAGE_MARGIN + COLUMNS.qty, rowY, { width: COLUMN_WIDTHS.qty, align: "right" });
     doc.text(formatMoney(item.unit_price), PAGE_MARGIN + COLUMNS.unitPrice, rowY, { width: COLUMN_WIDTHS.unitPrice, align: "right" });
-    doc.text(formatMoney(item.unit_price * item.quantity), PAGE_MARGIN + COLUMNS.total, rowY, {
+
+    const lineSubtotal = item.unit_price * item.quantity;
+    const discount = item.discount_amount || 0;
+    doc.text(formatMoney(lineSubtotal - discount), PAGE_MARGIN + COLUMNS.total, rowY, {
       width: COLUMN_WIDTHS.total,
       align: "right",
     });
+    let rowBottomRight = doc.y;
 
-    doc.y = Math.max(rowBottomLeft, doc.y);
+    // Only manual/admin-created orders ever carry a per-line discount —
+    // storefront/eBay items always have discount_amount === 0.
+    if (discount > 0) {
+      doc
+        .font(FONT)
+        .fontSize(8)
+        .fillColor(COLORS.accent)
+        .text(`Discount: -${formatMoney(discount)}`, PAGE_MARGIN + COLUMNS.total, doc.y + 2, {
+          width: COLUMN_WIDTHS.total,
+          align: "right",
+        });
+      rowBottomRight = doc.y;
+    }
+
+    doc.y = Math.max(rowBottomLeft, rowBottomRight);
     doc.moveDown(0.85);
     doc
       .strokeColor(COLORS.border)
@@ -283,12 +309,22 @@ function drawPaymentAndTotals(doc, order) {
 
   doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.muted).text("PAYMENT INFORMATION", PAGE_MARGIN, startY);
   doc.font(FONT).fontSize(10).fillColor(COLORS.text);
-  if (order.payment) {
+  if (order.payment?.provider === "manual") {
+    const methodLabel = PAYMENT_METHOD_LABEL[order.payment.payment_method] ?? "Manual";
+    doc.text(`${methodLabel} — ${formatMoney(order.payment.amount)} received`, PAGE_MARGIN, doc.y + 7, {
+      width: CONTENT_WIDTH / 2 - 14,
+    });
+    doc.fillColor(COLORS.muted).fontSize(9).text("Collected at time of sale", PAGE_MARGIN, doc.y + 3);
+  } else if (order.payment) {
     const brand = order.payment.card_brand
       ? order.payment.card_brand.charAt(0).toUpperCase() + order.payment.card_brand.slice(1)
       : "Card";
     doc.text(`${brand} Ending in ${order.payment.card_last4 ?? "----"}`, PAGE_MARGIN, doc.y + 7);
     doc.fillColor(COLORS.muted).fontSize(9).text("Processed via Secure Gateway", PAGE_MARGIN, doc.y + 3);
+  } else if (order.channel === "manual") {
+    doc.fillColor(COLORS.muted).text("Invoice due in full — no payment collected yet.", PAGE_MARGIN, doc.y + 7, {
+      width: CONTENT_WIDTH / 2 - 14,
+    });
   } else {
     doc.fillColor(COLORS.muted).text("No payment recorded yet.");
   }
@@ -321,9 +357,34 @@ function drawPaymentAndTotals(doc, order) {
   rowY += 12;
   doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.accent).text("Total Amount", rightX, rowY, { width: labelWidth });
   doc.fontSize(14).text(formatMoney(order.total), rightX + labelWidth, rowY - 2, { width: valueWidth, align: "right" });
+  rowY += 22;
+
+  // Manual/in-store sales are the only ones that can be partially paid at
+  // creation time — Stripe orders are always paid in full or not at all, so
+  // this section only ever appears here.
+  if (order.channel === "manual") {
+    const amountPaid = order.payment?.amount || 0;
+    const amountDue = order.total - amountPaid;
+    if (amountDue > 0) {
+      doc.font(FONT).fontSize(9).fillColor(COLORS.muted).text("Amount Paid", rightX, rowY, { width: labelWidth });
+      doc
+        .font(FONT_BOLD)
+        .fontSize(9)
+        .fillColor(COLORS.text)
+        .text(formatMoney(amountPaid), rightX + labelWidth, rowY, { width: valueWidth, align: "right" });
+      rowY += 16;
+      doc
+        .font(FONT_BOLD)
+        .fontSize(10)
+        .fillColor(COLORS.statusPendingText)
+        .text("Balance Due", rightX, rowY, { width: labelWidth });
+      doc.text(formatMoney(amountDue), rightX + labelWidth, rowY, { width: valueWidth, align: "right" });
+      rowY += 16;
+    }
+  }
 
   doc.fillColor(COLORS.text);
-  doc.y = Math.max(leftBottomY, rowY + 26);
+  doc.y = Math.max(leftBottomY, rowY + 4);
 }
 
 // Frames the whole invoice in a rounded-corner card, matching

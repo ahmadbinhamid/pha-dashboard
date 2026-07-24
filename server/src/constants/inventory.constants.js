@@ -12,6 +12,7 @@ const ADJUSTMENT_TYPE = Object.freeze({
   EBAY_MANUAL_ADJUSTMENT: "ebay_manual_adjustment",
   STRIPE_SALE: "stripe_sale",
   STRIPE_REFUND: "stripe_refund",
+  MANUAL_SALE: "manual_sale",
   OTHER: "other",
 });
 
