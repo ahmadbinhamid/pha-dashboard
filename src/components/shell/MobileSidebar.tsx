@@ -1,7 +1,7 @@
 
 import { Suspense } from "react";
+import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { Icons } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { useOrgSettings } from "@/context";
 import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
@@ -42,7 +42,7 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           </div>
           <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" onClick={onClose} aria-label="Close menu">
-            <Icons.X />
+            <X className="h-4 w-4" />
           </Button>
         </div>
 

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2, UserX, Mail, Phone } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
@@ -107,48 +108,42 @@ export default function CustomerDetailPage() {
               <div className="px-5 py-10 text-center text-sm text-fg/50">No orders placed yet.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-bg-2/40">
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
+                <Table className="min-w-120">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 z-2 min-w-32 sticky-col-header sticky-col-separator-right">
                         Order
-                      </th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                        Channel
-                      </th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                        Total
-                      </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
+                      </TableHead>
+                      <TableHead>Channel</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {customer.orders.map((order) => (
-                      <tr
+                      <TableRow
                         key={order._id}
-                        className="cursor-pointer transition hover:bg-bg-2/40"
+                        className="group cursor-pointer"
                         onClick={() => navigate(`/orders/${order._id}`)}
                       >
-                        <td className="px-5 py-3.5 font-medium text-fg">{order.order_number}</td>
-                        <td className="px-4 py-3.5">
+                        <TableCell className="sticky left-0 z-1 max-w-32 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                          {order.order_number}
+                        </TableCell>
+                        <TableCell>
                           <OrderChannelBadge channel={order.channel} />
-                        </td>
-                        <td className="px-4 py-3.5">
+                        </TableCell>
+                        <TableCell>
                           <OrderStatusBadge status={order.status} />
-                        </td>
-                        <td className="px-4 py-3.5 text-right text-fg">{formatCurrencyFromCents(order.total)}</td>
-                        <td className="px-5 py-3.5 text-right text-fg/60">
+                        </TableCell>
+                        <TableCell className="text-right text-fg">{formatCurrencyFromCents(order.total)}</TableCell>
+                        <TableCell className="text-right text-fg/60">
                           {new Date(order.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </Card>

@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "@/hooks";
 import { useSearchParams } from "react-router-dom";
+import { Search } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { Icons } from "@/components/ui/Icons";
 import { useInventoryData } from "@/context";
 import {
   buildInventoryListUrl,
@@ -74,7 +74,7 @@ export function InventorySearchDialog({ open, onClose }: { open: boolean; onClos
       <InventorySearchFields value={form} onChange={patch} categories={categories} />
       <div className="flex flex-wrap gap-2 pt-2">
         <Button type="button" variant="primary" className="gap-2" onClick={submit}>
-          <Icons.Search className="h-4 w-4" />
+          <Search className="h-4 w-4" />
           View results
         </Button>
         <Button type="button" variant="secondary" onClick={() => setForm(EMPTY)}>

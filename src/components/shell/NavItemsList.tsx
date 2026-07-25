@@ -26,7 +26,7 @@ export function NavItemsList({
               className={erpNavRowClass(active, collapsed)}
             >
               <span className={erpNavIconClass(active)} aria-hidden="true">
-                {item.icon({ className: "h-[17px] w-[17px]" })}
+                {item.icon({ className: "h-[15px] w-[15px]" })}
               </span>
               {!collapsed ? (
                 <span className="min-w-0 truncate pr-1">{item.label}</span>

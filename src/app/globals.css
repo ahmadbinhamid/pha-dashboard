@@ -37,6 +37,27 @@
   --color-ok: hsl(var(--ok));
   --color-ok-fg: hsl(var(--ok-fg));
 
+  /* Muted surface + text hierarchy */
+  --color-muted: hsl(var(--muted));
+  --color-muted-fg: hsl(var(--muted-fg));
+  --color-content-secondary: hsl(var(--content-secondary));
+  --color-content-tertiary: hsl(var(--content-tertiary));
+
+  /* Form field states */
+  --color-field-hover: hsl(var(--field-hover));
+
+  /* Status tag pills — bg/text pairs, distinct from banner tones (--warn etc) */
+  --color-tag-success-bg: hsl(var(--tag-success-bg));
+  --color-tag-success-fg: hsl(var(--tag-success-fg));
+  --color-tag-danger-bg: hsl(var(--tag-danger-bg));
+  --color-tag-danger-fg: hsl(var(--tag-danger-fg));
+  --color-tag-warn-bg: hsl(var(--tag-warn-bg));
+  --color-tag-warn-fg: hsl(var(--tag-warn-fg));
+  --color-tag-info-bg: hsl(var(--tag-info-bg));
+  --color-tag-info-fg: hsl(var(--tag-info-fg));
+  --color-tag-neutral-bg: hsl(var(--tag-neutral-bg));
+  --color-tag-neutral-fg: hsl(var(--tag-neutral-fg));
+
   /* Spacing */
   --spacing-page: 0.5rem;
   --spacing-section: 1rem;
@@ -62,6 +83,8 @@
     0 20px 50px -20px rgba(59, 130, 246, 0.25);
   --shadow-glow-gold: 0 0 0 1px rgba(200, 162, 74, 0.2),
     0 20px 40px -24px rgba(200, 162, 74, 0.15);
+  --shadow-input: 0 1px 2px 0 hsl(var(--fg) / 0.05);
+  --shadow-input-focus: 0 0 0 3px hsl(var(--accent) / 0.16), 0 1px 2px 0 hsl(var(--fg) / 0.05);
 
   /* Animations */
   --animate-marquee: marquee 45s linear infinite;
@@ -124,6 +147,27 @@
   --warn-fg: 0 0% 8%;
   --ok: 142 71% 45%;
   --ok-fg: 0 0% 100%;
+
+  /* Muted surface + text hierarchy */
+  --muted: var(--bg-2);
+  --muted-fg: var(--fg-2);
+  --content-secondary: var(--fg-2);
+  --content-tertiary: 215 14% 58%;
+
+  /* Form field states */
+  --field-hover: var(--bg-2);
+
+  /* Status tag pills */
+  --tag-success-bg: 161 75% 92%;
+  --tag-success-fg: 160 69% 32%;
+  --tag-danger-bg: 4 90% 95%;
+  --tag-danger-fg: 4 70% 45%;
+  --tag-warn-bg: 48 96% 89%;
+  --tag-warn-fg: 32 80% 32%;
+  --tag-info-bg: 213 94% 94%;
+  --tag-info-fg: 217 80% 40%;
+  --tag-neutral-bg: var(--bg-2);
+  --tag-neutral-fg: var(--fg-2);
 }
 
 .dark {
@@ -155,6 +199,27 @@
   --warn-fg: 0 0% 8%;
   --ok: 142 65% 48%;
   --ok-fg: 0 0% 100%;
+
+  /* Muted surface + text hierarchy */
+  --muted: var(--bg-2);
+  --muted-fg: var(--fg-2);
+  --content-secondary: var(--fg-2);
+  --content-tertiary: 217 10% 50%;
+
+  /* Form field states */
+  --field-hover: var(--bg-2);
+
+  /* Status tag pills */
+  --tag-success-bg: 160 45% 18%;
+  --tag-success-fg: 160 84% 65%;
+  --tag-danger-bg: 4 45% 20%;
+  --tag-danger-fg: 4 90% 75%;
+  --tag-warn-bg: 32 55% 18%;
+  --tag-warn-fg: 45 90% 65%;
+  --tag-info-bg: 213 55% 20%;
+  --tag-info-fg: 213 85% 72%;
+  --tag-neutral-bg: var(--bg-2);
+  --tag-neutral-fg: var(--fg-2);
 }
 
 /* ─── Storefront — black/gold luxury theme ───────────────────────────────── */
@@ -250,6 +315,28 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--fg-2) / 0.4);
+}
+
+/* ─── Data table — sticky first column ───────────────────────────────────── */
+/* A sticky cell needs an opaque background (it sits above scrolling
+   siblings) — color-mix blends the table-header tint with the card color so
+   it can't be expressed as a plain Tailwind utility. The vertical divider is
+   drawn as an inset box-shadow rather than a border so it can't be clipped
+   or doubled by the sticky positioning. */
+.sticky-col-header {
+  background-color: color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card)));
+}
+.sticky-col-cell {
+  background-color: hsl(var(--card));
+}
+.group:hover .sticky-col-cell {
+  background-color: color-mix(in srgb, hsl(var(--muted)) 40%, hsl(var(--card)));
+}
+.sticky-col-separator-right {
+  box-shadow: inset -1px 0 0 0 hsl(var(--border));
+}
+.sticky-col-separator-left {
+  box-shadow: inset 1px 0 0 0 hsl(var(--border));
 }
 
 /* ─── Focus ring ─────────────────────────────────────────────────────────── */

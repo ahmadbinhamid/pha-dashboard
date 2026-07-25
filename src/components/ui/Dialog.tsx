@@ -1,8 +1,8 @@
 
 import { useEffect } from "react";
+import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Button } from "@/components/ui/Button";
-import { Icons } from "@/components/ui/Icons";
 
 export function Dialog({
   open,
@@ -72,7 +72,7 @@ export function Dialog({
         >
           <div className="min-w-0 truncate text-sm font-semibold">{title}</div>
           <Button variant="ghost" size="sm" className="shrink-0" onClick={onClose} aria-label="Close">
-            <Icons.X />
+            <X className="h-4 w-4" />
           </Button>
         </div>
         <div

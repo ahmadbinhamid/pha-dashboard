@@ -5,11 +5,14 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { ManageColumns } from "@/components/ui/ManageColumns";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders } from "@/lib/api/orders";
+import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { Order, OrderStatus, OrderChannel } from "@/types/orders";
@@ -32,20 +35,21 @@ const CHANNEL_FILTERS: { label: string; value: OrderChannel | "" }[] = [
   { label: "eBay", value: "ebay" },
 ];
 
-const TABLE_HEADERS = [
-  { label: "Order", align: "left" },
-  { label: "Customer", align: "left" },
-  { label: "Channel", align: "left" },
-  { label: "Items", align: "right" },
-  { label: "Total", align: "right" },
-  { label: "Status", align: "left" },
-  { label: "Date", align: "right" },
-  { label: "Actions", align: "right" },
+// Order ID (sticky) and Actions are structural, not part of this list — every
+// other column can be hidden via "Manage Columns", persisted per browser.
+const ORDER_COLUMNS: ColumnDef[] = [
+  { key: "customer", label: "Customer", alwaysVisible: true },
+  { key: "channel", label: "Channel" },
+  { key: "items", label: "Items" },
+  { key: "total", label: "Total" },
+  { key: "status", label: "Status" },
+  { key: "date", label: "Date" },
 ];
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { visibility, toggleColumn, isVisible } = useColumnVisibility("orders", ORDER_COLUMNS);
 
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
@@ -136,83 +140,98 @@ export default function OrdersPage() {
         description={total > 0 ? `${total} order${total !== 1 ? "s" : ""}` : "Orders from your storefront and eBay"}
       />
 
-      <Card>
-        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 pointer-events-none text-fg/40" />
-            <Input
-              placeholder="Search order #, name, email…"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              className="pl-9"
-            />
+      <Card className="overflow-hidden">
+        {/* Filter bar — search, selects, and Manage Columns all in one row above the table */}
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="relative min-w-48 flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40" />
+              <Input
+                placeholder="Search order #, name, email…"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                className="pl-9"
+                size="sm"
+              />
+            </div>
+            <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} className="h-9" />
+            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} className="h-9" />
+            {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
           </div>
 
-          <div className="flex items-center gap-3">
-            {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
-            <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} />
-            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
-          </div>
+          <ManageColumns columns={ORDER_COLUMNS} visibility={visibility} onToggle={toggleColumn} />
         </div>
 
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : orders.length === 0 ? (
-            <EmptyState search={search} />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  {TABLE_HEADERS.map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-fg/45 ${
-                        h.align === "right" ? "text-right" : "text-left"
-                      } first:px-5`}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : orders.length === 0 ? (
+          <EmptyState search={search} />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-200">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-36 sticky-col-header sticky-col-separator-right">
+                    Order
+                  </TableHead>
+                  {isVisible("customer") && <TableHead className="min-w-44">Customer</TableHead>}
+                  {isVisible("channel") && <TableHead>Channel</TableHead>}
+                  {isVisible("items") && <TableHead className="text-right">Items</TableHead>}
+                  {isVisible("total") && <TableHead className="text-right">Total</TableHead>}
+                  {isVisible("status") && <TableHead>Status</TableHead>}
+                  {isVisible("date") && <TableHead className="text-right">Date</TableHead>}
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {orders.map((order) => {
                   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
                   return (
-                    <tr
+                    <TableRow
                       key={order._id}
-                      className="cursor-pointer transition hover:bg-bg-2/40"
+                      className="group cursor-pointer"
                       onClick={() => navigate(`/orders/${order._id}`)}
                     >
-                      <td className="px-5 py-3.5 font-medium text-fg">{order.order_number}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="text-fg">{order.customer.name}</div>
-                        <div className="text-xs text-fg/50">{order.customer.email}</div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <OrderChannelBadge channel={order.channel} />
-                      </td>
-                      <td className="px-4 py-3.5 text-right text-fg/60">{itemCount}</td>
-                      <td className="px-4 py-3.5 text-right text-fg">{formatCurrencyFromCents(order.total)}</td>
-                      <td className="px-4 py-3.5">
-                        <OrderStatusBadge status={order.status} />
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-fg/60">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                        {order.order_number}
+                      </TableCell>
+                      {isVisible("customer") && (
+                        <TableCell className="max-w-52">
+                          <div className="truncate text-fg">{order.customer.name}</div>
+                          <div className="truncate text-xs text-fg/50">{order.customer.email}</div>
+                        </TableCell>
+                      )}
+                      {isVisible("channel") && (
+                        <TableCell>
+                          <OrderChannelBadge channel={order.channel} />
+                        </TableCell>
+                      )}
+                      {isVisible("items") && <TableCell className="text-right text-fg/60">{itemCount}</TableCell>}
+                      {isVisible("total") && (
+                        <TableCell className="text-right text-fg">{formatCurrencyFromCents(order.total)}</TableCell>
+                      )}
+                      {isVisible("status") && (
+                        <TableCell>
+                          <OrderStatusBadge status={order.status} />
+                        </TableCell>
+                      )}
+                      {isVisible("date") && (
+                        <TableCell className="text-right text-fg/60">
+                          {new Date(order.created_at).toLocaleDateString()}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <OrderRowActionsMenu onView={() => navigate(`/orders/${order._id}`)} />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

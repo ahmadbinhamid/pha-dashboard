@@ -17,9 +17,9 @@ const inputSizes: Record<InputSize, string> = {
 };
 
 const inputVariants: Record<InputVariant, string> = {
-  default: "border border-border bg-bg text-fg shadow-sm",
-  ghost: "border border-transparent bg-transparent text-fg hover:bg-bg-2/50",
-  filled: "border border-transparent bg-bg-2 text-fg",
+  default: "border border-border bg-card text-fg shadow-(--shadow-input)",
+  ghost: "border border-transparent bg-transparent text-fg hover:bg-field-hover/50",
+  filled: "border border-transparent bg-field-hover text-fg",
 };
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
@@ -30,9 +30,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
     <input
       ref={ref}
       className={cn(
-        "w-full rounded-xs outline-none transition",
+        "w-full rounded-md outline-none! transition-shadow duration-150",
         "placeholder:text-fg/45",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        "focus-visible:ring-2 focus-visible:ring-accent/45",
         "disabled:cursor-not-allowed disabled:opacity-50",
         inputSizes[size],
         inputVariants[variant],

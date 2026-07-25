@@ -15,6 +15,7 @@ import {
   ModalDescription,
 } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { useToast } from "@/context";
 import {
   getCategories,
@@ -209,54 +210,49 @@ export default function CategoriesPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : categories.length === 0 ? (
-            <EmptyState search={search} onNew={openCreate} />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  <th className="w-px px-5 py-3" />
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : categories.length === 0 ? (
+          <EmptyState search={search} onNew={openCreate} />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-160">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
                     Name
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Slug
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Description
-                  </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {categories.map((category) => (
-                  <tr key={category._id} className="transition hover:bg-bg-2/50">
-                    <td className="px-5 py-3">
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
-                        {category.thumbnail?.url ? (
-                          <img
-                            src={category.thumbnail.url}
-                            alt={category.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Layers className="h-5 w-5 text-fg/25" />
-                          </div>
-                        )}
+                  <TableRow key={category._id} className="group">
+                    <TableCell className="sticky left-0 z-1 max-w-52 sticky-col-cell sticky-col-separator-right">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
+                          {category.thumbnail?.url ? (
+                            <img
+                              src={category.thumbnail.url}
+                              alt={category.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Layers className="h-5 w-5 text-fg/25" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1 truncate font-medium text-fg">{category.name}</span>
                       </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-fg">{category.name}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-fg/55">{category.slug}</td>
-                    <td className="max-w-xs truncate px-4 py-3 text-fg/55">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-fg/55">{category.slug}</TableCell>
+                    <TableCell className="max-w-xs truncate text-fg/55">
                       {category.description || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(category)}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -265,13 +261,13 @@ export default function CategoriesPage() {
                           <Trash2 className="h-3.5 w-3.5 text-danger" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

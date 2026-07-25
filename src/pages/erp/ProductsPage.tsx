@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
 import {
   Modal,
   ModalContent,
@@ -31,18 +32,6 @@ const STATUS_FILTERS = [
   { label: "Active", value: "active" },
   { label: "Draft", value: "draft" },
 ];
-
-const TABLE_HEADERS = [
-  { label: "Product", align: "left" },
-  { label: "Status", align: "left" },
-  { label: "Online", align: "left" },
-  { label: "Stock", align: "left" },
-  { label: "Channels", align: "left" },
-  { label: "Price", align: "right" },
-  { label: "Created", align: "right" },
-  { label: "Actions", align: "right" },
-];
-
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
@@ -235,31 +224,31 @@ export default function ProductsPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : products.length === 0 ? (
-            <EmptyState
-              search={search}
-              onNew={() => navigate("/products/new")}
-            />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  {TABLE_HEADERS.map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-fg/45 ${
-                        h.align === "right" ? "text-right" : "text-left"
-                      } first:px-5`}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : products.length === 0 ? (
+          <EmptyState
+            search={search}
+            onNew={() => navigate("/products/new")}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-240">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-64 sticky-col-header sticky-col-separator-right">
+                    Product
+                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Online</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Channels</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {products.map((product) => (
                   <ProductRow
                     key={product._id}
@@ -273,10 +262,10 @@ export default function ProductsPage() {
                     }
                   />
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

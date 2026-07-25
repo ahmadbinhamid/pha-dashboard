@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import {
   Modal,
   ModalContent,
@@ -33,15 +34,6 @@ const SYNC_STATUS_FILTERS = [
   { label: "Pending", value: "pending" },
   { label: "Error", value: "error" },
   { label: "Not listed", value: "not_listed" },
-];
-
-const TABLE_HEADERS = [
-  { label: "Product", align: "left" },
-  { label: "Platform", align: "left" },
-  { label: "SKU", align: "left" },
-  { label: "Status", align: "left" },
-  { label: "Last Synced", align: "left" },
-  { label: "Actions", align: "right" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -164,28 +156,26 @@ export default function ListingsPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : listings.length === 0 ? (
-            <EmptyState onNew={() => setPickerOpen(true)} />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  {TABLE_HEADERS.map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-fg/45 first:px-5 ${
-                        h.align === "right" ? "text-right" : "text-left"
-                      }`}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : listings.length === 0 ? (
+          <EmptyState onNew={() => setPickerOpen(true)} />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-180">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
+                    Product
+                  </TableHead>
+                  <TableHead>Platform</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Synced</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {listings.map((listing) => {
                   const productObj =
                     listing.product !== null && typeof listing.product === "object"
@@ -198,23 +188,25 @@ export default function ListingsPage() {
                     : "—";
 
                   return (
-                    <tr
+                    <TableRow
                       key={listing._id}
-                      className="cursor-pointer transition-colors hover:bg-bg-2/30"
+                      className="group cursor-pointer"
                       onClick={() => navigate(`/listings/${listing._id}/edit`)}
                     >
-                      <td className="px-5 py-3 font-medium text-fg">{productTitle}</td>
-                      <td className="px-4 py-3">
+                      <TableCell className="sticky left-0 z-1 max-w-52 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                        {productTitle}
+                      </TableCell>
+                      <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {listing.platform}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-fg/60">{sku}</td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell className="text-fg/60">{sku}</TableCell>
+                      <TableCell>
                         <SyncBadge status={listing.sync_status} />
-                      </td>
-                      <td className="px-4 py-3 text-fg/60">{syncedAt}</td>
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      </TableCell>
+                      <TableCell className="text-fg/60">{syncedAt}</TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <ListingRowActionsMenu
                             onPush={() => pushMutation.mutate(listing._id)}
@@ -224,14 +216,14 @@ export default function ListingsPage() {
                             ebayItemUrl={listing.ebay_item_url}
                           />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

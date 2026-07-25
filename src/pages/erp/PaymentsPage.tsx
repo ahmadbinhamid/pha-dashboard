@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
@@ -20,16 +21,6 @@ const STATUS_FILTERS: { label: string; value: PaymentStatus | "" }[] = [
   { label: "Succeeded", value: "succeeded" },
   { label: "Failed", value: "failed" },
   { label: "Canceled", value: "canceled" },
-];
-
-const TABLE_HEADERS = [
-  { label: "Order", align: "left" },
-  { label: "Customer", align: "left" },
-  { label: "Amount", align: "right" },
-  { label: "Refunded", align: "right" },
-  { label: "Status", align: "left" },
-  { label: "Date", align: "right" },
-  { label: "Actions", align: "right" },
 ];
 
 export default function PaymentsPage() {
@@ -98,63 +89,64 @@ export default function PaymentsPage() {
           {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
         </div>
 
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : payments.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  {TABLE_HEADERS.map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-fg/45 ${
-                        h.align === "right" ? "text-right" : "text-left"
-                      } first:px-5`}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : payments.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-180">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-36 sticky-col-header sticky-col-separator-right">
+                    Order
+                  </TableHead>
+                  <TableHead className="min-w-44">Customer</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Refunded</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {payments.map((payment) => {
                   const order = typeof payment.order === "object" ? payment.order : null;
                   return (
-                    <tr
+                    <TableRow
                       key={payment._id}
-                      className="cursor-pointer transition hover:bg-bg-2/40"
+                      className="group cursor-pointer"
                       onClick={() => setSelected(payment)}
                     >
-                      <td className="px-5 py-3.5 font-medium text-fg">{order?.order_number ?? "—"}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="text-fg">{order?.customer.name ?? "—"}</div>
-                        <div className="text-xs text-fg/50">{order?.customer.email ?? ""}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-right text-fg">{formatCurrencyFromCents(payment.amount)}</td>
-                      <td className="px-4 py-3.5 text-right text-fg/60">
+                      <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                        {order?.order_number ?? "—"}
+                      </TableCell>
+                      <TableCell className="max-w-52">
+                        <div className="truncate text-fg">{order?.customer.name ?? "—"}</div>
+                        <div className="truncate text-xs text-fg/50">{order?.customer.email ?? ""}</div>
+                      </TableCell>
+                      <TableCell className="text-right text-fg">{formatCurrencyFromCents(payment.amount)}</TableCell>
+                      <TableCell className="text-right text-fg/60">
                         {payment.amount_refunded > 0 ? formatCurrencyFromCents(payment.amount_refunded) : "—"}
-                      </td>
-                      <td className="px-4 py-3.5">
+                      </TableCell>
+                      <TableCell>
                         <PaymentStatusBadge status={payment.status} />
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-fg/60">
+                      </TableCell>
+                      <TableCell className="text-right text-fg/60">
                         {new Date(payment.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <PaymentRowActionsMenu onView={() => setSelected(payment)} />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

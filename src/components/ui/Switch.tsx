@@ -46,7 +46,7 @@ export function Switch({
         onClick={() => onCheckedChange(!checked)}
         className={cn(
           "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+          "outline-none! focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           "disabled:pointer-events-none disabled:opacity-50",
           checked ? "bg-accent" : "bg-fg/20",
         )}

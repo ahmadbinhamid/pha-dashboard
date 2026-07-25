@@ -14,9 +14,9 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-xs border border-border bg-bg px-3 py-2 text-sm shadow-sm",
-      "placeholder:text-fg/45 text-fg",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+      "flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input)",
+      "placeholder:text-fg/45 text-fg transition-shadow duration-150",
+      "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "[&>span]:line-clamp-1",
       className,
@@ -67,7 +67,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-32 overflow-hidden rounded-xs border border-border bg-bg text-fg shadow-lg",
+        "relative z-50 max-h-96 min-w-32 overflow-hidden rounded-md border border-border bg-card text-fg shadow-lg",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
@@ -153,8 +153,8 @@ const NativeSelect = React.forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "flex h-10 w-full appearance-none rounded-xs border border-border bg-bg px-3 py-2 text-sm shadow-sm",
-      "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-bg",
+      "flex h-10 w-full appearance-none rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input) transition-shadow duration-150",
+      "outline-none! focus:ring-2 focus:ring-accent/45",
       "disabled:cursor-not-allowed disabled:opacity-50",
       value === "" || value === undefined ? "text-fg/45" : "text-fg",
       className,

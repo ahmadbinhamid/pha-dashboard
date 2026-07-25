@@ -1,2 +1,3 @@
 export * from "./useRouter";
 export * from "./usePathname";
+export * from "./useColumnVisibility";

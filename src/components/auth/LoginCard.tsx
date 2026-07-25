@@ -6,8 +6,8 @@ import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
 import { useOrgSettings } from "@/context";
 
+import { ArrowRight } from "lucide-react";
 import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
-import { Icons } from "@/components/ui/Icons";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -211,7 +211,7 @@ export function LoginCard() {
                 >
                   {isLoadingLogin ? "Signing in…" : "Continue"}
                   <span className="ml-2 opacity-80">
-                    <Icons.ArrowRight />
+                    <ArrowRight className="h-4 w-4" />
                   </span>
                 </Button>
 

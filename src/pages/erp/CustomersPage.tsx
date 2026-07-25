@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadge";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
@@ -13,16 +14,6 @@ import { getCustomers } from "@/lib/api/customers";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { Customer } from "@/types/customer";
 import { Plus, Users, Pencil, Trash2, Search } from "lucide-react";
-
-const TABLE_HEADERS = [
-  { label: "Name", align: "left" },
-  { label: "Phone", align: "left" },
-  { label: "Orders", align: "right" },
-  { label: "Outstanding", align: "right" },
-  { label: "Account", align: "left" },
-  { label: "Created", align: "right" },
-  { label: "Actions", align: "right" },
-];
 
 export default function CustomersPage() {
   const navigate = useNavigate();
@@ -114,54 +105,53 @@ export default function CustomersPage() {
           {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
         </div>
 
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : customers.length === 0 ? (
-            <EmptyState search={search} onNew={openCreate} />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg-2/40">
-                  {TABLE_HEADERS.map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-fg/45 ${
-                        h.align === "right" ? "text-right" : "text-left"
-                      } first:px-5`}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : customers.length === 0 ? (
+          <EmptyState search={search} onNew={openCreate} />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="min-w-200">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
+                    Name
+                  </TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead className="text-right">Orders</TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead className="text-right">Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {customers.map((customer) => (
-                  <tr
+                  <TableRow
                     key={customer._id}
-                    className="cursor-pointer transition hover:bg-bg-2/40"
+                    className="group cursor-pointer"
                     onClick={() => navigate(`/customers/${customer._id}`)}
                   >
-                    <td className="px-5 py-3.5">
-                      <div className="font-medium text-fg">{customer.name}</div>
-                      <div className="text-xs text-fg/50">{customer.email || "—"}</div>
-                    </td>
-                    <td className="px-4 py-3.5 text-fg/60">{customer.phone || "—"}</td>
-                    <td className="px-4 py-3.5 text-right text-fg/60">{customer.orders_count}</td>
-                    <td className="px-4 py-3.5 text-right text-fg/60">
+                    <TableCell className="sticky left-0 z-1 max-w-52 sticky-col-cell sticky-col-separator-right">
+                      <div className="truncate font-medium text-fg">{customer.name}</div>
+                      <div className="truncate text-xs text-fg/50">{customer.email || "—"}</div>
+                    </TableCell>
+                    <TableCell className="text-fg/60">{customer.phone || "—"}</TableCell>
+                    <TableCell className="text-right text-fg/60">{customer.orders_count}</TableCell>
+                    <TableCell className="text-right text-fg/60">
                       {customer.outstanding_invoices_count > 0 ? (
                         <span className="font-medium text-danger">{customer.outstanding_invoices_count}</span>
                       ) : (
                         "—"
                       )}
-                    </td>
-                    <td className="px-4 py-3.5">
+                    </TableCell>
+                    <TableCell>
                       <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} />
-                    </td>
-                    <td className="px-5 py-3.5 text-right text-fg/60">
+                    </TableCell>
+                    <TableCell className="text-right text-fg/60">
                       {new Date(customer.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(customer)}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -170,13 +160,13 @@ export default function CustomersPage() {
                           <Trash2 className="h-3.5 w-3.5 text-danger" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <Pagination
           currentPage={page}

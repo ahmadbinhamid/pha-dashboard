@@ -1,7 +1,7 @@
 
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect as Select } from "@/components/ui/Select";
-import { Icons } from "@/components/ui/Icons";
 import { MAKES } from "@/config/vehicleMakes";
 import type { EbayFilter, InventorySearchQuery } from "@/config/inventoryFilters";
 
@@ -26,7 +26,7 @@ export function InventorySearchFields({
       {showQueryField ? (
         <div className="relative">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg/40">
-            <Icons.Search />
+            <Search className="h-4 w-4" />
           </span>
           <Input
             id={queryId}

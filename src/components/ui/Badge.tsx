@@ -3,11 +3,10 @@ import { cn } from "@/utils/cn";
 type BadgeVariant = "default" | "ok" | "warn" | "danger" | "muted" | "outline";
 
 const styles: Record<BadgeVariant, string> = {
-  default: "bg-bg-2 text-fg ring-1 ring-inset ring-border",
-  ok: "bg-[hsl(var(--ok))]/12 text-[hsl(var(--ok))] ring-1 ring-inset ring-[hsl(var(--ok))]/25",
-  warn: "bg-[hsl(var(--warn))]/14 text-[hsl(var(--warn))] ring-1 ring-inset ring-[hsl(var(--warn))]/25",
-  danger:
-    "bg-[hsl(var(--danger))]/14 text-[hsl(var(--danger))] ring-1 ring-inset ring-[hsl(var(--danger))]/25",
+  default: "bg-muted text-fg ring-1 ring-inset ring-border",
+  ok: "bg-tag-success-bg text-tag-success-fg",
+  warn: "bg-tag-warn-bg text-tag-warn-fg",
+  danger: "bg-tag-danger-bg text-tag-danger-fg",
   muted: "bg-transparent text-fg/65 ring-1 ring-inset ring-border",
   outline: "bg-transparent text-fg ring-1 ring-inset ring-border",
 };

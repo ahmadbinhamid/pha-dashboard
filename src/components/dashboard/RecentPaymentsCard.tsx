@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/Card";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import Link from "@/components/ui/Link";
@@ -32,47 +33,43 @@ export function RecentPaymentsCard({
           <div className="py-6 text-center text-sm text-fg/45">No payments yet</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
+            <Table className="min-w-100">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-2 h-8 min-w-28 px-2 sticky-col-header sticky-col-separator-right">
                     Order
-                  </th>
-                  <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Customer
-                  </th>
-                  <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Amount
-                  </th>
-                  <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Status
-                  </th>
-                  <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-fg/45">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                  <TableHead className="h-8 px-2">Customer</TableHead>
+                  <TableHead className="h-8 px-2 text-right">Amount</TableHead>
+                  <TableHead className="h-8 px-2">Status</TableHead>
+                  <TableHead className="h-8 px-2 text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {payments.map((payment) => {
                   const order = typeof payment.order === "object" ? payment.order : null;
                   return (
-                    <tr key={payment._id}>
-                      <td className="px-2 py-2.5 font-medium text-fg">{order?.order_number ?? "—"}</td>
-                      <td className="px-2 py-2.5 text-fg/70">{order?.customer.name ?? "—"}</td>
-                      <td className="px-2 py-2.5 text-right text-fg">
+                    <TableRow key={payment._id} className="group">
+                      <TableCell className="sticky left-0 z-1 max-w-28 truncate px-2 py-2.5 font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                        {order?.order_number ?? "—"}
+                      </TableCell>
+                      <TableCell className="max-w-36 truncate px-2 py-2.5 text-fg/70">
+                        {order?.customer.name ?? "—"}
+                      </TableCell>
+                      <TableCell className="px-2 py-2.5 text-right text-fg">
                         {formatCurrencyFromCents(payment.amount)}
-                      </td>
-                      <td className="px-2 py-2.5">
+                      </TableCell>
+                      <TableCell className="px-2 py-2.5">
                         <PaymentStatusBadge status={payment.status} />
-                      </td>
-                      <td className="px-2 py-2.5 text-right text-fg/55">
+                      </TableCell>
+                      <TableCell className="px-2 py-2.5 text-right text-fg/55">
                         {new Date(payment.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </CardContent>

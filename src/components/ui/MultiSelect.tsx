@@ -60,10 +60,10 @@ export function MultiSelect({
           type="button"
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-xs border border-border bg-bg px-3 py-2 text-sm shadow-sm",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+            "flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input)",
+            "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            "transition",
+            "transition-shadow duration-150",
             className,
           )}
         >
@@ -105,37 +105,39 @@ export function MultiSelect({
           align="start"
           sideOffset={4}
           className={cn(
-            "z-50 w-(--radix-popover-trigger-width) overflow-hidden rounded-xs border border-border bg-bg shadow-lg",
+            "z-50 w-(--radix-popover-trigger-width) overflow-hidden rounded-md border border-border bg-card shadow-lg",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           )}
         >
           {/* Search */}
           {options.length > 5 && (
-            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
-              <input
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-fg/40"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="text-fg/40 transition hover:text-fg"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
+            <div className="p-2">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 h-9 transition-shadow duration-150 focus-within:ring-2 focus-within:ring-accent/45">
+                <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="flex-1 bg-transparent text-sm outline-none! placeholder:text-fg/40"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="text-fg/40 transition hover:text-fg"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
           {/* Options list */}
           <div
-            className="overflow-y-auto p-1"
+            className={cn("overflow-y-auto p-1", options.length > 5 && "pt-0")}
             style={{ maxHeight }}
           >
             {filtered.length === 0 ? (
@@ -151,21 +153,18 @@ export function MultiSelect({
                     type="button"
                     onClick={() => toggle(opt.value)}
                     className={cn(
-                      "flex w-full items-center gap-2.5 rounded-xs px-2 py-1.5 text-sm outline-none transition",
-                      "hover:bg-accent/8 focus-visible:bg-accent/8",
-                      selected && "text-fg",
-                      !selected && "text-fg/70",
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+                      selected ? "bg-accent/10" : "hover:bg-muted/70",
+                      selected ? "text-fg" : "text-fg/75",
                     )}
                   >
                     <div
                       className={cn(
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border transition",
-                        selected
-                          ? "border-accent bg-accent text-accent-fg"
-                          : "border-border bg-bg",
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border-[1.5px] transition-colors",
+                        selected ? "border-accent bg-accent text-accent-fg" : "border-border bg-card",
                       )}
                     >
-                      {selected && <Check className="h-2.5 w-2.5" />}
+                      {selected && <Check className="h-3 w-3" strokeWidth={3} />}
                     </div>
                     <span className="truncate">{opt.label}</span>
                   </button>
