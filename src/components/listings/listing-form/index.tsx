@@ -27,6 +27,7 @@ import {
 } from "@/lib/validation/ebayListing";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
+import type { ProductVehicle } from "@/types/product";
 import { Textarea } from "@/components/ui/Textarea";
 import { AlertCircle, Cloud } from "lucide-react";
 import { Section } from "@/components/listings/listing-form/Section";
@@ -39,6 +40,11 @@ interface ListingFormProps {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   listing?: EbayListing | null;
+  // The listed product's own vehicle data, fetched live by the page —
+  // Technical Specifications always reads this directly, never a copy
+  // stored in form state, so it can never go stale or drift from the
+  // Product page's own make/model/year fields.
+  productVehicle?: ProductVehicle | null;
   onSaveDraft: () => void;
   onPush: () => void;
   saving: boolean;
@@ -51,6 +57,7 @@ export function ListingForm({
   form,
   onChange,
   listing,
+  productVehicle,
   onSaveDraft,
   onPush,
   saving,
@@ -225,7 +232,7 @@ export function ListingForm({
               rows={6}
             />
           </FormField>
-          <EbayDescriptionSection form={form} />
+          <EbayDescriptionSection form={form} vehicle={productVehicle} />
         </div>
       </Section>
 

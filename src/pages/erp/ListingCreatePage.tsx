@@ -39,11 +39,6 @@ export default function ListingCreatePage() {
       store_sku: p.sku || "",
       price_override: p.price != null ? String(p.price) : "",
       photo_overrides: p.attachments ?? [],
-      vehicle_make: p.vehicle?.make || "",
-      vehicle_model: p.vehicle?.model || "",
-      vehicle_model_code: p.vehicle?.model_code || "",
-      vehicle_year: p.vehicle?.year_from != null ? String(p.vehicle.year_from) : "",
-      vehicle_year_to: p.vehicle?.year_to != null ? String(p.vehicle.year_to) : "",
       condition: p.condition || prev.condition,
       item_specifics: {
         ...prev.item_specifics,
@@ -57,8 +52,10 @@ export default function ListingCreatePage() {
     setForm((prev) => ({ ...prev, ...patch }));
   }
 
+  const productVehicle = productData?.data?.vehicle ?? null;
+
   const createMutation = useMutation({
-    mutationFn: createListing,
+    mutationFn: (f: EbayListingFormState) => createListing(f, productVehicle),
     onSuccess: (res) => {
       toast({ title: "Listing saved", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -71,7 +68,7 @@ export default function ListingCreatePage() {
 
   const pushMutation = useMutation({
     mutationFn: async () => {
-      const res = await createListing(form);
+      const res = await createListing(form, productVehicle);
       await pushListing(res.data._id);
       return res;
     },
@@ -105,6 +102,7 @@ export default function ListingCreatePage() {
         form={form}
         onChange={patchForm}
         listing={null}
+        productVehicle={productVehicle}
         onSaveDraft={() => createMutation.mutate(form)}
         onPush={() => pushMutation.mutate()}
         saving={createMutation.isPending}

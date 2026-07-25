@@ -33,11 +33,23 @@ export interface PackageDimensions {
   weight: number | null;
 }
 
+export interface MarketplaceListingProduct {
+  _id: string;
+  title: string;
+  slug: string;
+  sku: string | null;
+  price: number;
+  // Present when the backend populates it (see ebay.listing.service.js's
+  // "product" populate field list) — the listing's Technical Specifications
+  // always reads this live, never a copy stored on the listing itself.
+  vehicle?: import("@/types/product").ProductVehicle | null;
+}
+
 export interface MarketplaceListing {
   _id: string;
   id: string;
   platform: MarketplacePlatform;
-  product: string | { _id: string; title: string; slug: string; sku: string | null; price: number };
+  product: string | MarketplaceListingProduct;
   variant: string | null | { _id: string; display_name: string; sku: string | null };
   title_override: string | null;
   description_override: string | null;
@@ -84,12 +96,10 @@ export interface EbayListingFormState {
   description_override: string;
   price_override: string;
   photo_overrides: import("@/types/product").Attachment[];
-  // Vehicle info (pre-populated from product for description generation)
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_model_code: string;
-  vehicle_year: string;
-  vehicle_year_to: string;
+  // Vehicle info is NOT part of the listing's own form state — the
+  // Technical Specifications section always reads the product's live
+  // `vehicle` field directly (see ebayDescriptionGenerator.ts), so it can
+  // never go stale or diverge from the Product page's own data.
   // eBay-specific
   ebay_category_id: string;
   store_category_id: string;
@@ -130,11 +140,6 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   description_override: "",
   price_override: "",
   photo_overrides: [],
-  vehicle_make: "",
-  vehicle_model: "",
-  vehicle_model_code: "",
-  vehicle_year: "",
-  vehicle_year_to: "",
   ebay_category_id: "",
   store_category_id: "",
   store_sku: "",

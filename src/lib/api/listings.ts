@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { ProductVehicle } from "@/types/product";
 import { generateListingHtml } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 export interface ListingListParams {
@@ -11,12 +12,12 @@ export interface ListingListParams {
   sync_status?: string;
 }
 
-function formStateToPayload(form: EbayListingFormState) {
+function formStateToPayload(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined) {
   return {
     product: form.product_id,
     variant: form.variant_id || null,
     title_override: form.title_override || null,
-    description_override: generateListingHtml(form),
+    description_override: generateListingHtml(form, vehicle),
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
@@ -59,10 +60,10 @@ function formStateToPayload(form: EbayListingFormState) {
   };
 }
 
-export const createListing = async (form: EbayListingFormState) => {
+export const createListing = async (form: EbayListingFormState, vehicle?: ProductVehicle | null) => {
   const { data } = await apiClient.post<BeResponse<EbayListing>>(
     "/ebay/listings",
-    formStateToPayload(form),
+    formStateToPayload(form, vehicle),
   );
   return data;
 };
@@ -80,11 +81,15 @@ export const getListing = async (id: string) => {
   return data;
 };
 
-export const updateListing = async (id: string, form: Partial<EbayListingFormState>) => {
+export const updateListing = async (
+  id: string,
+  form: Partial<EbayListingFormState>,
+  vehicle?: ProductVehicle | null,
+) => {
   const payload = form as EbayListingFormState;
   const { data } = await apiClient.put<BeResponse<EbayListing>>(
     `/ebay/listings/${id}`,
-    formStateToPayload(payload),
+    formStateToPayload(payload, vehicle),
   );
   return data;
 };

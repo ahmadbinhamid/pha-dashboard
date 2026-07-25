@@ -1,20 +1,18 @@
 import { useMemo } from "react";
 import type { EbayListingFormState } from "@/types/marketplace";
+import type { ProductVehicle } from "@/types/product";
 import { generateListingHtml } from "./ebayDescriptionGenerator";
 import { Eye } from "lucide-react";
 
 interface Props {
   form: EbayListingFormState;
+  vehicle: ProductVehicle | null | undefined;
 }
 
-export function EbayDescriptionSection({ form }: Props) {
-  const html = useMemo(() => generateListingHtml(form), [
+export function EbayDescriptionSection({ form, vehicle }: Props) {
+  const html = useMemo(() => generateListingHtml(form, vehicle), [
     form.title_override,
-    form.vehicle_make,
-    form.vehicle_model,
-    form.vehicle_model_code,
-    form.vehicle_year,
-    form.vehicle_year_to,
+    vehicle,
     form.item_specifics.mpn,
     form.store_sku,
     form.condition,

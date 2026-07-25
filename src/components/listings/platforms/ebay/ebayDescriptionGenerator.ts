@@ -1,4 +1,5 @@
 import type { EbayListingFormState } from "@/types/marketplace";
+import type { ProductVehicle } from "@/types/product";
 
 const CONDITION_LABEL: Record<string, string> = {
   NEW: "Brand New · Sealed",
@@ -15,13 +16,17 @@ function esc(s: string): string {
 
 const LOGO_SVG_INLINE = `<img src="https://admin.partshubaustralia.com.au/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">`;
 
-export function generateListingHtml(form: EbayListingFormState): string {
+// vehicle comes from the PRODUCT's own `vehicle` field, fetched fresh by the
+// caller (never a copy stored on the listing/form) — this is what guarantees
+// Technical Specifications always matches the Product page and is never
+// affected by the listing's own (unrelated) Vehicle Fitment compatibility list.
+export function generateListingHtml(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined): string {
   const title = esc(form.title_override.trim() || "Parts Hub Australia Product");
-  const make = esc(form.vehicle_make?.trim() || "—");
-  const model = esc(form.vehicle_model?.trim() || "—");
-  const series = esc(form.vehicle_model_code?.trim() || "—");
-  const yrFrom = form.vehicle_year?.trim() || "";
-  const yrTo = form.vehicle_year_to?.trim() || "";
+  const make = esc(vehicle?.make?.trim() || "—");
+  const model = esc(vehicle?.model?.trim() || "—");
+  const series = esc(vehicle?.model_code?.trim() || "—");
+  const yrFrom = vehicle?.year_from != null ? String(vehicle.year_from) : "";
+  const yrTo = vehicle?.year_to != null ? String(vehicle.year_to) : "";
   const yearRange = esc(yrFrom && yrTo ? `${yrFrom} – ${yrTo}` : yrFrom ? `${yrFrom} – Present` : "—");
   const mpn = esc(form.item_specifics.mpn.trim() || "—");
   const stockNumber = esc(form.store_sku.trim() || "—");

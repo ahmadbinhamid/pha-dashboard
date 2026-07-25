@@ -33,9 +33,6 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
   const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
   const pExt = p as unknown as Record<string, unknown>;
-  const pVehicle = pExt?.vehicle as
-    | { make?: string | null; model?: string | null; model_code?: string | null; year_from?: number | null; year_to?: number | null }
-    | undefined;
 
   return {
     product_id: productId,
@@ -46,11 +43,6 @@ function listingToForm(listing: EbayListing): EbayListingFormState {
       ? String(listing.price_override)
       : p?.price != null ? String(p.price) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
-    vehicle_make: pVehicle?.make || "",
-    vehicle_model: pVehicle?.model || "",
-    vehicle_model_code: pVehicle?.model_code || "",
-    vehicle_year: pVehicle?.year_from != null ? String(pVehicle.year_from) : "",
-    vehicle_year_to: pVehicle?.year_to != null ? String(pVehicle.year_to) : "",
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",
@@ -110,6 +102,10 @@ export default function ListingEditPage() {
 
   const listing = data?.data as EbayListing | undefined;
 
+  const listingProduct =
+    listing && listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+  const productVehicle = listingProduct?.vehicle ?? null;
+
   useEffect(() => {
     if (listing) setForm(listingToForm(listing));
   }, [listing]);
@@ -119,7 +115,7 @@ export default function ListingEditPage() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => updateListing(id!, form),
+    mutationFn: () => updateListing(id!, form, productVehicle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listing", id] });
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -130,7 +126,7 @@ export default function ListingEditPage() {
 
   const pushMutation = useMutation({
     mutationFn: async () => {
-      await updateListing(id!, form);
+      await updateListing(id!, form, productVehicle);
       await pushListing(id!);
     },
     onSuccess: () => {
@@ -184,6 +180,7 @@ export default function ListingEditPage() {
         form={form}
         onChange={patchForm}
         listing={listing}
+        productVehicle={productVehicle}
         onSaveDraft={() => saveMutation.mutate()}
         onPush={() => pushMutation.mutate()}
         saving={saveMutation.isPending}
