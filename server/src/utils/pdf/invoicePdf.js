@@ -302,7 +302,7 @@ function drawItemsTable(doc, order) {
   doc.fillColor(COLORS.text);
 }
 
-function drawPaymentAndTotals(doc, order) {
+function drawPaymentAndTotals(doc, order, totalPaidCents) {
   const startY = doc.y;
   const halfWidth = CONTENT_WIDTH / 2 - 14;
   const rightX = PAGE_MARGIN + halfWidth + 28;
@@ -359,11 +359,14 @@ function drawPaymentAndTotals(doc, order) {
   doc.fontSize(14).text(formatMoney(order.total), rightX + labelWidth, rowY - 2, { width: valueWidth, align: "right" });
   rowY += 22;
 
-  // Manual/in-store sales are the only ones that can be partially paid at
-  // creation time — Stripe orders are always paid in full or not at all, so
-  // this section only ever appears here.
+  // Manual/in-store sales are the only ones that can carry an outstanding
+  // balance — Stripe storefront/eBay orders are always paid in full or not
+  // at all by the time this is sent, so this section only ever appears here.
+  // totalPaidCents sums every succeeded Payment on the order (deposit +
+  // follow-up top-up, if any) — never just order.payment.amount, which only
+  // ever reflects the single most recently created Payment.
   if (order.channel === "manual") {
-    const amountPaid = order.payment?.amount || 0;
+    const amountPaid = totalPaidCents || 0;
     const amountDue = order.total - amountPaid;
     if (amountDue > 0) {
       doc.font(FONT).fontSize(9).fillColor(COLORS.muted).text("Amount Paid", rightX, rowY, { width: labelWidth });
@@ -399,7 +402,10 @@ function drawCardBorder(doc, bottomY) {
   doc.roundedRect(x, y, width, height, CARD_RADIUS).lineWidth(1.25).strokeColor(COLORS.border).stroke();
 }
 
-function buildInvoicePdfBuffer(order) {
+// totalPaidCents: sum of every succeeded Payment on the order (see
+// payment.service.js#getTotalPaidForOrder) — the caller computes this since
+// it requires a DB query this pure rendering function shouldn't make itself.
+function buildInvoicePdfBuffer(order, { totalPaidCents = 0 } = {}) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: PAGE_MARGIN });
     const chunks = [];
@@ -410,7 +416,7 @@ function buildInvoicePdfBuffer(order) {
     drawHeader(doc, order);
     drawPartiesBlock(doc, order);
     drawItemsTable(doc, order);
-    drawPaymentAndTotals(doc, order);
+    drawPaymentAndTotals(doc, order, totalPaidCents);
     drawCardBorder(doc, doc.y);
 
     doc.end();

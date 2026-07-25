@@ -94,6 +94,17 @@ exports.generatePaymentLink = async (req, res) => {
   }
 };
 
+exports.recordPayment = async (req, res) => {
+  try {
+    const order = await orderService.recordOrderPayment(req.params.id, req.body);
+    return created(res, order);
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.addOrderNote = async (req, res) => {
   try {
     const order = await orderService.addOrderNote(req.params.id, {

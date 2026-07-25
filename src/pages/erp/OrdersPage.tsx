@@ -18,6 +18,7 @@ import { Search, ShoppingCart } from "lucide-react";
 const STATUS_FILTERS: { label: string; value: OrderStatus | "" }[] = [
   { label: "All Status", value: "" },
   { label: "Pending Payment", value: "pending_payment" },
+  { label: "Partially Paid", value: "partially_paid" },
   { label: "Paid", value: "paid" },
   { label: "Fulfilled", value: "fulfilled" },
   { label: "Cancelled", value: "cancelled" },

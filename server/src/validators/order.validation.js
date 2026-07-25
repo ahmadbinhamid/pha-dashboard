@@ -2,7 +2,7 @@
 
 const Joi = require("joi");
 const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
-const { ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
+const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 
 const addressSchema = Joi.object({
   address: Joi.string().trim().min(1).required(),
@@ -132,6 +132,19 @@ const generatePaymentLink = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
 };
 
+// Records a follow-up cash/online-transfer payment against an order's
+// outstanding balance — see order.service.js#recordOrderPayment for the
+// remaining-balance check (can't be done here, it depends on DB state).
+const recordPayment = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    payment_method: Joi.string()
+      .valid(...Object.values(PAYMENT_METHOD))
+      .required(),
+    amount: Joi.number().greater(0).required(), // dollars
+  }),
+};
+
 const addOrderNote = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -150,5 +163,6 @@ module.exports = {
   sendOrderEmail,
   createManualOrder,
   generatePaymentLink,
+  recordPayment,
   addOrderNote,
 };

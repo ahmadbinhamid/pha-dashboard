@@ -2,6 +2,10 @@
 
 const ORDER_STATUS = Object.freeze({
   PENDING_PAYMENT: "pending_payment",
+  // Some, but not all, of the order total has been collected — e.g. a
+  // manual-sale deposit, with the remainder still due via cash/online
+  // transfer/payment link. See utils/paymentStatus.js#derivePaymentStatus.
+  PARTIALLY_PAID: "partially_paid",
   PAID: "paid",
   FULFILLED: "fulfilled",
   CANCELLED: "cancelled",

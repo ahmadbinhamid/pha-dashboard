@@ -21,7 +21,13 @@ async function getOrderStatsByCustomer(customerIds) {
         _id: "$customer_id",
         orders_count: { $sum: 1 },
         outstanding_invoices_count: {
-          $sum: { $cond: [{ $eq: ["$status", ORDER_STATUS.PENDING_PAYMENT] }, 1, 0] },
+          $sum: {
+            $cond: [
+              { $in: ["$status", [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID]] },
+              1,
+              0,
+            ],
+          },
         },
       },
     },
@@ -67,9 +73,12 @@ async function getCustomerById(id) {
   ]);
 
   const stats = statsMap.get(customer._id.toString());
-  // Outstanding invoices = this customer's orders still awaiting payment —
-  // there's no separate Invoice entity, an unpaid order IS the invoice.
-  const outstandingInvoices = orders.filter((order) => order.status === ORDER_STATUS.PENDING_PAYMENT);
+  // Outstanding invoices = this customer's orders still awaiting payment (in
+  // full or in part) — there's no separate Invoice entity, an unpaid or
+  // partially-paid order IS the invoice.
+  const outstandingInvoices = orders.filter((order) =>
+    [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status),
+  );
 
   return {
     ...customer.toObject(),

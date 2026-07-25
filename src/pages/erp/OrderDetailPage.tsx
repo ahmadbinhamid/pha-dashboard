@@ -222,7 +222,7 @@ export default function OrderDetailPage() {
                 <OrderPaymentSummaryCard
                   orderId={order._id}
                   orderStatus={order.status}
-                  payment={order.payment}
+                  payments={order.payments}
                   refunds={order.refunds}
                   total={order.total}
                   channel={order.channel}

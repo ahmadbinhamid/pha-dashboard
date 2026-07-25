@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type { Order, OrderAddress, OrderDeliveryMethod, OrderDetail } from "@/types/orders";
-import type { OrderPaymentChoice } from "@/types/payment";
+import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
 export interface OrderListParams {
   page?: number;
@@ -61,6 +61,18 @@ export const createManualOrder = async (payload: CreateManualOrderPayload) => {
 
 export const generatePaymentLink = async (orderId: string) => {
   const { data } = await apiClient.post<BeResponse<{ url: string }>>(`/order/${orderId}/payment-link`);
+  return data;
+};
+
+export interface RecordOrderPaymentPayload {
+  payment_method: PaymentMethod;
+  amount: number; // dollars
+}
+
+// Follow-up cash/online-transfer payment against an order's outstanding
+// balance — e.g. settling the rest of a manual sale's deposit later.
+export const recordOrderPayment = async (orderId: string, payload: RecordOrderPaymentPayload) => {
+  const { data } = await apiClient.post<BeResponse<Order>>(`/order/${orderId}/payments`, payload);
   return data;
 };
 

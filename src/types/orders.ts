@@ -2,6 +2,9 @@ import type { PaymentStatus, Refund } from "@/types/payment";
 
 export type OrderStatus =
   | "pending_payment"
+  // Some, but not all, of the order total has been collected — see
+  // OrderPaymentSummaryCard for the "collect remaining balance" actions.
+  | "partially_paid"
   | "paid"
   | "fulfilled"
   | "cancelled"
@@ -101,6 +104,10 @@ export interface Order {
   updated_at: string;
 }
 
-export interface OrderDetail extends Order {
+// The admin order-detail endpoint returns the full payment history (every
+// Payment doc for the order — a deposit plus a later top-up, for instance),
+// not just the single most-recently-created one `Order.payment` points at.
+export interface OrderDetail extends Omit<Order, "payment"> {
+  payments: OrderPaymentSummary[];
   refunds: Refund[];
 }

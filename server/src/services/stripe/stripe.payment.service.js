@@ -2,42 +2,74 @@
 
 const Payment = require("../../models/Payment");
 const { getStripeClient } = require("./stripe.client.service");
+const { getTotalPaidForOrder } = require("../payment.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
 const config = require("../../config");
+const { logger } = require("../../loaders/logging");
 
-// Creates (or reuses) a PaymentIntent for an order. Reuses an existing
-// pending intent instead of minting a new one on every call — otherwise a
-// reloaded payment page would create a fresh Payment doc each time. The
-// idempotency key additionally protects the very first create call against
-// duplicate network retries.
+// Creates (or reuses) a PaymentIntent for an order, for whatever balance is
+// still outstanding — not necessarily the full order.total, since a manual
+// sale may already have a deposit (or an earlier top-up) on file. Reuses an
+// existing pending intent instead of minting a new one on every call —
+// otherwise a reloaded payment page would create a fresh Payment doc each
+// time. The idempotency key additionally protects the very first create call
+// against duplicate network retries.
 async function createPaymentIntentForOrder(order) {
-  if (order.status !== ORDER_STATUS.PENDING_PAYMENT) {
+  if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
   }
 
   const stripe = getStripeClient();
 
-  let payment = await Payment.findOne({ order: order._id }).sort({ created_at: -1 });
-
-  if (payment && payment.status === PAYMENT_STATUS.SUCCEEDED) {
+  const totalPaidCents = await getTotalPaidForOrder(order._id);
+  const remainingCents = order.total - totalPaidCents;
+  if (remainingCents <= 0) {
     throw Object.assign(new Error("Order is already paid"), { status: 409 });
   }
 
-  if (payment && [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.REQUIRES_ACTION].includes(payment.status)) {
-    const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
-    return { payment, client_secret: intent.client_secret };
+  let payment = await Payment.findOne({ order: order._id }).sort({ created_at: -1 });
+
+  if (
+    payment &&
+    payment.stripe_payment_intent_id &&
+    [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.REQUIRES_ACTION].includes(payment.status)
+  ) {
+    if (payment.amount === remainingCents) {
+      const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+      if (!["canceled", "succeeded"].includes(intent.status)) {
+        return { payment, client_secret: intent.client_secret };
+      }
+    } else {
+      // The outstanding balance changed since this intent was created (e.g.
+      // a manual top-up was recorded while the customer had the payment
+      // page open) — cancel it rather than let them pay a stale amount, and
+      // fall through to mint a fresh intent for the correct remainder.
+      try {
+        await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+      } catch (err) {
+        if (err.code !== "payment_intent_unexpected_state") throw err;
+        logger.warn(
+          `[stripe.payment] intent ${payment.stripe_payment_intent_id} already in a terminal state, skipping cancel`,
+        );
+      }
+      payment.status = PAYMENT_STATUS.CANCELED;
+      await payment.save();
+    }
   }
 
   const currency = order.currency || config.stripe.currency;
 
   const intent = await stripe.paymentIntents.create(
     {
-      amount: order.total,
+      amount: remainingCents,
       currency,
       metadata: { order_id: order._id.toString(), order_number: order.order_number },
     },
-    { idempotencyKey: `order_${order._id.toString()}_create_intent` },
+    // Scoped to the remaining balance, not just the order — a stale-amount
+    // cancel-and-recreate (above) must not collide with the prior attempt's
+    // idempotency key, since Stripe rejects reusing a key with different params.
+    { idempotencyKey: `order_${order._id.toString()}_create_intent_${remainingCents}` },
   );
 
   try {
@@ -45,7 +77,7 @@ async function createPaymentIntentForOrder(order) {
       order: order._id,
       provider: PAYMENT_PROVIDER.STRIPE,
       stripe_payment_intent_id: intent.id,
-      amount: order.total,
+      amount: remainingCents,
       currency,
       status: PAYMENT_STATUS.PENDING,
     });
@@ -77,7 +109,7 @@ async function createPaymentIntentForOrder(order) {
 // paid order, regardless of whether the order came from the storefront or
 // this admin-generated link.
 function createPaymentLinkForOrder(order) {
-  if (order.status !== ORDER_STATUS.PENDING_PAYMENT) {
+  if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
   }
   if (!order.guest_access_token) {

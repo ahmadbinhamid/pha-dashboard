@@ -3,6 +3,7 @@ import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
 import { COMPANY_INFO, PICKUP_LOCATION, INVOICE_NOTE } from "@/config/company";
 import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import { cn } from "@/utils/cn";
 import type { OrderDetail } from "@/types/orders";
 
@@ -30,7 +31,19 @@ function DetailLine({ icon: Icon, children }: { icon: typeof MapPin; children: R
 
 export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
-  const isPaid = order.status !== "pending_payment";
+  // Sorted newest-first by the backend — the most recent payment is the one
+  // worth showing "how they paid" for (a full method-by-method breakdown
+  // isn't shown here; see the dashboard's Payment History for that).
+  const latestPayment = order.payments[0] ?? null;
+  const amountPaid = getTotalPaid(order.payments);
+  const amountDue = getBalanceDue(order.total, order.payments);
+  const isFullyPaid = order.status !== "pending_payment" && order.status !== "partially_paid";
+  const paymentPillLabel =
+    order.status === "partially_paid"
+      ? "Partially Paid"
+      : order.status === "pending_payment"
+        ? "Pending Payment"
+        : "Paid & Secured";
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
     month: "short",
@@ -53,10 +66,10 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <span
             className={cn(
               "inline-block rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
-              isPaid ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
+              isFullyPaid ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
             )}
           >
-            {isPaid ? "Paid & Secured" : "Pending Payment"}
+            {paymentPillLabel}
           </span>
           <p className="mt-2 text-xs uppercase tracking-wide" style={{ color: MUTED }}>
             Channel: {order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront"}
@@ -158,21 +171,22 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             Payment Information
           </div>
           <div className="mt-2 text-sm">
-            {order.payment?.provider === "manual" ? (
+            {latestPayment?.provider === "manual" ? (
               <>
                 <div>
-                  {order.payment.payment_method ? PAYMENT_METHOD_LABEL[order.payment.payment_method] : "Manual"} —{" "}
-                  {formatCurrencyFromCents(order.payment.amount)} received
+                  {latestPayment.payment_method ? PAYMENT_METHOD_LABEL[latestPayment.payment_method] : "Manual"} —{" "}
+                  {formatCurrencyFromCents(amountPaid)} received
+                  {order.payments.length > 1 ? ` across ${order.payments.length} payments` : ""}
                 </div>
                 <div className="text-xs" style={{ color: MUTED }}>
                   Collected at time of sale
                 </div>
               </>
-            ) : order.payment ? (
+            ) : latestPayment ? (
               <>
                 <div>
-                  {order.payment.card_brand
-                    ? `${order.payment.card_brand.charAt(0).toUpperCase()}${order.payment.card_brand.slice(1)} Ending in ${order.payment.card_last4}`
+                  {latestPayment.card_brand
+                    ? `${latestPayment.card_brand.charAt(0).toUpperCase()}${latestPayment.card_brand.slice(1)} Ending in ${latestPayment.card_last4}`
                     : "Card"}
                 </div>
                 <div className="text-xs" style={{ color: MUTED }}>
@@ -213,8 +227,6 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           </div>
           {order.channel === "manual" &&
             (() => {
-              const amountPaid = order.payment?.amount || 0;
-              const amountDue = order.total - amountPaid;
               if (amountDue <= 0) return null;
               return (
                 <>

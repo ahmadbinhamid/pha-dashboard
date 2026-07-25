@@ -10,9 +10,11 @@ const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
+const { getTotalPaidForOrder, getPaymentsForOrder } = require("./payment.service");
 const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
+const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
@@ -214,7 +216,7 @@ async function createManualOrder({
     tax_amount,
     total,
     currency: "aud",
-    status: amountPaidCents >= total ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING_PAYMENT,
+    status: derivePaymentStatus(amountPaidCents, total),
     channel: ORDER_CHANNEL.MANUAL,
     guest_access_token: generateGuestAccessToken(),
   });
@@ -245,6 +247,51 @@ async function createManualOrder({
   }
 
   await order.save();
+  return order;
+}
+
+// Records a follow-up cash/online-transfer payment against an order that
+// still has a balance outstanding — e.g. a manual-sale deposit followed by
+// the customer settling the rest later, without a second Stripe payment
+// link. Never touches stock: manual orders already had theirs deducted in
+// full at createManualOrder() regardless of how much was actually collected.
+async function recordOrderPayment(orderId, { payment_method, amount }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+  // Storefront/eBay orders are only ever settled through Stripe (their stock
+  // deduction is gated on that webhook firing) — a staff-recorded cash/
+  // transfer payment only makes sense for a manual/in-store sale, whose
+  // stock was already deducted up front at creation regardless of payment.
+  if (order.channel !== ORDER_CHANNEL.MANUAL) {
+    throw httpError("Only manual orders can have a payment recorded against them", 400);
+  }
+  if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
+    throw httpError("This order has no outstanding balance to collect", 409);
+  }
+
+  const totalPaidCents = await getTotalPaidForOrder(order._id);
+  const remainingCents = order.total - totalPaidCents;
+  const amountCents = Math.round(amount * 100);
+  if (amountCents <= 0 || amountCents > remainingCents) {
+    throw httpError(`Amount must be between $0.01 and ${formatCentsAsDollars(remainingCents)}`, 400);
+  }
+
+  const payment = await Payment.create({
+    order: order._id,
+    provider: PAYMENT_PROVIDER.MANUAL,
+    payment_method,
+    amount: amountCents,
+    currency: order.currency,
+    status: PAYMENT_STATUS.SUCCEEDED,
+    paid_at: new Date(),
+  });
+
+  order.payment = payment._id;
+  order.status = derivePaymentStatus(totalPaidCents + amountCents, order.total);
+  await order.save();
+
   return order;
 }
 
@@ -480,14 +527,20 @@ async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, sea
 
 // Full order record for the admin detail/invoice view — unlike
 // getOrderForGuest, this isn't token-gated (route requires admin JWT auth
-// instead) and includes the order's refund history for display alongside
-// the populated payment.
+// instead) and includes the order's full payment + refund history, rather
+// than just the single most-recently-created Payment `order.payment` points
+// at (which a deposit + follow-up payment would make incomplete/stale).
 async function getOrderDetailForAdmin(orderId) {
-  const order = await Order.findById(orderId).populate("payment");
+  const order = await Order.findById(orderId);
   if (!order) throw httpError("Order not found", 404);
 
-  const refunds = await Refund.find({ order: order._id }).sort({ created_at: -1 });
-  return { ...order.toObject(), refunds };
+  const [payments, refunds] = await Promise.all([
+    getPaymentsForOrder(order._id),
+    Refund.find({ order: order._id }).sort({ created_at: -1 }),
+  ]);
+
+  const { payment, ...orderFields } = order.toObject();
+  return { ...orderFields, payments, refunds };
 }
 
 // Admin action triggered by the "Send Email" button on the order detail
@@ -502,6 +555,11 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   const order = await Order.findById(orderId).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
+  // Sums every succeeded Payment on the order, not just the most recently
+  // created one (order.payment) — a manual sale can have a deposit plus a
+  // separate follow-up payment, and the invoice must reflect both.
+  const totalPaidCents = await getTotalPaidForOrder(order._id);
+
   // In-person sales are already complete when created — no shipped/pickup
   // framing applies, just the invoice (with the outstanding balance called
   // out, if any) attached to a plain receipt email.
@@ -509,8 +567,8 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     if (!order.customer.email) {
       throw httpError("This customer has no email on file — add one before sending an invoice", 400);
     }
-    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject());
-    const amountDueCents = order.total - (order.payment?.amount || 0);
+    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
+    const amountDueCents = order.total - totalPaidCents;
     await emailService.sendManualOrderReceipt({
       to: order.customer.email,
       name: order.customer.name,
@@ -538,7 +596,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     }
   }
 
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject());
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
   const pdfBase64 = pdfBuffer.toString("base64");
   const pdfFilename = `${order.order_number}-invoice.pdf`;
 
@@ -568,6 +626,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
 module.exports = {
   createOrder,
   createManualOrder,
+  recordOrderPayment,
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,

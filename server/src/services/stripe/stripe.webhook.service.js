@@ -12,10 +12,12 @@ const Refund = require("../../models/Refund");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
+const { getTotalPaidForOrder } = require("../payment.service");
 const emailService = require("../email/email.service");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
-const { ORDER_STATUS, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
+const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
+const { derivePaymentStatus } = require("../../utils/paymentStatus");
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 
@@ -81,15 +83,19 @@ async function handlePaymentSucceeded(intent) {
 
   // Trust nothing from the intent except what Stripe says was actually
   // captured — verify it matches what we billed for before marking paid.
+  // Compared against this Payment doc's own `amount` (what we told Stripe to
+  // charge when the intent was created), NOT order.total — an intent for a
+  // manual sale's remaining balance is legitimately less than the total.
+  const expectedAmount = payment.amount;
   const amountReceived = intent.amount_received ?? intent.amount;
-  const amountMismatch = amountReceived !== order.total;
+  const amountMismatch = amountReceived !== expectedAmount;
   const currencyMismatch = intent.currency !== order.currency;
   if (amountMismatch || currencyMismatch) {
     // Funds were captured (this event only fires on success) — FAILED would
     // wrongly imply no money moved, so flag for manual review instead.
     payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
     payment.failure_reason = [
-      amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${order.total}` : null,
+      amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
       currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
     ]
       .filter(Boolean)
@@ -123,17 +129,36 @@ async function handlePaymentSucceeded(intent) {
   payment.card_last4 = paymentMethod?.card?.last4 || null;
   await payment.save();
 
-  order.status = ORDER_STATUS.PAID;
+  // Recomputed across every succeeded payment on the order, not hardcoded to
+  // PAID — this same webhook fires for a manual sale's payment-link
+  // remainder too, where a prior deposit means this payment might not be
+  // the last money owed... though in practice it always is, since nothing
+  // else currently lets more than one payment attempt be in flight at once.
+  const totalPaidCents = await getTotalPaidForOrder(order._id);
+  order.status = derivePaymentStatus(totalPaidCents, order.total);
 
-  const { hasShortfall, note } = await syncOrderStock(order, DIRECTION.DEDUCT);
-  if (hasShortfall) {
-    order.has_stock_issue = true;
-    order.stock_issue_note = note;
+  // Manual/in-store sales already had their stock deducted in full at
+  // creation time (the goods left with the customer then, regardless of how
+  // much was actually collected) — deducting again here on a payment-link
+  // top-up would double-count it. Only storefront/eBay orders wait for a
+  // Stripe payment to confirm before stock ever moves.
+  if (order.channel !== ORDER_CHANNEL.MANUAL) {
+    const { hasShortfall, note } = await syncOrderStock(order, DIRECTION.DEDUCT);
+    if (hasShortfall) {
+      order.has_stock_issue = true;
+      order.stock_issue_note = note;
+    }
   }
 
   await order.save();
 
-  logger.info(`[stripe.webhook] order ${order.order_number} marked paid (intent ${intent.id})`);
+  logger.info(`[stripe.webhook] order ${order.order_number} marked ${order.status} (intent ${intent.id})`);
+
+  // Manual/in-store sales get their invoice via the explicit "Send Email"
+  // button (order.service.js#sendOrderNotification) — never this automatic
+  // storefront-checkout confirmation, which assumes a storefront/eBay order
+  // shape (e.g. sendOrderConfirmation's copy) that doesn't fit an in-person sale.
+  if (order.channel === ORDER_CHANNEL.MANUAL) return;
 
   // Best-effort — never let an email hiccup fail this webhook. Throwing here
   // would make handleEvent release the processed-event claim and cause

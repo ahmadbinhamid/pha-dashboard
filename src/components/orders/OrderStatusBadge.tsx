@@ -3,6 +3,7 @@ import type { OrderStatus } from "@/types/orders";
 
 const VARIANT: Record<OrderStatus, "ok" | "warn" | "danger" | "muted" | "default"> = {
   pending_payment: "warn",
+  partially_paid: "warn",
   paid: "ok",
   fulfilled: "default",
   cancelled: "muted",
@@ -12,6 +13,7 @@ const VARIANT: Record<OrderStatus, "ok" | "warn" | "danger" | "muted" | "default
 
 const LABEL: Record<OrderStatus, string> = {
   pending_payment: "Pending Payment",
+  partially_paid: "Partially Paid",
   paid: "Paid",
   fulfilled: "Fulfilled",
   cancelled: "Cancelled",
