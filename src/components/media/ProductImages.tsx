@@ -4,18 +4,24 @@ import { cn } from "@/utils/cn";
 import { useToast } from "@/context";
 import { uploadAttachments } from "@/lib/api/products";
 import type { Attachment } from "@/types/product";
-import { Star, Trash2, GripVertical, Plus, Loader2 } from "lucide-react";
+import { Star, X, Plus, Loader2, Image as ImageIcon, Lightbulb } from "lucide-react";
 
 interface ProductImagesProps {
   images: Attachment[];
   onChange: (images: Attachment[]) => void;
 }
 
+const tileBase =
+  "group relative cursor-move overflow-hidden rounded-md border border-border bg-bg-2 transition-colors hover:border-accent/50";
+
+// Layout modeled on tenant-dashboard's product media picker: a large cover
+// tile plus a mini-grid of the rest, restyled with our own tokens (accent
+// instead of primary, warn/danger for the star/remove controls) and wired to
+// our real upload-from-device flow rather than a shared media-library modal.
 export function ProductImages({ images, onChange }: ProductImagesProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
   const uploadMutation = useMutation({
@@ -39,9 +45,7 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
 
   const openPicker = () => fileInputRef.current?.click();
 
-  const handleRemove = (idx: number) => {
-    onChange(images.filter((_, i) => i !== idx));
-  };
+  const handleRemove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
 
   const handleSetCover = (idx: number) => {
     if (idx === 0) return;
@@ -53,17 +57,10 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
   };
 
   const handleDragStart = (idx: number) => setDraggingIdx(idx);
-
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    setDragOverIdx(idx);
-  };
-
-  const handleDrop = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+  const handleDrop = (idx: number) => {
     if (draggingIdx === null || draggingIdx === idx) {
       setDraggingIdx(null);
-      setDragOverIdx(null);
       return;
     }
     const updated = [...images];
@@ -71,13 +68,59 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
     updated.splice(idx, 0, item);
     onChange(updated);
     setDraggingIdx(null);
-    setDragOverIdx(null);
   };
 
-  const handleDragEnd = () => {
-    setDraggingIdx(null);
-    setDragOverIdx(null);
-  };
+  const imgAlt = (img: Attachment) => img.original_name || img.file_name;
+
+  const AddTile = ({ className }: { className?: string }) => (
+    <button
+      type="button"
+      onClick={openPicker}
+      disabled={uploadMutation.isPending}
+      title="Add images"
+      className={cn(
+        "flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border bg-bg-2/40 text-fg/40 transition-colors hover:border-accent/40 hover:bg-bg-2 hover:text-fg/60 disabled:opacity-50",
+        className,
+      )}
+    >
+      {uploadMutation.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <>
+          <Plus className="h-4 w-4" />
+          <span className="text-[10px] leading-none">Add</span>
+        </>
+      )}
+    </button>
+  );
+
+  const CoverPin = () => (
+    <span className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card ring-1 ring-border">
+      <Star className="h-2.5 w-2.5 fill-accent text-accent" />
+    </span>
+  );
+
+  const StarControl = ({ idx }: { idx: number }) => (
+    <button
+      type="button"
+      onClick={() => handleSetCover(idx)}
+      title="Set as cover"
+      className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card opacity-0 ring-1 ring-border transition-opacity group-hover:opacity-100"
+    >
+      <Star className="h-2.5 w-2.5 text-warn" />
+    </button>
+  );
+
+  const RemoveControl = ({ idx }: { idx: number }) => (
+    <button
+      type="button"
+      onClick={() => handleRemove(idx)}
+      title="Remove"
+      className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card opacity-0 ring-1 ring-border transition-opacity group-hover:opacity-100"
+    >
+      <X className="h-3 w-3 text-danger" />
+    </button>
+  );
 
   return (
     <div className="space-y-3">
@@ -90,104 +133,94 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
         onChange={handleFileChange}
       />
 
-      {images.length > 0 ? (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {images.map((img, idx) => (
-            <div
-              key={img._id || img.id || idx}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragOver={(e) => handleDragOver(e, idx)}
-              onDrop={(e) => handleDrop(e, idx)}
-              onDragEnd={handleDragEnd}
-              className={cn(
-                "group relative aspect-square overflow-hidden rounded-lg border-2 transition",
-                idx === 0 ? "border-accent" : "border-border",
-                draggingIdx === idx && "opacity-40",
-                dragOverIdx === idx && draggingIdx !== idx && "ring-2 ring-accent ring-offset-1",
-              )}
-            >
-              <img
-                src={img.url}
-                alt={img.original_name || img.file_name}
-                className="h-full w-full object-cover"
-                draggable={false}
-              />
-
-              {idx === 0 && (
-                <div className="absolute left-1 top-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-accent-fg shadow">
-                  Cover
-                </div>
-              )}
-
-              <div className="absolute right-1 top-1 cursor-grab opacity-0 transition group-hover:opacity-100">
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-black/50">
-                  <GripVertical className="h-3 w-3 text-white" />
-                </div>
-              </div>
-
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/50 py-1 opacity-0 transition group-hover:opacity-100">
-                {idx !== 0 && (
-                  <button
-                    type="button"
-                    title="Set as cover"
-                    onClick={() => handleSetCover(idx)}
-                    className="flex h-6 w-6 items-center justify-center rounded text-yellow-300 hover:text-yellow-200"
-                  >
-                    <Star className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  title="Remove"
-                  onClick={() => handleRemove(idx)}
-                  className="flex h-6 w-6 items-center justify-center rounded text-red-400 hover:text-red-300"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-
+      {images.length === 0 ? (
+        <div className="space-y-3">
           <button
             type="button"
             onClick={openPicker}
             disabled={uploadMutation.isPending}
-            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-fg/40 transition hover:border-fg/20 hover:text-fg/60 disabled:opacity-50"
+            className="flex w-full items-center gap-3 rounded-md border-2 border-dashed border-border bg-bg-2/30 px-4 py-6 text-left transition-colors hover:border-accent/40 hover:bg-bg-2/60 disabled:opacity-50"
           >
-            {uploadMutation.isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <Plus className="h-5 w-5" />
-                <span className="text-[10px]">Add</span>
-              </>
-            )}
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg-2">
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin text-fg/40" />
+              ) : (
+                <ImageIcon className="h-4 w-4 text-fg/40" />
+              )}
+            </span>
+            <span>
+              <span className="block text-sm font-medium text-fg/75">
+                {uploadMutation.isPending ? "Uploading…" : "Click to add images"}
+              </span>
+              <span className="mt-0.5 block text-xs text-fg/45">
+                Drop files here or browse — PNG, JPG up to 5MB
+              </span>
+            </span>
           </button>
+
+          <div className="flex items-center gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2">
+            <Lightbulb className="h-3.5 w-3.5 shrink-0 text-warn" />
+            <p className="text-xs text-warn">The first image becomes the cover shown in listings.</p>
+          </div>
+        </div>
+      ) : images.length === 1 ? (
+        <div className="flex h-48 gap-2">
+          <div
+            draggable
+            onDragStart={() => handleDragStart(0)}
+            onDragOver={handleDragOver}
+            onDrop={() => handleDrop(0)}
+            className={cn("flex-1", tileBase)}
+          >
+            <img src={images[0].url} alt={imgAlt(images[0])} className="h-full w-full object-contain p-1" draggable={false} />
+            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
+              Cover
+            </span>
+            <CoverPin />
+          </div>
+          <AddTile className="h-full w-28" />
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={uploadMutation.isPending}
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border py-10 text-center transition hover:border-fg/20 disabled:opacity-50"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-2">
-            {uploadMutation.isPending ? (
-              <Loader2 className="h-6 w-6 animate-spin text-fg/40" />
-            ) : (
-              <Plus className="h-6 w-6 text-fg/40" />
-            )}
+        <div className="flex h-56 gap-2">
+          <div
+            draggable
+            onDragStart={() => handleDragStart(0)}
+            onDragOver={handleDragOver}
+            onDrop={() => handleDrop(0)}
+            className={cn("h-full w-1/2", tileBase)}
+          >
+            <img src={images[0].url} alt={imgAlt(images[0])} className="h-full w-full object-contain p-1" draggable={false} />
+            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
+              Cover
+            </span>
+            <CoverPin />
           </div>
-          <div>
-            <div className="text-sm font-medium text-fg/70">
-              {uploadMutation.isPending ? "Uploading…" : "Add images"}
-            </div>
-            <div className="mt-0.5 text-xs text-fg/45">
-              Click to upload from your device
-            </div>
+
+          <div className="grid h-full w-1/2 auto-rows-[4.5rem] grid-cols-3 content-start gap-2 overflow-y-auto pr-0.5">
+            {images.slice(1).map((img, i) => {
+              const idx = i + 1;
+              return (
+                <div
+                  key={img._id || img.id || idx}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(idx)}
+                  className={tileBase}
+                >
+                  <img src={img.url} alt={imgAlt(img)} className="h-full w-full object-contain p-1" draggable={false} />
+                  <StarControl idx={idx} />
+                  <RemoveControl idx={idx} />
+                </div>
+              );
+            })}
+            <AddTile className="h-full" />
           </div>
-        </button>
+        </div>
+      )}
+
+      {images.length > 0 && (
+        <p className="text-xs text-fg/40">Drag to reorder, click ★ to set as cover.</p>
       )}
     </div>
   );

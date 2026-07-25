@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
@@ -9,15 +8,20 @@ import { NativeSelect } from "@/components/ui/Select";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { FormField } from "@/components/ui/FormField";
+import { Badge } from "@/components/ui/Badge";
 import { ProductImages } from "@/components/media/ProductImages";
 import { CreateStockSection } from "@/components/products/CreateStockSection";
+import { CreateProductNotesSection } from "@/components/products/CreateProductNotesSection";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { FormSection } from "@/components/products/FormSection";
+import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
+import { ProductFormActionsCard } from "@/components/products/ProductFormActionsCard";
+import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
 import { useToast } from "@/context";
-import { createProduct } from "@/lib/api/products";
+import { createProduct, addProductNote } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
-import type { ProductCreateFormState } from "@/types/product";
-import { SectionLabel } from "@/components/products/SectionLabel";
-import { Package2, Image, DollarSign, Boxes, Layers, Car, Tag, Plus } from "lucide-react";
+import type { ProductCreateFormState, ProductStatus } from "@/types/product";
+import { formatCurrency } from "@/utils/format";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 
 const INITIAL: ProductCreateFormState = {
@@ -45,9 +49,10 @@ const INITIAL: ProductCreateFormState = {
   categories: [],
   tags: [],
   images: [],
+  notes: [],
 };
 
-function formToFD(form: ProductCreateFormState): FormData {
+function formToFD(form: ProductCreateFormState, status: ProductStatus): FormData {
   const fd = new FormData();
   fd.append("title", form.title.trim());
   fd.append("description", form.description);
@@ -75,7 +80,7 @@ function formToFD(form: ProductCreateFormState): FormData {
     fd.append("stock_entries", JSON.stringify(form.stock_entries));
   }
   fd.append("type", form.type);
-  fd.append("status", form.status);
+  fd.append("status", status);
   fd.append("is_published_online", String(form.is_published_online));
   fd.append("categories", JSON.stringify(form.categories));
   fd.append("tags", JSON.stringify(form.tags));
@@ -108,7 +113,11 @@ export default function ProductCreatePage() {
 
   const mutation = useMutation({
     mutationFn: (fd: FormData) => createProduct(fd),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      const productId = res.data?._id;
+      if (productId && form.notes.length > 0) {
+        await Promise.allSettled(form.notes.map((text) => addProductNote(productId, text)));
+      }
       toast({ title: "Product created", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       const slug = res.data?.slug;
@@ -136,64 +145,84 @@ export default function ProductCreatePage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (status: ProductStatus) => {
     if (!validate()) return;
-    mutation.mutate(formToFD(form));
+    mutation.mutate(formToFD(form, status));
   };
 
+  const essentials = [
+    form.title.trim().length > 0,
+    Number(form.price) > 0,
+    form.categories.length > 0,
+    form.images.length > 0,
+  ];
+  const essentialsCompleted = essentials.filter(Boolean).length;
+
+  const priceNumber = Number(form.price) || 0;
+  const costNumber = Number(form.cost_price) || 0;
+  const hasMargin = priceNumber > 0 && form.cost_price !== "";
+  const profitPerUnit = priceNumber - costNumber;
+  const marginPct = hasMargin ? Math.round((profitPerUnit / priceNumber) * 100) : null;
+
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       {/* Sticky header */}
       <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
         <BreadcrumbNav
           items={[
             { label: "Products", href: "/products" },
-            { label: "New Product" },
+            { label: "New product" },
           ]}
         />
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">New Product</h1>
+            <h1 className="text-xl font-semibold tracking-tight">New product</h1>
             <p className="mt-0.5 text-sm text-fg/50">
-              SKU is auto-generated on save. Variants can be added after creating.
+              SKU generates on save · variants can be added after creating
             </p>
           </div>
-          <Button
-            type="submit"
-            form="product-create-form"
-            variant="primary"
-            size="sm"
-            disabled={mutation.isPending}
-            className="gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {mutation.isPending ? "Creating…" : "Create Product"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <ProductEssentialsProgress completed={essentialsCompleted} total={essentials.length} />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={() => handleSubmit("draft")}
+            >
+              Save draft
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={() => handleSubmit("active")}
+            >
+              {mutation.isPending ? "Creating…" : "Create product"}
+            </Button>
+          </div>
         </div>
       </div>
 
-      <form
-        id="product-create-form"
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-5"
-      >
-        <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
 
-          {/* Basic Info */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <FormField label="Title" required error={errors.title}>
-                <Input
-                  value={form.title}
-                  onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                  placeholder="Product title"
-                  autoFocus
-                />
-              </FormField>
+          {/* 1. Basics */}
+          <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
+            <FormField label="Product title" required error={errors.title}>
+              <Input
+                value={form.title}
+                onChange={(e) => { set("title", e.target.value); clearError("title"); }}
+                placeholder="e.g. Front brake pad set — ceramic"
+                autoFocus
+              />
+            </FormField>
+            <p className="-mt-2.5 text-xs text-fg/45">
+              Include the part type and a key spec — it's what staff search for at the till.
+            </p>
 
-              {/* Barcode */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-fg/65">Barcode</label>
@@ -202,73 +231,70 @@ export default function ProductCreatePage() {
                 <Input
                   value={form.barcode}
                   onChange={(e) => set("barcode", e.target.value)}
-                  placeholder="EAN / UPC"
+                  placeholder="Scan or type EAN / UPC"
                   maxLength={13}
                 />
               </div>
 
-              <Switch
-                checked={form.is_published_online}
-                onCheckedChange={(v) => set("is_published_online", v)}
-                label="Show on storefront"
-                description="Make this product visible on the public storefront"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Classification */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Tag}>Classification</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <FormField label="Categories">
-                <MultiSelect
-                  options={categoryOptions}
-                  value={form.categories}
-                  onChange={(v) => set("categories", v)}
-                  placeholder="Select categories…"
-                  searchPlaceholder="Search categories…"
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Condition">
-                  <NativeSelect
-                    value={form.condition}
-                    onChange={(e) => set("condition", e.target.value as ProductCreateFormState["condition"])}
-                  >
-                    {CONDITIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
-
-                <FormField label="Authenticity">
-                  <NativeSelect
-                    value={form.authenticity}
-                    onChange={(e) => set("authenticity", e.target.value as ProductCreateFormState["authenticity"])}
-                  >
-                    <option value="">Select authenticity…</option>
-                    {AUTHENTICITY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
-              </div>
-
-              <FormField label="Manufacturer Part Number (MPN)">
+              <FormField label="Manufacturer part number">
                 <Input
                   value={form.mpn}
                   onChange={(e) => set("mpn", e.target.value)}
-                  placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+                  placeholder='e.g. 45022-TBC-A01'
                 />
               </FormField>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Vehicle */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Car}>Vehicle</SectionLabel>} description="Set the compatible vehicle for this part" />
-            <CardContent>
+            <Switch
+              checked={form.is_published_online}
+              onCheckedChange={(v) => set("is_published_online", v)}
+              label="Show on storefront"
+              description="Visible to customers online as soon as it's created"
+            />
+          </FormSection>
+
+          {/* 2. Classification & fitment */}
+          <FormSection number={2} title="Classification & fitment">
+            <FormField label="Categories">
+              <MultiSelect
+                options={categoryOptions}
+                value={form.categories}
+                onChange={(v) => set("categories", v)}
+                placeholder="Add category…"
+                searchPlaceholder="Search categories…"
+              />
+            </FormField>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField label="Condition">
+                <NativeSelect
+                  value={form.condition}
+                  onChange={(e) => set("condition", e.target.value as ProductCreateFormState["condition"])}
+                >
+                  {CONDITIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+
+              <FormField label="Authenticity">
+                <NativeSelect
+                  value={form.authenticity}
+                  onChange={(e) => set("authenticity", e.target.value as ProductCreateFormState["authenticity"])}
+                >
+                  <option value="">Select authenticity…</option>
+                  {AUTHENTICITY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            </div>
+
+            <div className="border-t border-dashed border-border pt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-sm font-semibold text-fg">Vehicle fitment</span>
+                <Badge variant="muted">Optional</Badge>
+              </div>
               <ProductVehicleSection
                 values={{
                   vehicle_make: form.vehicle_make,
@@ -279,36 +305,33 @@ export default function ProductCreatePage() {
                 }}
                 onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
-          {/* Pricing */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Price (A$)" required error={errors.price}>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) => { set("price", e.target.value); clearError("price"); }}
-                    placeholder="0.00"
-                  />
-                </FormField>
-                <FormField label="Cost price (A$)">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.cost_price}
-                    onChange={(e) => set("cost_price", e.target.value)}
-                    placeholder="0.00"
-                  />
-                </FormField>
-              </div>
-              <FormField label="Shipping cost (A$)">
+          {/* 3. Pricing */}
+          <FormSection number={3} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FormField label="Retail price" required error={errors.price}>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => { set("price", e.target.value); clearError("price"); }}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField label="Cost price">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.cost_price}
+                  onChange={(e) => set("cost_price", e.target.value)}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField label="Shipping cost">
                 <Input
                   type="number"
                   min="0"
@@ -318,13 +341,32 @@ export default function ProductCreatePage() {
                   placeholder="0.00"
                 />
               </FormField>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Inventory */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Boxes}>Inventory</SectionLabel>} />
-            <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-4 rounded-xs border border-border bg-bg-2/40 px-4 py-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Margin</p>
+                <p className="mt-0.5 text-sm font-semibold text-fg">{hasMargin ? `${marginPct}%` : "—"}</p>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Profit per unit</p>
+                <p className="mt-0.5 text-sm font-semibold text-fg">
+                  {hasMargin ? formatCurrency(profitPerUnit) : "—"}
+                </p>
+              </div>
+              {!hasMargin && (
+                <p className="text-xs text-fg/45">Enter retail and cost to see live margin.</p>
+              )}
+            </div>
+          </FormSection>
+
+          {/* 4. Stock */}
+          <FormSection
+            number={4}
+            title="Stock"
+            description="Opening quantity for your only stock location"
+            tag={
               <Switch
                 checked={form.stock_control}
                 onCheckedChange={(v) => {
@@ -332,48 +374,58 @@ export default function ProductCreatePage() {
                   if (!v) set("stock_entries", []);
                 }}
                 label="Track stock"
-                description="Manage inventory levels and get low-stock alerts"
+                className="border-none bg-transparent px-0 py-0"
               />
-            </CardContent>
-          </Card>
-
-          {/* Set Stock — shown only when stock tracking is on */}
-          {form.stock_control && (
-            <Card>
-              <CardHeader
-                title={<SectionLabel icon={Layers}>Set Stock</SectionLabel>}
-                description="Set initial stock levels per location"
+            }
+          >
+            {form.stock_control && (
+              <CreateStockSection
+                entries={form.stock_entries}
+                onChange={(entries) => set("stock_entries", entries)}
               />
-              <CardContent>
-                <CreateStockSection
-                  entries={form.stock_entries}
-                  onChange={(entries) => set("stock_entries", entries)}
-                />
-              </CardContent>
-            </Card>
-          )}
+            )}
+          </FormSection>
 
-          {/* Media */}
-          <Card>
-            <CardHeader
-              title={<SectionLabel icon={Image}>Media</SectionLabel>}
-              description="First image is used as the product cover"
+          {/* 5. Media */}
+          <FormSection
+            number={5}
+            title="Media"
+            description="First image becomes the cover"
+            tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
+          >
+            <ProductImages
+              images={form.images}
+              onChange={(imgs) => set("images", imgs)}
             />
-            <CardContent>
-              <ProductImages
-                images={form.images}
-                onChange={(imgs) => set("images", imgs)}
-              />
-              {form.images.length === 0 && (
-                <p className="mt-3 text-xs text-fg/40">
-                  Tip: You can add images after creating the product too.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          </FormSection>
+
+          {/* 6. Internal notes */}
+          <FormSection number={6} title="Internal notes" description="Staff only — never shown to customers">
+            <CreateProductNotesSection notes={form.notes} onChange={(notes) => set("notes", notes)} />
+          </FormSection>
 
         </div>
-      </form>
+
+        {/* Sidebar */}
+        <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+          <ProductLivePreviewCard
+            title={form.title}
+            image={form.images[0]?.url}
+            price={form.price}
+            skuPending
+            stockControl={form.stock_control}
+            stockCount={form.stock_entries.reduce((sum, e) => sum + e.qty, 0)}
+          />
+          <ProductFormActionsCard
+            heading="Before you create"
+            buttonLabel="Create product"
+            pendingLabel="Creating…"
+            pending={mutation.isPending}
+            onClick={() => handleSubmit("active")}
+            caption="Then add variants & images"
+          />
+        </div>
+      </div>
     </div>
   );
 }

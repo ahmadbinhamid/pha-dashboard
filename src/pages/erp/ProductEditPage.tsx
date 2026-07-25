@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,7 +16,10 @@ import { ProductStockCard } from "@/components/products/ProductStockCard";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
 import { ProductNotesSection } from "@/components/products/ProductNotesSection";
-import { SectionLabel } from "@/components/products/SectionLabel";
+import { FormSection } from "@/components/products/FormSection";
+import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
+import { ProductFormActionsCard } from "@/components/products/ProductFormActionsCard";
+import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
 import { useToast } from "@/context";
 import {
   getProduct,
@@ -28,15 +30,8 @@ import type {
   Product,
   ProductEditFormState,
 } from "@/types/product";
+import { formatCurrency } from "@/utils/format";
 import {
-  Save,
-  Package2,
-  Image,
-  DollarSign,
-  Layers,
-  Tag,
-  Boxes,
-  Car,
   ShoppingBag,
 } from "lucide-react";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
@@ -118,7 +113,7 @@ function formToFD(form: ProductEditFormState): FormData {
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function ProductEditSkeleton() {
   return (
-    <div className="mx-auto max-w-4xl space-y-5 pb-24">
+    <div className="mx-auto max-w-6xl space-y-5 pb-24">
       {/* Header */}
       <div className="space-y-2">
         <Skeleton className="h-3 w-32" />
@@ -198,7 +193,6 @@ export default function ProductEditPage() {
 
   const isDirty = form !== null && JSON.stringify(form) !== savedFormRef.current;
 
-
   const saveMutation = useMutation({
     mutationFn: (fd: FormData) => updateProduct(product!._id, fd),
     onError: (err: Error) => {
@@ -222,8 +216,7 @@ export default function ProductEditPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSave = () => {
     if (!form || !product) return;
     if (!validate()) return;
     // Capture the snapshot now — onSuccess fires async and `form` may have
@@ -257,8 +250,22 @@ export default function ProductEditPage() {
 
   const showSetStockCard = form.stock_control && !form.has_variants;
 
+  const essentials = [
+    form.title.trim().length > 0,
+    Number(form.price) > 0,
+    form.categories.length > 0,
+    form.images.length > 0,
+  ];
+  const essentialsCompleted = essentials.filter(Boolean).length;
+
+  const priceNumber = Number(form.price) || 0;
+  const costNumber = Number(form.cost_price) || 0;
+  const hasMargin = priceNumber > 0 && form.cost_price !== "";
+  const profitPerUnit = priceNumber - costNumber;
+  const marginPct = hasMargin ? Math.round((profitPerUnit / priceNumber) * 100) : null;
+
   return (
-    <div className="mx-auto max-w-4xl space-y-5 pb-24">
+    <div className="mx-auto max-w-6xl space-y-5 pb-24">
 
       {/* Sticky page header */}
       <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
@@ -278,7 +285,8 @@ export default function ProductEditPage() {
             </Tooltip>
             <p className="mt-0.5 truncate text-sm text-fg/45">/{product.slug}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <ProductEssentialsProgress completed={essentialsCompleted} total={essentials.length} />
             <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">
               {product.status === "active" ? "Active" : "Draft"}
             </Badge>
@@ -297,124 +305,111 @@ export default function ProductEditPage() {
               type="button"
               variant="primary"
               size="sm"
-              className="gap-1.5"
               disabled={!isDirty || saveMutation.isPending}
-              onClick={() => handleSave()}
+              onClick={handleSave}
             >
-              <Save className="h-3.5 w-3.5" />
               {saveMutation.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>
       </div>
 
-      <form
-        onSubmit={handleSave}
-        className="flex flex-col gap-5"
-      >
-        <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
 
-          {/* Basic Info */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Package2}>Basic Information</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <FormField label="Title" required error={errors.title}>
-                <Input
-                  value={form.title}
-                  onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                  placeholder="Product title"
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* SKU — auto-generated, read-only */}
-                <FormField label="SKU">
-                  <Input
-                    value={form.sku}
-                    readOnly
-                    disabled
-                    placeholder="Not assigned"
-                    className="cursor-not-allowed opacity-60 font-mono"
-                  />
-                </FormField>
-
-                {/* Barcode */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-fg/65">Barcode</label>
-                    <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
-                  </div>
-                  <Input
-                    value={form.barcode}
-                    onChange={(e) => set("barcode", e.target.value)}
-                    placeholder="EAN / UPC"
-                    maxLength={13}
-                  />
-                </div>
-              </div>
-
-              <Switch
-                checked={form.is_published_online}
-                onCheckedChange={(v) => set("is_published_online", v)}
-                label="Show on storefront"
-                description="Make this product visible on the public storefront"
+          {/* 1. Basics */}
+          <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
+            <FormField label="Product title" required error={errors.title}>
+              <Input
+                value={form.title}
+                onChange={(e) => { set("title", e.target.value); clearError("title"); }}
+                placeholder="Product title"
               />
-            </CardContent>
-          </Card>
+            </FormField>
 
-          {/* Classification */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Tag}>Classification</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <FormField label="Categories">
-                <MultiSelect
-                  options={categoryOptions}
-                  value={form.categories}
-                  onChange={(v) => set("categories", v)}
-                  placeholder="Select categories…"
-                  searchPlaceholder="Search categories…"
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FormField label="SKU">
+                <Input
+                  value={form.sku}
+                  readOnly
+                  disabled
+                  placeholder="Not assigned"
+                  className="cursor-not-allowed font-mono opacity-60"
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Condition">
-                  <NativeSelect
-                    value={form.condition}
-                    onChange={(e) => set("condition", e.target.value as ProductEditFormState["condition"])}
-                  >
-                    {CONDITIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
-
-                <FormField label="Authenticity">
-                  <NativeSelect
-                    value={form.authenticity}
-                    onChange={(e) => set("authenticity", e.target.value as ProductEditFormState["authenticity"])}
-                  >
-                    <option value="">Select authenticity…</option>
-                    {AUTHENTICITY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-fg/65">Barcode</label>
+                  <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
+                </div>
+                <Input
+                  value={form.barcode}
+                  onChange={(e) => set("barcode", e.target.value)}
+                  placeholder="EAN / UPC"
+                  maxLength={13}
+                />
               </div>
 
-              <FormField label="Manufacturer Part Number (MPN)">
+              <FormField label="Manufacturer part number">
                 <Input
                   value={form.mpn}
                   onChange={(e) => set("mpn", e.target.value)}
-                  placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+                  placeholder='e.g. 45022-TBC-A01'
                 />
               </FormField>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Vehicle */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Car}>Vehicle</SectionLabel>} description="Set the compatible vehicle for this part" />
-            <CardContent>
+            <Switch
+              checked={form.is_published_online}
+              onCheckedChange={(v) => set("is_published_online", v)}
+              label="Show on storefront"
+              description="Visible to customers online as soon as it's created"
+            />
+          </FormSection>
+
+          {/* 2. Classification & fitment */}
+          <FormSection number={2} title="Classification & fitment">
+            <FormField label="Categories">
+              <MultiSelect
+                options={categoryOptions}
+                value={form.categories}
+                onChange={(v) => set("categories", v)}
+                placeholder="Add category…"
+                searchPlaceholder="Search categories…"
+              />
+            </FormField>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField label="Condition">
+                <NativeSelect
+                  value={form.condition}
+                  onChange={(e) => set("condition", e.target.value as ProductEditFormState["condition"])}
+                >
+                  {CONDITIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+
+              <FormField label="Authenticity">
+                <NativeSelect
+                  value={form.authenticity}
+                  onChange={(e) => set("authenticity", e.target.value as ProductEditFormState["authenticity"])}
+                >
+                  <option value="">Select authenticity…</option>
+                  {AUTHENTICITY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            </div>
+
+            <div className="border-t border-dashed border-border pt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-sm font-semibold text-fg">Vehicle fitment</span>
+                <Badge variant="muted">Optional</Badge>
+              </div>
               <ProductVehicleSection
                 values={{
                   vehicle_make: form.vehicle_make,
@@ -425,36 +420,33 @@ export default function ProductEditPage() {
                 }}
                 onChange={(patch) => setForm((prev) => prev ? { ...prev, ...patch } : null)}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
-          {/* Pricing */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={DollarSign}>Pricing</SectionLabel>} />
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Price (A$)" required error={errors.price}>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) => { set("price", e.target.value); clearError("price"); }}
-                    placeholder="0.00"
-                  />
-                </FormField>
-                <FormField label="Cost price (A$)">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.cost_price}
-                    onChange={(e) => set("cost_price", e.target.value)}
-                    placeholder="0.00"
-                  />
-                </FormField>
-              </div>
-              <FormField label="Shipping cost (A$)">
+          {/* 3. Pricing */}
+          <FormSection number={3} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FormField label="Retail price" required error={errors.price}>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => { set("price", e.target.value); clearError("price"); }}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField label="Cost price">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.cost_price}
+                  onChange={(e) => set("cost_price", e.target.value)}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField label="Shipping cost">
                 <Input
                   type="number"
                   min="0"
@@ -464,125 +456,86 @@ export default function ProductEditPage() {
                   placeholder="0.00"
                 />
               </FormField>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Inventory */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Boxes}>Inventory</SectionLabel>} />
-            <CardContent>
+            <div className="flex flex-wrap items-center gap-4 rounded-xs border border-border bg-bg-2/40 px-4 py-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Margin</p>
+                <p className="mt-0.5 text-sm font-semibold text-fg">{hasMargin ? `${marginPct}%` : "—"}</p>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Profit per unit</p>
+                <p className="mt-0.5 text-sm font-semibold text-fg">
+                  {hasMargin ? formatCurrency(profitPerUnit) : "—"}
+                </p>
+              </div>
+              {!hasMargin && (
+                <p className="text-xs text-fg/45">Enter retail and cost to see live margin.</p>
+              )}
+            </div>
+          </FormSection>
+
+          {/* 4. Stock */}
+          <FormSection
+            number={4}
+            title="Stock"
+            description="Manage stock for your only location"
+            tag={
               <Switch
                 checked={form.stock_control}
                 onCheckedChange={(v) => set("stock_control", v)}
                 label="Track stock"
-                description="Manage inventory levels and get low-stock alerts"
+                className="border-none bg-transparent px-0 py-0"
               />
-            </CardContent>
-          </Card>
+            }
+          >
+            {showSetStockCard && <ProductStockCard productId={product._id} />}
+          </FormSection>
 
-          {/* Set Stock */}
-          {showSetStockCard && (
-            <Card>
-              <CardHeader
-                title={<SectionLabel icon={Layers}>Set Stock</SectionLabel>}
-                description="Manage stock levels per location"
-              />
-              <CardContent>
-                <ProductStockCard productId={product._id} limit={1} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Media */}
-          <Card>
-            <CardHeader
-              title={<SectionLabel icon={Image}>Media</SectionLabel>}
-              description="First image is used as the product cover"
+          {/* 5. Media */}
+          <FormSection
+            number={5}
+            title="Media"
+            description="First image is used as the product cover"
+            tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
+          >
+            <ProductImages
+              images={form.images}
+              onChange={(imgs) => set("images", imgs)}
             />
-            <CardContent>
-              <ProductImages
-                images={form.images}
-                onChange={(imgs) => set("images", imgs)}
-              />
-              {form.images.length === 0 && (
-                <p className="mt-3 text-xs text-fg/40">
-                  Tip: high-quality images from multiple angles increase conversion.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          </FormSection>
 
-          {/* Notes */}
-          <ProductNotesSection productId={product._id} slug={product.slug} notes={product.internal_notes} />
+          {/* 6. Internal notes */}
+          <ProductNotesSection
+            number={6}
+            productId={product._id}
+            slug={product.slug}
+            notes={product.internal_notes}
+          />
 
-          {/* Choices — hidden for now
-          <Card>
-            <CardHeader
-              title={<SectionLabel icon={Tag}>Choices</SectionLabel>}
-              description="Add options like Size or Color to generate variants"
-              right={
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.has_variants}
-                    onChange={(e) => set("has_variants", e.target.checked)}
-                    className="h-4 w-4 rounded-xs border-border accent-accent"
-                  />
-                  Has variants
-                </label>
-              }
-            />
-            <CardContent>
-              <ChoicesEditor
-                choices={form.choices}
-                onChange={(c) => set("choices", c)}
-              />
-            </CardContent>
-          </Card>
-          */}
-
-          {/* Variant Combinations — hidden for now
-          {form.has_variants && (
-            <Card>
-              <CardHeader
-                title={
-                  <SectionLabel icon={Layers}>
-                    Variant Combinations
-                  </SectionLabel>
-                }
-                description={
-                  showVariants
-                    ? `${variants.length} variant${variants.length !== 1 ? "s" : ""} · save choices above then refresh to update`
-                    : "No variants yet — add choices above and save to generate"
-                }
-              />
-              {showVariants ? (
-                <div className="divide-y divide-border">
-                  {variants.map((v) => (
-                    <VariantRow
-                      key={v._id}
-                      variant={v}
-                      productId={product._id}
-                      onUpdate={() => {
-                        refetchVariants();
-                        queryClient.invalidateQueries({ queryKey: ["inventory"] });
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <CardContent>
-                  <p className="text-sm text-fg/45">
-                    No variants yet. Add choices above to generate variants.
-                  </p>
-                </CardContent>
-              )}
-            </Card>
-          )}
-          */}
         </div>
 
-      </form>
+        {/* Sidebar */}
+        <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+          <ProductLivePreviewCard
+            title={form.title}
+            image={form.images[0]?.url}
+            price={form.price}
+            sku={form.sku}
+            stockControl={form.stock_control}
+            stockCount={product.stock_count}
+          />
+          <ProductFormActionsCard
+            heading="Before you save"
+            buttonLabel="Save changes"
+            pendingLabel="Saving…"
+            pending={saveMutation.isPending}
+            disabled={!isDirty}
+            onClick={handleSave}
+          />
+        </div>
+      </div>
     </div>
   );
 }

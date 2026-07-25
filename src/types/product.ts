@@ -170,6 +170,9 @@ export interface ProductCreateFormState {
   categories: string[];
   tags: string[];
   images: Attachment[];
+  // Drafted before the product exists — posted as real notes right after
+  // creation succeeds (addProductNote needs a productId, which doesn't exist yet).
+  notes: string[];
 }
 
 export interface ProductEditFormState {
