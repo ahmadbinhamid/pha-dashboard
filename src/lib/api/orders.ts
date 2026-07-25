@@ -80,3 +80,16 @@ export const addOrderNote = async (orderId: string, text: string) => {
   const { data } = await apiClient.post<BeResponse<Order>>(`/order/${orderId}/notes`, { text });
   return data;
 };
+
+export interface UpdateOrderCustomerDetailsPayload {
+  customer?: { name?: string; email?: string | null; phone?: string | null };
+  shipping_address?: OrderAddress;
+  billing_address?: OrderAddress | null;
+}
+
+// Corrects the order's own customer/address snapshot — never the linked
+// Customer record (see order.service.js#updateOrderCustomerDetails).
+export const updateOrderCustomerDetails = async (orderId: string, payload: UpdateOrderCustomerDetailsPayload) => {
+  const { data } = await apiClient.put<BeResponse<Order>>(`/order/${orderId}/customer-details`, payload);
+  return data;
+};

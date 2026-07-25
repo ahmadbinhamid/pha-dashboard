@@ -150,6 +150,16 @@ const listProducts = {
   }),
 };
 
+const addProductNote = {
+  params: Joi.object({ id: Joi.string().required() }),
+  body: Joi.object({
+    text: Joi.string().trim().min(1).required().messages({
+      "string.empty": "Note text is required",
+      "any.required": "Note text is required",
+    }),
+  }),
+};
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -157,4 +167,5 @@ module.exports = {
   byIdParam,
   byVariantParam,
   listProducts,
+  addProductNote,
 };

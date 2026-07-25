@@ -6,6 +6,7 @@ const {
   ensureInventoryForProduct,
   getProducts,
   findProductById,
+  addProductNote,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecordWithSlug,
@@ -403,6 +404,19 @@ exports.updateVariant = async (req, res) => {
     await saveVariant(variant);
 
     return success(res, await getPopulatedVariant(variant._id), "Variant updated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.addProductNote = async (req, res) => {
+  try {
+    const product = await addProductNote(req.params.id, {
+      text: req.body.text,
+      userId: req.user?._id,
+    });
+    if (!product) return notFound(res, "Product not found");
+    return created(res, product, "Note added");
   } catch (err) {
     return systemfailure(res, err);
   }

@@ -30,6 +30,13 @@ router.post(
   asyncHandler(ctrl.generatePaymentLink),
 );
 router.post("/:id/payments", auth(), admin, validate(v.recordPayment), asyncHandler(ctrl.recordPayment));
+router.put(
+  "/:id/customer-details",
+  auth(),
+  admin,
+  validate(v.updateOrderCustomerDetails),
+  asyncHandler(ctrl.updateOrderCustomerDetails),
+);
 router.post("/:id/notes", auth(), admin, validate(v.addOrderNote), asyncHandler(ctrl.addOrderNote));
 
 module.exports = router;

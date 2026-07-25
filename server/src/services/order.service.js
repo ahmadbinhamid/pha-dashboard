@@ -295,6 +295,37 @@ async function recordOrderPayment(orderId, { payment_method, amount }) {
   return order;
 }
 
+// Corrects the order's OWN customer/address snapshot (e.g. a mistyped
+// email, an updated phone number) — deliberately never touches the linked
+// Customer record even when customer_id is set. Orders are a historical
+// record and this snapshot is already independent of the master Customer
+// profile (see Order.js's `customer` field) — the same separation applies
+// here, so this only ever corrects what's on this specific invoice.
+async function updateOrderCustomerDetails(orderId, { customer, shipping_address, billing_address }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+
+  if (customer) {
+    if (customer.name !== undefined) order.customer.name = customer.name;
+    if (customer.email !== undefined) order.customer.email = customer.email || null;
+    if (customer.phone !== undefined) order.customer.phone = customer.phone || null;
+  }
+
+  // Pickup orders carry no address at all — silently ignore address fields
+  // sent for one rather than erroring, since the client shouldn't need to
+  // know this order's delivery_method before deciding what to send.
+  const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  if (!isPickup) {
+    if (shipping_address !== undefined) order.shipping_address = shipping_address;
+    if (billing_address !== undefined) order.billing_address = billing_address || null;
+  }
+
+  await order.save();
+  return order;
+}
+
 // Adds a staff comment to an order's internal notes thread — distinct from
 // the customer-facing `note` captured once at creation.
 async function addOrderNote(orderId, { text, userId }) {
@@ -627,6 +658,7 @@ module.exports = {
   createOrder,
   createManualOrder,
   recordOrderPayment,
+  updateOrderCustomerDetails,
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,

@@ -28,6 +28,17 @@ const vehicleSchema = new Schema(
   { _id: false },
 );
 
+// Internal staff comment thread — never shown to customers. Mirrors
+// Order.js's internalNoteSchema exactly.
+const internalNoteSchema = new Schema(
+  {
+    text: { type: String, required: true, trim: true },
+    author: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    created_at: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
 const productSchema = buildSchema({
   title: { type: String, required: true, trim: true },
   slug: { type: String, unique: true },
@@ -77,6 +88,7 @@ const productSchema = buildSchema({
     ref: "Attachment",
     default: null,
   },
+  internal_notes: { type: [internalNoteSchema], default: [] },
 });
 
 productSchema.index({ sku: 1 }, { sparse: true });

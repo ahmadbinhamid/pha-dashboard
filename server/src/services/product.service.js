@@ -187,6 +187,17 @@ async function findProductById(id) {
   return Product.findById(id);
 }
 
+// Adds a staff comment to a product's internal notes thread — never shown
+// to customers. Mirrors order.service.js#addOrderNote exactly.
+async function addProductNote(productId, { text, userId }) {
+  const product = await Product.findById(productId);
+  if (!product) return null;
+
+  product.internal_notes.push({ text, author: userId || null, created_at: new Date() });
+  await product.save();
+  return product;
+}
+
 async function getProductBySlug(slug) {
   const product = await Product.findOne({ slug })
     .populate("attachments")
@@ -204,6 +215,12 @@ async function getProductBySlug(slug) {
     ? await getTotalStockForProduct(product._id)
     : null;
   product.stock_status = getStockStatus(product.stock_count, product.stock_control);
+
+  // internal_notes was added to the schema after existing products were
+  // created — .lean() returns the raw stored document with no schema
+  // defaults applied (unlike a hydrated Mongoose document), so any product
+  // saved before this field existed comes back with the key missing entirely.
+  product.internal_notes = product.internal_notes ?? [];
 
   // Active marketplace listings (currently only eBay) carry storefront-useful
   // content — warranty, condition notes, fitment — layered on top of the
@@ -307,6 +324,7 @@ module.exports = {
   ensureInventoryForProduct,
   getProducts,
   findProductById,
+  addProductNote,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecordWithSlug,

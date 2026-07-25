@@ -57,6 +57,15 @@ export interface Choice {
   items: string[];
 }
 
+// Internal staff comment thread — never shown to customers. Mirrors
+// OrderInternalNote in @/types/orders.
+export interface ProductInternalNote {
+  _id: string;
+  text: string;
+  author: string | null;
+  created_at: string;
+}
+
 export interface ProductVariant {
   _id: string;
   id: string;
@@ -125,6 +134,7 @@ export interface Product {
   digital_file: Attachment | null;
   stock_count: number | null;
   stock_status: StockStatus;
+  internal_notes: ProductInternalNote[];
   created_at: string;
   updated_at: string;
 }

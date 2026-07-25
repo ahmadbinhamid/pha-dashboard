@@ -16,6 +16,7 @@ import { ProductImages } from "@/components/media/ProductImages";
 import { ProductStockCard } from "@/components/products/ProductStockCard";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { ProductNotesSection } from "@/components/products/ProductNotesSection";
 import { SectionLabel } from "@/components/products/SectionLabel";
 import { useToast } from "@/context";
 import {
@@ -510,6 +511,9 @@ export default function ProductEditPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Notes */}
+          <ProductNotesSection productId={product._id} slug={product.slug} notes={product.internal_notes} />
 
           {/* Choices — hidden for now
           <Card>

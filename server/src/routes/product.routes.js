@@ -53,5 +53,11 @@ router.put(
   validate(v.byVariantParam),
   asyncHandler(ctrl.updateVariant),
 );
+router.post(
+  "/:id/notes",
+  auth(),
+  validate(v.addProductNote),
+  asyncHandler(ctrl.addProductNote),
+);
 
 module.exports = router;

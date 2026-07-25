@@ -155,6 +155,24 @@ const addOrderNote = {
   }),
 };
 
+// Edits the order's OWN customer/address snapshot — not the linked Customer
+// record (if any). See order.service.js#updateOrderCustomerDetails.
+const updateOrderCustomerDetails = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    customer: Joi.object({
+      name: Joi.string().trim().min(1),
+      email: Joi.string().trim().email().allow("", null),
+      phone: Joi.string().trim().allow("", null),
+    }),
+    // Pickup orders carry no address at all — omit both fields rather than
+    // sending null/forbidden, since whether they're editable depends on the
+    // order's own delivery_method, which the service layer already knows.
+    shipping_address: addressSchema,
+    billing_address: addressSchema.allow(null),
+  }),
+};
+
 module.exports = {
   createOrder,
   byIdParam,
@@ -165,4 +183,5 @@ module.exports = {
   generatePaymentLink,
   recordPayment,
   addOrderNote,
+  updateOrderCustomerDetails,
 };

@@ -105,6 +105,17 @@ exports.recordPayment = async (req, res) => {
   }
 };
 
+exports.updateOrderCustomerDetails = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderCustomerDetails(req.params.id, req.body);
+    return success(res, order, "Order updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.addOrderNote = async (req, res) => {
   try {
     const order = await orderService.addOrderNote(req.params.id, {

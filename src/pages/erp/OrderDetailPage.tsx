@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Printer, Mail, PackageX } from "lucide-react";
+import { Printer, Mail, Pencil, PackageX } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,7 @@ import { OrderItemsTable } from "@/components/orders/OrderItemsTable";
 import { OrderPaymentSummaryCard } from "@/components/orders/OrderPaymentSummaryCard";
 import { OrderNotesSection } from "@/components/orders/OrderNotesSection";
 import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
+import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
 import { getOrderDetail } from "@/lib/api/orders";
 import { formatCurrencyFromCents } from "@/utils/format";
@@ -75,6 +76,7 @@ function NotFoundState() {
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["order", id],
@@ -105,7 +107,12 @@ export default function OrderDetailPage() {
               <OrderDeliveryMethodBadge method={order.delivery_method} />
               <OrderChannelBadge channel={order.channel} />
             </div>
-            <p className="mt-1 text-sm text-fg/55">Placed {new Date(order.created_at).toLocaleString()}</p>
+            <p className="mt-1 text-sm text-fg/55">
+              Placed {new Date(order.created_at).toLocaleString()}
+              {order.updated_at !== order.created_at && (
+                <span className="text-fg/40"> · Last updated {new Date(order.updated_at).toLocaleString()}</span>
+              )}
+            </p>
           </div>
           <div className="flex gap-2 self-start">
             <Button variant="secondary" size="md" className="gap-2" onClick={() => window.print()}>
@@ -162,7 +169,21 @@ export default function OrderDetailPage() {
             )}
 
             <Card>
-              <CardHeader title="Customer & Addresses" />
+              <CardHeader
+                title="Customer & Addresses"
+                right={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setEditDetailsModalOpen(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                }
+              />
               <CardContent className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Customer</div>
@@ -240,6 +261,7 @@ export default function OrderDetailPage() {
       </div>
 
       <SendOrderEmailModal order={order} open={emailModalOpen} onOpenChange={setEmailModalOpen} />
+      <EditOrderDetailsModal order={order} open={editDetailsModalOpen} onOpenChange={setEditDetailsModalOpen} />
     </div>
   );
 }

@@ -73,6 +73,11 @@ export const duplicateProduct = async (id: string) => {
   return data;
 };
 
+export const addProductNote = async (id: string, text: string) => {
+  const { data } = await apiClient.post<BeResponse<Product>>(`/product/${id}/notes`, { text });
+  return data;
+};
+
 export const getVariants = async (id: string) => {
   const { data } = await apiClient.get<BeResponse<ProductVariant[]>>(
     `/product/${id}/variants`,
