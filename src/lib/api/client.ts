@@ -1,4 +1,6 @@
 import axios from "axios";
+import { clearCartStorage } from "@/context/cart";
+import { clearOrderDraft } from "@/lib/orderDraftStorage";
 
 const TOKEN_KEY = "auth_token";
 
@@ -27,6 +29,8 @@ apiClient.interceptors.response.use(
 
     if (status === 401) {
       clearToken();
+      clearCartStorage();
+      clearOrderDraft();
       if (!window.location.pathname.startsWith("/login")) {
         window.location.replace("/login");
       }

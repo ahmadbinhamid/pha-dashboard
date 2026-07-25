@@ -66,6 +66,16 @@ function persist(items: CartItem[]) {
   }
 }
 
+// For use outside the CartProvider tree (logout, 401 interceptor) where
+// there's no `clearCart()` action available to update in-memory state too.
+export function clearCartStorage() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function clamp(quantity: number, max: number | null) {
   return max != null ? Math.min(quantity, max) : quantity;
 }

@@ -51,8 +51,6 @@ async function handleEvent(event) {
         return await handlePaymentFailed(event.data.object);
       case "charge.refunded":
         return await handleChargeRefunded(event.data.object);
-      case "checkout.session.completed":
-        return await handleCheckoutSessionCompleted(event.data.object);
       default:
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
@@ -63,34 +61,6 @@ async function handleEvent(event) {
     await StripeProcessedEvent.deleteOne({ stripe_event_id: event.id });
     throw err;
   }
-}
-
-// Fires for a Checkout Session (used by the admin dashboard's "Generate
-// Payment Link" flow) once the customer completes payment. Needed because
-// `stripe.checkout.sessions.create` doesn't reliably hand back the
-// underlying PaymentIntent id synchronously (see
-// stripe.payment.service.js#createPaymentLinkForOrder), so the Payment doc
-// may not have stripe_payment_intent_id set yet — fill it in here, then
-// hand off to the same handlePaymentSucceeded every other Stripe payment
-// path uses, so stock/order-status/email logic never has to be duplicated.
-async function handleCheckoutSessionCompleted(session) {
-  if (session.mode !== "payment" || session.payment_status !== "paid") return;
-
-  const payment = await Payment.findOne({ stripe_checkout_session_id: session.id });
-  if (!payment) {
-    logger.warn(`[stripe.webhook] checkout.session.completed for unknown session ${session.id}`);
-    return;
-  }
-  if (payment.status === PAYMENT_STATUS.SUCCEEDED) return; // already handled
-
-  if (!payment.stripe_payment_intent_id) {
-    payment.stripe_payment_intent_id = session.payment_intent;
-    await payment.save();
-  }
-
-  const stripe = getStripeClient();
-  const intent = await stripe.paymentIntents.retrieve(session.payment_intent);
-  await handlePaymentSucceeded(intent);
 }
 
 async function handlePaymentSucceeded(intent) {

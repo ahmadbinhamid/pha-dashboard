@@ -8,6 +8,8 @@ import {
 } from "react";
 import { clearToken, getToken, setToken } from "@/lib/api/client";
 import { getProfile } from "@/lib/api/auth";
+import { clearCartStorage } from "@/context/cart";
+import { clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { AuthUser } from "@/types/auth";
 
 interface AuthContextValue {
@@ -37,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // the axios interceptor already handles the 401 → redirect case.
         if (err.status === 401) {
           clearToken();
+          clearCartStorage();
+          clearOrderDraft();
           setTokenState(null);
         }
       })
@@ -52,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearToken();
+    clearCartStorage();
+    clearOrderDraft();
     setTokenState(null);
     setUser(null);
   }, []);

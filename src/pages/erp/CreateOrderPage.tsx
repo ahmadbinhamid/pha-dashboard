@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { Button } from "@/components/ui/Button";
 import { OrderStepper } from "@/components/pos/OrderStepper";
 import { AddProductsStep } from "@/components/pos/steps/AddProductsStep";
 import { CustomerDeliveryStep } from "@/components/pos/steps/CustomerDeliveryStep";
@@ -8,6 +9,7 @@ import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliv
 import { ReviewOrderStep } from "@/components/pos/steps/ReviewOrderStep";
 import { OrderConfirmationStep } from "@/components/pos/steps/OrderConfirmationStep";
 import { useCart } from "@/context/cart";
+import { ORDER_DRAFT_STORAGE_KEY, clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { Order, OrderAddress } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
 
@@ -41,8 +43,6 @@ interface WizardStorage {
   amountPaidInput: string;
 }
 
-const WIZARD_STORAGE_KEY = "pha-dashboard-create-order-wizard";
-
 const EMPTY_WIZARD: WizardStorage = {
   step: 1,
   customerDelivery: EMPTY_CUSTOMER_DELIVERY,
@@ -54,10 +54,15 @@ const EMPTY_WIZARD: WizardStorage = {
 
 function readStoredWizard(): WizardStorage {
   try {
-    const raw = localStorage.getItem(WIZARD_STORAGE_KEY);
+    const raw = localStorage.getItem(ORDER_DRAFT_STORAGE_KEY);
     if (!raw) return EMPTY_WIZARD;
     const parsed = JSON.parse(raw) as Partial<WizardStorage>;
-    return { ...EMPTY_WIZARD, ...parsed };
+    const merged = { ...EMPTY_WIZARD, ...parsed };
+    // Step 4 (confirmation) is never persisted with its `createdOrder` — that
+    // lives only in in-memory state — so resuming into it renders a blank
+    // confirmation screen. Treat a stored step 4 as stale and start over.
+    if (merged.step >= 4) return EMPTY_WIZARD;
+    return merged;
   } catch {
     return EMPTY_WIZARD;
   }
@@ -65,23 +70,15 @@ function readStoredWizard(): WizardStorage {
 
 function persistWizard(state: WizardStorage) {
   try {
-    localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(ORDER_DRAFT_STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* localStorage unavailable (private mode / quota) — wizard still works for this tab */
   }
 }
 
-function clearStoredWizard() {
-  try {
-    localStorage.removeItem(WIZARD_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
 export default function CreateOrderPage() {
   const navigate = useNavigate();
-  const { items } = useCart();
+  const { items, clearCart } = useCart();
 
   const initial = readStoredWizard();
   const [step, setStep] = useState(initial.step);
@@ -102,6 +99,11 @@ export default function CreateOrderPage() {
   }, []);
 
   useEffect(() => {
+    // Step 4 has nothing worth resuming (the order's already created) and
+    // isn't a valid resume target anyway — see readStoredWizard. Persisting
+    // it here would just re-write over the clearOrderDraft() call that
+    // handleOrderCreated makes right before this effect re-runs.
+    if (step === 4) return;
     persistWizard({ step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput });
   }, [step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput]);
 
@@ -118,7 +120,7 @@ export default function CreateOrderPage() {
     setCreatedOrder(order);
     setStep(4);
     // The order is done and the cart's already cleared — nothing left worth resuming.
-    clearStoredWizard();
+    clearOrderDraft();
   }
 
   function startNewOrder() {
@@ -129,12 +131,25 @@ export default function CreateOrderPage() {
     setAmountPaidInput("");
     setCreatedOrder(null);
     setStep(1);
-    clearStoredWizard();
+    clearOrderDraft();
+  }
+
+  function handleCancel() {
+    if (!window.confirm("Cancel this order? Your cart and progress will be cleared.")) return;
+    clearCart();
+    clearOrderDraft();
+    navigate("/orders");
   }
 
   return (
     <div className="space-y-6 pb-24">
-      <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer" />
+      <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer">
+        {step < 4 && (
+          <Button variant="ghost" size="md" onClick={handleCancel}>
+            Cancel
+          </Button>
+        )}
+      </PageHeader>
 
       <div className="rounded-xs border border-border bg-card px-5 py-5 shadow-card">
         <OrderStepper steps={STEPS} current={step} />
