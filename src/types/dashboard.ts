@@ -1,11 +1,54 @@
-import type { ListingSyncStatus } from "@/types/marketplace";
-
-export interface SyncStatusBreakdownItem {
-  status: ListingSyncStatus;
-  count: number;
+export interface DashboardStats {
+  totalInventoryValue: number; // dollars
+  lowStockCount: number;
+  outOfStockCount: number;
+  pendingOrdersCount: number;
+  pendingOrdersAvgAgeHours: number;
+  syncStabilityPct: number;
+  channelsOperational: number;
+  channelsTotal: number;
 }
 
-export interface RevenueTrendPoint {
+export interface OrderVolumePoint {
   date: string; // yyyy-mm-dd
-  totalCents: number;
+  orders: number;
+  revenueCents: number;
+  items: number;
+}
+
+export type OrderVolumeMetric = "orders" | "revenueCents" | "items";
+
+// Only channels this app actually integrates with are ever returned —
+// "not_connected" exists for a real channel with zero activity yet, never a
+// platform (Amazon/Walmart/Shopify) that isn't built.
+export type ChannelStatus = "operational" | "attention" | "not_connected";
+
+export interface ChannelHealth {
+  key: string;
+  name: string;
+  status: ChannelStatus;
+  lastSyncedAt: string | null;
+  detail?: string;
+  listingsSynced?: number;
+  listingsTotal?: number;
+}
+
+export type ActivityEventType = "order" | "stock";
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  title: string;
+  description: string;
+  timestamp: string;
+  tags: string[];
+}
+
+export interface CriticalStockItem {
+  inventoryId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  category: string | null;
+  stockCount: number;
 }

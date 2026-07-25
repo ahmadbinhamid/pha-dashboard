@@ -1,0 +1,49 @@
+// controllers/dashboard.controller.js
+
+const dashboardService = require("../services/dashboard.service");
+const { success, systemfailure } = require("../utils/http/response");
+
+exports.getStats = async (req, res) => {
+  try {
+    const stats = await dashboardService.getStats();
+    return success(res, stats);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getChannels = async (req, res) => {
+  try {
+    const { channels } = await dashboardService.getChannelHealth();
+    return success(res, channels);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getOrderVolume = async (req, res) => {
+  try {
+    const points = await dashboardService.getOrderVolumeTrend(req.query.days);
+    return success(res, points);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getActivity = async (req, res) => {
+  try {
+    const events = await dashboardService.getRecentActivity(req.query.limit);
+    return success(res, events);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getCriticalStock = async (req, res) => {
+  try {
+    const rows = await dashboardService.getCriticalStock(req.query.limit);
+    return success(res, rows);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
