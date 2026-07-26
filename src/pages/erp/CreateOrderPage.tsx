@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +8,7 @@ import { CustomerDeliveryStep } from "@/components/pos/steps/CustomerDeliverySte
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
 import { ReviewOrderStep } from "@/components/pos/steps/ReviewOrderStep";
 import { OrderConfirmationStep } from "@/components/pos/steps/OrderConfirmationStep";
+import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import { useCart } from "@/context/cart";
 import { ORDER_DRAFT_STORAGE_KEY, clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { Order, OrderAddress } from "@/types/orders";
@@ -88,6 +89,10 @@ export default function CreateOrderPage() {
   const [paymentChoice, setPaymentChoice] = useState<OrderPaymentChoice | "">(initial.paymentChoice);
   const [amountPaidInput, setAmountPaidInput] = useState(initial.amountPaidInput);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [reviewPending, setReviewPending] = useState(false);
+
+  const customerDeliveryRef = useRef<StepHandle>(null);
+  const reviewOrderRef = useRef<StepHandle>(null);
 
   // A restored step 2/3 with an empty cart means the cart was cleared
   // elsewhere (or the order behind it was already completed) — there's
@@ -141,6 +146,19 @@ export default function CreateOrderPage() {
     navigate("/orders");
   }
 
+  function handleBack() {
+    if (step === 2) setStep(1);
+    else if (step === 3) setStep(2);
+  }
+
+  function handleNext() {
+    if (step === 1) goToStep2();
+    else if (step === 2) customerDeliveryRef.current?.submit();
+    else if (step === 3) reviewOrderRef.current?.submit();
+  }
+
+  const nextDisabled = step === 1 ? items.length === 0 : step === 3 ? reviewPending : false;
+
   return (
     <div className="space-y-6 pb-24">
       <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer">
@@ -149,25 +167,36 @@ export default function CreateOrderPage() {
             Cancel
           </Button>
         )}
+        {step > 1 && step < 4 && (
+          <Button variant="secondary" size="md" onClick={handleBack} disabled={reviewPending}>
+            Back
+          </Button>
+        )}
+        {step < 4 && (
+          <Button variant="primary" size="md" onClick={handleNext} disabled={nextDisabled}>
+            {step === 3 ? (reviewPending ? "Creating…" : "Create") : "Next"}
+          </Button>
+        )}
       </PageHeader>
 
       <div className="rounded-xs border border-border bg-card px-5 py-5 shadow-card">
         <OrderStepper steps={STEPS} current={step} />
       </div>
 
-      {step === 1 && <AddProductsStep onContinue={goToStep2} />}
+      {step === 1 && <AddProductsStep />}
 
       {step === 2 && (
         <CustomerDeliveryStep
+          ref={customerDeliveryRef}
           state={customerDelivery}
           onChange={patchCustomerDelivery}
-          onBack={() => setStep(1)}
           onContinue={() => setStep(3)}
         />
       )}
 
       {step === 3 && (
         <ReviewOrderStep
+          ref={reviewOrderRef}
           customerDelivery={customerDelivery}
           orderNote={orderNote}
           onOrderNoteChange={setOrderNote}
@@ -177,8 +206,8 @@ export default function CreateOrderPage() {
           onPaymentChoiceChange={setPaymentChoice}
           amountPaidInput={amountPaidInput}
           onAmountPaidInputChange={setAmountPaidInput}
-          onBack={() => setStep(2)}
           onOrderCreated={handleOrderCreated}
+          onPendingChange={setReviewPending}
         />
       )}
 

@@ -81,6 +81,19 @@ exports.sendOrderEmail = async (req, res) => {
   }
 };
 
+exports.downloadInvoicePdf = async (req, res) => {
+  try {
+    const { pdfBuffer, orderNumber } = await orderService.getInvoicePdfForOrder(req.params.id);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${orderNumber}-invoice.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.generatePaymentLink = async (req, res) => {
   try {
     // +guest_access_token: select:false by default — needed to build the link.

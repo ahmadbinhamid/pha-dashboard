@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { User, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
@@ -16,6 +15,7 @@ import { formatCurrency } from "@/utils/format";
 import { PICKUP_LOCATION } from "@/config/company";
 import { ORDER_PAYMENT_CHOICE_LABEL } from "@/config/paymentMethods";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
+import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { Order } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
 
@@ -29,23 +29,28 @@ interface ReviewOrderStepProps {
   onPaymentChoiceChange: (choice: OrderPaymentChoice | "") => void;
   amountPaidInput: string;
   onAmountPaidInputChange: (value: string) => void;
-  onBack: () => void;
   onOrderCreated: (order: Order) => void;
+  // Bubbles the create-order mutation's pending state up to the page header,
+  // which owns the Create button now (and needs to show "Creating…"/disable it).
+  onPendingChange?: (pending: boolean) => void;
 }
 
-export function ReviewOrderStep({
-  customerDelivery,
-  orderNote,
-  onOrderNoteChange,
-  discounts,
-  onDiscountsChange,
-  paymentChoice,
-  onPaymentChoiceChange,
-  amountPaidInput,
-  onAmountPaidInputChange,
-  onBack,
-  onOrderCreated,
-}: ReviewOrderStepProps) {
+export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(function ReviewOrderStep(
+  {
+    customerDelivery,
+    orderNote,
+    onOrderNoteChange,
+    discounts,
+    onDiscountsChange,
+    paymentChoice,
+    onPaymentChoiceChange,
+    amountPaidInput,
+    onAmountPaidInputChange,
+    onOrderCreated,
+    onPendingChange,
+  },
+  ref,
+) {
   const { toast } = useToast();
   const { items, clearCart } = useCart();
   const { customer, deliveryMethod, shippingAddress, useDifferentBilling, billingAddress } = customerDelivery;
@@ -65,7 +70,11 @@ export function ReviewOrderStep({
 
   const rawSubtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0);
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
-  const total = rawSubtotal - totalDiscount;
+  // Nothing to ship for pickup — matches order.service.js#createManualOrder,
+  // which only charges freight when delivery_method is "delivery".
+  const shippingTotal =
+    deliveryMethod === "delivery" ? items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) : 0;
+  const total = rawSubtotal - totalDiscount + shippingTotal;
   const isPaymentLink = paymentChoice === "payment_link";
   const amountPaid = isPaymentLink ? 0 : Math.min(Math.max(Number(amountPaidInput) || 0, 0), total);
   const amountDue = total - amountPaid;
@@ -113,6 +122,13 @@ export function ReviewOrderStep({
     });
   }
 
+  useImperativeHandle(ref, () => ({ submit: handleSubmit }));
+
+  useEffect(() => {
+    onPendingChange?.(createMutation.isPending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createMutation.isPending]);
+
   if (!customer) return null;
 
   return (
@@ -121,18 +137,16 @@ export function ReviewOrderStep({
         <div className="space-y-5 lg:col-span-2">
           <Card>
             <CardHeader title="Product List" description={`${items.length} line${items.length !== 1 ? "s" : ""}`} />
-            <div className="overflow-x-auto">
-              <div className="min-w-max divide-y divide-border">
-                {lines.map(({ item, lineTotal }) => (
-                  <CartItemRow
-                    key={item.key}
-                    item={item}
-                    discountValue={discounts[item.key] ?? ""}
-                    onDiscountChange={(value) => onDiscountsChange({ ...discounts, [item.key]: value })}
-                    lineTotal={lineTotal}
-                  />
-                ))}
-              </div>
+            <div className="divide-y divide-border">
+              {lines.map(({ item, lineTotal }) => (
+                <CartItemRow
+                  key={item.key}
+                  item={item}
+                  discountValue={discounts[item.key] ?? ""}
+                  onDiscountChange={(value) => onDiscountsChange({ ...discounts, [item.key]: value })}
+                  lineTotal={lineTotal}
+                />
+              ))}
             </div>
           </Card>
 
@@ -161,7 +175,7 @@ export function ReviewOrderStep({
               </div>
               <div className="flex justify-between text-fg/60">
                 <span>Shipping</span>
-                <span>{formatCurrency(0)}</span>
+                <span>{formatCurrency(shippingTotal)}</span>
               </div>
               <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-fg">
                 <span>Total</span>
@@ -278,15 +292,6 @@ export function ReviewOrderStep({
           </Card>
         </div>
       </div>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" size="md" onClick={onBack}>
-          Back
-        </Button>
-        <Button variant="primary" size="md" disabled={createMutation.isPending} onClick={handleSubmit}>
-          {createMutation.isPending ? "Creating…" : "Create Order & Generate Invoice"}
-        </Button>
-      </div>
     </div>
   );
-}
+});

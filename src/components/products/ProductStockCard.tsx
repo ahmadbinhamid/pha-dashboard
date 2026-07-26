@@ -85,15 +85,15 @@ export function ProductStockCard({ productId, variantId }: ProductStockCardProps
         </div>
       </div>
 
-      {setStockTarget && (
-        <SetStockDialogFull
-          item={setStockTarget}
-          onClose={() => {
+      <SetStockDialogFull
+        item={setStockTarget}
+        onOpenChange={(open) => {
+          if (!open) {
             setSetStockTarget(null);
             refetchInv();
-          }}
-        />
-      )}
+          }
+        }}
+      />
     </>
   );
 }

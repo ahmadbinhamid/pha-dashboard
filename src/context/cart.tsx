@@ -50,9 +50,9 @@ function readStored(): CartItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    // `note` predates this field on carts persisted before it was added —
+    // `note`/`shipping_cost` predate carts persisted before they were added —
     // normalize rather than drop those items.
-    return parsed.filter(isCartItem).map((i) => ({ ...i, note: i.note ?? null }));
+    return parsed.filter(isCartItem).map((i) => ({ ...i, note: i.note ?? null, shipping_cost: i.shipping_cost ?? 0 }));
   } catch {
     return [];
   }

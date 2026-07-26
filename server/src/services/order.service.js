@@ -144,6 +144,7 @@ async function resolveManualOrderItem({
     name,
     sku,
     unit_price: unitPriceCents,
+    shipping_cost: product.shipping_cost ?? 0, // dollars, per-unit freight cost
     quantity,
     discount_amount: discountCents,
     note: note || null,
@@ -185,8 +186,16 @@ async function createManualOrder({
     (sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount),
     0,
   );
+  // Nothing to ship for pickup — skip the per-item shipping cost entirely
+  // rather than charging for shipping that never happens. Mirrors createOrder
+  // (storefront checkout) so a staff-created delivery order isn't silently free freight.
+  const shipping_cost = isPickup
+    ? 0
+    : Math.round(
+        resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
+      );
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
-  const total = subtotal; // manual/counter sales carry no separate shipping charge
+  const total = subtotal + shipping_cost;
 
   // "payment_link" means nothing is collected now — the customer pays later
   // via a Stripe-hosted link generated separately (see
@@ -212,7 +221,7 @@ async function createManualOrder({
     billing_address: isPickup ? null : billing_address || null,
     note: note || null,
     subtotal,
-    shipping_cost: 0,
+    shipping_cost,
     tax_amount,
     total,
     currency: "aud",
@@ -654,6 +663,22 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   return order;
 }
 
+// Admin action triggered by the "Download PDF" button on the order detail
+// page — the same pdfkit-rendered tax invoice emailed via sendOrderNotification,
+// just handed straight to the browser instead of attached to an email. Kept as
+// its own read-only fetch (rather than reusing sendOrderNotification) since
+// downloading never needs the tracking-number capture/fulfilment side effect
+// that function has for delivery orders.
+async function getInvoicePdfForOrder(orderId) {
+  const order = await Order.findById(orderId).populate("payment");
+  if (!order) throw httpError("Order not found", 404);
+
+  const totalPaidCents = await getTotalPaidForOrder(order._id);
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
+
+  return { pdfBuffer, orderNumber: order.order_number };
+}
+
 module.exports = {
   createOrder,
   createManualOrder,
@@ -665,5 +690,6 @@ module.exports = {
   listOrders,
   getOrderDetailForAdmin,
   sendOrderNotification,
+  getInvoicePdfForOrder,
   addOrderNote,
 };

@@ -21,6 +21,13 @@ router.get("/:id", validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 router.get("/", auth(), admin, pagination(), validate(v.listOrders), asyncHandler(ctrl.listOrders));
 router.post("/manual", auth(), admin, validate(v.createManualOrder), asyncHandler(ctrl.createManualOrder));
 router.get("/:id/detail", auth(), admin, validate(v.adminByIdParam), asyncHandler(ctrl.getOrderDetail));
+router.get(
+  "/:id/invoice-pdf",
+  auth(),
+  admin,
+  validate(v.adminByIdParam),
+  asyncHandler(ctrl.downloadInvoicePdf),
+);
 router.post("/:id/send-email", auth(), admin, validate(v.sendOrderEmail), asyncHandler(ctrl.sendOrderEmail));
 router.post(
   "/:id/payment-link",

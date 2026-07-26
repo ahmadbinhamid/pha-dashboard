@@ -4,7 +4,7 @@ import { Search, Package, ShoppingCart } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/Select";
-import { Button } from "@/components/ui/Button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
@@ -12,7 +12,10 @@ import { getProducts } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { formatCurrency } from "@/utils/format";
 
-export function AddProductsStep({ onContinue }: { onContinue: () => void }) {
+// Continuing to step 2 needs no validation beyond "cart isn't empty" — the
+// page header's Next button checks that directly, so this step doesn't need
+// its own bottom button or an onContinue prop.
+export function AddProductsStep() {
   const { items, totalPrice } = useCart();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -60,7 +63,7 @@ export function AddProductsStep({ onContinue }: { onContinue: () => void }) {
           </NativeSelect>
         </div>
 
-        <div className="max-h-[28rem] divide-y divide-border overflow-y-auto">
+        <div className="max-h-112 divide-y divide-border overflow-y-auto">
           {isFetching && products.length === 0 ? (
             <div className="py-10 text-center text-sm text-fg/50">Loading products…</div>
           ) : products.length === 0 ? (
@@ -82,11 +85,16 @@ export function AddProductsStep({ onContinue }: { onContinue: () => void }) {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium text-fg">{product.title}</div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="truncate font-medium text-fg">{product.title}</div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{product.title}</TooltipContent>
+                  </Tooltip>
                   {product.has_variants && <span className="text-xs text-fg/45">Has variants</span>}
                 </div>
                 <div className="w-20 shrink-0 text-right text-sm text-fg/70">{formatCurrency(product.price)}</div>
-                <AddToCartButton product={product} display="labeled" />
+                <AddToCartButton product={product} display="icon-solid" className="shrink-0" />
               </div>
             ))
           )}
@@ -108,21 +116,11 @@ export function AddProductsStep({ onContinue }: { onContinue: () => void }) {
               ))}
             </div>
           )}
-          <div className="space-y-3 border-t border-border px-5 py-4">
+          <div className="border-t border-border px-5 py-4">
             <div className="flex justify-between text-sm font-semibold text-fg">
               <span>Total</span>
               <span>{formatCurrency(totalPrice)}</span>
             </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              className="w-full"
-              disabled={items.length === 0}
-              onClick={onContinue}
-            >
-              Continue to Customer Details
-            </Button>
           </div>
         </Card>
       </div>

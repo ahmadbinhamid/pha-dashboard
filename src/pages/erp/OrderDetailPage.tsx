@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Printer, Mail, Pencil, PackageX } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Printer, Mail, Pencil, PackageX, Download } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
@@ -15,7 +15,8 @@ import { OrderNotesSection } from "@/components/orders/OrderNotesSection";
 import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
 import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
-import { getOrderDetail } from "@/lib/api/orders";
+import { getOrderDetail, downloadInvoicePdf } from "@/lib/api/orders";
+import { useToast } from "@/context";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderAddress } from "@/types/orders";
 
@@ -75,6 +76,7 @@ function NotFoundState() {
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
 
@@ -85,6 +87,23 @@ export default function OrderDetailPage() {
   });
 
   const order = data?.data;
+
+  const downloadPdfMutation = useMutation({
+    mutationFn: () => downloadInvoicePdf(id!),
+    onSuccess: ({ blob, filename }) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't download invoice", description: err.message, tone: "danger" });
+    },
+  });
 
   if (isLoading) return <OrderDetailSkeleton />;
   if (isError || !order) return <NotFoundState />;
@@ -118,6 +137,16 @@ export default function OrderDetailPage() {
             <Button variant="secondary" size="md" className="gap-2" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
               Print Invoice
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              className="gap-2"
+              disabled={downloadPdfMutation.isPending}
+              onClick={() => downloadPdfMutation.mutate()}
+            >
+              <Download className="h-4 w-4" />
+              {downloadPdfMutation.isPending ? "Preparing…" : "Download PDF"}
             </Button>
             <Button variant="primary" size="md" className="gap-2" onClick={() => setEmailModalOpen(true)}>
               <Mail className="h-4 w-4" />

@@ -1,16 +1,64 @@
-import { useState } from "react";
-import { UserCheck, X } from "lucide-react";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { UserCheck, X, Store, Truck } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
-import { Radio, RadioGroup } from "@/components/ui/Radio";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { CustomerSearchCombobox } from "@/components/pos/CustomerSearchCombobox";
 import { AddressFields } from "@/components/pos/AddressFields";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { useToast } from "@/context";
+import { cn } from "@/utils/cn";
+import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { Customer } from "@/types/customer";
 import type { OrderAddress, OrderDeliveryMethod } from "@/types/orders";
+
+interface FulfilmentOptionProps {
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+// Card-style option instead of a bare native radio input — same selectable-
+// card pattern as the rest of the app's "pick one of a few things" moments.
+function FulfilmentOption({ icon: Icon, label, description, selected, onSelect }: FulfilmentOptionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex flex-1 items-start gap-3 rounded-md border p-4 text-left transition",
+        "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
+        selected ? "border-accent bg-accent/5" : "border-border bg-card hover:border-fg/20 hover:bg-bg-2/40",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+          selected ? "bg-accent/15 text-accent" : "bg-bg-2 text-fg/50",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-fg">{label}</span>
+          <span
+            className={cn(
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+              selected ? "border-accent" : "border-border",
+            )}
+          >
+            {selected && <span className="h-2 w-2 rounded-full bg-accent" />}
+          </span>
+        </span>
+        <span className="mt-0.5 block text-xs text-fg/55">{description}</span>
+      </span>
+    </button>
+  );
+}
 
 export interface CustomerDeliveryState {
   customer: Customer | null;
@@ -23,13 +71,17 @@ export interface CustomerDeliveryState {
 interface CustomerDeliveryStepProps {
   state: CustomerDeliveryState;
   onChange: (patch: Partial<CustomerDeliveryState>) => void;
-  onBack: () => void;
   onContinue: () => void;
 }
 
 // Combines what were two separate steps (customer, and pickup/delivery mode)
-// into one — the two are always decided together for a manual sale.
-export function CustomerDeliveryStep({ state, onChange, onBack, onContinue }: CustomerDeliveryStepProps) {
+// into one — the two are always decided together for a manual sale. Back
+// needs no validation so the page header handles it directly; Continue does,
+// so it's exposed via ref for the header's Next button to trigger.
+export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepProps>(function CustomerDeliveryStep(
+  { state, onChange, onContinue },
+  ref,
+) {
   const { toast } = useToast();
   const { customer, deliveryMethod, shippingAddress, useDifferentBilling, billingAddress } = state;
 
@@ -68,8 +120,10 @@ export function CustomerDeliveryStep({ state, onChange, onBack, onContinue }: Cu
     onContinue();
   }
 
+  useImperativeHandle(ref, () => ({ submit: handleContinue }));
+
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="space-y-5">
       <Card>
         <CardHeader title="Customer" />
         <CardContent className="space-y-3">
@@ -108,22 +162,22 @@ export function CustomerDeliveryStep({ state, onChange, onBack, onContinue }: Cu
       <Card>
         <CardHeader title="Fulfilment" />
         <CardContent className="space-y-5">
-          <RadioGroup>
-            <Radio
-              name="delivery_method"
-              checked={deliveryMethod === "pickup"}
-              onChange={() => onChange({ deliveryMethod: "pickup" })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FulfilmentOption
+              icon={Store}
               label="Pickup"
               description="Customer will collect this order in-store."
+              selected={deliveryMethod === "pickup"}
+              onSelect={() => onChange({ deliveryMethod: "pickup" })}
             />
-            <Radio
-              name="delivery_method"
-              checked={deliveryMethod === "delivery"}
-              onChange={() => onChange({ deliveryMethod: "delivery" })}
+            <FulfilmentOption
+              icon={Truck}
               label="Delivery"
               description="Ship this order to the customer's address."
+              selected={deliveryMethod === "delivery"}
+              onSelect={() => onChange({ deliveryMethod: "delivery" })}
             />
-          </RadioGroup>
+          </div>
 
           {deliveryMethod === "delivery" && (
             <div className="space-y-4 border-t border-border pt-5">
@@ -161,15 +215,6 @@ export function CustomerDeliveryStep({ state, onChange, onBack, onContinue }: Cu
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" size="md" onClick={onBack}>
-          Back
-        </Button>
-        <Button variant="primary" size="md" onClick={handleContinue}>
-          Continue to Review
-        </Button>
-      </div>
-
       <CustomerFormModal
         open={customerFormOpen}
         onOpenChange={setCustomerFormOpen}
@@ -179,4 +224,4 @@ export function CustomerDeliveryStep({ state, onChange, onBack, onContinue }: Cu
       />
     </div>
   );
-}
+});

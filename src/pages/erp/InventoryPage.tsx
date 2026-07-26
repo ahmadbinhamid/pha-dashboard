@@ -11,7 +11,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components
 import { InventoryRow } from "@/components/inventory/InventoryRow";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
-import { ViewHistoryModal } from "@/components/inventory/ViewHistoryModal";
+import { InventoryHistorySheet } from "@/components/inventory/InventoryHistorySheet";
 import { InventorySettingsModal } from "@/components/inventory/InventorySettingsModal";
 import { getInventory, getInventorySettings } from "@/lib/api/inventory";
 import { getLocations } from "@/lib/api/products";
@@ -206,17 +206,17 @@ export default function InventoryPage() {
 
       <AdjustStockDialog item={adjustTarget} onOpenChange={(open) => !open && setAdjustTarget(null)} />
 
-      {setStockTarget && (
-        <SetStockDialogFull
-          item={setStockTarget}
-          onClose={() => {
+      <SetStockDialogFull
+        item={setStockTarget}
+        onOpenChange={(open) => {
+          if (!open) {
             setSetStockTarget(null);
             refetch();
-          }}
-        />
-      )}
+          }
+        }}
+      />
 
-      <ViewHistoryModal item={historyTarget} onOpenChange={(open) => !open && setHistoryTarget(null)} />
+      <InventoryHistorySheet item={historyTarget} onOpenChange={(open) => !open && setHistoryTarget(null)} />
 
       <InventorySettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>

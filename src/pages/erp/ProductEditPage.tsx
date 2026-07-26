@@ -11,6 +11,12 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { FormField } from "@/components/ui/FormField";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/ActionsMenu";
 import { ProductImages } from "@/components/media/ProductImages";
 import { ProductStockCard } from "@/components/products/ProductStockCard";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
@@ -33,6 +39,8 @@ import type {
 import { formatCurrency } from "@/utils/format";
 import {
   ShoppingBag,
+  ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 
@@ -200,6 +208,32 @@ export default function ProductEditPage() {
     },
   });
 
+  // Immediate, independent of the main Save flow — mirrors the Products list's
+  // publish/hide toggle. Also patches `form`/savedFormRef directly so the
+  // in-progress edit's dirty-check doesn't go stale and a later Save doesn't
+  // silently revert the status back.
+  const statusMutation = useMutation({
+    mutationFn: (status: Product["status"]) => {
+      const fd = new FormData();
+      fd.append("status", status);
+      return updateProduct(product!._id, fd);
+    },
+    onSuccess: (_res, status) => {
+      setForm((prev) => (prev ? { ...prev, status } : null));
+      try {
+        savedFormRef.current = JSON.stringify({ ...JSON.parse(savedFormRef.current), status });
+      } catch {
+        /* ignore — worst case isDirty is briefly wrong until next save */
+      }
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product", slug] });
+      toast({ title: "Product marked as active", tone: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update status", description: err.message, tone: "danger" });
+    },
+  });
+
   const set = <K extends keyof ProductEditFormState>(
     key: K,
     value: ProductEditFormState[K],
@@ -287,9 +321,27 @@ export default function ProductEditPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <ProductEssentialsProgress completed={essentialsCompleted} total={essentials.length} />
-            <Badge variant={product.status === "active" ? "ok" : "muted"} className="hidden sm:inline-flex">
-              {product.status === "active" ? "Active" : "Draft"}
-            </Badge>
+            {product.status === "active" ? (
+              <Badge variant="ok" className="hidden sm:inline-flex">Active</Badge>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="hidden h-auto w-auto items-center gap-1 rounded-full px-0 py-0 text-fg/40 hover:bg-transparent hover:text-fg/40 data-[state=open]:bg-transparent data-[state=open]:text-fg/40 sm:inline-flex">
+                  <Badge variant="muted" className="cursor-pointer">
+                    Draft
+                    <ChevronDown className="h-3 w-3" />
+                  </Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onSelect={() => statusMutation.mutate("active")}
+                    disabled={statusMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-fg/50" />
+                    Active
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <AddToCartButton product={product} display="labeled" />
             <Button
               type="button"

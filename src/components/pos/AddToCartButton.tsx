@@ -14,8 +14,10 @@ import type { Product } from "@/types/product";
 interface AddToCartButtonProps {
   product: Product;
   // "icon" for dense contexts (table rows); "labeled" for a full button
-  // (product detail page).
-  display?: "icon" | "labeled";
+  // (product detail page); "icon-solid" for a prominent circular action in
+  // a shopping list (Add Products step) — same icon-only content as "icon"
+  // but sized and colored to read as the row's primary action, not a minor one.
+  display?: "icon" | "labeled" | "icon-solid";
   className?: string;
 }
 
@@ -57,6 +59,7 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
       sku: product.sku,
       image_url: product.attachments?.[0]?.url ?? null,
       unit_price: product.price,
+      shipping_cost: product.shipping_cost ?? 0,
       max_quantity: product.stock_control ? product.stock_count : null,
     });
   }
@@ -72,6 +75,8 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
       sku: variant.sku,
       image_url: variant.attachments?.[0]?.url ?? product.attachments?.[0]?.url ?? null,
       unit_price: variant.price,
+      // No per-variant shipping rate — always the parent product's.
+      shipping_cost: product.shipping_cost ?? 0,
       quantity,
       // Variant-level stock isn't exposed by the list-variants endpoint —
       // the backend re-validates real availability at order-creation time.
@@ -88,13 +93,20 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
     </>
   );
 
+  const triggerVariant = display === "labeled" ? "secondary" : display === "icon-solid" ? "primary" : "ghost";
+  const triggerSize = display === "labeled" ? "sm" : "icon";
+  const triggerClassName = cn(
+    display === "icon-solid" ? "h-10 w-10 rounded-full p-0" : display === "icon" ? "h-7 w-7 p-0" : "gap-1.5",
+    className,
+  );
+
   if (!product.has_variants) {
     return (
       <Button
         type="button"
-        variant={display === "icon" ? "ghost" : "secondary"}
-        size={display === "icon" ? "icon" : "sm"}
-        className={cn(display === "icon" ? "h-7 w-7 p-0" : "gap-1.5", className)}
+        variant={triggerVariant}
+        size={triggerSize}
+        className={triggerClassName}
         disabled={isBaseOutOfStock}
         title={isBaseOutOfStock ? "Out of stock" : "Add to cart"}
         onClick={(e) => {
@@ -118,9 +130,9 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
       <Popover.Trigger asChild>
         <Button
           type="button"
-          variant={display === "icon" ? "ghost" : "secondary"}
-          size={display === "icon" ? "icon" : "sm"}
-          className={cn(display === "icon" ? "h-7 w-7 p-0" : "gap-1.5", className)}
+          variant={triggerVariant}
+          size={triggerSize}
+          className={triggerClassName}
           title="Add to cart"
           onClick={(e) => e.stopPropagation()}
         >

@@ -7,6 +7,10 @@ export interface CartItem {
   sku: string | null;
   image_url: string | null;
   unit_price: number; // dollars, matches Product/ProductVariant.price convention
+  // Per-unit freight cost, dollars — always the parent Product's shipping_cost
+  // (there's no per-variant shipping rate), summed into the order total for
+  // delivery orders only. Mirrors Order.service.js#resolveOrderItem.
+  shipping_cost: number;
   quantity: number;
   // Soft stock cap captured at add-to-cart time — a best-effort UX guard
   // only; the backend always re-validates real stock at order-creation time.

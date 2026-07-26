@@ -58,8 +58,8 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
         <button
           type="button"
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-xs border border-border bg-bg px-3 py-2 text-sm shadow-sm",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+            "flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input)",
+            "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
             value ? "text-fg" : "text-fg/45",
             className,
           )}
@@ -75,20 +75,24 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
           sideOffset={4}
           align="start"
           className={cn(
-            "z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-xs border border-border bg-bg shadow-lg",
+            "z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-md border border-border bg-card shadow-lg",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+            "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            "data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2",
           )}
         >
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name, email, phone…"
-              className="flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg/40"
-            />
-            {isFetching && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-fg/40" />}
+          <div className="p-2">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-2.5 transition-shadow duration-150 focus-within:ring-2 focus-within:ring-accent/45">
+              <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, email, phone…"
+                className="flex-1 bg-transparent text-sm text-fg outline-none! placeholder:text-fg/40"
+              />
+              {isFetching && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-fg/40" />}
+            </div>
           </div>
 
           <div className="max-h-60 overflow-y-auto p-1">

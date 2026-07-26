@@ -22,7 +22,19 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    // A request made with responseType: "blob" (e.g. downloading a PDF) still
+    // gets its ERROR body parsed as a Blob, not JSON — recover the real
+    // message so a failed download doesn't just say "Request failed with
+    // status code 404" instead of the backend's actual error message.
+    if (err.response?.data instanceof Blob && err.response.data.type?.includes("json")) {
+      try {
+        err.response.data = JSON.parse(await err.response.data.text());
+      } catch {
+        /* wasn't actually JSON — leave as-is */
+      }
+    }
+
     const status: number | undefined = err.response?.status;
     const message: string =
       err.response?.data?.message ?? err.message ?? "Something went wrong";

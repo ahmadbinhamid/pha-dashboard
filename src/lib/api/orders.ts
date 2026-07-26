@@ -31,6 +31,17 @@ export const sendOrderEmail = async (id: string, payload: SendOrderEmailPayload 
   return data;
 };
 
+// The same pdfkit-rendered tax invoice attached to the order emails — no
+// BeResponse envelope here, the server sends the raw PDF bytes. Filename
+// comes from the server's Content-Disposition header (order number), with a
+// generic fallback only if that header is somehow missing.
+export const downloadInvoicePdf = async (id: string) => {
+  const response = await apiClient.get(`/order/${id}/invoice-pdf`, { responseType: "blob" });
+  const disposition = response.headers["content-disposition"] as string | undefined;
+  const filename = disposition?.match(/filename="?([^"]+)"?/)?.[1] ?? `invoice-${id}.pdf`;
+  return { blob: response.data as Blob, filename };
+};
+
 // ── Manual/in-person orders (POS) ───────────────────────────────────────────
 
 export interface CreateManualOrderItemPayload {
