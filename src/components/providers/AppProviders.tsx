@@ -3,7 +3,6 @@ import { AuthProvider } from "@/context/auth";
 import {
   ToastProvider,
   OrgSettingsProvider,
-  InventoryProvider,
   CartProvider,
 } from "@/context";
 import { TooltipProvider } from "@/components/ui/Tooltip";
@@ -23,13 +22,11 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <OrgSettingsProvider>
-          <InventoryProvider>
-            <ToastProvider>
-              <CartProvider>
-                <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-              </CartProvider>
-            </ToastProvider>
-          </InventoryProvider>
+          <ToastProvider>
+            <CartProvider>
+              <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+            </CartProvider>
+          </ToastProvider>
         </OrgSettingsProvider>
       </AuthProvider>
     </QueryClientProvider>

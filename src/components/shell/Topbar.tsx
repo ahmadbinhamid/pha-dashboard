@@ -1,18 +1,16 @@
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import { UserMenu } from "@/components/shell/UserMenu";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { cn } from "@/utils/cn";
-import { InventorySearchDialog } from "@/components/inventory/InventorySearchDialog";
 import { useCart } from "@/context/cart";
-import { Menu, Search, PackageSearch, ShoppingCart } from "lucide-react";
+import { Menu, Search, ShoppingCart } from "lucide-react";
 
 export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
   const navigate = useNavigate();
   const { totalItems } = useCart();
-  const [inventorySearchOpen, setInventorySearchOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -80,17 +78,6 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => setInventorySearchOpen(true)}
-              aria-label="Search inventory"
-              title="Search inventory (make, model, year)"
-            >
-              <PackageSearch className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
               className="relative h-9 w-9 shrink-0"
               onClick={() => navigate("/create-order")}
               aria-label="Create order"
@@ -111,13 +98,6 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
       </header>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-
-      <Suspense fallback={null}>
-        <InventorySearchDialog
-          open={inventorySearchOpen}
-          onClose={() => setInventorySearchOpen(false)}
-        />
-      </Suspense>
     </>
   );
 }
