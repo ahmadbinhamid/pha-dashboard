@@ -112,7 +112,7 @@ export default function OrderDetailPage() {
   const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24">
+    <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
       {/* On-screen admin view — the actual invoice (matching what's emailed
           to the customer) is rendered separately below, for print only. */}
       <div className="space-y-5 print:hidden">
@@ -165,7 +165,7 @@ export default function OrderDetailPage() {
           <div className="space-y-5 lg:col-span-2">
             <Card>
               <CardHeader title="Items" description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`} />
-              <OrderItemsTable items={order.items} />
+              <OrderItemsTable items={order.items} orderId={order._id} channel={order.channel} />
               <div className="space-y-1.5 border-t border-border px-5 py-4 text-sm">
                 <div className="flex justify-between text-fg/60">
                   <span>Subtotal</span>

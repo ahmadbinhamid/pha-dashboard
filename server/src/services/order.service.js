@@ -348,6 +348,49 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
   return order;
 }
 
+// Corrects a single line item's price on a storefront/eBay order — e.g. a
+// listing that synced with the wrong price. Manual orders are out of scope:
+// their pricing is already adjustable at creation time via discount_amount
+// (see resolveManualOrderItem), and reopening unit_price after the fact would
+// give staff two conflicting ways to change the same number. Recomputes
+// subtotal/tax_amount/total the same way order creation does, so the invoice
+// always reflects live line-item data rather than a stale creation-time
+// snapshot. Note: if the order was already paid before this edit, the new
+// total can diverge from what was actually collected — that's surfaced to
+// staff via the order's Balance Outstanding figure for manual reconciliation,
+// not auto-resolved here (no refund/extra-charge is triggered).
+async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+  if (order.channel === ORDER_CHANNEL.MANUAL) {
+    throw httpError("Manual order prices are set via discount at creation, not edited afterward", 400);
+  }
+  const item = order.items[itemIndex];
+  if (!item) {
+    throw httpError("Order item not found", 404);
+  }
+  if (!Number.isFinite(unit_price) || unit_price <= 0) {
+    throw httpError("Unit price must be greater than 0", 400);
+  }
+
+  const unitPriceCents = Math.round(unit_price * 100);
+  if (item.original_unit_price === null) {
+    item.original_unit_price = item.unit_price;
+  }
+  item.unit_price = unitPriceCents;
+  item.unit_price_updated_at = new Date();
+  item.unit_price_updated_by = userId || null;
+
+  order.subtotal = order.items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount), 0);
+  order.tax_amount = Math.round(order.subtotal / GST_DIVISOR);
+  order.total = order.subtotal + order.shipping_cost;
+
+  await order.save();
+  return order;
+}
+
 // Adds a staff comment to an order's internal notes thread — distinct from
 // the customer-facing `note` captured once at creation.
 async function addOrderNote(orderId, { text, userId }) {
@@ -707,4 +750,5 @@ module.exports = {
   sendOrderNotification,
   getInvoicePdfForOrder,
   addOrderNote,
+  updateOrderItemPrice,
 };

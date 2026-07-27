@@ -45,5 +45,12 @@ router.put(
   asyncHandler(ctrl.updateOrderCustomerDetails),
 );
 router.post("/:id/notes", auth(), admin, validate(v.addOrderNote), asyncHandler(ctrl.addOrderNote));
+router.patch(
+  "/:id/items/:itemIndex/price",
+  auth(),
+  admin,
+  validate(v.updateOrderItemPrice),
+  asyncHandler(ctrl.updateOrderItemPrice),
+);
 
 module.exports = router;

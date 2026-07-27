@@ -129,6 +129,20 @@ exports.updateOrderCustomerDetails = async (req, res) => {
   }
 };
 
+exports.updateOrderItemPrice = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderItemPrice(req.params.id, req.params.itemIndex, {
+      unit_price: req.body.unit_price,
+      userId: req.user?._id,
+    });
+    return success(res, order, "Price updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.addOrderNote = async (req, res) => {
   try {
     const order = await orderService.addOrderNote(req.params.id, {

@@ -145,6 +145,19 @@ const recordPayment = {
   }),
 };
 
+// Corrects a single line item's price on a storefront/eBay order — see
+// order.service.js#updateOrderItemPrice for why manual orders are excluded
+// (that check needs DB state, so it lives in the service, not here).
+const updateOrderItemPrice = {
+  params: Joi.object({
+    id: Joi.string().hex().length(24).required(),
+    itemIndex: Joi.number().integer().min(0).required(),
+  }),
+  body: Joi.object({
+    unit_price: Joi.number().greater(0).required(), // dollars
+  }),
+};
+
 const addOrderNote = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -184,4 +197,5 @@ module.exports = {
   recordPayment,
   addOrderNote,
   updateOrderCustomerDetails,
+  updateOrderItemPrice,
 };

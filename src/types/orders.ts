@@ -44,6 +44,12 @@ export interface OrderItem {
   note: string | null;
   ebay_sync_status: "not_applicable" | "pending" | "synced" | "failed";
   ebay_sync_error: string | null;
+  // Price-edit audit trail (storefront/eBay orders only — see
+  // order.service.js#updateOrderItemPrice). original_unit_price is captured
+  // once, on the first edit; unit_price itself is always the current price.
+  original_unit_price: number | null;
+  unit_price_updated_at: string | null;
+  unit_price_updated_by: string | null;
 }
 
 // Internal staff comment thread — distinct from Order.note (customer-facing,

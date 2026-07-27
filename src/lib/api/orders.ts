@@ -92,6 +92,16 @@ export const addOrderNote = async (orderId: string, text: string) => {
   return data;
 };
 
+// Corrects a single line item's price on a storefront/eBay order — manual
+// orders reject this server-side (their pricing is set via discount at
+// creation instead). Recomputes subtotal/tax_amount/total on the backend.
+export const updateOrderItemPrice = async (orderId: string, itemIndex: number, unit_price: number) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/price`, {
+    unit_price,
+  });
+  return data;
+};
+
 export interface UpdateOrderCustomerDetailsPayload {
   customer?: { name?: string; email?: string | null; phone?: string | null };
   shipping_address?: OrderAddress;

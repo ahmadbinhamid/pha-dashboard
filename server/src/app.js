@@ -39,7 +39,7 @@ app.use(
             cb(new Error(`CORS: origin ${origin} not allowed`));
           }
         : true, // dev fallback: allow all
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })

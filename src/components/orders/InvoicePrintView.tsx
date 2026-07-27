@@ -1,10 +1,14 @@
-import { Building2, MapPin, Mail } from "lucide-react";
+import { CheckCircle2, Landmark } from "lucide-react";
 import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
-import { COMPANY_INFO, PICKUP_LOCATION, INVOICE_NOTE } from "@/config/company";
-import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
-import { formatCurrencyFromCents } from "@/utils/format";
+import {
+  COMPANY_INFO,
+  PICKUP_LOCATION,
+  BANK_DETAILS,
+  WARRANTY_TEXT,
+  LEGAL_DISCLAIMER_TEXT,
+} from "@/config/company";
+import { formatCurrencyFromCents, getLineGst } from "@/utils/format";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
-import { cn } from "@/utils/cn";
 import type { OrderDetail } from "@/types/orders";
 
 // Print-only invoice, structured to match the tax-invoice PDF attached to
@@ -14,233 +18,291 @@ import type { OrderDetail } from "@/types/orders";
 // the app's theme tokens) since this must stay legible on paper regardless
 // of whether the dashboard is in dark mode when "Print Invoice" is clicked.
 
-const INK = "#1f1a14";
-const MUTED = "#7b7065";
-const ACCENT = "#c39113";
-const BORDER = "#d8d4ca";
-const TABLE_HEAD_BG = "#f6f3ec";
+const INK = "#18140f";
+const MUTED = "#6b6f7a";
+const ACCENT = "#c2790b";
+const BORDER = "#e2e0da";
+const TINT_BG = "#eef1f7";
 
-function DetailLine({ icon: Icon, children }: { icon: typeof MapPin; children: React.ReactNode }) {
+function LabelRule({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />
-      <span>{children}</span>
+    <div className="border-b pb-1.5 text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED, borderColor: BORDER }}>
+      {children}
+    </div>
+  );
+}
+
+function HeaderMetaRow({ label, value, mutedValue = false }: { label: string; value: string; mutedValue?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-6">
+      <span className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+        {label}
+      </span>
+      <span className="text-xs" style={{ color: mutedValue ? MUTED : INK, fontWeight: mutedValue ? 400 : 700 }}>
+        {value}
+      </span>
     </div>
   );
 }
 
 export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
-  // Sorted newest-first by the backend — the most recent payment is the one
-  // worth showing "how they paid" for (a full method-by-method breakdown
-  // isn't shown here; see the dashboard's Payment History for that).
-  const latestPayment = order.payments[0] ?? null;
   const amountPaid = getTotalPaid(order.payments);
   const amountDue = getBalanceDue(order.total, order.payments);
-  const isFullyPaid = order.status !== "pending_payment" && order.status !== "partially_paid";
-  const paymentPillLabel =
-    order.status === "partially_paid"
-      ? "Partially Paid"
-      : order.status === "pending_payment"
-        ? "Pending Payment"
-        : "Paid & Secured";
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
+  // Rendered at print/PDF-build time, not stored — matches invoicePdf.js,
+  // which stamps the same "as of right now" timestamp server-side.
+  const printedAt = new Date().toLocaleString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const billingAddress = order.billing_address ?? order.shipping_address;
+  const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
 
   return (
-    <div className="rounded-[10px] border p-7" style={{ borderColor: BORDER, color: INK, background: "#ffffff" }}>
+    <div
+      className="flex min-h-[270mm] flex-col rounded-[10px] border p-7"
+      style={{ borderColor: BORDER, color: INK, background: "#ffffff" }}
+    >
       <div className="flex flex-wrap items-start justify-between gap-6 border-b pb-6" style={{ borderColor: BORDER }}>
         <div className="flex items-start gap-4">
-          <PartsHubLogoImage sizeClass="h-12" maxWidthClass="max-w-[52px]" />
+          <PartsHubLogoImage sizeClass="h-14" maxWidthClass="max-w-[60px]" />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">INVOICE #{order.invoice_number}</h1>
-            <p className="mt-1.5 text-xs uppercase tracking-wide" style={{ color: MUTED }}>
-              Order Date: {orderDate}
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          <span
-            className={cn(
-              "inline-block rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
-              isFullyPaid ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
-            )}
-          >
-            {paymentPillLabel}
-          </span>
-          <p className="mt-2 text-xs uppercase tracking-wide" style={{ color: MUTED }}>
-            Channel: {order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront"}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-8 border-b py-6 sm:grid-cols-2" style={{ borderColor: BORDER }}>
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
-            Seller Profile
-          </div>
-          <div className="mt-2 text-sm font-bold">{COMPANY_INFO.name}</div>
-          <div className="mt-2 space-y-1.5 text-sm" style={{ color: MUTED }}>
-            <DetailLine icon={Building2}>ABN {COMPANY_INFO.abn}</DetailLine>
-            <DetailLine icon={MapPin}>
+            <h2 className="text-2xl font-black uppercase tracking-tight">{COMPANY_INFO.name}</h2>
+            <div className="mt-1.5 text-xs" style={{ color: INK }}>
               {PICKUP_LOCATION.address}, {PICKUP_LOCATION.country}
-            </DetailLine>
-            <DetailLine icon={Mail}>{COMPANY_INFO.email}</DetailLine>
+            </div>
+            <div className="mt-1 text-[11px]" style={{ color: MUTED }}>
+              <span className="font-semibold" style={{ color: INK }}>
+                ABN:
+              </span>{" "}
+              {COMPANY_INFO.abn} &nbsp;|&nbsp;{" "}
+              <span className="font-semibold" style={{ color: INK }}>
+                PH:
+              </span>{" "}
+              {COMPANY_INFO.phone}
+            </div>
+            <div className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+              <span className="font-semibold" style={{ color: INK }}>
+                EMAIL:
+              </span>{" "}
+              {COMPANY_INFO.email}
+            </div>
+            <div className="mt-1.5 text-xs font-semibold" style={{ color: ACCENT }}>
+              Official Tax Invoice
+            </div>
           </div>
         </div>
-
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
-            {isPickup ? "Customer Details" : "Billing & Delivery Address"}
-          </div>
-          <div className="mt-2 text-sm font-bold">{order.customer.name}</div>
-          <div className="mt-2 space-y-1.5 text-sm" style={{ color: MUTED }}>
-            {isPickup || !order.shipping_address ? (
-              <>
-                <DetailLine icon={Mail}>{order.customer.email}</DetailLine>
-                <DetailLine icon={MapPin}>Collecting in-store — see seller address above.</DetailLine>
-              </>
-            ) : (
-              <>
-                <DetailLine icon={MapPin}>
-                  {order.shipping_address.address}, {order.shipping_address.suburb} {order.shipping_address.state}{" "}
-                  {order.shipping_address.postcode}, Australia
-                </DetailLine>
-                <DetailLine icon={Mail}>{order.customer.email}</DetailLine>
-                {order.billing_address && (
-                  <div className="text-xs">
-                    Billing: {order.billing_address.address}, {order.billing_address.suburb}{" "}
-                    {order.billing_address.state} {order.billing_address.postcode}
-                  </div>
-                )}
-              </>
-            )}
+        <div className="text-right" style={{ minWidth: 240 }}>
+          <h1 className="text-3xl font-black uppercase tracking-tight">Tax Invoice</h1>
+          <p className="mt-1 text-sm font-bold" style={{ color: ACCENT }}>
+            {order.invoice_number}
+          </p>
+          <div className="mt-3 space-y-1">
+            <HeaderMetaRow label="Invoice Date:" value={orderDate} />
+            <HeaderMetaRow label="Due Date:" value="Upon Receipt" />
+            <HeaderMetaRow label="Printed:" value={printedAt} mutedValue />
           </div>
         </div>
       </div>
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr style={{ background: TABLE_HEAD_BG }}>
-            <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-              Item Spec &amp; Part SKU
-            </th>
-            <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-              Qty
-            </th>
-            <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-              Unit Price
-            </th>
-            <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-              Total Price
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.items.map((item, i) => (
-            <tr key={i} className="border-b" style={{ borderColor: BORDER }}>
-              <td className="px-3 py-3">
-                <div className="font-semibold">{item.name}</div>
-                {item.sku && (
-                  <div className="text-xs" style={{ color: ACCENT }}>
-                    {item.sku}
-                  </div>
-                )}
-              </td>
-              <td className="px-3 py-3 text-right">{item.quantity}</td>
-              <td className="px-3 py-3 text-right">{formatCurrencyFromCents(item.unit_price)}</td>
-              <td className="px-3 py-3 text-right">
-                {formatCurrencyFromCents(item.unit_price * item.quantity - item.discount_amount)}
-                {item.discount_amount > 0 && (
-                  <div className="mt-0.5 text-xs" style={{ color: ACCENT }}>
-                    Discount: -{formatCurrencyFromCents(item.discount_amount)}
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="grid gap-8 pt-6 sm:grid-cols-2">
+      <div className="grid gap-6 py-6 sm:grid-cols-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-            Payment Information
+          <LabelRule>Bill To</LabelRule>
+          <div className="mt-2.5 text-sm font-bold">{order.customer.name}</div>
+          <div className="mt-1.5 space-y-0.5 text-xs" style={{ color: MUTED }}>
+            {billingAddress && <div>{billingAddress.address}</div>}
+            {billingAddress && (
+              <div>
+                {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
+              </div>
+            )}
+            {order.customer.phone && <div>PH: {order.customer.phone}</div>}
+            {order.customer.email && <div>EMAIL: {order.customer.email}</div>}
           </div>
-          <div className="mt-2 text-sm">
-            {latestPayment?.provider === "manual" ? (
-              <>
-                <div>
-                  {latestPayment.payment_method ? PAYMENT_METHOD_LABEL[latestPayment.payment_method] : "Manual"} —{" "}
-                  {formatCurrencyFromCents(amountPaid)} received
-                  {order.payments.length > 1 ? ` across ${order.payments.length} payments` : ""}
-                </div>
-                <div className="text-xs" style={{ color: MUTED }}>
-                  Collected at time of sale
-                </div>
-              </>
-            ) : latestPayment ? (
-              <>
-                <div>
-                  {latestPayment.card_brand
-                    ? `${latestPayment.card_brand.charAt(0).toUpperCase()}${latestPayment.card_brand.slice(1)} Ending in ${latestPayment.card_last4}`
-                    : "Card"}
-                </div>
-                <div className="text-xs" style={{ color: MUTED }}>
-                  Processed via Secure Gateway
-                </div>
-              </>
-            ) : order.channel === "manual" ? (
-              <div style={{ color: MUTED }}>Invoice due in full — no payment collected yet.</div>
+        </div>
+
+        <div>
+          <LabelRule>Ship To</LabelRule>
+          <div className="mt-2.5 text-sm font-bold">{order.customer.name}</div>
+          <div className="mt-1.5 space-y-0.5 text-xs" style={{ color: MUTED }}>
+            {isPickup || !order.shipping_address ? (
+              <div>Collecting in-store — see seller address above.</div>
             ) : (
-              <div style={{ color: MUTED }}>No payment recorded yet.</div>
+              <>
+                <div>{order.shipping_address.address}</div>
+                <div>
+                  {order.shipping_address.suburb} {order.shipping_address.state} {order.shipping_address.postcode}
+                </div>
+              </>
             )}
           </div>
-          <p className="mt-3 text-xs italic" style={{ color: MUTED }}>
-            &quot;{INVOICE_NOTE}&quot;
-          </p>
+        </div>
+
+        <div className="rounded-lg p-4" style={{ background: TINT_BG }}>
+          <LabelRule>Transaction</LabelRule>
+          <div className="mt-2.5 text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+            Order Number
+          </div>
+          <div className="text-sm font-bold">{order.order_number}</div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border" style={{ borderColor: BORDER }}>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr style={{ background: TINT_BG }}>
+              <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                #
+              </th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                Description / Item Code
+              </th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                Unit Price
+              </th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                GST (11%)
+              </th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                Qty
+              </th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                Discount
+              </th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.items.map((item, i) => {
+              // GST-inclusive AU retail pricing: extracted as total/11, never
+              // added on top of unit_price — see utils/format.ts#getLineGst.
+              const lineTotal = item.unit_price * item.quantity - item.discount_amount;
+              const lineGst = getLineGst(lineTotal);
+              return (
+                <tr key={i} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                  <td className="px-3 py-3 align-top text-xs" style={{ color: MUTED }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="font-semibold">{item.name}</div>
+                    {item.sku && (
+                      <div className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                        Part SKU: {item.sku}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(item.unit_price)}</td>
+                  <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(lineGst)}</td>
+                  <td className="px-3 py-3 text-right align-top">{item.quantity}</td>
+                  <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(item.discount_amount)}</td>
+                  <td className="px-3 py-3 text-right align-top font-semibold">{formatCurrencyFromCents(lineTotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid gap-8 pt-8 sm:grid-cols-2">
+        <div>
+          <div className="rounded-lg p-4" style={{ background: TINT_BG }}>
+            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+              <Landmark className="h-3.5 w-3.5" />
+              Bank Transfer Details
+            </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+                  Bank Name
+                </div>
+                <div className="font-semibold">{BANK_DETAILS.bankName || "—"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+                  Account Name
+                </div>
+                <div className="font-semibold">{BANK_DETAILS.accountName || COMPANY_INFO.name}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+                  BSB
+                </div>
+                <div className="font-semibold">{BANK_DETAILS.bsb || "—"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
+                  Account No
+                </div>
+                <div className="font-semibold">{BANK_DETAILS.accountNumber || "—"}</div>
+              </div>
+            </div>
+          </div>
+          {amountPaid > 0 ? (
+            <div
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-white"
+              style={{ background: "#16a34a" }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Payment Received via {channelLabel}
+            </div>
+          ) : (
+            <div className="mt-3 text-xs" style={{ color: MUTED }}>
+              No payment recorded yet.
+            </div>
+          )}
         </div>
 
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between">
-            <span style={{ color: MUTED }}>Subtotal (incl. GST)</span>
+            <span style={{ color: MUTED }}>Subtotal</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.subtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span style={{ color: MUTED }}>GST Included</span>
-            <span className="font-semibold">{formatCurrencyFromCents(order.tax_amount)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: MUTED }}>{isPickup ? "Pickup" : "Shipping"}</span>
+            <span style={{ color: MUTED }}>{isPickup ? "Pickup" : "Freight / Shipping"}</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.shipping_cost)}</span>
           </div>
           <div className="flex justify-between border-t pt-2 text-base" style={{ borderColor: BORDER }}>
-            <span className="font-bold" style={{ color: ACCENT }}>
-              Total Amount
-            </span>
+            <span className="font-bold">Total</span>
             <span className="font-bold" style={{ color: ACCENT }}>
               {formatCurrencyFromCents(order.total)}
             </span>
           </div>
-          {order.channel === "manual" &&
-            (() => {
-              if (amountDue <= 0) return null;
-              return (
-                <>
-                  <div className="flex justify-between">
-                    <span style={{ color: MUTED }}>Amount Paid</span>
-                    <span className="font-semibold">{formatCurrencyFromCents(amountPaid)}</span>
-                  </div>
-                  <div className="flex justify-between text-base">
-                    <span className="font-bold text-amber-600">Balance Due</span>
-                    <span className="font-bold text-amber-600">{formatCurrencyFromCents(amountDue)}</span>
-                  </div>
-                </>
-              );
-            })()}
+
+          {/* Every channel can carry an outstanding balance now that
+              storefront/eBay prices can be edited post-payment — not just
+              manual sales, so this is no longer gated on order.channel. */}
+          <div className="mt-3 flex items-center justify-between rounded-lg px-4 py-3" style={{ background: ACCENT }}>
+            <span className="text-xs font-bold uppercase tracking-wider text-white">Balance Outstanding</span>
+            <span className="text-sm font-bold text-white">{formatCurrencyFromCents(amountDue)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="mt-auto grid gap-6 rounded-lg p-5 text-xs sm:grid-cols-2"
+        style={{ background: TINT_BG, color: MUTED }}
+      >
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
+            Warranty &amp; Returns
+          </div>
+          <p className="mt-1.5 leading-relaxed">{WARRANTY_TEXT}</p>
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
+            Legal Disclaimer
+          </div>
+          <p className="mt-1.5 leading-relaxed">{LEGAL_DISCLAIMER_TEXT}</p>
         </div>
       </div>
     </div>

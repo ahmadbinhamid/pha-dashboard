@@ -20,3 +20,11 @@ export function formatCompactNumber(n: number) {
 export function formatCurrencyFromCents(cents: number, currency: string = "AUD") {
   return formatCurrency(cents / 100, currency);
 }
+
+// GST-inclusive AU retail pricing: GST component of a (post-discount) line
+// total is extracted as total/11, never added on top — same convention as
+// the backend's order.service.js#GST_DIVISOR, applied per-line here since
+// order.tax_amount is only ever an order-level figure.
+export function getLineGst(lineTotalCents: number) {
+  return Math.round(lineTotalCents / 11);
+}

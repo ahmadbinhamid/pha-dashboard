@@ -444,6 +444,16 @@
 @media print {
   @page {
     margin: 0;
-    size: auto;
+    size: A4;
+  }
+
+  /* Without this, Chromium/Firefox silently drop background colors and
+     images on print by default — the invoice's tinted cards, the green
+     "Payment Received" pill, and the orange Balance Outstanding bar would
+     all render as plain white/gray instead of their real colors. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
   }
 }

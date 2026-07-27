@@ -24,6 +24,15 @@ const orderItemSchema = new Schema(
     // included") — captured by staff when building a manual order.
     note: { type: String, default: null },
 
+    // Price-edit audit trail — storefront/eBay orders only (see
+    // order.service.js#updateOrderItemPrice; manual orders price at creation
+    // via discount_amount instead). original_unit_price is set once, on the
+    // first edit, so it always reflects what was originally charged even if
+    // the price is edited more than once afterward.
+    original_unit_price: { type: Number, default: null },
+    unit_price_updated_at: { type: Date, default: null },
+    unit_price_updated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+
     // Tracks whether this line item's quantity change (sale or restock) has
     // been pushed to eBay. "not_applicable" covers SKUs with no inventory
     // record / no eBay listing. A failed push is retried via the eBay queue;

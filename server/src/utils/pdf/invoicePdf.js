@@ -6,157 +6,171 @@
 // dashboard's InvoicePrintView.tsx (the "Print Invoice" button) — same
 // light theme, same colors, same field order — so the emailed PDF and the
 // printed copy never disagree. pdfkit has no SVG/icon-font support, so the
-// small building/pin/mail glyphs are hand-drawn with vector primitives
-// rather than pulled from an icon set (InvoicePrintView uses lucide-react
-// icons directly since it renders in a browser).
+// small check glyph is hand-drawn with vector primitives rather than pulled
+// from an icon set (InvoicePrintView uses lucide-react icons directly since
+// it renders in a browser).
 
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const { COMPANY_INFO, PICKUP_LOCATION } = require("../../constants/company.constants");
+const {
+  COMPANY_INFO,
+  PICKUP_LOCATION,
+  BANK_DETAILS,
+  WARRANTY_TEXT,
+  LEGAL_DISCLAIMER_TEXT,
+} = require("../../constants/company.constants");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 
 const PAGE_MARGIN = 54;
 const FRAME_PADDING = 20; // gap between the card border and its content
 const CARD_RADIUS = 10;
 // Column starts/widths must sum to <= CONTENT_WIDTH (487.28pt at the current
-// PAGE_MARGIN) — previous values summed to 495 and bled ~8pt past the table's
-// shaded header/divider lines, clipping the TOTAL PRICE column.
-const COLUMNS = { item: 0, qty: 235, unitPrice: 292, total: 385 };
-const COLUMN_WIDTHS = { item: 225, qty: 47, unitPrice: 88, total: 95 };
+// PAGE_MARGIN) — seven columns: a row-number column plus GST/Qty/Discount
+// each broken out as their own correctly-labeled column (order.tax_amount is
+// only ever an order-level figure, so it can't answer "what's the GST on
+// this specific line"). `total`'s width is deliberately short of the
+// remaining space so its right-aligned text never sits flush against the
+// table's outer border (every other column already gets this breathing
+// room for free, via the 5pt gap before the next column).
+const COLUMNS = { number: 0, item: 27, unitPrice: 182, gst: 247, qty: 304, discount: 339, total: 402 };
+const COLUMN_WIDTHS = { number: 22, item: 150, unitPrice: 60, gst: 52, qty: 30, discount: 58, total: 76 };
 const PAGE_WIDTH = 595.28; // A4 points
+const PAGE_HEIGHT = 841.89; // A4 points
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 const LOGO_PATH = path.join(__dirname, "../../assets/branding/logo.png");
-const LOGO_SIZE = 46;
+const LOGO_SIZE = 50;
 const LOGO_TEXT_GAP = 14;
-const ICON_SIZE = 9;
-const ICON_TEXT_GAP = 7;
-const LINE_GAP = 7; // vertical gap between stacked icon-led detail lines
 const FONT = "Helvetica";
 const FONT_BOLD = "Helvetica-Bold";
 
-// Same hex values as InvoicePrintView.tsx's INK/MUTED/ACCENT/BORDER/TABLE_HEAD_BG.
+// Same hex values as InvoicePrintView.tsx's INK/MUTED/ACCENT/BORDER/TINT_BG.
 const COLORS = {
-  text: "#1f1a14",
-  muted: "#7b7065",
-  accent: "#c39113",
-  border: "#d8d4ca",
-  tableHeaderBg: "#f6f3ec",
-  statusGoodBorder: "#10b981", // emerald-500/600, matching the print view's pill
-  statusGoodText: "#059669",
-  statusPendingBorder: "#f59e0b", // amber-500/600
-  statusPendingText: "#d97706",
-};
-
-const PAYMENT_METHOD_LABEL = {
-  cash: "Cash",
-  card_terminal: "Card (Terminal)",
-  bank_transfer: "Bank Transfer",
-  other: "Other",
+  text: "#18140f",
+  muted: "#6b6f7a",
+  accent: "#c2790b",
+  border: "#e2e0da",
+  tint: "#eef1f7",
+  white: "#ffffff",
+  green: "#16a34a",
 };
 
 function formatMoney(cents) {
   return `A$${(cents / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatDate(date) {
-  return new Date(date).toLocaleDateString("en-AU", { year: "numeric", month: "short", day: "numeric" });
+function formatDate(date, opts) {
+  return new Date(date).toLocaleDateString("en-AU", opts || { year: "numeric", month: "short", day: "numeric" });
 }
 
-// --- Small hand-drawn icons (pdfkit has no SVG/icon-font support) ---------
-
-function drawBuildingIcon(doc, x, y, color) {
-  doc.save().lineWidth(0.9).strokeColor(color);
-  doc.rect(x, y, ICON_SIZE, ICON_SIZE).stroke();
-  const pad = ICON_SIZE * 0.22;
-  const win = (ICON_SIZE - pad * 3) / 2;
-  [0, 1].forEach((row) =>
-    [0, 1].forEach((col) => doc.rect(x + pad + col * (win + pad), y + pad + row * (win + pad), win, win).stroke()),
-  );
-  doc.restore();
+// GST-inclusive AU retail pricing: extracted as total/11, never added on top
+// of unit_price — same convention as order.service.js#GST_DIVISOR and the
+// dashboard's utils/format.ts#getLineGst. order.tax_amount is only ever an
+// order-level figure, so each line recomputes its own GST from its own
+// (post-discount) total.
+function lineGst(lineTotalCents) {
+  return Math.round(lineTotalCents / 11);
 }
 
-function drawPinIcon(doc, x, y, color) {
-  doc.save().lineWidth(0.9).strokeColor(color);
-  const r = ICON_SIZE * 0.32;
-  const cx = x + ICON_SIZE / 2;
-  const cy = y + r + 0.5;
-  doc.circle(cx, cy, r).stroke();
+function drawCheckIcon(doc, x, y, color, size = 9) {
+  doc.save().lineWidth(1.4).strokeColor(color).lineJoin("round").lineCap("round");
   doc
-    .moveTo(cx - r * 0.55, cy + r * 0.55)
-    .lineTo(cx, y + ICON_SIZE)
-    .lineTo(cx + r * 0.55, cy + r * 0.55)
+    .moveTo(x, y + size * 0.5)
+    .lineTo(x + size * 0.38, y + size * 0.85)
+    .lineTo(x + size, y + size * 0.15)
     .stroke();
   doc.restore();
 }
 
-function drawMailIcon(doc, x, y, color) {
-  doc.save().lineWidth(0.9).strokeColor(color);
-  const h = ICON_SIZE * 0.72;
-  const top = y + (ICON_SIZE - h) / 2;
-  doc.rect(x, top, ICON_SIZE, h).stroke();
+// Draws a small caps label (left) and a value (right), both within `width`,
+// on one line — used for the header's Invoice Date / Due Date / Printed rows.
+function drawMetaRow(doc, x, y, width, label, value, opts = {}) {
+  const labelWidth = width * 0.4;
+  doc.font(FONT).fontSize(7).fillColor(COLORS.muted).text(label, x, y + 1, { width: labelWidth });
   doc
-    .moveTo(x, top)
-    .lineTo(x + ICON_SIZE / 2, top + h * 0.55)
-    .lineTo(x + ICON_SIZE, top)
-    .stroke();
-  doc.restore();
+    .font(opts.muted ? FONT : FONT_BOLD)
+    .fontSize(8.5)
+    .fillColor(opts.muted ? COLORS.muted : COLORS.text)
+    .text(value, x + labelWidth, y, { width: width - labelWidth, align: "right" });
+  return y + 13;
 }
 
-// Draws `icon` + `text` as one line at the given y, indented consistently so
-// icon-led lines line up under the (icon-less) bold name line above them.
-function iconLine(doc, icon, text, x, y, width, opts = {}) {
-  icon(doc, x, y + 1.5, opts.iconColor || COLORS.muted);
-  doc
-    .font(opts.font || FONT)
-    .fontSize(opts.fontSize || 9.5)
-    .fillColor(opts.color || COLORS.muted)
-    .text(text, x + ICON_SIZE + ICON_TEXT_GAP, y, { width: width - ICON_SIZE - ICON_TEXT_GAP });
+// Bold-label-then-value on one line (e.g. "ABN: 82 698 225 464") — pdfkit
+// has no inline-bold markup, so alternating .font() calls with
+// `continued: true` is the only way to mix weights on a single text line.
+function drawInlineLabel(doc, x, y, width, segments) {
+  segments.forEach((seg, i) => {
+    doc
+      .font(seg.bold ? FONT_BOLD : FONT)
+      .fontSize(seg.size || 8)
+      .fillColor(seg.color || COLORS.muted);
+    if (i === 0) {
+      doc.text(seg.text, x, y, { continued: i < segments.length - 1, width });
+    } else {
+      doc.text(seg.text, { continued: i < segments.length - 1 });
+    }
+  });
   return doc.y;
 }
 
+// Fixed width for the right-hand (Tax Invoice / dates) block — the left
+// block (logo + company letterhead) gets whatever's left of CONTENT_WIDTH,
+// which is most of it, so "PARTS HUB AUSTRALIA" never wraps.
+const HEADER_RIGHT_WIDTH = 210;
+const HEADER_GAP = 16;
+
 function drawHeader(doc, order) {
   const textX = PAGE_MARGIN + LOGO_SIZE + LOGO_TEXT_GAP;
+  const leftWidth = CONTENT_WIDTH - HEADER_RIGHT_WIDTH - HEADER_GAP - LOGO_SIZE - LOGO_TEXT_GAP;
   doc.image(LOGO_PATH, PAGE_MARGIN, PAGE_MARGIN, { width: LOGO_SIZE, height: LOGO_SIZE });
 
   doc
     .font(FONT_BOLD)
-    .fontSize(20)
+    .fontSize(15)
     .fillColor(COLORS.text)
-    .text(`INVOICE #${order.invoice_number}`, textX, PAGE_MARGIN);
+    .text(COMPANY_INFO.name.toUpperCase(), textX, PAGE_MARGIN, { width: leftWidth });
   doc
     .font(FONT)
-    .fontSize(9)
-    .fillColor(COLORS.muted)
-    .text(`ORDER DATE: ${formatDate(order.created_at).toUpperCase()}`, textX, doc.y + 7);
+    .fontSize(8.5)
+    .fillColor(COLORS.text)
+    .text(`${PICKUP_LOCATION.address}, ${PICKUP_LOCATION.country}`, textX, doc.y + 5, { width: leftWidth });
+  drawInlineLabel(doc, textX, doc.y + 4, leftWidth, [
+    { text: "ABN: ", bold: true, color: COLORS.text },
+    { text: `${COMPANY_INFO.abn}   |   `, color: COLORS.muted },
+    { text: "PH: ", bold: true, color: COLORS.text },
+    { text: COMPANY_INFO.phone, color: COLORS.muted },
+  ]);
+  drawInlineLabel(doc, textX, doc.y + 3, leftWidth, [
+    { text: "EMAIL: ", bold: true, color: COLORS.text },
+    { text: COMPANY_INFO.email, color: COLORS.muted },
+  ]);
+  doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.accent).text("Official Tax Invoice", textX, doc.y + 5);
+  const leftBottomY = doc.y;
 
-  const isPaid = order.status !== "pending_payment";
-  const pillLabel = isPaid ? "PAID & SECURED" : "PENDING PAYMENT";
-  const pillBorder = isPaid ? COLORS.statusGoodBorder : COLORS.statusPendingBorder;
-  const pillText = isPaid ? COLORS.statusGoodText : COLORS.statusPendingText;
-  doc.font(FONT_BOLD).fontSize(9);
-  const pillTextWidth = doc.widthOfString(pillLabel);
-  const pillPaddingX = 10;
-  const pillWidth = pillTextWidth + pillPaddingX * 2;
-  const pillHeight = 20;
-  const pillX = PAGE_MARGIN + CONTENT_WIDTH - pillWidth;
-  const pillY = PAGE_MARGIN;
-  doc.roundedRect(pillX, pillY, pillWidth, pillHeight, pillHeight / 2).lineWidth(1).strokeColor(pillBorder).stroke();
-  doc.fillColor(pillText).text(pillLabel, pillX, pillY + 6, { width: pillWidth, align: "center" });
-
-  const CHANNEL_LABEL = { ebay: "EBAY", manual: "IN-STORE" };
-  const channelLabel = `CHANNEL: ${CHANNEL_LABEL[order.channel] ?? "STOREFRONT"}`;
-  const channelBoxWidth = Math.max(pillWidth, doc.widthOfString(channelLabel) + 4);
+  const rightWidth = HEADER_RIGHT_WIDTH;
+  const rightX = PAGE_MARGIN + CONTENT_WIDTH - rightWidth;
   doc
-    .font(FONT)
-    .fontSize(9)
-    .fillColor(COLORS.muted)
-    .text(channelLabel, PAGE_MARGIN + CONTENT_WIDTH - channelBoxWidth, pillY + pillHeight + 6, {
-      width: channelBoxWidth,
-      align: "right",
-    });
+    .font(FONT_BOLD)
+    .fontSize(22)
+    .fillColor(COLORS.text)
+    .text("TAX INVOICE", rightX, PAGE_MARGIN, { width: rightWidth, align: "right" });
+  doc
+    .font(FONT_BOLD)
+    .fontSize(10)
+    .fillColor(COLORS.accent)
+    .text(order.invoice_number, rightX, doc.y + 4, { width: rightWidth, align: "right" });
+
+  let my = doc.y + 12;
+  my = drawMetaRow(doc, rightX, my, rightWidth, "INVOICE DATE:", formatDate(order.created_at).toUpperCase());
+  my = drawMetaRow(doc, rightX, my, rightWidth, "DUE DATE:", "UPON RECEIPT");
+  const now = new Date();
+  const printedTime = now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+  my = drawMetaRow(doc, rightX, my, rightWidth, "PRINTED:", `${formatDate(now).toUpperCase()} @ ${printedTime}`, {
+    muted: true,
+  });
+  const rightBottomY = my;
 
   doc.fillColor(COLORS.text);
-  doc.y = Math.max(doc.y, pillY + pillHeight + 26, PAGE_MARGIN + LOGO_SIZE);
+  doc.y = Math.max(leftBottomY, rightBottomY, PAGE_MARGIN + LOGO_SIZE);
   doc.moveDown(1.4);
   doc
     .strokeColor(COLORS.border)
@@ -166,144 +180,183 @@ function drawHeader(doc, order) {
   doc.moveDown(1.4);
 }
 
-function drawPartiesBlock(doc, order) {
+// Draws a small-caps label with a thin rule underneath it, spanning `width`
+// — matches InvoicePrintView.tsx's LabelRule. Returns the y to start content
+// below it.
+function drawLabelRule(doc, x, y, width, label) {
+  doc.font(FONT_BOLD).fontSize(8).fillColor(COLORS.muted).text(label, x, y, { width });
+  const lineY = y + 11;
+  doc.strokeColor(COLORS.border).lineWidth(0.75).moveTo(x, lineY).lineTo(x + width, lineY).stroke();
+  return lineY + 8;
+}
+
+function drawBillShipTransactionBlock(doc, order) {
   const startY = doc.y;
-  const halfWidth = CONTENT_WIDTH / 2 - 14;
-  const rightX = PAGE_MARGIN + halfWidth + 28;
+  const colGap = 20;
+  const colWidth = (CONTENT_WIDTH - colGap * 2) / 3;
+  const col1X = PAGE_MARGIN;
+  const col2X = PAGE_MARGIN + colWidth + colGap;
+  const col3X = PAGE_MARGIN + (colWidth + colGap) * 2;
 
-  // Left column — seller
-  doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.accent).text("SELLER PROFILE", PAGE_MARGIN, startY);
-  doc
-    .font(FONT_BOLD)
-    .fontSize(11)
-    .fillColor(COLORS.text)
-    .text(COMPANY_INFO.name, PAGE_MARGIN, doc.y + 6, { width: halfWidth });
-
-  let y = doc.y + 9;
-  y = iconLine(doc, drawBuildingIcon, `ABN ${COMPANY_INFO.abn}`, PAGE_MARGIN, y, halfWidth) + LINE_GAP;
-  y = iconLine(doc, drawPinIcon, `${PICKUP_LOCATION.address}, ${PICKUP_LOCATION.country}`, PAGE_MARGIN, y, halfWidth) + LINE_GAP;
-  y = iconLine(doc, drawMailIcon, COMPANY_INFO.email, PAGE_MARGIN, y, halfWidth) + LINE_GAP;
-  const leftBottomY = y;
-
-  // Right column — customer
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  doc
-    .font(FONT_BOLD)
-    .fontSize(9)
-    .fillColor(COLORS.accent)
-    .text(isPickup ? "CUSTOMER DETAILS" : "BILLING & DELIVERY ADDRESS", rightX, startY, { width: halfWidth });
-  doc
-    .font(FONT_BOLD)
-    .fontSize(11)
-    .fillColor(COLORS.text)
-    .text(order.customer.name, rightX, doc.y + 6, { width: halfWidth });
+  const billingAddress = order.billing_address || order.shipping_address;
 
-  let ry = doc.y + 9;
-  if (isPickup) {
-    ry = iconLine(doc, drawMailIcon, order.customer.email, rightX, ry, halfWidth) + LINE_GAP;
-    ry = iconLine(doc, drawPinIcon, "Collecting in-store — see seller address above.", rightX, ry, halfWidth) + LINE_GAP;
-  } else {
-    ry =
-      iconLine(
-        doc,
-        drawPinIcon,
-        `${order.shipping_address.address}, ${order.shipping_address.suburb}, ${order.shipping_address.state} ${order.shipping_address.postcode}, Australia`,
-        rightX,
-        ry,
-        halfWidth,
-      ) + LINE_GAP;
-    ry = iconLine(doc, drawMailIcon, order.customer.email, rightX, ry, halfWidth) + LINE_GAP;
-    if (order.billing_address) {
-      doc
-        .font(FONT)
-        .fontSize(8)
-        .fillColor(COLORS.muted)
-        .text(
-          `Billing: ${order.billing_address.address}, ${order.billing_address.suburb}, ${order.billing_address.state} ${order.billing_address.postcode}`,
-          rightX,
-          ry,
-          { width: halfWidth },
-        );
-      ry = doc.y + LINE_GAP;
-    }
+  // Bill To
+  let y1 = drawLabelRule(doc, col1X, startY, colWidth, "BILL TO");
+  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(order.customer.name, col1X, y1, { width: colWidth });
+  y1 = doc.y + 5;
+  doc.font(FONT).fontSize(8).fillColor(COLORS.muted);
+  if (billingAddress) {
+    doc.text(billingAddress.address, col1X, y1, { width: colWidth });
+    y1 = doc.y + 1;
+    doc.text(`${billingAddress.suburb} ${billingAddress.state} ${billingAddress.postcode}, Australia`, col1X, y1, {
+      width: colWidth,
+    });
+    y1 = doc.y + 1;
   }
-  const rightBottomY = ry;
+  if (order.customer.phone) {
+    doc.text(`PH: ${order.customer.phone}`, col1X, y1, { width: colWidth });
+    y1 = doc.y + 1;
+  }
+  if (order.customer.email) {
+    doc.text(`EMAIL: ${order.customer.email}`, col1X, y1, { width: colWidth });
+    y1 = doc.y;
+  }
+  const bottom1 = y1;
+
+  // Ship To
+  let y2 = drawLabelRule(doc, col2X, startY, colWidth, "SHIP TO");
+  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(order.customer.name, col2X, y2, { width: colWidth });
+  y2 = doc.y + 5;
+  doc.font(FONT).fontSize(8).fillColor(COLORS.muted);
+  if (isPickup || !order.shipping_address) {
+    doc.text("Collecting in-store — see seller address above.", col2X, y2, { width: colWidth });
+    y2 = doc.y;
+  } else {
+    doc.text(order.shipping_address.address, col2X, y2, { width: colWidth });
+    y2 = doc.y + 1;
+    doc.text(
+      `${order.shipping_address.suburb} ${order.shipping_address.state} ${order.shipping_address.postcode}`,
+      col2X,
+      y2,
+      { width: colWidth },
+    );
+    y2 = doc.y;
+  }
+  const bottom2 = y2;
+
+  // Transaction — tint background drawn first (fixed height; content here
+  // is always just a label + one value, so a fixed box reads fine).
+  const boxPad = 10;
+  const boxTop = startY - boxPad + 4;
+  const boxHeight = 70;
+  doc.roundedRect(col3X - boxPad, boxTop, colWidth + boxPad * 2, boxHeight, 6).fill(COLORS.tint);
+  doc.fillColor(COLORS.text);
+  let y3 = drawLabelRule(doc, col3X, startY, colWidth, "TRANSACTION");
+  doc.font(FONT).fontSize(7.5).fillColor(COLORS.muted).text("ORDER NUMBER", col3X, y3, { width: colWidth });
+  doc
+    .font(FONT_BOLD)
+    .fontSize(10)
+    .fillColor(COLORS.text)
+    .text(order.order_number, col3X, doc.y + 2, { width: colWidth });
+  const bottom3 = Math.max(doc.y, boxTop + boxHeight);
 
   doc.fillColor(COLORS.text);
-  doc.y = Math.max(leftBottomY, rightBottomY);
-  doc.moveDown(1.4);
-  doc
-    .strokeColor(COLORS.border)
-    .moveTo(PAGE_MARGIN, doc.y)
-    .lineTo(PAGE_MARGIN + CONTENT_WIDTH, doc.y)
-    .stroke();
-  doc.moveDown(1.4);
+  doc.y = Math.max(bottom1, bottom2, bottom3);
+  doc.moveDown(1.3);
 }
 
 function drawItemsTable(doc, order) {
-  const headerY = doc.y;
-  const headerHeight = 26;
-  doc.rect(PAGE_MARGIN, headerY, CONTENT_WIDTH, headerHeight).fill(COLORS.tableHeaderBg);
+  const tableTop = doc.y;
+  const headerHeight = 22;
+  doc.rect(PAGE_MARGIN, tableTop, CONTENT_WIDTH, headerHeight).fill(COLORS.tint);
 
-  doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.muted);
-  const headerTextY = headerY + 9;
-  doc.text("ITEM SPEC & PART SKU", PAGE_MARGIN + 12 + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item - 12 });
-  doc.text("QTY", PAGE_MARGIN + COLUMNS.qty, headerTextY, { width: COLUMN_WIDTHS.qty, align: "right" });
+  doc.font(FONT_BOLD).fontSize(7.5).fillColor(COLORS.muted);
+  const headerTextY = tableTop + 7;
+  doc.text("#", PAGE_MARGIN + 6 + COLUMNS.number, headerTextY, { width: COLUMN_WIDTHS.number - 6 });
+  doc.text("DESCRIPTION / ITEM CODE", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item });
   doc.text("UNIT PRICE", PAGE_MARGIN + COLUMNS.unitPrice, headerTextY, { width: COLUMN_WIDTHS.unitPrice, align: "right" });
-  doc.text("TOTAL PRICE", PAGE_MARGIN + COLUMNS.total, headerTextY, { width: COLUMN_WIDTHS.total, align: "right" });
+  doc.text("GST (11%)", PAGE_MARGIN + COLUMNS.gst, headerTextY, { width: COLUMN_WIDTHS.gst, align: "right" });
+  doc.text("QTY", PAGE_MARGIN + COLUMNS.qty, headerTextY, { width: COLUMN_WIDTHS.qty, align: "right" });
+  doc.text("DISCOUNT", PAGE_MARGIN + COLUMNS.discount, headerTextY, { width: COLUMN_WIDTHS.discount, align: "right" });
+  doc.text("TOTAL", PAGE_MARGIN + COLUMNS.total, headerTextY, { width: COLUMN_WIDTHS.total, align: "right" });
 
-  doc.y = headerY + headerHeight;
-  doc.moveDown(1.1);
+  doc.y = tableTop + headerHeight;
+  doc.moveDown(1);
 
-  order.items.forEach((item) => {
+  order.items.forEach((item, i) => {
     const rowY = doc.y;
-    doc.font(FONT_BOLD).fontSize(10).fillColor(COLORS.text).text(item.name, PAGE_MARGIN + 12 + COLUMNS.item, rowY, {
-      width: COLUMN_WIDTHS.item - 12,
+    doc
+      .font(FONT)
+      .fontSize(8.5)
+      .fillColor(COLORS.muted)
+      .text(String(i + 1).padStart(2, "0"), PAGE_MARGIN + 6 + COLUMNS.number, rowY, { width: COLUMN_WIDTHS.number - 6 });
+
+    doc.font(FONT_BOLD).fontSize(9.5).fillColor(COLORS.text).text(item.name, PAGE_MARGIN + COLUMNS.item, rowY, {
+      width: COLUMN_WIDTHS.item,
     });
     if (item.sku) {
-      doc.font(FONT).fontSize(8).fillColor(COLORS.accent).text(item.sku, PAGE_MARGIN + 12 + COLUMNS.item, doc.y + 2, {
-        width: COLUMN_WIDTHS.item - 12,
-      });
+      doc
+        .font(FONT)
+        .fontSize(7.5)
+        .fillColor(COLORS.muted)
+        .text(`Part SKU: ${item.sku}`, PAGE_MARGIN + COLUMNS.item, doc.y + 2, { width: COLUMN_WIDTHS.item });
     }
     const rowBottomLeft = doc.y;
 
-    doc.font(FONT).fontSize(10).fillColor(COLORS.text);
-    doc.text(String(item.quantity), PAGE_MARGIN + COLUMNS.qty, rowY, { width: COLUMN_WIDTHS.qty, align: "right" });
-    doc.text(formatMoney(item.unit_price), PAGE_MARGIN + COLUMNS.unitPrice, rowY, { width: COLUMN_WIDTHS.unitPrice, align: "right" });
-
     const lineSubtotal = item.unit_price * item.quantity;
     const discount = item.discount_amount || 0;
-    doc.text(formatMoney(lineSubtotal - discount), PAGE_MARGIN + COLUMNS.total, rowY, {
+    const lineTotal = lineSubtotal - discount;
+    const gst = lineGst(lineTotal);
+
+    doc.font(FONT).fontSize(9).fillColor(COLORS.text);
+    doc.text(formatMoney(item.unit_price), PAGE_MARGIN + COLUMNS.unitPrice, rowY, {
+      width: COLUMN_WIDTHS.unitPrice,
+      align: "right",
+    });
+    const unitPriceBottom = doc.y;
+
+    doc.font(FONT).fontSize(9).fillColor(COLORS.text);
+    doc.text(formatMoney(gst), PAGE_MARGIN + COLUMNS.gst, rowY, { width: COLUMN_WIDTHS.gst, align: "right" });
+    const gstBottom = doc.y;
+
+    doc.text(String(item.quantity), PAGE_MARGIN + COLUMNS.qty, rowY, { width: COLUMN_WIDTHS.qty, align: "right" });
+    const qtyBottom = doc.y;
+
+    doc.text(formatMoney(discount), PAGE_MARGIN + COLUMNS.discount, rowY, {
+      width: COLUMN_WIDTHS.discount,
+      align: "right",
+    });
+    const discountBottom = doc.y;
+
+    doc.font(FONT_BOLD).text(formatMoney(lineTotal), PAGE_MARGIN + COLUMNS.total, rowY, {
       width: COLUMN_WIDTHS.total,
       align: "right",
     });
-    let rowBottomRight = doc.y;
+    const totalBottom = doc.y;
 
-    // Only manual/admin-created orders ever carry a per-line discount —
-    // storefront/eBay items always have discount_amount === 0.
-    if (discount > 0) {
-      doc
-        .font(FONT)
-        .fontSize(8)
-        .fillColor(COLORS.accent)
-        .text(`Discount: -${formatMoney(discount)}`, PAGE_MARGIN + COLUMNS.total, doc.y + 2, {
-          width: COLUMN_WIDTHS.total,
-          align: "right",
-        });
-      rowBottomRight = doc.y;
-    }
-
+    const rowBottomRight = Math.max(unitPriceBottom, gstBottom, qtyBottom, discountBottom, totalBottom);
     doc.y = Math.max(rowBottomLeft, rowBottomRight);
-    doc.moveDown(0.85);
+    doc.moveDown(0.8);
     doc
       .strokeColor(COLORS.border)
       .moveTo(PAGE_MARGIN, doc.y)
       .lineTo(PAGE_MARGIN + CONTENT_WIDTH, doc.y)
       .stroke();
-    doc.moveDown(0.85);
+    doc.moveDown(0.8);
   });
 
+  const tableBottom = doc.y;
+  doc
+    .roundedRect(PAGE_MARGIN, tableTop, CONTENT_WIDTH, tableBottom - tableTop, 6)
+    .lineWidth(1)
+    .strokeColor(COLORS.border)
+    .stroke();
   doc.fillColor(COLORS.text);
+  // Fixed gap (not moveDown, which scales with whatever font size a row
+  // last set) so the Bank Transfer Details / Totals section never crowds
+  // the table's bottom border.
+  doc.y = tableBottom + 22;
 }
 
 function drawPaymentAndTotals(doc, order, totalPaidCents) {
@@ -311,35 +364,61 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
   const halfWidth = CONTENT_WIDTH / 2 - 14;
   const rightX = PAGE_MARGIN + halfWidth + 28;
 
-  doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.muted).text("PAYMENT INFORMATION", PAGE_MARGIN, startY);
-  doc.font(FONT).fontSize(10).fillColor(COLORS.text);
-  if (order.payment?.provider === "manual") {
-    const methodLabel = PAYMENT_METHOD_LABEL[order.payment.payment_method] ?? "Manual";
-    doc.text(`${methodLabel} — ${formatMoney(order.payment.amount)} received`, PAGE_MARGIN, doc.y + 7, {
-      width: CONTENT_WIDTH / 2 - 14,
-    });
-    doc.fillColor(COLORS.muted).fontSize(9).text("Collected at time of sale", PAGE_MARGIN, doc.y + 3);
-  } else if (order.payment) {
-    const brand = order.payment.card_brand
-      ? order.payment.card_brand.charAt(0).toUpperCase() + order.payment.card_brand.slice(1)
-      : "Card";
-    doc.text(`${brand} Ending in ${order.payment.card_last4 ?? "----"}`, PAGE_MARGIN, doc.y + 7);
-    doc.fillColor(COLORS.muted).fontSize(9).text("Processed via Secure Gateway", PAGE_MARGIN, doc.y + 3);
-  } else if (order.channel === "manual") {
-    doc.fillColor(COLORS.muted).text("Invoice due in full — no payment collected yet.", PAGE_MARGIN, doc.y + 7, {
-      width: CONTENT_WIDTH / 2 - 14,
-    });
+  // Bank Transfer Details — tint box, fixed height (always the same 4 fields).
+  const boxHeight = 82;
+  doc.roundedRect(PAGE_MARGIN, startY, halfWidth, boxHeight, 6).fill(COLORS.tint);
+  doc.fillColor(COLORS.text);
+  doc
+    .font(FONT_BOLD)
+    .fontSize(8)
+    .fillColor(COLORS.muted)
+    .text("BANK TRANSFER DETAILS", PAGE_MARGIN + 12, startY + 10, { width: halfWidth - 24 });
+
+  const gridColWidth = (halfWidth - 24) / 2;
+  const bankRows = [
+    ["BANK NAME", BANK_DETAILS.bankName || "—"],
+    ["ACCOUNT NAME", BANK_DETAILS.accountName || COMPANY_INFO.name],
+    ["BSB", BANK_DETAILS.bsb || "—"],
+    ["ACCOUNT NO", BANK_DETAILS.accountNumber || "—"],
+  ];
+  const gridStartY = startY + 28;
+  bankRows.forEach(([label, value], idx) => {
+    const colX = PAGE_MARGIN + 12 + (idx % 2) * gridColWidth;
+    const rowY = gridStartY + Math.floor(idx / 2) * 26;
+    doc.font(FONT).fontSize(7).fillColor(COLORS.muted).text(label, colX, rowY, { width: gridColWidth - 8 });
+    doc
+      .font(FONT_BOLD)
+      .fontSize(8.5)
+      .fillColor(COLORS.text)
+      .text(value, colX, rowY + 9, { width: gridColWidth - 8 });
+  });
+
+  let leftBottomY = startY + boxHeight + 10;
+
+  // Payment-received pill — only when something's actually been collected;
+  // otherwise a plain "not yet paid" line rather than a false confirmation.
+  if (totalPaidCents > 0) {
+    const CHANNEL_LABEL = { ebay: "EBAY", manual: "IN-STORE" };
+    const channelLabel = CHANNEL_LABEL[order.channel] ?? "STOREFRONT";
+    const pillLabel = `PAYMENT RECEIVED VIA ${channelLabel}`;
+    doc.font(FONT_BOLD).fontSize(8);
+    const pillTextWidth = doc.widthOfString(pillLabel);
+    const pillHeight = 20;
+    const pillWidth = pillTextWidth + 34;
+    doc.roundedRect(PAGE_MARGIN, leftBottomY, pillWidth, pillHeight, pillHeight / 2).fill(COLORS.green);
+    drawCheckIcon(doc, PAGE_MARGIN + 10, leftBottomY + 5, COLORS.white, 8);
+    doc.fillColor(COLORS.white).text(pillLabel, PAGE_MARGIN + 24, leftBottomY + 6, { width: pillWidth - 24 });
+    leftBottomY += pillHeight;
   } else {
-    doc.fillColor(COLORS.muted).text("No payment recorded yet.");
+    doc.font(FONT).fontSize(8.5).fillColor(COLORS.muted).text("No payment recorded yet.", PAGE_MARGIN, leftBottomY);
+    leftBottomY = doc.y;
   }
-  const leftBottomY = doc.y;
 
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   let rowY = startY;
   const totalsRows = [
-    ["Subtotal (incl. GST)", formatMoney(order.subtotal)],
-    ["GST Included", formatMoney(order.tax_amount)],
-    [isPickup ? "Pickup" : "Shipping", formatMoney(order.shipping_cost)],
+    ["Subtotal", formatMoney(order.subtotal)],
+    [isPickup ? "Pickup" : "Freight / Shipping", formatMoney(order.shipping_cost)],
   ];
   const labelWidth = 130;
   const valueWidth = 95;
@@ -359,39 +438,79 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
     .lineTo(rightX + labelWidth + valueWidth, rowY)
     .stroke();
   rowY += 12;
-  doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.accent).text("Total Amount", rightX, rowY, { width: labelWidth });
-  doc.fontSize(14).text(formatMoney(order.total), rightX + labelWidth, rowY - 2, { width: valueWidth, align: "right" });
-  rowY += 22;
+  doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.text).text("Total", rightX, rowY, { width: labelWidth });
+  doc
+    .fillColor(COLORS.accent)
+    .fontSize(14)
+    .text(formatMoney(order.total), rightX + labelWidth, rowY - 2, { width: valueWidth, align: "right" });
+  rowY += 30;
 
-  // Manual/in-store sales are the only ones that can carry an outstanding
-  // balance — Stripe storefront/eBay orders are always paid in full or not
-  // at all by the time this is sent, so this section only ever appears here.
-  // totalPaidCents sums every succeeded Payment on the order (deposit +
-  // follow-up top-up, if any) — never just order.payment.amount, which only
-  // ever reflects the single most recently created Payment.
-  if (order.channel === "manual") {
-    const amountPaid = totalPaidCents || 0;
-    const amountDue = order.total - amountPaid;
-    if (amountDue > 0) {
-      doc.font(FONT).fontSize(9).fillColor(COLORS.muted).text("Amount Paid", rightX, rowY, { width: labelWidth });
-      doc
-        .font(FONT_BOLD)
-        .fontSize(9)
-        .fillColor(COLORS.text)
-        .text(formatMoney(amountPaid), rightX + labelWidth, rowY, { width: valueWidth, align: "right" });
-      rowY += 16;
-      doc
-        .font(FONT_BOLD)
-        .fontSize(10)
-        .fillColor(COLORS.statusPendingText)
-        .text("Balance Due", rightX, rowY, { width: labelWidth });
-      doc.text(formatMoney(amountDue), rightX + labelWidth, rowY, { width: valueWidth, align: "right" });
-      rowY += 16;
-    }
-  }
+  // Every channel can now carry an outstanding balance — storefront/eBay
+  // prices are editable after the fact (see updateOrderItemPrice), not just
+  // manual sales — so this bar is unconditional, mirroring
+  // InvoicePrintView.tsx's generalized Balance Outstanding treatment.
+  const amountDue = Math.max(0, order.total - (totalPaidCents || 0));
+  const barWidth = labelWidth + valueWidth;
+  const barHeight = 28;
+  doc.roundedRect(rightX, rowY, barWidth, barHeight, 6).fill(COLORS.accent);
+  doc
+    .font(FONT_BOLD)
+    .fontSize(7.5)
+    .fillColor(COLORS.white)
+    .text("BALANCE OUTSTANDING", rightX + 10, rowY + 6, { width: barWidth - 20 });
+  doc.fontSize(10.5).text(formatMoney(amountDue), rightX + 10, rowY + 15, { width: barWidth - 20, align: "right" });
+  rowY += barHeight + 4;
 
   doc.fillColor(COLORS.text);
-  doc.y = Math.max(leftBottomY, rowY + 4);
+  doc.y = Math.max(leftBottomY, rowY);
+}
+
+// Warranty & Returns / Legal Disclaimer footer, matching
+// InvoicePrintView.tsx's tinted footer section — replaces the old single
+// italic INVOICE_NOTE line that used to sit under Payment Information.
+function drawFooter(doc, bottomY) {
+  const boxPad = 16;
+  const colGap = 24;
+  const colWidth = CONTENT_WIDTH / 2 - colGap / 2 - boxPad * 2;
+
+  doc.font(FONT).fontSize(7.5);
+  const leftTextHeight = doc.heightOfString(WARRANTY_TEXT, { width: colWidth, lineGap: 1.5 });
+  const rightTextHeight = doc.heightOfString(LEGAL_DISCLAIMER_TEXT, { width: colWidth, lineGap: 1.5 });
+  const headerHeight = 16;
+  const boxHeight = boxPad * 2 + headerHeight + Math.max(leftTextHeight, rightTextHeight);
+
+  // Pinned to the bottom of the page, like InvoicePrintView.tsx's `mt-auto`
+  // footer — falls back to sitting right after the table (rather than
+  // overlapping it) only if the order has enough line items to push content
+  // past where the footer would otherwise sit.
+  const pageBottomTarget = PAGE_HEIGHT - PAGE_MARGIN - FRAME_PADDING - boxHeight;
+  const boxY = Math.max(bottomY + 12, pageBottomTarget);
+
+  doc.roundedRect(PAGE_MARGIN, boxY, CONTENT_WIDTH, boxHeight, 8).fill(COLORS.tint);
+  doc.fillColor(COLORS.text);
+
+  const textY = boxY + boxPad;
+  doc
+    .font(FONT_BOLD)
+    .fontSize(8)
+    .fillColor(COLORS.text)
+    .text("WARRANTY & RETURNS", PAGE_MARGIN + boxPad, textY, { width: colWidth });
+  doc
+    .font(FONT)
+    .fontSize(7.5)
+    .fillColor(COLORS.muted)
+    .text(WARRANTY_TEXT, PAGE_MARGIN + boxPad, doc.y + 4, { width: colWidth, lineGap: 1.5 });
+
+  const col2X = PAGE_MARGIN + CONTENT_WIDTH / 2 + colGap / 2;
+  doc.font(FONT_BOLD).fontSize(8).fillColor(COLORS.text).text("LEGAL DISCLAIMER", col2X, textY, { width: colWidth });
+  doc
+    .font(FONT)
+    .fontSize(7.5)
+    .fillColor(COLORS.muted)
+    .text(LEGAL_DISCLAIMER_TEXT, col2X, doc.y + 4, { width: colWidth, lineGap: 1.5 });
+
+  doc.fillColor(COLORS.text);
+  return boxY + boxHeight;
 }
 
 // Frames the whole invoice in a rounded-corner card, matching
@@ -418,10 +537,11 @@ function buildInvoicePdfBuffer(order, { totalPaidCents = 0 } = {}) {
     doc.on("error", reject);
 
     drawHeader(doc, order);
-    drawPartiesBlock(doc, order);
+    drawBillShipTransactionBlock(doc, order);
     drawItemsTable(doc, order);
     drawPaymentAndTotals(doc, order, totalPaidCents);
-    drawCardBorder(doc, doc.y);
+    const footerBottomY = drawFooter(doc, doc.y);
+    drawCardBorder(doc, footerBottomY);
 
     doc.end();
   });
