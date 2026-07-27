@@ -47,3 +47,22 @@ exports.getCriticalStock = async (req, res) => {
     return systemfailure(res, err);
   }
 };
+
+exports.listActivityLog = async (req, res) => {
+  try {
+    const { page, limit, type, from, to, search } = req.query;
+    const result = await dashboardService.listActivity({ page, limit, type, from, to, search });
+    return success(res, result);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getActivityAnalytics = async (req, res) => {
+  try {
+    const analytics = await dashboardService.getActivityAnalytics({ from: req.query.from, to: req.query.to });
+    return success(res, analytics);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};

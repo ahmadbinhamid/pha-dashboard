@@ -24,6 +24,7 @@ import PaymentsPage from "@/pages/erp/PaymentsPage";
 import ListingsPage from "@/pages/erp/ListingsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
+import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 
 function HomeRedirect() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/listings" element={<ListingsPage />} />
             <Route path="/listings/new" element={<ListingCreatePage />} />
             <Route path="/listings/:id/edit" element={<ListingEditPage />} />
+            <Route path="/activity-log" element={<ActivityLogPage />} />
           </Route>
 
           <Route path="/" element={<HomeRedirect />} />

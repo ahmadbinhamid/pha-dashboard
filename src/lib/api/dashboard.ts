@@ -5,6 +5,8 @@ import type {
   OrderVolumePoint,
   ChannelHealth,
   ActivityEvent,
+  ActivityLogPage,
+  ActivityAnalytics,
   CriticalStockItem,
 } from "@/types/dashboard";
 
@@ -35,6 +37,27 @@ export const getRecentActivity = async (limit = 10) => {
 export const getCriticalStock = async (limit = 10) => {
   const { data } = await apiClient.get<BeResponse<CriticalStockItem[]>>("/dashboard/critical-stock", {
     params: { limit },
+  });
+  return data;
+};
+
+export interface ListActivityLogParams {
+  page?: number;
+  limit?: number;
+  type?: "" | "order" | "stock";
+  from?: string;
+  to?: string;
+  search?: string;
+}
+
+export const listActivityLog = async (params: ListActivityLogParams = {}) => {
+  const { data } = await apiClient.get<BeResponse<ActivityLogPage>>("/dashboard/activity-log", { params });
+  return data;
+};
+
+export const getActivityAnalytics = async (params: { from?: string; to?: string } = {}) => {
+  const { data } = await apiClient.get<BeResponse<ActivityAnalytics>>("/dashboard/activity-log/analytics", {
+    params,
   });
   return data;
 };

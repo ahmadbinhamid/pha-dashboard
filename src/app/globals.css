@@ -435,3 +435,15 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Print ──────────────────────────────────────────────────────────────── */
+/* Zero page margins suppress Chromium's default print header/footer (date,   */
+/* page title/URL, page numbers) — that content only renders inside the       */
+/* default margin area. Firefox/Safari honor the same rule but may still show */
+/* their own header/footer depending on the user's print settings.            */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}

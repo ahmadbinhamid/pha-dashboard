@@ -56,7 +56,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         <div className="flex items-start gap-4">
           <PartsHubLogoImage sizeClass="h-12" maxWidthClass="max-w-[52px]" />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">INVOICE #{order.order_number}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">INVOICE #{order.invoice_number}</h1>
             <p className="mt-1.5 text-xs uppercase tracking-wide" style={{ color: MUTED }}>
               Order Date: {orderDate}
             </p>

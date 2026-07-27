@@ -82,7 +82,11 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   const createMutation = useMutation({
     mutationFn: createManualOrder,
     onSuccess: (res) => {
-      toast({ title: "Order created", description: `Invoice ${res.data.order_number} generated.`, tone: "success" });
+      toast({
+        title: "Order created",
+        description: `Invoice ${res.data.invoice_number} generated.`,
+        tone: "success",
+      });
       clearCart();
       onOrderCreated(res.data);
     },

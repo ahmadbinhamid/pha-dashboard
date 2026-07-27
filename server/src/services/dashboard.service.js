@@ -171,6 +171,35 @@ async function getOrderVolumeTrend(days = 7) {
 // No dedicated activity/audit log exists in this system; this merges the two
 // event sources this app actually has, newest first.
 
+function mapOrderEvent(o) {
+  return {
+    id: `order_${o._id}`,
+    type: "order",
+    title: `New order — ${o.customer.name}`,
+    description: `${o.order_number} via ${o.channel}`,
+    timestamp: o.created_at,
+    tags: [o.channel, o.status],
+  };
+}
+
+function mapStockEvent(h) {
+  return {
+    id: `stock_${h._id}`,
+    type: "stock",
+    title: h.adjustment >= 0 ? "Inventory Restock" : "Stock Adjustment",
+    description: [
+      h.product ? h.product.title : "Product",
+      h.variant ? `(${h.variant.display_name})` : null,
+      `${h.adjustment >= 0 ? "+" : ""}${h.adjustment} units`,
+      h.reason || null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    timestamp: h.created_at,
+    tags: [h.type],
+  };
+}
+
 async function getRecentActivity(limit = 10) {
   const [recentOrders, recentStockChanges] = await Promise.all([
     Order.find({})
@@ -186,34 +215,130 @@ async function getRecentActivity(limit = 10) {
       .lean(),
   ]);
 
-  const events = [
-    ...recentOrders.map((o) => ({
-      id: `order_${o._id}`,
-      type: "order",
-      title: `New order — ${o.customer.name}`,
-      description: `${o.order_number} via ${o.channel}`,
-      timestamp: o.created_at,
-      tags: [o.channel, o.status],
-    })),
-    ...recentStockChanges.map((h) => ({
-      id: `stock_${h._id}`,
-      type: "stock",
-      title: h.adjustment >= 0 ? "Inventory Restock" : "Stock Adjustment",
-      description: [
-        h.product ? h.product.title : "Product",
-        h.variant ? `(${h.variant.display_name})` : null,
-        `${h.adjustment >= 0 ? "+" : ""}${h.adjustment} units`,
-        h.reason || null,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      timestamp: h.created_at,
-      tags: [h.type],
-    })),
-  ];
+  const events = [...recentOrders.map(mapOrderEvent), ...recentStockChanges.map(mapStockEvent)];
 
   events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   return events.slice(0, limit);
+}
+
+// ── Activity log — paginated, filterable version of the feed above ─────────
+// Merging two differently-shaped collections into one sorted, paginated feed
+// means skip/limit can't be pushed to a single query. Instead each source is
+// queried for its own top (skip + limit) rows (already filtered/sorted),
+// merged, re-sorted, then sliced to the requested page — every page comes
+// out exactly right while only ever fetching two bounded slices, never the
+// whole table. `total` is a separate, cheap countDocuments per source.
+async function listActivity({ page = 1, limit = 20, type = "", from, to, search } = {}) {
+  const skip = (page - 1) * limit;
+  const fetchCount = skip + limit;
+
+  const dateFilter = {};
+  if (from) dateFilter.$gte = new Date(from);
+  if (to) dateFilter.$lte = new Date(to);
+  const hasDateFilter = Object.keys(dateFilter).length > 0;
+
+  const includeOrders = type !== "stock";
+  const includeStock = type !== "order";
+
+  const orderFilter = {};
+  if (hasDateFilter) orderFilter.created_at = dateFilter;
+  if (search) {
+    orderFilter.$or = [
+      { order_number: { $regex: search, $options: "i" } },
+      { "customer.name": { $regex: search, $options: "i" } },
+      { "customer.email": { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const stockBasePipeline = [];
+  if (hasDateFilter) stockBasePipeline.push({ $match: { created_at: dateFilter } });
+  stockBasePipeline.push(
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+    { $unwind: "$product" },
+    { $lookup: { from: "productvariants", localField: "variant", foreignField: "_id", as: "variant" } },
+    { $addFields: { variant: { $arrayElemAt: ["$variant", 0] } } },
+  );
+  if (search) {
+    stockBasePipeline.push({
+      $match: { $or: [{ "product.title": { $regex: search, $options: "i" } }, { reason: { $regex: search, $options: "i" } }] },
+    });
+  }
+
+  const [orderDocs, orderTotal, stockDocs, stockTotal] = await Promise.all([
+    includeOrders
+      ? Order.find(orderFilter)
+          .sort({ created_at: -1 })
+          .limit(fetchCount)
+          .select("order_number channel status created_at customer")
+          .lean()
+      : [],
+    includeOrders ? Order.countDocuments(orderFilter) : 0,
+    includeStock ? InventoryHistory.aggregate([...stockBasePipeline, { $sort: { created_at: -1 } }, { $limit: fetchCount }]) : [],
+    includeStock
+      ? InventoryHistory.aggregate([...stockBasePipeline, { $count: "total" }]).then((r) => r[0]?.total || 0)
+      : 0,
+  ]);
+
+  const events = [...orderDocs.map(mapOrderEvent), ...stockDocs.map(mapStockEvent)];
+  events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  const total = orderTotal + stockTotal;
+  return {
+    items: events.slice(skip, skip + limit),
+    total,
+    page,
+    pageSize: limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
+}
+
+// One zero-filled bucket per calendar day across [from, to] (default: the
+// trailing 14 days) — same "always fully populated" contract as
+// getOrderVolumeTrend, so the activity log's trend chart never has to guess
+// about missing days.
+async function getActivityAnalytics({ from, to } = {}) {
+  const rangeTo = to ? new Date(to) : new Date();
+  const rangeFrom = from
+    ? new Date(from)
+    : (() => {
+        const d = new Date(rangeTo);
+        d.setDate(d.getDate() - 13);
+        return d;
+      })();
+
+  const dateFilter = { $gte: rangeFrom, $lte: rangeTo };
+
+  const [orders, stockChanges] = await Promise.all([
+    Order.find({ created_at: dateFilter }).select("created_at").lean(),
+    InventoryHistory.find({ created_at: dateFilter }).select("created_at").lean(),
+  ]);
+
+  const byDate = new Map();
+  const cursor = new Date(rangeFrom);
+  cursor.setHours(0, 0, 0, 0);
+  const endDay = new Date(rangeTo);
+  endDay.setHours(0, 0, 0, 0);
+  while (cursor <= endDay) {
+    const key = cursor.toISOString().slice(0, 10);
+    byDate.set(key, { date: key, orders: 0, stock: 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const o of orders) {
+    const bucket = byDate.get(new Date(o.created_at).toISOString().slice(0, 10));
+    if (bucket) bucket.orders += 1;
+  }
+  for (const h of stockChanges) {
+    const bucket = byDate.get(new Date(h.created_at).toISOString().slice(0, 10));
+    if (bucket) bucket.stock += 1;
+  }
+
+  return {
+    totalEvents: orders.length + stockChanges.length,
+    orderEvents: orders.length,
+    stockEvents: stockChanges.length,
+    dailyTrend: Array.from(byDate.values()),
+  };
 }
 
 // ── Critical stock ───────────────────────────────────────────────────────────
@@ -264,5 +389,7 @@ module.exports = {
   getChannelHealth,
   getOrderVolumeTrend,
   getRecentActivity,
+  listActivity,
+  getActivityAnalytics,
   getCriticalStock,
 };

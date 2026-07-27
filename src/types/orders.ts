@@ -72,6 +72,7 @@ export interface OrderPaymentSummary {
 export interface Order {
   _id: string;
   order_number: string;
+  invoice_number: string;
   items: OrderItem[];
   customer: OrderCustomer;
   // Linked Customer record, when this order belongs to a known customer —

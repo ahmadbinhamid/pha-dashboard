@@ -63,6 +63,12 @@ const internalNoteSchema = new Schema(
 
 const orderSchema = buildSchema({
   order_number: { type: String, required: true, unique: true }, // e.g. "PHA-00001"
+  // Separate sequence from order_number, minted at the same time — orders
+  // and invoices are 1:1 today, but this keeps the financial/tax-invoice
+  // document number independent of the operational order reference, since
+  // they diverge the moment partial shipments, credit notes, or consolidated
+  // billing exist. See scripts/migrateInvoiceNumbers.js for backfill.
+  invoice_number: { type: String, required: true, unique: true }, // e.g. "INV-00001"
   items: { type: [orderItemSchema], required: true },
 
   // Required for storefront/eBay orders (enforced by their own request

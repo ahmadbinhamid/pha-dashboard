@@ -40,6 +40,18 @@ async function nextOrderNumber() {
   return `PHA-${String(counter.seq).padStart(5, "0")}`;
 }
 
+// Own sequence, own counter — kept separate from order_number so an
+// invoice's numbering never has to assume "one order = one invoice" (see
+// the comment on Order.invoice_number).
+async function nextInvoiceNumber() {
+  const counter = await Counter.findOneAndUpdate(
+    { _id: "invoice_number" },
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true },
+  );
+  return `INV-${String(counter.seq).padStart(5, "0")}`;
+}
+
 function generateGuestAccessToken() {
   return crypto.randomBytes(32).toString("hex");
 }
@@ -209,6 +221,7 @@ async function createManualOrder({
 
   const order = await Order.create({
     order_number: await nextOrderNumber(),
+    invoice_number: await nextInvoiceNumber(),
     items: resolvedItems,
     customer: {
       name: customer.name,
@@ -377,6 +390,7 @@ async function createOrder({
 
   const order = await Order.create({
     order_number: await nextOrderNumber(),
+    invoice_number: await nextInvoiceNumber(),
     items: resolvedItems,
     customer,
     delivery_method,
@@ -459,6 +473,7 @@ async function createOrderFromEbayOrder(rawEbayOrder) {
 
   const order = await Order.create({
     order_number: await nextOrderNumber(),
+    invoice_number: await nextInvoiceNumber(),
     items: resolvedItems,
     customer: mapped.customer,
     shipping_address: mapped.shippingAddress,

@@ -52,3 +52,24 @@ export interface CriticalStockItem {
   category: string | null;
   stockCount: number;
 }
+
+export interface ActivityLogPage {
+  items: ActivityEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ActivityAnalyticsPoint {
+  date: string; // yyyy-mm-dd
+  orders: number;
+  stock: number;
+}
+
+export interface ActivityAnalytics {
+  totalEvents: number;
+  orderEvents: number;
+  stockEvents: number;
+  dailyTrend: ActivityAnalyticsPoint[];
+}

@@ -39,16 +39,16 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
             Nothing below your low-stock threshold right now.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-80 overflow-auto">
             <Table className="min-w-140">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 max-w-64 min-w-52 sticky-col-header sticky-col-separator-right">
+                  <TableHead className="sticky left-0 top-0 z-3 max-w-64 min-w-52 bg-card sticky-col-header sticky-col-separator-right">
                     Part Details
                   </TableHead>
-                  <TableHead className="text-right">In Stock</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="sticky top-0 z-2 bg-card text-right">In Stock</TableHead>
+                  <TableHead className="sticky top-0 z-2 bg-card">Category</TableHead>
+                  <TableHead className="sticky top-0 z-2 bg-card text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

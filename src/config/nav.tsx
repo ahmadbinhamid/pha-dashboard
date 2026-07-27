@@ -7,6 +7,7 @@ import {
   Tag,
   CreditCard,
   Boxes,
+  History,
 } from "lucide-react";
 
 export type NavItem = {
@@ -24,6 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Orders", href: "/orders", icon: (p) => <ShoppingCart {...p} /> },
   { label: "Listings", href: "/listings", icon: (p) => <Tag {...p} /> },
   { label: "Payments", href: "/payments", icon: (p) => <CreditCard {...p} /> },
+  { label: "Activity Log", href: "/activity-log", icon: (p) => <History {...p} /> },
 ];
 
 export function isNavItemActive(href: string, pathname: string): boolean {

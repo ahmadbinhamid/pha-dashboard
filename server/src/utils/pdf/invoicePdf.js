@@ -118,7 +118,11 @@ function drawHeader(doc, order) {
   const textX = PAGE_MARGIN + LOGO_SIZE + LOGO_TEXT_GAP;
   doc.image(LOGO_PATH, PAGE_MARGIN, PAGE_MARGIN, { width: LOGO_SIZE, height: LOGO_SIZE });
 
-  doc.font(FONT_BOLD).fontSize(20).fillColor(COLORS.text).text(`INVOICE #${order.order_number}`, textX, PAGE_MARGIN);
+  doc
+    .font(FONT_BOLD)
+    .fontSize(20)
+    .fillColor(COLORS.text)
+    .text(`INVOICE #${order.invoice_number}`, textX, PAGE_MARGIN);
   doc
     .font(FONT)
     .fontSize(9)
