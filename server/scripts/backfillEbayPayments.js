@@ -11,7 +11,13 @@
 //
 // Safe to re-run: only touches Order docs with payment: null (which also
 // matches "field never existed"), so an order already backfilled (or
-// imported after the fix) is left alone.
+// imported after the fix) is left alone. Also safe to re-run after a partial
+// failure — reuses an existing eBay Payment for the order instead of
+// creating a second one (see the Payment.findOne check below), and links it
+// back via a raw Order.updateOne rather than loading + saving a full
+// Mongoose document, so a legacy order missing an unrelated required field
+// (e.g. invoice_number, on orders that predate that field) can't block this
+// migration — same convention as migrateInvoiceNumbers.js.
 //
 // Usage: node scripts/backfillEbayPayments.js
 
@@ -28,7 +34,7 @@ async function backfill() {
   await mongoose.connect(config.mongoUri);
   console.log("Connected to MongoDB");
 
-  const orders = await Order.find({ channel: ORDER_CHANNEL.EBAY, payment: null });
+  const orders = await Order.find({ channel: ORDER_CHANNEL.EBAY, payment: null }).lean();
   console.log(`Found ${orders.length} eBay orders with no Payment record`);
 
   let succeeded = 0;
@@ -36,16 +42,20 @@ async function backfill() {
 
   for (const order of orders) {
     try {
-      const payment = await Payment.create({
-        order: order._id,
-        provider: PAYMENT_PROVIDER.EBAY,
-        amount: order.total,
-        currency: order.currency,
-        status: PAYMENT_STATUS.SUCCEEDED,
-        paid_at: order.created_at,
-      });
-      order.payment = payment._id;
-      await order.save();
+      // Reuse an already-created Payment if a prior run got this far before
+      // failing on the order-side write — avoids creating a duplicate.
+      let payment = await Payment.findOne({ order: order._id, provider: PAYMENT_PROVIDER.EBAY });
+      if (!payment) {
+        payment = await Payment.create({
+          order: order._id,
+          provider: PAYMENT_PROVIDER.EBAY,
+          amount: order.total,
+          currency: order.currency,
+          status: PAYMENT_STATUS.SUCCEEDED,
+          paid_at: order.created_at,
+        });
+      }
+      await Order.updateOne({ _id: order._id }, { $set: { payment: payment._id } });
       succeeded++;
     } catch (err) {
       failed++;
