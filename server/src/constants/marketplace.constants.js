@@ -19,6 +19,12 @@ const LISTING_SYNC_STATUS = Object.freeze({
   PENDING: "pending",
   SYNCED: "synced",
   OUT_OF_STOCK: "out_of_stock",
+  // Listing is live and otherwise in sync, but eBay rejected the last price
+  // update because the offer is part of an active eBay sale/promotion — see
+  // EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE. Distinct from ERROR: this
+  // isn't a failure to fix, just a state that resolves itself once the sale
+  // ends (or is reconfigured on eBay to allow price updates).
+  PRICE_LOCKED: "price_locked",
   ERROR: "error",
 });
 

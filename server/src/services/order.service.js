@@ -591,6 +591,23 @@ async function createOrderFromEbayOrder(rawEbayOrder) {
     guest_access_token: generateGuestAccessToken(),
   });
 
+  // eBay collects payment on their end (Managed Payments) before the order
+  // ever reaches us — mapped.status is always PAID/FULFILLED, never
+  // PENDING_PAYMENT (see mapStatus()), so the full total is recorded as
+  // already collected. Without this, every eBay order looked unpaid to the
+  // rest of the app (balance-due banners, invoice totals, payment history)
+  // since nothing else ever creates a Payment for this channel.
+  const payment = await Payment.create({
+    order: order._id,
+    provider: PAYMENT_PROVIDER.EBAY,
+    amount: order.total,
+    currency: order.currency,
+    status: PAYMENT_STATUS.SUCCEEDED,
+    paid_at: order.created_at,
+  });
+  order.payment = payment._id;
+  await order.save();
+
   logger.info(`[order.service] imported eBay order ${mapped.externalOrderId} as ${order.order_number}`);
   return order;
 }
@@ -599,9 +616,11 @@ async function createOrderFromEbayOrder(rawEbayOrder) {
 // matching local Order. No-op (returns null) if that eBay order was never
 // imported here, e.g. its line items didn't match any known product —
 // consistent with createOrderFromEbayOrder() treating that as "nothing to
-// do" rather than an error. Doesn't create a Refund record: eBay-side
-// refunds for these are settled through eBay's own managed payments, not
-// our Stripe/Payment pipeline, so there's no Payment to link one to.
+// do" rather than an error. Doesn't create a Refund record automatically:
+// eBay-side refunds are settled through eBay's own managed payments, not
+// ours, so there's nothing for us to actually reverse here — staff can
+// still record a manual refund against the order's Payment (see
+// refund.service.js#createManualRefund) if they want it reflected locally.
 //
 // eBay sends one LINE_ITEMS_UPDATED event per SKU, so a multi-item order
 // can have just one line cancelled while the rest still ship — only flip

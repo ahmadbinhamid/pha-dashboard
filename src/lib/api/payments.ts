@@ -28,3 +28,13 @@ export const refundPayment = async (id: string, payload: RefundPaymentPayload) =
   const { data } = await apiClient.post<BeResponse<Refund>>(`/payment/${id}/refund`, payload);
   return data;
 };
+
+export interface ManualRefundPayload {
+  amount: number; // cents
+  reason: RefundReason;
+}
+
+export const refundPaymentManual = async (id: string, payload: ManualRefundPayload) => {
+  const { data } = await apiClient.post<BeResponse<Refund>>(`/payment/${id}/refund-manual`, payload);
+  return data;
+};

@@ -30,7 +30,7 @@ const createProduct = {
     is_taxable: Joi.boolean().default(false),
     sku: Joi.string().allow("", null).default(null),
     barcode: Joi.string().allow("", null).default(null),
-    stock_control: Joi.boolean().default(false),
+    stock_control: Joi.boolean().default(true),
     has_variants: Joi.boolean().default(false),
     brand: Joi.string().allow("", null).default(null),
     condition: Joi.string()

@@ -27,5 +27,12 @@ router.post(
   validate(v.createRefund),
   asyncHandler(ctrl.refundPayment),
 );
+router.post(
+  "/:id/refund-manual",
+  auth(),
+  admin,
+  validate(v.createManualRefund),
+  asyncHandler(ctrl.refundPaymentManual),
+);
 
 module.exports = router;

@@ -71,6 +71,12 @@ function lineGst(lineTotalCents) {
   return Math.round(lineTotalCents / 11);
 }
 
+// Same GST-inclusive convention as lineGst, applied to a single unit's
+// inclusive price to get its GST-exclusive counterpart for display.
+function lineExclusiveUnitPrice(unitPriceCents) {
+  return unitPriceCents - lineGst(unitPriceCents);
+}
+
 function drawCheckIcon(doc, x, y, color, size = 9) {
   doc.save().lineWidth(1.4).strokeColor(color).lineJoin("round").lineCap("round");
   doc
@@ -377,7 +383,7 @@ function drawItemsTable(doc, order) {
     const gst = lineGst(lineTotal);
 
     doc.font(FONT).fontSize(9).fillColor(COLORS.text);
-    doc.text(formatMoney(item.unit_price), PAGE_MARGIN + COLUMNS.unitPrice, rowY, {
+    doc.text(formatMoney(lineExclusiveUnitPrice(item.unit_price)), PAGE_MARGIN + COLUMNS.unitPrice, rowY, {
       width: COLUMN_WIDTHS.unitPrice,
       align: "right",
     });
@@ -523,19 +529,26 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
 
   // Every channel can now carry an outstanding balance — storefront/eBay
   // prices are editable after the fact (see updateOrderItemPrice), not just
-  // manual sales — so this bar is unconditional, mirroring
-  // InvoicePrintView.tsx's generalized Balance Outstanding treatment.
+  // manual sales — mirroring InvoicePrintView.tsx's generalized Balance
+  // Outstanding treatment. Only drawn when there's an actual balance
+  // (amountDue > 0) and the order isn't refunded — a refund nets out of
+  // totalPaidCents the same way an uncollected payment would, leaving the
+  // same arithmetic remainder, but it means the opposite thing: the
+  // customer already got that money back, they don't still owe it.
+  const isRefunded = order.status === "refunded" || order.status === "partially_refunded";
   const amountDue = Math.max(0, order.total - (totalPaidCents || 0));
-  const barWidth = totalsWidth;
-  const barHeight = 28;
-  doc.roundedRect(rightX, rowY, barWidth, barHeight, 6).fill(COLORS.accent);
-  doc
-    .font(FONT_BOLD)
-    .fontSize(7.5)
-    .fillColor(COLORS.white)
-    .text("BALANCE OUTSTANDING", rightX + 10, rowY + 6, { width: barWidth - 20 });
-  doc.fontSize(10.5).text(formatMoney(amountDue), rightX + 10, rowY + 15, { width: barWidth - 20, align: "right" });
-  rowY += barHeight + 4;
+  if (!isRefunded && amountDue > 0) {
+    const barWidth = totalsWidth;
+    const barHeight = 28;
+    doc.roundedRect(rightX, rowY, barWidth, barHeight, 6).fill(COLORS.accent);
+    doc
+      .font(FONT_BOLD)
+      .fontSize(7.5)
+      .fillColor(COLORS.white)
+      .text("BALANCE OUTSTANDING", rightX + 10, rowY + 6, { width: barWidth - 20 });
+    doc.fontSize(10.5).text(formatMoney(amountDue), rightX + 10, rowY + 15, { width: barWidth - 20, align: "right" });
+    rowY += barHeight + 4;
+  }
 
   doc.fillColor(COLORS.text);
   doc.y = Math.max(leftBottomY, rowY);

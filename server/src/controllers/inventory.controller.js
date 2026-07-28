@@ -2,7 +2,6 @@
 
 const {
   listInventory,
-  fanOutMarketplaceInventory,
   fetchPopulatedRecord,
   findRecord,
   ensureRecord,
@@ -67,8 +66,6 @@ exports.adjustStock = async (req, res) => {
       userId: req.user?._id,
     });
 
-    await fanOutMarketplaceInventory(record.product, record.variant);
-
     return success(res, await fetchPopulatedRecord(record._id), "Stock adjusted");
   } catch (err) {
     return systemfailure(res, err);
@@ -95,8 +92,6 @@ exports.setStock = async (req, res) => {
       reason,
       userId: req.user?._id,
     });
-
-    await fanOutMarketplaceInventory(record.product, record.variant);
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock set");
   } catch (err) {

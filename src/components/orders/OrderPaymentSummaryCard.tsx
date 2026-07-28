@@ -49,7 +49,12 @@ export function OrderPaymentSummaryCard({
         <span className="text-xs text-fg/50">of {formatCurrencyFromCents(total)}</span>
       </div>
 
-      {isManual && balanceDue > 0 && <BalanceDueBanner amount={balanceDue} />}
+      {/* Gated on hasOutstandingBalance (not just balanceDue > 0) so a refund
+          never gets mistaken for money still owed — refunding a paid order
+          moves orderStatus to refunded/partially_refunded, which leaves the
+          same arithmetic remainder as an uncollected balance but means the
+          opposite thing. */}
+      {isManual && hasOutstandingBalance && balanceDue > 0 && <BalanceDueBanner amount={balanceDue} />}
 
       {canCollectMore && (
         <div className="space-y-2">

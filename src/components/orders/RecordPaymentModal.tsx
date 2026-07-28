@@ -93,6 +93,7 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
               <NativeSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
                 <option value="cash">{PAYMENT_METHOD_LABEL.cash}</option>
                 <option value="online_transfer">{PAYMENT_METHOD_LABEL.online_transfer}</option>
+                <option value="efpos">{PAYMENT_METHOD_LABEL.efpos}</option>
               </NativeSelect>
             </FormField>
             <FormField label="Amount" required error={error}>

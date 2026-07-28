@@ -29,6 +29,7 @@ export function RefundHistoryList({ refunds }: { refunds: Refund[] }) {
           <div className="mt-1 text-xs text-fg/55">
             {REFUND_REASON_LABEL[refund.reason] ?? refund.reason}
             {refund.initiated_via === "stripe_dashboard" && " — via Stripe Dashboard"}
+            {refund.initiated_via === "manual" && " — recorded manually"}
           </div>
           {refund.failure_reason && <div className="mt-1 text-xs text-danger">{refund.failure_reason}</div>}
           <div className="mt-1.5 text-[10px] text-fg/40">{new Date(refund.created_at).toLocaleString()}</div>

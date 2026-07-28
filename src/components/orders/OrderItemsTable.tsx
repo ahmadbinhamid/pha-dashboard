@@ -5,7 +5,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { updateOrderItemPrice } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import type { OrderChannel, OrderItem } from "@/types/orders";
@@ -87,7 +87,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
         setEditing(true);
       }}
     >
-      {formatCurrencyFromCents(item.unit_price)}
+      {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
       <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );
@@ -115,10 +115,11 @@ export function OrderItemsTable({
               Item
             </TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
-            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">GST (11%)</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Discount</TableHead>
-            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Line Total</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Total</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -131,12 +132,11 @@ export function OrderItemsTable({
                 )}
               </TableCell>
               <TableCell className="text-fg/60">{item.sku ?? "—"}</TableCell>
-              <TableCell className="text-right text-fg">{item.quantity}</TableCell>
               <TableCell className="text-right text-fg">
                 {priceEditable ? (
                   <EditableUnitPrice orderId={orderId} itemIndex={i} item={item} />
                 ) : (
-                  formatCurrencyFromCents(item.unit_price)
+                  formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))
                 )}
                 {item.unit_price_updated_at && (
                   <div className="mt-1 flex justify-end">
@@ -150,6 +150,10 @@ export function OrderItemsTable({
                   </div>
                 )}
               </TableCell>
+              <TableCell className="text-right text-fg/60">
+                {formatCurrencyFromCents(getLineGst(item.unit_price))}
+              </TableCell>
+              <TableCell className="text-right text-fg">{item.quantity}</TableCell>
               <TableCell className="text-right text-fg/60">
                 {item.discount_amount > 0 ? `-${formatCurrencyFromCents(item.discount_amount)}` : "—"}
               </TableCell>

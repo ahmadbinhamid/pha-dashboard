@@ -1,6 +1,6 @@
 export type MarketplacePlatform = "ebay" | "amazon" | "shopify";
 export type ListingState = "draft" | "active" | "ended";
-export type ListingSyncStatus = "not_listed" | "pending" | "synced" | "out_of_stock" | "error";
+export type ListingSyncStatus = "not_listed" | "pending" | "synced" | "out_of_stock" | "price_locked" | "error";
 
 export interface ItemSpecifics {
   brand: string | null;

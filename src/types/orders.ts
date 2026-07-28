@@ -1,4 +1,4 @@
-import type { PaymentStatus, Refund } from "@/types/payment";
+import type { PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
 
 export type OrderStatus =
   | "pending_payment"
@@ -64,9 +64,9 @@ export interface OrderInternalNote {
 // Populated by the backend from the linked Payment doc.
 export interface OrderPaymentSummary {
   _id: string;
-  provider: "stripe" | "manual";
+  provider: PaymentProvider;
   // Only set for provider "manual" — how the customer actually paid.
-  payment_method: "cash" | "online_transfer" | null;
+  payment_method: "cash" | "online_transfer" | "efpos" | null;
   status: PaymentStatus;
   amount: number; // cents
   amount_refunded: number; // cents

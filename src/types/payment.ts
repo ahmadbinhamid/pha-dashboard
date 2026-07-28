@@ -2,12 +2,14 @@ export type PaymentStatus = "pending" | "requires_action" | "succeeded" | "faile
 
 // "stripe" = the API/webhook is the source of truth; "manual" = a staff
 // member typed in what they collected — see PaymentMethod for the human
-// detail on *how* a manual payment was taken.
-export type PaymentProvider = "stripe" | "manual";
+// detail on *how* a manual payment was taken. "ebay" = auto-created when an
+// eBay order is imported, since eBay collects payment on their end
+// (Managed Payments) before the order ever reaches us.
+export type PaymentProvider = "stripe" | "manual" | "ebay";
 
 // Only meaningful when provider is "manual" — always null for Stripe, which
 // is inherently a card.
-export type PaymentMethod = "cash" | "online_transfer";
+export type PaymentMethod = "cash" | "online_transfer" | "efpos";
 
 // The three choices staff see when creating a manual order. "payment_link"
 // is not a PaymentMethod (no Payment doc is created with it as the method) —
@@ -59,7 +61,7 @@ export interface Refund {
   reason: RefundReason;
   status: RefundStatus;
   failure_reason: string | null;
-  initiated_via: "admin_api" | "stripe_dashboard";
+  initiated_via: "admin_api" | "stripe_dashboard" | "manual";
   initiated_by: string | null;
   created_at: string;
 }

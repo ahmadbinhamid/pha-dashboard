@@ -6,6 +6,10 @@
 const PAYMENT_PROVIDER = Object.freeze({
   STRIPE: "stripe",
   MANUAL: "manual",
+  // eBay collects payment on their end (Managed Payments) before pushing the
+  // order to us — this Payment is auto-created at import time purely as a
+  // record of that, never something we collect or refund through a gateway.
+  EBAY: "ebay",
 });
 
 // How the customer actually paid, for manual (provider = "manual") payments
@@ -15,6 +19,7 @@ const PAYMENT_PROVIDER = Object.freeze({
 const PAYMENT_METHOD = Object.freeze({
   CASH: "cash",
   ONLINE_TRANSFER: "online_transfer",
+  EFPOS: "efpos",
 });
 
 // The three choices staff see when creating a manual order — the first two
@@ -24,6 +29,7 @@ const PAYMENT_METHOD = Object.freeze({
 const ORDER_PAYMENT_CHOICE = Object.freeze({
   CASH: PAYMENT_METHOD.CASH,
   ONLINE_TRANSFER: PAYMENT_METHOD.ONLINE_TRANSFER,
+  EFPOS: PAYMENT_METHOD.EFPOS,
   PAYMENT_LINK: "payment_link",
 });
 

@@ -4,6 +4,7 @@ const orderService = require("../services/order.service");
 const paymentService = require("../services/payment.service");
 const { createPaymentIntentForOrder } = require("../services/stripe/stripe.payment.service");
 const { createRefund } = require("../services/stripe/stripe.refund.service");
+const { createManualRefund } = require("../services/refund.service");
 const { constructEvent, handleEvent } = require("../services/stripe/stripe.webhook.service");
 const { logger } = require("../loaders/logging");
 const {
@@ -58,6 +59,21 @@ exports.refundPayment = async (req, res) => {
       amount: req.body.amount,
       reason: req.body.reason,
       restock: req.body.restock,
+      initiatedBy: req.user._id,
+    });
+    return created(res, refund);
+  } catch (err) {
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
+exports.refundPaymentManual = async (req, res) => {
+  try {
+    const refund = await createManualRefund({
+      paymentId: req.params.id,
+      amount: req.body.amount,
+      reason: req.body.reason,
       initiatedBy: req.user._id,
     });
     return created(res, refund);

@@ -28,3 +28,9 @@ export function formatCurrencyFromCents(cents: number, currency: string = "AUD")
 export function getLineGst(lineTotalCents: number) {
   return Math.round(lineTotalCents / 11);
 }
+
+// Same GST-inclusive convention as getLineGst, applied to a single unit's
+// inclusive price to get its GST-exclusive counterpart for display.
+export function getExclusiveUnitPrice(unitPriceCents: number) {
+  return unitPriceCents - getLineGst(unitPriceCents);
+}

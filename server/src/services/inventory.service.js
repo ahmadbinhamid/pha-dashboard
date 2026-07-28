@@ -190,6 +190,12 @@ async function adjustStock(record, { adjustment, reason, type, userId }) {
     user: userId || null,
   });
 
+  // Every stock change — manual correction or a sale/refund driving this via
+  // adjustStockForSku below — should keep the listing's sync_status (and, if
+  // it just hit/left zero, quantity on eBay) current. Centralized here
+  // instead of at each call site so no adjustment path can forget it.
+  await fanOutMarketplaceInventory(record.product, record.variant);
+
   return { record, stock_before, stock_after };
 }
 
@@ -212,6 +218,8 @@ async function setStock(record, { stock_count, reason, userId }) {
     type: "correction",
     user: userId || null,
   });
+
+  await fanOutMarketplaceInventory(record.product, record.variant);
 
   return { record, stock_before, stock_after: newCount };
 }

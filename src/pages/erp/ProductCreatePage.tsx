@@ -32,7 +32,9 @@ const INITIAL: ProductCreateFormState = {
   shipping_cost: "",
   is_taxable: false,
   barcode: "",
-  stock_control: false,
+  // New products track stock (starting at 0) by default, rather than
+  // silently landing in the untracked "stock_count: null" state.
+  stock_control: true,
   stock_entries: [],
   mpn: "",
   condition: "NEW",

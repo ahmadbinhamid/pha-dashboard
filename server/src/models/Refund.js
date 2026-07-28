@@ -24,13 +24,16 @@ const refundSchema = buildSchema({
   failure_reason: { type: String, default: null },
 
   // How this Refund doc came to exist:
-  //  - "admin_api": created by our own POST /payments/:id/refund endpoint
+  //  - "admin_api": created by our own POST /payment/:id/refund endpoint (Stripe)
   //  - "stripe_dashboard": reconciled from a charge.refunded webhook whose
   //    stripe_refund_id we didn't already know — i.e. issued directly from
   //    the Stripe dashboard, bypassing our API entirely
+  //  - "manual": staff recorded a refund for a non-Stripe (cash/online
+  //    transfer/EFPOS) payment via POST /payment/:id/refund-manual — no
+  //    gateway call, the amount is just handed back outside the system
   initiated_via: {
     type: String,
-    enum: ["admin_api", "stripe_dashboard"],
+    enum: ["admin_api", "stripe_dashboard", "manual"],
     default: "admin_api",
   },
   // Admin user who triggered the refund — null for "stripe_dashboard" refunds,

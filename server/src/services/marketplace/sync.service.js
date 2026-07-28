@@ -63,16 +63,25 @@ async function syncListing(listingId) {
       return { skipped: true, reason: "out_of_stock" };
     }
 
+    // priceLocked (see ebay.adapter.js#updateOfferTolerant): everything else
+    // about the sync succeeded, eBay just rejected the price/quantity
+    // revision because the offer is part of an active sale. Not an error —
+    // sync_error stays null (same convention as OUT_OF_STOCK) since the
+    // PRICE_LOCKED status itself already communicates what's going on.
     await listing.updateOne({
       external_listing_id: ids.external_listing_id || listing.external_listing_id,
       external_offer_id: ids.external_offer_id || listing.external_offer_id,
-      sync_status: LISTING_SYNC_STATUS.SYNCED,
+      sync_status: ids.priceLocked ? LISTING_SYNC_STATUS.PRICE_LOCKED : LISTING_SYNC_STATUS.SYNCED,
       state: LISTING_STATE.ACTIVE,
       synced_at: new Date(),
       sync_error: null,
     });
 
-    logger.info(`[marketplace.sync] listing ${listingId} synced successfully`);
+    if (ids.priceLocked) {
+      logger.warn(`[marketplace.sync] listing ${listingId} synced, but price update was skipped (active eBay sale)`);
+    } else {
+      logger.info(`[marketplace.sync] listing ${listingId} synced successfully`);
+    }
     return { ok: true, ...ids };
   } catch (err) {
     logger.error(`[marketplace.sync] listing ${listingId} sync failed: ${err.message}`);

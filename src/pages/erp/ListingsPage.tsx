@@ -32,6 +32,8 @@ const SYNC_STATUS_FILTERS = [
   { label: "All", value: "" },
   { label: "Synced", value: "synced" },
   { label: "Pending", value: "pending" },
+  { label: "Out of Stock", value: "out_of_stock" },
+  { label: "Price Locked (On Sale)", value: "price_locked" },
   { label: "Error", value: "error" },
   { label: "Not listed", value: "not_listed" },
 ];

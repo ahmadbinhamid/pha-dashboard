@@ -1,18 +1,11 @@
 // services/stripe/stripe.refund.service.js
 
 const Refund = require("../../models/Refund");
-const Payment = require("../../models/Payment");
 const Order = require("../../models/Order");
 const { getStripeClient } = require("./stripe.client.service");
-const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
+const { loadRefundablePayment, finalizeSucceededRefund, httpError } = require("../refund.service");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
-const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../../constants/payment.constants");
-const { ORDER_STATUS } = require("../../constants/order.constants");
-const { logger } = require("../../loaders/logging");
-
-function httpError(message, status) {
-  return Object.assign(new Error(message), { status });
-}
+const { PAYMENT_PROVIDER } = require("../../constants/payment.constants");
 
 // Stripe's refund `reason` only accepts a few literal values distinct from
 // ours; map what we can, default the rest to "requested_by_customer".
@@ -25,23 +18,11 @@ function mapReasonToStripe(reason) {
 }
 
 async function createRefund({ paymentId, amount, reason, initiatedBy, restock = false }) {
-  const payment = await Payment.findById(paymentId);
-  if (!payment) {
-    throw httpError("Payment not found", 404);
-  }
-  if (payment.status !== PAYMENT_STATUS.SUCCEEDED) {
-    throw httpError("Only a succeeded payment can be refunded", 400);
-  }
+  const { payment, isFullRefund } = await loadRefundablePayment(paymentId, amount);
   if (payment.provider !== PAYMENT_PROVIDER.STRIPE) {
     throw httpError("This payment was collected manually and cannot be refunded via Stripe", 400);
   }
 
-  const remaining = payment.amount - payment.amount_refunded;
-  if (!Number.isInteger(amount) || amount < 1 || amount > remaining) {
-    throw httpError(`Refund amount must be between 1 and ${remaining} cents`, 400);
-  }
-
-  const isFullRefund = amount === remaining;
   if (restock && !isFullRefund) {
     // Restocking a partial refund would require per-item quantities we don't
     // collect here — rather than guess, require a full refund for restock:true.
@@ -99,31 +80,18 @@ async function createRefund({ paymentId, amount, reason, initiatedBy, restock = 
     throw httpError(`Stripe refund failed: ${err.message}`, 502);
   }
 
-  refund.stripe_refund_id = stripeRefund.id;
-  refund.status = REFUND_STATUS.SUCCEEDED;
-  await refund.save();
-
-  payment.amount_refunded += amount;
-  await payment.save();
-
   const order = await Order.findById(payment.order);
-  const isNowFullyRefunded = payment.amount_refunded >= payment.amount;
-  order.status = isNowFullyRefunded ? ORDER_STATUS.REFUNDED : ORDER_STATUS.PARTIALLY_REFUNDED;
 
-  // Restock only on a full refund, and only when the admin asked for it
-  // (explicit restock:true) or it's the default order-cancelled case — a
-  // partial/goodwill refund never implies units are physically coming back.
-  const shouldRestock = isFullRefund && (restock || reason === REFUND_REASON.ORDER_CANCELLED);
-  if (shouldRestock) {
-    const { hasShortfall, note } = await syncOrderStock(order, DIRECTION.RESTOCK);
-    if (hasShortfall) {
-      logger.warn(`[stripe.refund] restock issue for order ${order.order_number}: ${note}`);
-    }
-  }
-
-  await order.save();
-
-  return refund;
+  return finalizeSucceededRefund({
+    refund,
+    payment,
+    order,
+    amount,
+    isFullRefund,
+    restock,
+    reason,
+    stripeRefundId: stripeRefund.id,
+  });
 }
 
 module.exports = { createRefund };

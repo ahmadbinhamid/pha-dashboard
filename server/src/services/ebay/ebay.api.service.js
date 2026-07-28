@@ -5,6 +5,44 @@ const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { EBAY_SCOPES } = require("../../constants/ebay.constants");
 
+// eBay's error envelope for a rejected Inventory/Offer API call is
+// `{ errors: [{ errorId, message, longMessage, parameters }, ...] }`. Callers
+// that only care about "did this fail" can still just read `.message`
+// (unchanged format: "<action> failed: <status> <raw body>"), but anything
+// that needs to branch on a specific eBay error code (e.g. recovering from
+// "offer already exists", or treating "price locked by an active sale" as
+// non-fatal) can check `.errorId(code)` instead of parsing the message string.
+class EbayApiError extends Error {
+  constructor(message, { status, body } = {}) {
+    super(message);
+    this.name = "EbayApiError";
+    this.status = status;
+    this.errors = parseEbayErrorBody(body);
+  }
+
+  hasErrorId(code) {
+    return this.errors.some((e) => e.errorId === code);
+  }
+}
+
+// eBay's error body is documented JSON, but isn't guaranteed to parse that
+// way (a gateway timeout or an unrelated 5xx can return plain text/HTML) —
+// fall back to an empty list rather than let a malformed body crash the
+// error-handling path itself.
+function parseEbayErrorBody(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return Array.isArray(parsed.errors) ? parsed.errors : [];
+  } catch {
+    return [];
+  }
+}
+
+async function throwEbayApiError(action, res) {
+  const text = await res.text();
+  throw new EbayApiError(`${action} failed: ${res.status} ${text}`, { status: res.status, body: text });
+}
+
 // Strip HTML tags and collapse whitespace for fields that only accept plain text
 function toPlainText(html, maxLen = 4000) {
   return (html || "")
@@ -284,47 +322,31 @@ function normalizeCondition(condition) {
   return condition;
 }
 
-// Builds Make/Model/Series/Year aspects from the listing's vehicle fitment
-// rows so custom-typed vehicle values (not just catalog ones) reach eBay as
-// item specifics. Falls back to the product's own vehicle field when no
-// fitment rows have been added yet (e.g. a listing just prefilled from a
-// product).
+// Builds Make/Model/Series/Year aspects strictly from the vehicle entered on
+// the Product itself (Product Details > Vehicle section, captured once at
+// product creation) — never from the listing's own Vehicle Fitment table.
 //
-// eBay's Make/Model/Series aspects are single-value (cardinality SINGLE) in
-// motor-parts categories — sending more than one value is rejected with
-// errorId 25002 ("Model should contain only one value"). So only the first
-// fitment row supplies Make/Model/Series; Year is still combined into a
-// min-max range across all rows, since that's already a single string value.
-function buildVehicleAspects(listing, product) {
-  const fitmentRows = Array.isArray(listing.fitment) ? listing.fitment : [];
-  const rows = fitmentRows.length > 0
-    ? fitmentRows
-    : product?.vehicle && (product.vehicle.make || product.vehicle.model)
-      ? [product.vehicle]
-      : [];
-
-  if (rows.length === 0) return {};
-
-  const primary = rows[0];
-  let minYear = null;
-  let maxYear = null;
-
-  for (const row of rows) {
-    if (row?.year_from != null) {
-      minYear = minYear == null ? row.year_from : Math.min(minYear, row.year_from);
-    }
-    const upperYear = row?.year_to != null ? row.year_to : row?.year_from;
-    if (upperYear != null) {
-      maxYear = maxYear == null ? upperYear : Math.max(maxYear, upperYear);
-    }
-  }
+// That table can legitimately hold several distinct compatible vehicles for
+// the buyer-facing description/compatibility chart, but eBay's Make/Model/
+// Series aspects are single-value (cardinality SINGLE) in motor-parts
+// categories — sending more than one value is rejected with errorId 25002
+// ("Model should contain only one value"). This used to paper over that by
+// taking the fitment table's first row for Make/Model/Series and min/max-ing
+// the year across every row, which silently substituted whatever the first
+// row happened to be (and a blended year range spanning models it was never
+// actually true for) in place of what the seller entered for this part —
+// see bug report "Incorrect Vehicle Fitment Mapping to eBay Item Specifics".
+function buildVehicleAspects(product) {
+  const vehicle = product?.vehicle;
+  if (!vehicle || (!vehicle.make && !vehicle.model)) return {};
 
   const aspects = {};
-  if (primary?.make) aspects["Make"] = [String(primary.make).trim()];
-  if (primary?.model) aspects["Model"] = [String(primary.model).trim()];
-  if (primary?.model_code) aspects["Series"] = [String(primary.model_code).trim()];
-  if (minYear != null) {
-    aspects["Year"] = [maxYear != null && maxYear !== minYear ? `${minYear}-${maxYear}` : String(minYear)];
+  if (vehicle.make) aspects["Make"] = [String(vehicle.make).trim()];
+  if (vehicle.model) aspects["Model"] = [String(vehicle.model).trim()];
+  if (vehicle.model_code) aspects["Series"] = [String(vehicle.model_code).trim()];
+  if (vehicle.year_from != null) {
+    const yearTo = vehicle.year_to != null ? vehicle.year_to : vehicle.year_from;
+    aspects["Year"] = [yearTo !== vehicle.year_from ? `${vehicle.year_from}-${yearTo}` : String(vehicle.year_from)];
   }
   return aspects;
 }
@@ -360,8 +382,9 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
   if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
   if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
 
-  // Make/Model/Series/Year from vehicle fitment (or the product's vehicle as fallback)
-  const vehicleAspects = buildVehicleAspects(listing, product);
+  // Make/Model/Series/Year from the product's own vehicle field — see
+  // buildVehicleAspects for why this deliberately ignores listing.fitment.
+  const vehicleAspects = buildVehicleAspects(product);
   for (const [name, value] of Object.entries(vehicleAspects)) {
     if (!aspects[name]) aspects[name] = value;
   }
@@ -463,10 +486,7 @@ async function createOffer(token, offerBody) {
     body: JSON.stringify(offerBody),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`createOffer failed: ${res.status} ${text}`);
-  }
+  if (!res.ok) await throwEbayApiError("createOffer", res);
 
   const data = await res.json();
   return data.offerId;
@@ -482,10 +502,7 @@ async function updateOffer(token, offerId, offerBody) {
     },
   );
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`updateOffer failed: ${res.status} ${text}`);
-  }
+  if (!res.ok) await throwEbayApiError("updateOffer", res);
   return { ok: true };
 }
 
@@ -501,10 +518,7 @@ async function publishOffer(token, offerId) {
     },
   );
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`publishOffer failed: ${res.status} ${text}`);
-  }
+  if (!res.ok) await throwEbayApiError("publishOffer", res);
 
   const data = await res.json();
   return data.listingId;
@@ -777,6 +791,7 @@ async function getItemAspectsForCategory(categoryId) {
 }
 
 module.exports = {
+  EbayApiError,
   credentialsConfigured,
   getAccessToken,
   getAppToken,

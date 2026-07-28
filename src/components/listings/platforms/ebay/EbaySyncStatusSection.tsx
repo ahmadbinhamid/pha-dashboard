@@ -49,6 +49,14 @@ export function EbaySyncStatusSection({ listing }: Props) {
         )}
       </div>
 
+      {listing?.sync_status === "price_locked" && (
+        <div className="rounded-md bg-warn/10 px-3 py-2 text-sm text-warn">
+          <span className="font-medium">Price not updated: </span>
+          This offer is part of an active eBay sale, so eBay rejected the price change. Remove it from the sale (or
+          change the sale's price-update setting) on eBay, then sync again.
+        </div>
+      )}
+
       {listing?.sync_error && (
         <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
           <span className="font-medium">Sync error: </span>{listing.sync_error}

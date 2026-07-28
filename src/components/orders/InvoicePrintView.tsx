@@ -7,7 +7,7 @@ import {
   WARRANTY_TEXT,
   LEGAL_DISCLAIMER_TEXT,
 } from "@/config/company";
-import { formatCurrencyFromCents, getLineGst } from "@/utils/format";
+import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
@@ -49,6 +49,10 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
   const amountDue = getBalanceDue(order.total, order.payments);
+  // A refund reduces getTotalPaid the same way an uncollected payment would,
+  // leaving the same arithmetic remainder — this order status distinguishes
+  // "still owed" from "already refunded" so the two don't get conflated.
+  const isRefunded = order.status === "refunded" || order.status === "partially_refunded";
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
     month: "short",
@@ -201,7 +205,9 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(item.unit_price)}</td>
+                  <td className="px-3 py-3 text-right align-top">
+                    {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
+                  </td>
                   <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(lineGst)}</td>
                   <td className="px-3 py-3 text-right align-top">{item.quantity}</td>
                   <td className="px-3 py-3 text-right align-top">{formatCurrencyFromCents(item.discount_amount)}</td>
@@ -286,11 +292,18 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
           {/* Every channel can carry an outstanding balance now that
               storefront/eBay prices can be edited post-payment — not just
-              manual sales, so this is no longer gated on order.channel. */}
-          <div className="mt-3 flex items-center justify-between rounded-lg px-4 py-3" style={{ background: ACCENT }}>
-            <span className="text-xs font-bold uppercase tracking-wider text-white">Balance Outstanding</span>
-            <span className="text-sm font-bold text-white">{formatCurrencyFromCents(amountDue)}</span>
-          </div>
+              manual sales, so this is no longer gated on order.channel.
+              Only rendered when there's an actual balance (amountDue > 0)
+              and the order isn't refunded — amountDue nets out a refund the
+              same way it nets out a payment, so a refunded order would
+              otherwise look like the customer still owed the refunded
+              amount instead of having received it back. */}
+          {!isRefunded && amountDue > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-lg px-4 py-3" style={{ background: ACCENT }}>
+              <span className="text-xs font-bold uppercase tracking-wider text-white">Balance Outstanding</span>
+              <span className="text-sm font-bold text-white">{formatCurrencyFromCents(amountDue)}</span>
+            </div>
+          )}
         </div>
       </div>
 

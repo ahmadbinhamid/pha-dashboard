@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
-import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 import type { OrderPaymentSummary } from "@/types/orders";
 
 // Every Payment doc recorded against an order — a manual sale can have more
@@ -42,15 +42,7 @@ export function PaymentHistoryList({
               {onSelect && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg/30" />}
             </div>
           </div>
-          <div className="mt-1 text-xs text-fg/55">
-            {payment.provider === "manual"
-              ? payment.payment_method
-                ? PAYMENT_METHOD_LABEL[payment.payment_method]
-                : "Manual"
-              : payment.card_brand
-                ? `${payment.card_brand.charAt(0).toUpperCase()}${payment.card_brand.slice(1)} •••• ${payment.card_last4}`
-                : "Card"}
-          </div>
+          <div className="mt-1 text-xs text-fg/55">{getPaymentMethodDisplay(payment)}</div>
           {payment.amount_refunded > 0 && (
             <div className="mt-1 text-xs text-fg/55">{formatCurrencyFromCents(payment.amount_refunded)} refunded</div>
           )}

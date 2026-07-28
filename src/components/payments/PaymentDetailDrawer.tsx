@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { RefundDialog } from "@/components/payments/RefundDialog";
+import { ManualRefundModal } from "@/components/payments/ManualRefundModal";
 import { getPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { getPaymentSourceLabel, getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 import type { Refund, RefundStatus } from "@/types/payment";
 import { REFUND_REASON_LABEL } from "@/config/refundReasons";
-import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 
 interface PaymentDetailDrawerProps {
   paymentId: string;
@@ -25,6 +26,7 @@ const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger"> = {
 export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerProps) {
   const queryClient = useQueryClient();
   const [refunding, setRefunding] = useState(false);
+  const [manualRefunding, setManualRefunding] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["payment", paymentId],
@@ -34,15 +36,19 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   const payment = data?.data;
   const order = payment && typeof payment.order === "object" ? payment.order : null;
   const remaining = payment ? payment.amount - payment.amount_refunded : 0;
-  // Manual payments have no Stripe charge to reverse — refunding those has
-  // to happen outside this flow (e.g. handing back cash), so the action
-  // simply isn't offered rather than erroring out against the Stripe API.
-  const canRefund = payment?.status === "succeeded" && payment?.provider === "stripe" && remaining > 0;
+  // Stripe payments refund through the real Stripe API (money actually
+  // moves); every other provider (manual cash/online transfer/EFPOS, or an
+  // eBay-collected order) has no gateway of ours to reverse, so they share a
+  // manual-refund action that just records the amount handed back outside
+  // the system.
+  const canRefundStripe = payment?.status === "succeeded" && payment?.provider === "stripe" && remaining > 0;
+  const canRefundManual = payment?.status === "succeeded" && payment?.provider !== "stripe" && remaining > 0;
 
   function handleRefunded() {
     queryClient.invalidateQueries({ queryKey: ["payment", paymentId] });
     queryClient.invalidateQueries({ queryKey: ["payments"] });
     setRefunding(false);
+    setManualRefunding(false);
   }
 
   return (
@@ -84,14 +90,8 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                     <span className="text-fg">{order?.customer.email ?? "—"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>{payment.provider === "manual" ? "Payment Method" : "Card"}</span>
-                    <span className="text-fg">
-                      {payment.provider === "manual"
-                        ? (payment.payment_method ? PAYMENT_METHOD_LABEL[payment.payment_method] : "—")
-                        : payment.card_brand
-                          ? `${payment.card_brand} •••• ${payment.card_last4}`
-                          : "—"}
-                    </span>
+                    <span>{getPaymentSourceLabel(payment)}</span>
+                    <span className="text-fg">{getPaymentMethodDisplay(payment)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Paid At</span>
@@ -108,10 +108,21 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                 </div>
               </div>
 
-              {canRefund && (
+              {canRefundStripe && (
                 <Button variant="secondary" size="sm" className="w-full gap-2" onClick={() => setRefunding(true)}>
                   <RotateCcw className="h-3.5 w-3.5" />
                   Refund Payment
+                </Button>
+              )}
+              {canRefundManual && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setManualRefunding(true)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Record Manual Refund
                 </Button>
               )}
 
@@ -132,6 +143,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                         <div className="mt-1 text-xs text-fg/55">
                           {REFUND_REASON_LABEL[refund.reason] ?? refund.reason}
                           {refund.initiated_via === "stripe_dashboard" && " — via Stripe Dashboard"}
+                          {refund.initiated_via === "manual" && " — recorded manually"}
                         </div>
                         {refund.failure_reason && (
                           <div className="mt-1 text-xs text-danger">{refund.failure_reason}</div>
@@ -151,6 +163,14 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
 
       {refunding && payment && (
         <RefundDialog payment={payment} onClose={() => setRefunding(false)} onSuccess={handleRefunded} />
+      )}
+      {payment && (
+        <ManualRefundModal
+          payment={payment}
+          open={manualRefunding}
+          onOpenChange={setManualRefunding}
+          onSuccess={handleRefunded}
+        />
       )}
     </div>
   );

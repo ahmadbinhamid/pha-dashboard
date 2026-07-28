@@ -36,4 +36,16 @@ const createRefund = {
   }),
 };
 
-module.exports = { createIntent, byIdParam, listPayments, createRefund };
+const createManualRefund = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }), // payment id
+  body: Joi.object({
+    amount: Joi.number().integer().min(1).required(),
+    // Unlike the Stripe flow, "other" is a valid staff-entered reason here —
+    // there's no Stripe-dashboard reconciliation case to keep it reserved for.
+    reason: Joi.string()
+      .valid(...Object.values(REFUND_REASON))
+      .required(),
+  }),
+};
+
+module.exports = { createIntent, byIdParam, listPayments, createRefund, createManualRefund };

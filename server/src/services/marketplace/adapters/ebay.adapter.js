@@ -17,6 +17,7 @@
 
 const { logger } = require("../../../loaders/logging");
 const {
+  EbayApiError,
   credentialsConfigured,
   getAccessToken,
   buildInventoryItemFromResolved,
@@ -31,6 +32,7 @@ const {
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
 const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
+const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
 const Product = require("../../../models/Product");
@@ -88,6 +90,26 @@ async function resolveCategoryCondition(rawCondition, categoryId) {
   }
 }
 
+function isPriceLockedBySaleError(err) {
+  return err instanceof EbayApiError && err.hasErrorId(EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE);
+}
+
+// updateOffer, tolerant of eBay rejecting the price/quantity revision because
+// the offer is part of an active sale (error 25019) — that's not something
+// retrying or erroring out helps with, it resolves itself once the sale ends
+// or is reconfigured on eBay, so this is treated as a soft skip (logged, not
+// thrown) rather than the same hard failure as every other updateOffer error.
+async function updateOfferTolerant(token, offerId, offerBody, sku) {
+  try {
+    await updateOffer(token, offerId, offerBody);
+    return { priceLocked: false };
+  } catch (err) {
+    if (!isPriceLockedBySaleError(err)) throw err;
+    logger.warn(`[EbayAdapter] ${sku}: price update skipped — offer ${offerId} is part of an active eBay sale`);
+    return { priceLocked: true };
+  }
+}
+
 async function resolveQuantity(resolved) {
   const { product, variant } = resolved;
   const total = await getTotalStockForProductVariant(
@@ -132,10 +154,11 @@ async function publish(resolved, settings, hooks = {}) {
   logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
+  let priceLocked = false;
 
   if (offerId) {
-    await updateOffer(token, offerId, offerBody);
-    logger.info(`[EbayAdapter] offer updated: ${offerId}`);
+    ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+    if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
   } else {
     try {
       offerId = await createOffer(token, offerBody);
@@ -145,8 +168,8 @@ async function publish(resolved, settings, hooks = {}) {
       if (existingMatch) {
         offerId = existingMatch[1];
         logger.warn(`[EbayAdapter] offer already exists (${offerId}), switching to updateOffer`);
-        await updateOffer(token, offerId, offerBody);
-        logger.info(`[EbayAdapter] offer updated (recovered from 25002): ${offerId}`);
+        ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+        if (!priceLocked) logger.info(`[EbayAdapter] offer updated (recovered from 25002): ${offerId}`);
       } else {
         throw createErr;
       }
@@ -166,6 +189,7 @@ async function publish(resolved, settings, hooks = {}) {
   return {
     external_listing_id: listingId,
     external_offer_id: offerId,
+    ...(priceLocked ? { priceLocked: true } : {}),
   };
 }
 
@@ -205,31 +229,36 @@ async function update(resolved, settings, hooks = {}) {
   let offerId = listing.external_offer_id || null;
 
   if (offerId) {
-    await updateOffer(token, offerId, offerBody);
-    logger.info(`[EbayAdapter] offer updated: ${offerId}`);
-  } else {
-    // Listing is "active" but we lost the offerId — re-create and re-publish
-    try {
-      offerId = await createOffer(token, offerBody);
-    } catch (createErr) {
-      const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
-      if (existingMatch) {
-        offerId = existingMatch[1];
-        await updateOffer(token, offerId, offerBody);
-      } else {
-        throw createErr;
-      }
-    }
-    // Persist immediately — see the comment in publish() for why this can't
-    // wait until after publishOffer() succeeds.
-    await hooks.onOfferCreated?.(offerId);
-    const listingId = await publishOffer(token, offerId);
-    return { external_listing_id: listingId, external_offer_id: offerId };
+    const { priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku);
+    if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
+    return {
+      external_listing_id: listing.external_listing_id || null,
+      external_offer_id: offerId,
+      ...(priceLocked ? { priceLocked: true } : {}),
+    };
   }
 
+  // Listing is "active" but we lost the offerId — re-create and re-publish
+  let priceLocked = false;
+  try {
+    offerId = await createOffer(token, offerBody);
+  } catch (createErr) {
+    const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
+    if (existingMatch) {
+      offerId = existingMatch[1];
+      ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+    } else {
+      throw createErr;
+    }
+  }
+  // Persist immediately — see the comment in publish() for why this can't
+  // wait until after publishOffer() succeeds.
+  await hooks.onOfferCreated?.(offerId);
+  const listingId = await publishOffer(token, offerId);
   return {
-    external_listing_id: listing.external_listing_id || null,
+    external_listing_id: listingId,
     external_offer_id: offerId,
+    ...(priceLocked ? { priceLocked: true } : {}),
   };
 }
 

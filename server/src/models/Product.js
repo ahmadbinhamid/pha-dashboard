@@ -61,7 +61,7 @@ const productSchema = buildSchema({
   is_taxable: { type: Boolean, default: false },
   sku: { type: String, default: null },
   barcode: { type: String, default: null },
-  stock_control: { type: Boolean, default: false },
+  stock_control: { type: Boolean, default: true },
   has_variants: { type: Boolean, default: false },
   brand: { type: String, default: null },
   mpn: { type: String, default: null, trim: true },
