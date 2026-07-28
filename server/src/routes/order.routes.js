@@ -52,5 +52,19 @@ router.patch(
   validate(v.updateOrderItemPrice),
   asyncHandler(ctrl.updateOrderItemPrice),
 );
+router.patch(
+  "/:id/shipping-cost",
+  auth(),
+  admin,
+  validate(v.updateOrderShippingCost),
+  asyncHandler(ctrl.updateOrderShippingCost),
+);
+router.patch(
+  "/:id/discount",
+  auth(),
+  admin,
+  validate(v.updateOrderDiscount),
+  asyncHandler(ctrl.updateOrderDiscount),
+);
 
 module.exports = router;

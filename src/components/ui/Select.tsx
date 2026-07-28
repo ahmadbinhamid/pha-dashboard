@@ -16,7 +16,7 @@ const SelectTrigger = React.forwardRef<
     className={cn(
       "flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input)",
       "placeholder:text-fg/45 text-fg transition-shadow duration-150",
-      "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
+      "outline-none! focus-visible:border-accent",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "[&>span]:line-clamp-1",
       className,
@@ -154,7 +154,7 @@ const NativeSelect = React.forwardRef<
     value={value}
     className={cn(
       "flex h-10 w-full appearance-none rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input) transition-shadow duration-150",
-      "outline-none! focus:ring-2 focus:ring-accent/45",
+      "outline-none! focus:border-accent",
       "disabled:cursor-not-allowed disabled:opacity-50",
       value === "" || value === undefined ? "text-fg/45" : "text-fg",
       className,

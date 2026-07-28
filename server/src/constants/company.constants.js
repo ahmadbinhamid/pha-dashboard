@@ -9,14 +9,11 @@ const COMPANY_INFO = Object.freeze({
   email: "sales@partshubaustralia.com.au",
 });
 
-// Not yet supplied — the invoice renders this section with "—" placeholders
-// until these are filled in, rather than shipping fabricated account
-// details on a real customer-facing document.
 const BANK_DETAILS = Object.freeze({
-  bankName: "",
-  accountName: "",
-  bsb: "",
-  accountNumber: "",
+  bankName: "National Australia Bank",
+  accountName: "PARTS HUB AUSTRALIA PTY LTD",
+  bsb: "083004",
+  accountNumber: "299755132",
 });
 
 const PICKUP_LOCATION = Object.freeze({

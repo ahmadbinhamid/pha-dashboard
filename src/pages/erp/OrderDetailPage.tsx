@@ -14,8 +14,9 @@ import { OrderPaymentSummaryCard } from "@/components/orders/OrderPaymentSummary
 import { OrderNotesSection } from "@/components/orders/OrderNotesSection";
 import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
 import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal";
+import { EditableOrderAmount } from "@/components/orders/EditableOrderAmount";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
-import { getOrderDetail, downloadInvoicePdf } from "@/lib/api/orders";
+import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost, updateOrderDiscount } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderAddress } from "@/types/orders";
@@ -110,6 +111,7 @@ export default function OrderDetailPage() {
 
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
   const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
+  const isEbayOrder = order.channel === "ebay";
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
@@ -173,13 +175,49 @@ export default function OrderDetailPage() {
                 </div>
                 {totalDiscount > 0 && (
                   <div className="flex justify-between text-fg/60">
-                    <span>Discount</span>
+                    <span>Item Discount</span>
                     <span>-{formatCurrencyFromCents(totalDiscount)}</span>
                   </div>
                 )}
+                {/* Discount/shipping edits are only offered for eBay orders —
+                    see order.service.js#updateOrderDiscount /
+                    #updateOrderShippingCost for why. Other channels still
+                    show a plain Discount line, but only when non-zero. */}
+                {isEbayOrder ? (
+                  <div className="flex justify-between text-fg/60">
+                    <span>Discount</span>
+                    <EditableOrderAmount
+                      orderId={order._id}
+                      label="Discount"
+                      amountCents={order.discount_amount}
+                      negative
+                      mutationFn={updateOrderDiscount}
+                      successMessage="Discount updated"
+                      errorMessage="Couldn't update discount"
+                    />
+                  </div>
+                ) : (
+                  order.discount_amount > 0 && (
+                    <div className="flex justify-between text-fg/60">
+                      <span>Discount</span>
+                      <span>-{formatCurrencyFromCents(order.discount_amount)}</span>
+                    </div>
+                  )
+                )}
                 <div className="flex justify-between text-fg/60">
                   <span>Shipping</span>
-                  <span>{formatCurrencyFromCents(order.shipping_cost)}</span>
+                  {isEbayOrder ? (
+                    <EditableOrderAmount
+                      orderId={order._id}
+                      label="Shipping"
+                      amountCents={order.shipping_cost}
+                      mutationFn={updateOrderShippingCost}
+                      successMessage="Shipping cost updated"
+                      errorMessage="Couldn't update shipping cost"
+                    />
+                  ) : (
+                    <span>{formatCurrencyFromCents(order.shipping_cost)}</span>
+                  )}
                 </div>
                 <div className="flex justify-between border-t border-border pt-1.5 text-base font-semibold text-fg">
                   <span>Total</span>

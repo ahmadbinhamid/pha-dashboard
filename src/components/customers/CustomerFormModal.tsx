@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { AddressFields } from "@/components/pos/AddressFields";
 import {
   Modal,
   ModalContent,
@@ -15,18 +17,35 @@ import { useToast } from "@/context";
 import { createCustomer, updateCustomer } from "@/lib/api/customers";
 import type { CustomerPayload } from "@/lib/api/customers";
 import type { Customer, CustomerFormState } from "@/types/customer";
+import type { OrderAddress } from "@/types/orders";
 
-const EMPTY_FORM: CustomerFormState = { name: "", email: "", phone: "" };
+const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
+
+const EMPTY_FORM: CustomerFormState = {
+  name: "",
+  email: "",
+  phone: "",
+  shippingAddress: EMPTY_ADDRESS,
+  useDifferentBilling: false,
+  billingAddress: EMPTY_ADDRESS,
+};
 
 // Digits plus common phone punctuation — no letters, mirrors the backend's
 // PHONE_PATTERN in customer.validation.js.
 const PHONE_PATTERN = /^[\d\s\-()+]*$/;
+
+function isAddressFilled(a: OrderAddress) {
+  return !!(a.address.trim() || a.suburb.trim() || a.state.trim() || a.postcode.trim());
+}
 
 function customerToForm(c: Customer): CustomerFormState {
   return {
     name: c.name,
     email: c.email ?? "",
     phone: c.phone ?? "",
+    shippingAddress: c.shipping_address ?? EMPTY_ADDRESS,
+    useDifferentBilling: !!c.billing_address,
+    billingAddress: c.billing_address ?? EMPTY_ADDRESS,
   };
 }
 
@@ -93,10 +112,13 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   function buildPayload(): CustomerPayload {
+    const shippingFilled = isAddressFilled(form.shippingAddress);
     return {
       name: form.name.trim(),
       email: form.email.trim() || null,
       phone: form.phone.trim() || null,
+      shipping_address: shippingFilled ? form.shippingAddress : null,
+      billing_address: form.useDifferentBilling ? form.billingAddress : null,
     };
   }
 
@@ -105,6 +127,21 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
     const nextErrors: Record<string, string> = {};
     if (!form.name.trim()) nextErrors.name = "Customer name is required";
     if (!PHONE_PATTERN.test(form.phone)) nextErrors.phone = "Phone number cannot contain letters";
+
+    const shippingFilled = isAddressFilled(form.shippingAddress);
+    if (shippingFilled) {
+      if (!form.shippingAddress.address.trim()) nextErrors.address = "Address is required";
+      if (!form.shippingAddress.suburb.trim()) nextErrors.suburb = "Suburb is required";
+      if (!form.shippingAddress.state.trim()) nextErrors.state = "State is required";
+      if (!form.shippingAddress.postcode.trim()) nextErrors.postcode = "Postcode is required";
+    }
+    if (form.useDifferentBilling) {
+      if (!form.billingAddress.address.trim()) nextErrors.billingAddress = "Billing address is required";
+      if (!form.billingAddress.suburb.trim()) nextErrors.billingSuburb = "Billing suburb is required";
+      if (!form.billingAddress.state.trim()) nextErrors.billingState = "Billing state is required";
+      if (!form.billingAddress.postcode.trim()) nextErrors.billingPostcode = "Billing postcode is required";
+    }
+
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -120,8 +157,8 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent>
-        <form onSubmit={handleSubmit}>
+      <ModalContent className="max-w-xl">
+        <form onSubmit={handleSubmit} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
           <ModalHeader>
             <ModalTitle>{customer ? "Edit customer" : "New customer"}</ModalTitle>
             <ModalDescription>
@@ -158,6 +195,41 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
                   placeholder="0412 345 678"
                 />
               </FormField>
+            </div>
+
+            <div className="space-y-4 border-t border-dashed border-border pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg/45">Shipping address</p>
+              <AddressFields
+                value={form.shippingAddress}
+                onChange={(a) => setForm((f) => ({ ...f, shippingAddress: a }))}
+                errors={{
+                  address: errors.address,
+                  suburb: errors.suburb,
+                  state: errors.state,
+                  postcode: errors.postcode,
+                }}
+                required={false}
+              />
+
+              <Checkbox
+                label="Use a different billing address"
+                checked={form.useDifferentBilling}
+                onChange={(e) => setForm((f) => ({ ...f, useDifferentBilling: e.target.checked }))}
+              />
+
+              {form.useDifferentBilling && (
+                <AddressFields
+                  value={form.billingAddress}
+                  onChange={(a) => setForm((f) => ({ ...f, billingAddress: a }))}
+                  errors={{
+                    address: errors.billingAddress,
+                    suburb: errors.billingSuburb,
+                    state: errors.billingState,
+                    postcode: errors.billingPostcode,
+                  }}
+                  required={false}
+                />
+              )}
             </div>
           </div>
 

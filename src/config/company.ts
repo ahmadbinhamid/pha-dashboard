@@ -7,14 +7,11 @@ export const COMPANY_INFO = {
   email: "sales@partshubaustralia.com.au",
 };
 
-// Not yet supplied — the invoice renders this section with "—" placeholders
-// until these are filled in, rather than shipping fabricated account
-// details on a real customer-facing document.
 export const BANK_DETAILS = {
-  bankName: "",
-  accountName: "",
-  bsb: "",
-  accountNumber: "",
+  bankName: "National Australia Bank",
+  accountName: "PARTS HUB AUSTRALIA PTY LTD",
+  bsb: "083004",
+  accountNumber: "299755132",
 };
 
 // Mirrors the storefront's PICKUP_LOCATION and the server's invoice PDF —

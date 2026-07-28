@@ -267,6 +267,12 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             <span style={{ color: MUTED }}>Subtotal</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.subtotal)}</span>
           </div>
+          {order.discount_amount > 0 && (
+            <div className="flex justify-between">
+              <span style={{ color: MUTED }}>Discount</span>
+              <span className="font-semibold">-{formatCurrencyFromCents(order.discount_amount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span style={{ color: MUTED }}>{isPickup ? "Pickup" : "Freight / Shipping"}</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.shipping_cost)}</span>

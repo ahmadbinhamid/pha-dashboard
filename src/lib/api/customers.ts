@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type { Customer, CustomerDetail } from "@/types/customer";
+import type { OrderAddress } from "@/types/orders";
 
 export interface CustomerListParams {
   page?: number;
@@ -12,6 +13,8 @@ export interface CustomerPayload {
   name: string;
   email?: string | null;
   phone?: string | null;
+  shipping_address?: OrderAddress | null;
+  billing_address?: OrderAddress | null;
 }
 
 export const getCustomers = async (params: CustomerListParams = {}) => {

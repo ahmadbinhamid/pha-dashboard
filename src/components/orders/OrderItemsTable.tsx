@@ -102,23 +102,23 @@ export function OrderItemsTable({
   orderId: string;
   channel: OrderChannel;
 }) {
-  // Manual orders price at creation via discount_amount instead — the
-  // backend rejects a price edit for that channel, so don't offer it here.
-  const priceEditable = channel !== "manual";
+  // Only eBay order prices can be corrected after the fact — the backend
+  // rejects a price edit for any other channel, so don't offer it here.
+  const priceEditable = channel === "ebay";
 
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-140 overflow-auto">
       <Table className="min-w-140">
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 z-2 min-w-48 sticky-col-header sticky-col-separator-right">
+            <TableHead className="sticky left-0 top-0 z-3 min-w-48 sticky-col-header sticky-col-separator-right">
               Item
             </TableHead>
-            <TableHead>SKU</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Unit Price</TableHead>
-            <TableHead className="text-right">Discount</TableHead>
-            <TableHead className="text-right">Line Total</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Discount</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Line Total</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -88,16 +88,18 @@ async function getCustomerById(id) {
   };
 }
 
-async function createCustomer({ name, email, phone, has_online_account }) {
+async function createCustomer({ name, email, phone, has_online_account, shipping_address, billing_address }) {
   return Customer.create({
     name,
     email: email || null,
     phone: phone || null,
     has_online_account: !!has_online_account,
+    shipping_address: shipping_address || null,
+    billing_address: billing_address || null,
   });
 }
 
-async function updateCustomer(id, { name, email, phone, has_online_account }) {
+async function updateCustomer(id, { name, email, phone, has_online_account, shipping_address, billing_address }) {
   const customer = await Customer.findById(id);
   if (!customer) return null;
 
@@ -105,6 +107,8 @@ async function updateCustomer(id, { name, email, phone, has_online_account }) {
   if (email !== undefined) customer.email = email || null;
   if (phone !== undefined) customer.phone = phone || null;
   if (has_online_account !== undefined) customer.has_online_account = has_online_account;
+  if (shipping_address !== undefined) customer.shipping_address = shipping_address || null;
+  if (billing_address !== undefined) customer.billing_address = billing_address || null;
 
   await customer.save();
   return customer;

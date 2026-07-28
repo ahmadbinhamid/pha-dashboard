@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 import { formatCurrencyFromCents } from "@/utils/format";
@@ -6,7 +7,13 @@ import type { OrderPaymentSummary } from "@/types/orders";
 // Every Payment doc recorded against an order — a manual sale can have more
 // than one (a deposit, then a later top-up or payment-link remainder), so
 // this always renders a history rather than assuming a single payment.
-export function PaymentHistoryList({ payments }: { payments: OrderPaymentSummary[] }) {
+export function PaymentHistoryList({
+  payments,
+  onSelect,
+}: {
+  payments: OrderPaymentSummary[];
+  onSelect?: (paymentId: string) => void;
+}) {
   if (payments.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border py-5 text-center text-xs text-fg/45">
@@ -18,10 +25,22 @@ export function PaymentHistoryList({ payments }: { payments: OrderPaymentSummary
   return (
     <div className="space-y-2">
       {payments.map((payment) => (
-        <div key={payment._id} className="rounded-lg border border-border bg-bg-2/40 p-3">
+        <div
+          key={payment._id}
+          role={onSelect ? "button" : undefined}
+          tabIndex={onSelect ? 0 : undefined}
+          onClick={onSelect ? () => onSelect(payment._id) : undefined}
+          className={
+            "rounded-lg border border-border bg-bg-2/40 p-3" +
+            (onSelect ? " cursor-pointer transition hover:border-fg/20 hover:bg-bg-2/70" : "")
+          }
+        >
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-fg">{formatCurrencyFromCents(payment.amount)}</span>
-            <PaymentStatusBadge status={payment.status} />
+            <div className="flex items-center gap-2">
+              <PaymentStatusBadge status={payment.status} />
+              {onSelect && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg/30" />}
+            </div>
           </div>
           <div className="mt-1 text-xs text-fg/55">
             {payment.provider === "manual"

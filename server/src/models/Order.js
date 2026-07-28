@@ -120,8 +120,13 @@ const orderSchema = buildSchema({
 
   // Cents, GST-inclusive prices throughout (AU retail convention):
   // subtotal already includes GST; tax_amount is informational (subtotal / 11),
-  // not added on top. total = subtotal + shipping_cost.
+  // not added on top. total = subtotal - discount_amount + shipping_cost.
   subtotal: { type: Number, required: true },
+  // Order-level manual adjustment (goodwill credit, negotiated discount) —
+  // distinct from each line item's own discount_amount, which is baked into
+  // subtotal already. Zero at creation on every channel; only ever set
+  // afterward via order.service.js#updateOrderDiscount.
+  discount_amount: { type: Number, required: true, default: 0 },
   shipping_cost: { type: Number, required: true, default: 0 },
   tax_amount: { type: Number, required: true }, // GST extracted from subtotal, display-only
   total: { type: Number, required: true },

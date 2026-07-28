@@ -13,6 +13,8 @@ import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { Customer } from "@/types/customer";
 import type { OrderAddress, OrderDeliveryMethod } from "@/types/orders";
 
+const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
+
 interface FulfilmentOptionProps {
   icon: React.ElementType;
   label: string;
@@ -94,6 +96,18 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
     setCustomerFormOpen(true);
   }
 
+  // Selecting (or just creating) a customer with a saved address carries it
+  // over as a starting point — staff can still edit it per-order without
+  // touching the customer's profile.
+  function selectCustomer(c: Customer) {
+    onChange({
+      customer: c,
+      shippingAddress: c.shipping_address ?? EMPTY_ADDRESS,
+      useDifferentBilling: !!c.billing_address,
+      billingAddress: c.billing_address ?? EMPTY_ADDRESS,
+    });
+  }
+
   function handleContinue() {
     const nextErrors: Record<string, string> = {};
     if (!customer) nextErrors.customer = "Select or create a customer to continue";
@@ -147,7 +161,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
               <FormField error={errors.customer}>
                 <CustomerSearchCombobox
                   value={customer}
-                  onSelect={(c) => onChange({ customer: c })}
+                  onSelect={selectCustomer}
                   onCreateNew={openCreateNew}
                 />
               </FormField>
@@ -220,7 +234,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
         onOpenChange={setCustomerFormOpen}
         customer={null}
         initialName={prefillName}
-        onCreated={(c) => onChange({ customer: c })}
+        onCreated={selectCustomer}
       />
     </div>
   );

@@ -1,7 +1,17 @@
 // models/Customer.js
 
-const { model } = require("mongoose");
+const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+
+const addressSchema = new Schema(
+  {
+    address: { type: String, required: true },
+    suburb: { type: String, required: true },
+    state: { type: String, required: true },
+    postcode: { type: String, required: true },
+  },
+  { _id: false },
+);
 
 const customerSchema = buildSchema({
   name: { type: String, required: true, trim: true },
@@ -11,6 +21,8 @@ const customerSchema = buildSchema({
   // record created purely to track orders) — informational only for now.
   has_online_account: { type: Boolean, default: false },
   registered_at: { type: Date, default: null },
+  shipping_address: { type: addressSchema, default: null },
+  billing_address: { type: addressSchema, default: null }, // null => same as shipping
 });
 
 // Partial index: only enforce uniqueness among documents that actually have

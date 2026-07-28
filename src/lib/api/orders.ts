@@ -102,6 +102,20 @@ export const updateOrderItemPrice = async (orderId: string, itemIndex: number, u
   return data;
 };
 
+// Corrects the order's freight charge after the fact. Recomputes
+// tax_amount/total on the backend.
+export const updateOrderShippingCost = async (orderId: string, shipping_cost: number) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/shipping-cost`, { shipping_cost });
+  return data;
+};
+
+// Applies (or clears, by passing 0) a manual order-level discount — see
+// order.service.js#updateOrderDiscount.
+export const updateOrderDiscount = async (orderId: string, discount_amount: number) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/discount`, { discount_amount });
+  return data;
+};
+
 export interface UpdateOrderCustomerDetailsPayload {
   customer?: { name?: string; email?: string | null; phone?: string | null };
   shipping_address?: OrderAddress;

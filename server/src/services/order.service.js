@@ -348,10 +348,12 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
   return order;
 }
 
-// Corrects a single line item's price on a storefront/eBay order — e.g. a
-// listing that synced with the wrong price. Manual orders are out of scope:
-// their pricing is already adjustable at creation time via discount_amount
-// (see resolveManualOrderItem), and reopening unit_price after the fact would
+// Corrects a single line item's price on an eBay order — e.g. a listing
+// that synced with the wrong price. Storefront/manual orders are out of
+// scope: storefront prices are the storefront's own listed price (editing
+// it here would desync from what the customer actually saw at checkout),
+// and manual orders set their price at creation via discount_amount instead
+// (see resolveManualOrderItem) — reopening unit_price after the fact would
 // give staff two conflicting ways to change the same number. Recomputes
 // subtotal/tax_amount/total the same way order creation does, so the invoice
 // always reflects live line-item data rather than a stale creation-time
@@ -364,8 +366,8 @@ async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }) 
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  if (order.channel === ORDER_CHANNEL.MANUAL) {
-    throw httpError("Manual order prices are set via discount at creation, not edited afterward", 400);
+  if (order.channel !== ORDER_CHANNEL.EBAY) {
+    throw httpError("Only eBay order prices can be edited after the fact", 400);
   }
   const item = order.items[itemIndex];
   if (!item) {
@@ -385,7 +387,62 @@ async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }) 
 
   order.subtotal = order.items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount), 0);
   order.tax_amount = Math.round(order.subtotal / GST_DIVISOR);
-  order.total = order.subtotal + order.shipping_cost;
+  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
+
+  await order.save();
+  return order;
+}
+
+// Corrects the order's freight charge after the fact — e.g. a shipping quote
+// that turned out wrong. eBay orders only, same reasoning as
+// updateOrderItemPrice. Mirrors its recompute of tax_amount/total; same "no
+// auto refund/extra-charge" caveat applies if the order was already paid.
+async function updateOrderShippingCost(orderId, { shipping_cost }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+  if (order.channel !== ORDER_CHANNEL.EBAY) {
+    throw httpError("Only eBay order shipping costs can be edited after the fact", 400);
+  }
+  if (!Number.isFinite(shipping_cost) || shipping_cost < 0) {
+    throw httpError("Shipping cost cannot be negative", 400);
+  }
+
+  order.shipping_cost = Math.round(shipping_cost * 100);
+  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
+  if (order.total < 0) {
+    throw httpError("Shipping cost would make the order total negative", 400);
+  }
+
+  await order.save();
+  return order;
+}
+
+// Applies (or clears, by passing 0) a manual order-level discount — a
+// goodwill credit or negotiated price break on top of whatever the line
+// items and shipping already total. Distinct from each item's own
+// discount_amount, which order.subtotal already nets out. eBay orders only,
+// same reasoning as updateOrderItemPrice.
+async function updateOrderDiscount(orderId, { discount_amount }) {
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+  if (order.channel !== ORDER_CHANNEL.EBAY) {
+    throw httpError("Only eBay order discounts can be edited after the fact", 400);
+  }
+  if (!Number.isFinite(discount_amount) || discount_amount < 0) {
+    throw httpError("Discount cannot be negative", 400);
+  }
+
+  const discountCents = Math.round(discount_amount * 100);
+  if (discountCents > order.subtotal + order.shipping_cost) {
+    throw httpError("Discount cannot exceed the order total", 400);
+  }
+
+  order.discount_amount = discountCents;
+  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
 
   await order.save();
   return order;
@@ -751,4 +808,6 @@ module.exports = {
   getInvoicePdfForOrder,
   addOrderNote,
   updateOrderItemPrice,
+  updateOrderShippingCost,
+  updateOrderDiscount,
 };

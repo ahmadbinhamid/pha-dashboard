@@ -200,6 +200,40 @@ export default function CustomerDetailPage() {
           </Card>
 
           <Card>
+            <CardHeader title="Shipping address" />
+            <CardContent className="text-sm text-fg/70">
+              {customer.shipping_address ? (
+                <>
+                  <div>{customer.shipping_address.address}</div>
+                  <div>
+                    {customer.shipping_address.suburb} {customer.shipping_address.state}{" "}
+                    {customer.shipping_address.postcode}
+                  </div>
+                </>
+              ) : (
+                <span className="text-fg/50">No address on file.</span>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader title="Billing address" />
+            <CardContent className="text-sm text-fg/70">
+              {customer.billing_address ? (
+                <>
+                  <div>{customer.billing_address.address}</div>
+                  <div>
+                    {customer.billing_address.suburb} {customer.billing_address.state}{" "}
+                    {customer.billing_address.postcode}
+                  </div>
+                </>
+              ) : (
+                <span className="text-fg/50">Same as shipping address.</span>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader title="Summary" />
             <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between">

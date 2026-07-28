@@ -7,6 +7,13 @@ const Joi = require("joi");
 const PHONE_PATTERN = /^[\d\s\-()+]*$/;
 const phoneMessages = { "string.pattern.base": "Phone number cannot contain letters" };
 
+const addressSchema = Joi.object({
+  address: Joi.string().trim().min(1).required(),
+  suburb: Joi.string().trim().min(1).required(),
+  state: Joi.string().trim().min(1).required(),
+  postcode: Joi.string().trim().min(1).required(),
+});
+
 const createCustomer = {
   body: Joi.object({
     name: Joi.string().trim().min(1).required().messages({
@@ -16,6 +23,8 @@ const createCustomer = {
     email: Joi.string().trim().lowercase().email().allow("", null).default(null),
     phone: Joi.string().trim().allow("", null).pattern(PHONE_PATTERN).messages(phoneMessages).default(null),
     has_online_account: Joi.boolean().default(false),
+    shipping_address: addressSchema.allow(null).default(null),
+    billing_address: addressSchema.allow(null).default(null),
   }),
 };
 
@@ -25,6 +34,8 @@ const updateCustomer = {
     email: Joi.string().trim().lowercase().email().allow("", null),
     phone: Joi.string().trim().allow("", null).pattern(PHONE_PATTERN).messages(phoneMessages),
     has_online_account: Joi.boolean(),
+    shipping_address: addressSchema.allow(null),
+    billing_address: addressSchema.allow(null),
   }),
 };
 

@@ -158,6 +158,23 @@ const updateOrderItemPrice = {
   }),
 };
 
+// See order.service.js#updateOrderShippingCost / #updateOrderDiscount —
+// negative-amount and exceeds-total checks need DB state, so they live in
+// the service, not here.
+const updateOrderShippingCost = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    shipping_cost: Joi.number().min(0).required(), // dollars
+  }),
+};
+
+const updateOrderDiscount = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    discount_amount: Joi.number().min(0).required(), // dollars
+  }),
+};
+
 const addOrderNote = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -198,4 +215,6 @@ module.exports = {
   addOrderNote,
   updateOrderCustomerDetails,
   updateOrderItemPrice,
+  updateOrderShippingCost,
+  updateOrderDiscount,
 };

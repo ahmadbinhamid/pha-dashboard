@@ -61,7 +61,7 @@ export function MultiSelect({
           disabled={disabled}
           className={cn(
             "flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input)",
-            "outline-none! focus-visible:ring-2 focus-visible:ring-accent/45",
+            "outline-none! focus-visible:border-accent",
             "disabled:cursor-not-allowed disabled:opacity-50",
             "transition-shadow duration-150",
             className,
@@ -113,7 +113,7 @@ export function MultiSelect({
           {/* Search */}
           {options.length > 5 && (
             <div className="p-2">
-              <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 h-9 transition-shadow duration-150 focus-within:ring-2 focus-within:ring-accent/45">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 h-9 transition-shadow duration-150 focus-within:border-accent">
                 <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
                 <input
                   autoFocus

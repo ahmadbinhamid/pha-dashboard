@@ -15,7 +15,6 @@ import { CreateProductNotesSection } from "@/components/products/CreateProductNo
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
 import { FormSection } from "@/components/products/FormSection";
 import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
-import { ProductFormActionsCard } from "@/components/products/ProductFormActionsCard";
 import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
 import { useToast } from "@/context";
 import { createProduct, addProductNote } from "@/lib/api/products";
@@ -415,14 +414,6 @@ export default function ProductCreatePage() {
             skuPending
             stockControl={form.stock_control}
             stockCount={form.stock_entries.reduce((sum, e) => sum + e.qty, 0)}
-          />
-          <ProductFormActionsCard
-            heading="Before you create"
-            buttonLabel="Create product"
-            pendingLabel="Creating…"
-            pending={mutation.isPending}
-            onClick={() => handleSubmit("active")}
-            caption="Then add variants & images"
           />
         </div>
       </div>

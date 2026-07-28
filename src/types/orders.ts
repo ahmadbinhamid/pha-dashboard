@@ -92,6 +92,11 @@ export interface Order {
   note: string | null;
   internal_notes: OrderInternalNote[];
   subtotal: number; // cents, GST-inclusive
+  // Order-level manual adjustment (goodwill credit, negotiated discount) —
+  // distinct from each line item's own discount_amount, which subtotal
+  // already nets out. Zero unless an admin has set one via the order-detail
+  // page's editable Discount row.
+  discount_amount: number; // cents
   shipping_cost: number; // cents
   tax_amount: number; // cents — GST component of subtotal, display-only
   total: number; // cents

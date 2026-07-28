@@ -161,26 +161,28 @@ export default function CreateOrderPage() {
 
   return (
     <div className="space-y-6 pb-24">
-      <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer">
-        {step < 4 && (
-          <Button variant="ghost" size="md" onClick={handleCancel}>
-            Cancel
-          </Button>
-        )}
-        {step > 1 && step < 4 && (
-          <Button variant="secondary" size="md" onClick={handleBack} disabled={reviewPending}>
-            Back
-          </Button>
-        )}
-        {step < 4 && (
-          <Button variant="primary" size="md" onClick={handleNext} disabled={nextDisabled}>
-            {step === 3 ? (reviewPending ? "Creating…" : "Create") : "Next"}
-          </Button>
-        )}
-      </PageHeader>
+      <div className="sticky top-0 z-30 -mx-6 space-y-3 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
+        <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer">
+          {step < 4 && (
+            <Button variant="ghost" size="md" onClick={handleCancel}>
+              Cancel
+            </Button>
+          )}
+          {step > 1 && step < 4 && (
+            <Button variant="secondary" size="md" onClick={handleBack} disabled={reviewPending}>
+              Back
+            </Button>
+          )}
+          {step < 4 && (
+            <Button variant="primary" size="md" onClick={handleNext} disabled={nextDisabled}>
+              {step === 3 ? (reviewPending ? "Creating…" : "Create") : "Next"}
+            </Button>
+          )}
+        </PageHeader>
 
-      <div className="rounded-xs border border-border bg-card px-5 py-5 shadow-card">
-        <OrderStepper steps={STEPS} current={step} />
+        <div className="rounded-xs border border-border bg-card px-4 py-3.5 shadow-card">
+          <OrderStepper steps={STEPS} current={step} />
+        </div>
       </div>
 
       {step === 1 && <AddProductsStep />}

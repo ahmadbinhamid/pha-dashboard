@@ -81,6 +81,20 @@ function drawCheckIcon(doc, x, y, color, size = 9) {
   doc.restore();
 }
 
+// Mirrors lucide's Landmark icon (used next to "Bank Transfer Details" in
+// InvoicePrintView.tsx) as vector primitives — pdfkit can't pull in an icon
+// font/SVG set the way the browser view does.
+function drawBankIcon(doc, x, y, color, size = 9) {
+  doc.save().lineWidth(1).strokeColor(color).lineJoin("round").lineCap("round");
+  doc.moveTo(x, y + size * 0.32).lineTo(x + size * 0.5, y).lineTo(x + size, y + size * 0.32).stroke();
+  doc.moveTo(x, y + size * 0.32).lineTo(x + size, y + size * 0.32).stroke();
+  [0.14, 0.38, 0.62, 0.86].forEach((f) => {
+    doc.moveTo(x + size * f, y + size * 0.42).lineTo(x + size * f, y + size * 0.82).stroke();
+  });
+  doc.moveTo(x - size * 0.05, y + size * 0.92).lineTo(x + size * 1.05, y + size * 0.92).stroke();
+  doc.restore();
+}
+
 // Draws a small caps label (left) and a value (right), both within `width`,
 // on one line — used for the header's Invoice Date / Due Date / Printed rows.
 function drawMetaRow(doc, x, y, width, label, value, opts = {}) {
@@ -266,13 +280,24 @@ function drawBillShipTransactionBlock(doc, order) {
   doc.moveDown(1.3);
 }
 
-function drawItemsTable(doc, order) {
-  const tableTop = doc.y;
-  const headerHeight = 22;
-  doc.rect(PAGE_MARGIN, tableTop, CONTENT_WIDTH, headerHeight).fill(COLORS.tint);
+const TABLE_HEADER_HEIGHT = 22;
+// Item names get clamped to 2 lines (ellipsized beyond that) so a row's
+// height is always predictable — an unbroken/very long product title (bad
+// data, but real data we've seen) used to wrap to a dozen+ lines and blow
+// the row past the page boundary mid-draw. pdfkit's own auto-pagination
+// would then kick in *inside* the item-name .text() call, but the sibling
+// cells (price/qty/discount/total) are drawn afterwards at that same
+// pre-computed rowY — now meaningless on whatever page it auto-added —
+// scattering a single row's columns across two or more pages. Measuring
+// each row's height up front and deciding to paginate *before* drawing
+// anything is what actually fixes it.
+const ITEM_NAME_MAX_LINES = 2;
+
+function drawItemsTableHeader(doc, y) {
+  doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, TABLE_HEADER_HEIGHT).fill(COLORS.tint);
 
   doc.font(FONT_BOLD).fontSize(7.5).fillColor(COLORS.muted);
-  const headerTextY = tableTop + 7;
+  const headerTextY = y + 7;
   doc.text("#", PAGE_MARGIN + 6 + COLUMNS.number, headerTextY, { width: COLUMN_WIDTHS.number - 6 });
   doc.text("DESCRIPTION / ITEM CODE", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item });
   doc.text("UNIT PRICE", PAGE_MARGIN + COLUMNS.unitPrice, headerTextY, { width: COLUMN_WIDTHS.unitPrice, align: "right" });
@@ -280,11 +305,47 @@ function drawItemsTable(doc, order) {
   doc.text("QTY", PAGE_MARGIN + COLUMNS.qty, headerTextY, { width: COLUMN_WIDTHS.qty, align: "right" });
   doc.text("DISCOUNT", PAGE_MARGIN + COLUMNS.discount, headerTextY, { width: COLUMN_WIDTHS.discount, align: "right" });
   doc.text("TOTAL", PAGE_MARGIN + COLUMNS.total, headerTextY, { width: COLUMN_WIDTHS.total, align: "right" });
+  doc.fillColor(COLORS.text);
+  return y + TABLE_HEADER_HEIGHT;
+}
 
-  doc.y = tableTop + headerHeight;
+function drawItemsTableSegmentBorder(doc, top, bottom) {
+  doc.roundedRect(PAGE_MARGIN, top, CONTENT_WIDTH, bottom - top, 6).lineWidth(1).strokeColor(COLORS.border).stroke();
+  doc.fillColor(COLORS.text);
+}
+
+// Fixed vertical space a row's content + separator rule take up, beyond the
+// name/SKU block itself — mirrors the moveDown(0.8)/rule/moveDown(0.8) the
+// draw step below performs, at the font sizes it runs them at.
+const ROW_TRAILING_GAP = 17;
+
+function estimateItemRowHeight(doc, item) {
+  doc.font(FONT_BOLD).fontSize(9.5);
+  let height = doc.currentLineHeight() * ITEM_NAME_MAX_LINES;
+  if (item.sku) {
+    doc.font(FONT).fontSize(7.5);
+    height += 2 + doc.currentLineHeight();
+  }
+  return height + ROW_TRAILING_GAP;
+}
+
+function drawItemsTable(doc, order) {
+  let segmentTop = doc.y;
+  doc.y = drawItemsTableHeader(doc, segmentTop);
   doc.moveDown(1);
 
+  const bottomLimit = PAGE_HEIGHT - PAGE_MARGIN - FRAME_PADDING;
+
   order.items.forEach((item, i) => {
+    const estimatedHeight = estimateItemRowHeight(doc, item);
+    if (doc.y + estimatedHeight > bottomLimit) {
+      drawItemsTableSegmentBorder(doc, segmentTop, doc.y);
+      doc.addPage();
+      segmentTop = PAGE_MARGIN;
+      doc.y = drawItemsTableHeader(doc, segmentTop);
+      doc.moveDown(1);
+    }
+
     const rowY = doc.y;
     doc
       .font(FONT)
@@ -292,17 +353,23 @@ function drawItemsTable(doc, order) {
       .fillColor(COLORS.muted)
       .text(String(i + 1).padStart(2, "0"), PAGE_MARGIN + 6 + COLUMNS.number, rowY, { width: COLUMN_WIDTHS.number - 6 });
 
-    doc.font(FONT_BOLD).fontSize(9.5).fillColor(COLORS.text).text(item.name, PAGE_MARGIN + COLUMNS.item, rowY, {
+    doc.font(FONT_BOLD).fontSize(9.5).fillColor(COLORS.text);
+    const nameMaxHeight = doc.currentLineHeight() * ITEM_NAME_MAX_LINES;
+    doc.text(item.name, PAGE_MARGIN + COLUMNS.item, rowY, {
       width: COLUMN_WIDTHS.item,
+      height: nameMaxHeight,
+      ellipsis: true,
     });
+    let nameBottom = rowY + nameMaxHeight;
     if (item.sku) {
       doc
         .font(FONT)
         .fontSize(7.5)
         .fillColor(COLORS.muted)
-        .text(`Part SKU: ${item.sku}`, PAGE_MARGIN + COLUMNS.item, doc.y + 2, { width: COLUMN_WIDTHS.item });
+        .text(`Part SKU: ${item.sku}`, PAGE_MARGIN + COLUMNS.item, nameBottom + 2, { width: COLUMN_WIDTHS.item });
+      nameBottom = doc.y;
     }
-    const rowBottomLeft = doc.y;
+    const rowBottomLeft = nameBottom;
 
     const lineSubtotal = item.unit_price * item.quantity;
     const discount = item.discount_amount || 0;
@@ -347,11 +414,7 @@ function drawItemsTable(doc, order) {
   });
 
   const tableBottom = doc.y;
-  doc
-    .roundedRect(PAGE_MARGIN, tableTop, CONTENT_WIDTH, tableBottom - tableTop, 6)
-    .lineWidth(1)
-    .strokeColor(COLORS.border)
-    .stroke();
+  drawItemsTableSegmentBorder(doc, segmentTop, tableBottom);
   doc.fillColor(COLORS.text);
   // Fixed gap (not moveDown, which scales with whatever font size a row
   // last set) so the Bank Transfer Details / Totals section never crowds
@@ -361,18 +424,30 @@ function drawItemsTable(doc, order) {
 
 function drawPaymentAndTotals(doc, order, totalPaidCents) {
   const startY = doc.y;
-  const halfWidth = CONTENT_WIDTH / 2 - 14;
-  const rightX = PAGE_MARGIN + halfWidth + 28;
+  // Totals only ever hold short currency strings, so it doesn't need as much
+  // width as a straight half/half split gives it — handing that space to the
+  // bank details box instead is what keeps "PARTS HUB AUSTRALIA PTY LTD" and
+  // "National Australia Bank" from wrapping and colliding with the row below.
+  const totalsLabelWidth = 90;
+  const totalsValueWidth = 80;
+  const totalsWidth = totalsLabelWidth + totalsValueWidth;
+  const gap = 16;
+  const halfWidth = CONTENT_WIDTH - totalsWidth - gap;
+  const rightX = PAGE_MARGIN + halfWidth + gap;
 
   // Bank Transfer Details — tint box, fixed height (always the same 4 fields).
-  const boxHeight = 82;
+  const boxHeight = 84;
   doc.roundedRect(PAGE_MARGIN, startY, halfWidth, boxHeight, 6).fill(COLORS.tint);
   doc.fillColor(COLORS.text);
+  const iconSize = 8;
+  drawBankIcon(doc, PAGE_MARGIN + 12, startY + 11, COLORS.muted, iconSize);
   doc
     .font(FONT_BOLD)
-    .fontSize(8)
+    .fontSize(7.5)
     .fillColor(COLORS.muted)
-    .text("BANK TRANSFER DETAILS", PAGE_MARGIN + 12, startY + 10, { width: halfWidth - 24 });
+    .text("BANK TRANSFER DETAILS", PAGE_MARGIN + 12 + iconSize + 6, startY + 11, {
+      width: halfWidth - 24 - iconSize - 6,
+    });
 
   const gridColWidth = (halfWidth - 24) / 2;
   const bankRows = [
@@ -381,14 +456,14 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
     ["BSB", BANK_DETAILS.bsb || "—"],
     ["ACCOUNT NO", BANK_DETAILS.accountNumber || "—"],
   ];
-  const gridStartY = startY + 28;
+  const gridStartY = startY + 30;
   bankRows.forEach(([label, value], idx) => {
     const colX = PAGE_MARGIN + 12 + (idx % 2) * gridColWidth;
     const rowY = gridStartY + Math.floor(idx / 2) * 26;
-    doc.font(FONT).fontSize(7).fillColor(COLORS.muted).text(label, colX, rowY, { width: gridColWidth - 8 });
+    doc.font(FONT).fontSize(6.5).fillColor(COLORS.muted).text(label, colX, rowY, { width: gridColWidth - 8 });
     doc
       .font(FONT_BOLD)
-      .fontSize(8.5)
+      .fontSize(7.5)
       .fillColor(COLORS.text)
       .text(value, colX, rowY + 9, { width: gridColWidth - 8 });
   });
@@ -416,33 +491,34 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
 
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   let rowY = startY;
-  const totalsRows = [
-    ["Subtotal", formatMoney(order.subtotal)],
-    [isPickup ? "Pickup" : "Freight / Shipping", formatMoney(order.shipping_cost)],
-  ];
-  const labelWidth = 130;
-  const valueWidth = 95;
+  const totalsRows = [["Subtotal", formatMoney(order.subtotal)]];
+  // Order-level manual discount (see order.service.js#updateOrderDiscount) —
+  // omitted when zero, same as the dashboard's order-detail page.
+  if (order.discount_amount > 0) {
+    totalsRows.push(["Discount", `-${formatMoney(order.discount_amount)}`]);
+  }
+  totalsRows.push([isPickup ? "Pickup" : "Freight / Shipping", formatMoney(order.shipping_cost)]);
   totalsRows.forEach(([label, value]) => {
-    doc.font(FONT).fontSize(10).fillColor(COLORS.muted).text(label, rightX, rowY, { width: labelWidth });
+    doc.font(FONT).fontSize(9).fillColor(COLORS.muted).text(label, rightX, rowY, { width: totalsLabelWidth });
     doc
       .font(FONT_BOLD)
-      .fontSize(10)
+      .fontSize(9.5)
       .fillColor(COLORS.text)
-      .text(value, rightX + labelWidth, rowY, { width: valueWidth, align: "right" });
+      .text(value, rightX + totalsLabelWidth, rowY, { width: totalsValueWidth, align: "right" });
     rowY += 19;
   });
   rowY += 4;
   doc
     .strokeColor(COLORS.border)
     .moveTo(rightX, rowY)
-    .lineTo(rightX + labelWidth + valueWidth, rowY)
+    .lineTo(rightX + totalsWidth, rowY)
     .stroke();
   rowY += 12;
-  doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.text).text("Total", rightX, rowY, { width: labelWidth });
+  doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.text).text("Total", rightX, rowY, { width: totalsLabelWidth });
   doc
     .fillColor(COLORS.accent)
     .fontSize(14)
-    .text(formatMoney(order.total), rightX + labelWidth, rowY - 2, { width: valueWidth, align: "right" });
+    .text(formatMoney(order.total), rightX + totalsLabelWidth, rowY - 2, { width: totalsValueWidth, align: "right" });
   rowY += 30;
 
   // Every channel can now carry an outstanding balance — storefront/eBay
@@ -450,7 +526,7 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
   // manual sales — so this bar is unconditional, mirroring
   // InvoicePrintView.tsx's generalized Balance Outstanding treatment.
   const amountDue = Math.max(0, order.total - (totalPaidCents || 0));
-  const barWidth = labelWidth + valueWidth;
+  const barWidth = totalsWidth;
   const barHeight = 28;
   doc.roundedRect(rightX, rowY, barWidth, barHeight, 6).fill(COLORS.accent);
   doc

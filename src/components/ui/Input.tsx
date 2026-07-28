@@ -32,7 +32,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       className={cn(
         "w-full rounded-md outline-none! transition-shadow duration-150",
         "placeholder:text-fg/45",
-        "focus-visible:ring-2 focus-visible:ring-accent/45",
+        "focus-visible:border-accent",
         "disabled:cursor-not-allowed disabled:opacity-50",
         inputSizes[size],
         inputVariants[variant],

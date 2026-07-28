@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { GeneratePaymentLink } from "@/components/orders/GeneratePaymentLink";
 import { RecordPaymentModal } from "@/components/orders/RecordPaymentModal";
 import { PaymentHistoryList } from "@/components/orders/PaymentHistoryList";
 import { RefundHistoryList } from "@/components/orders/RefundHistoryList";
 import { BalanceDueBanner } from "@/components/orders/BalanceDueBanner";
+import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderChannel, OrderStatus, OrderPaymentSummary } from "@/types/orders";
@@ -28,6 +27,7 @@ export function OrderPaymentSummaryCard({
   channel: OrderChannel;
 }) {
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const isManual = channel === "manual";
   const hasOutstandingBalance = orderStatus === "pending_payment" || orderStatus === "partially_paid";
   // Collecting more only ever applies to manual/in-store sales — storefront
@@ -68,18 +68,8 @@ export function OrderPaymentSummaryCard({
 
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Payment History</div>
-        <PaymentHistoryList payments={payments} />
+        <PaymentHistoryList payments={payments} onSelect={setSelectedPaymentId} />
       </div>
-
-      {payments.length > 0 && (
-        <Link
-          to="/payments"
-          className="inline-flex items-center gap-1 text-xs font-medium text-accent transition hover:opacity-80"
-        >
-          View in Payments
-          <ArrowRight className="h-3 w-3" />
-        </Link>
-      )}
 
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Refund History</div>
@@ -92,6 +82,10 @@ export function OrderPaymentSummaryCard({
         open={recordPaymentOpen}
         onOpenChange={setRecordPaymentOpen}
       />
+
+      {selectedPaymentId && (
+        <PaymentDetailDrawer paymentId={selectedPaymentId} onClose={() => setSelectedPaymentId(null)} />
+      )}
     </div>
   );
 }

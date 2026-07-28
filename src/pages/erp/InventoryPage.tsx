@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterSelect } from "@/components/ui/FilterSelect";
 import { ManageColumns } from "@/components/ui/ManageColumns";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
 import { InventoryRow } from "@/components/inventory/InventoryRow";
@@ -14,7 +13,6 @@ import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
 import { InventoryHistorySheet } from "@/components/inventory/InventoryHistorySheet";
 import { InventorySettingsModal } from "@/components/inventory/InventorySettingsModal";
 import { getInventory, getInventorySettings } from "@/lib/api/inventory";
-import { getLocations } from "@/lib/api/products";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { InventoryRecord } from "@/types/inventory";
@@ -35,7 +33,6 @@ export default function InventoryPage() {
   const { visibility, toggleColumn, isVisible } = useColumnVisibility("inventory", INVENTORY_COLUMNS);
 
   const search = searchParams.get("search") ?? "";
-  const location = searchParams.get("location") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
@@ -61,19 +58,6 @@ export default function InventoryPage() {
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
 
-  const setLocation = useCallback(
-    (val: string) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (val) next.set("location", val);
-        else next.delete("location");
-        next.set("page", "1");
-        return next;
-      });
-    },
-    [setSearchParams],
-  );
-
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
@@ -98,19 +82,9 @@ export default function InventoryPage() {
   );
 
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["inventory", { search, location, page, limit }],
-    queryFn: () => getInventory({ search, location, page, limit }),
+    queryKey: ["inventory", { search, page, limit }],
+    queryFn: () => getInventory({ search, page, limit }),
   });
-
-  const { data: locationsRes } = useQuery({
-    queryKey: ["locations"],
-    queryFn: getLocations,
-    staleTime: 5 * 60 * 1000,
-  });
-  const locationOptions = [
-    { label: "All locations", value: "" },
-    ...(locationsRes?.data ?? []).filter((l) => l.is_active).map((l) => ({ label: l.name, value: l._id })),
-  ];
 
   const { data: settingsRes } = useQuery({
     queryKey: ["inventory-settings"],
@@ -146,7 +120,6 @@ export default function InventoryPage() {
                 className="pl-9"
               />
             </div>
-            <FilterSelect options={locationOptions} value={location} onChange={setLocation} />
           </div>
 
           <div className="flex items-center gap-3">

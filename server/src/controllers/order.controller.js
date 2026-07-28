@@ -143,6 +143,32 @@ exports.updateOrderItemPrice = async (req, res) => {
   }
 };
 
+exports.updateOrderShippingCost = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderShippingCost(req.params.id, {
+      shipping_cost: req.body.shipping_cost,
+    });
+    return success(res, order, "Shipping cost updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
+exports.updateOrderDiscount = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderDiscount(req.params.id, {
+      discount_amount: req.body.discount_amount,
+    });
+    return success(res, order, "Discount updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.addOrderNote = async (req, res) => {
   try {
     const order = await orderService.addOrderNote(req.params.id, {

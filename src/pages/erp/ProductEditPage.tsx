@@ -24,7 +24,6 @@ import { ProductVehicleSection } from "@/components/products/ProductVehicleSecti
 import { ProductNotesSection } from "@/components/products/ProductNotesSection";
 import { FormSection } from "@/components/products/FormSection";
 import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
-import { ProductFormActionsCard } from "@/components/products/ProductFormActionsCard";
 import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
 import { useToast } from "@/context";
 import {
@@ -577,14 +576,6 @@ export default function ProductEditPage() {
             sku={form.sku}
             stockControl={form.stock_control}
             stockCount={product.stock_count}
-          />
-          <ProductFormActionsCard
-            heading="Before you save"
-            buttonLabel="Save changes"
-            pendingLabel="Saving…"
-            pending={saveMutation.isPending}
-            disabled={!isDirty}
-            onClick={handleSave}
           />
         </div>
       </div>

@@ -1,0 +1,116 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { useToast } from "@/context";
+import { formatCurrencyFromCents } from "@/utils/format";
+
+interface EditableOrderAmountProps {
+  orderId: string;
+  label: string;
+  amountCents: number;
+  // Renders with a leading "-" when non-zero (e.g. Discount) — purely
+  // cosmetic, the underlying value stored/submitted is always non-negative.
+  negative?: boolean;
+  mutationFn: (orderId: string, dollars: number) => Promise<unknown>;
+  successMessage: string;
+  errorMessage: string;
+}
+
+// Inline click-to-edit amount — same interaction as OrderItemsTable's
+// EditableUnitPrice, generalized for the order-level Discount/Shipping rows.
+export function EditableOrderAmount({
+  orderId,
+  label,
+  amountCents,
+  negative,
+  mutationFn,
+  successMessage,
+  errorMessage,
+}: EditableOrderAmountProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(amountCents / 100));
+
+  const mutation = useMutation({
+    mutationFn: (dollars: number) => mutationFn(orderId, dollars),
+    onSuccess: () => {
+      toast({ title: successMessage, tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      setEditing(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: errorMessage, description: err.message, tone: "danger" });
+    },
+  });
+
+  if (editing) {
+    return (
+      <form
+        className="flex items-center justify-end gap-0.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed) || parsed < 0) {
+            toast({ title: "Enter a valid amount", tone: "danger" });
+            return;
+          }
+          mutation.mutate(parsed);
+        }}
+      >
+        <Input
+          autoFocus
+          type="number"
+          step="0.01"
+          min="0"
+          size="sm"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-24 text-right"
+          disabled={mutation.isPending}
+        />
+        <Button
+          type="submit"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={mutation.isPending}
+          aria-label={`Save ${label}`}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={mutation.isPending}
+          onClick={() => {
+            setValue(String(amountCents / 100));
+            setEditing(false);
+          }}
+          aria-label="Cancel"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="group inline-flex items-center gap-1.5 text-fg/60 hover:text-accent"
+      onClick={() => {
+        setValue(String(amountCents / 100));
+        setEditing(true);
+      }}
+    >
+      {negative && amountCents > 0 ? "-" : ""}
+      {formatCurrencyFromCents(amountCents)}
+      <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
+  );
+}
