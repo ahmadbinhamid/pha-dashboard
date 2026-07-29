@@ -12,7 +12,7 @@ const Refund = require("../../models/Refund");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
-const { getTotalPaidForOrder } = require("../payment.service");
+const { getTotalPaidForOrder, getTotalRefundedForOrder } = require("../payment.service");
 const emailService = require("../email/email.service");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
@@ -283,8 +283,22 @@ async function handleChargeRefunded(charge) {
   payment.amount_refunded = charge.amount_refunded;
   await payment.save();
 
-  order.status =
-    payment.amount_refunded >= payment.amount ? ORDER_STATUS.REFUNDED : ORDER_STATUS.PARTIALLY_REFUNDED;
+  // Order-scoped, not payment-scoped: comparing this one payment's own
+  // amount_refunded against its own amount marks the WHOLE order refunded
+  // the moment any single payment (e.g. just a deposit) is refunded in
+  // full, even though other payments on the order can still be covering
+  // the rest of the total. getTotalRefundedForOrder sums every payment on
+  // the order, so a deposit-only refund can only ever reach
+  // PARTIALLY_REFUNDED unless it actually covers the whole order.
+  const totalRefunded = await getTotalRefundedForOrder(order._id);
+  if (totalRefunded === 0) {
+    const totalPaid = await getTotalPaidForOrder(order._id);
+    order.status = derivePaymentStatus(totalPaid, order.total);
+  } else if (totalRefunded >= order.total) {
+    order.status = ORDER_STATUS.REFUNDED;
+  } else {
+    order.status = ORDER_STATUS.PARTIALLY_REFUNDED;
+  }
   await order.save();
 }
 

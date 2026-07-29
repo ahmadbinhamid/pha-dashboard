@@ -9,9 +9,11 @@ const Refund = require("../models/Refund");
 const Payment = require("../models/Payment");
 const Order = require("../models/Order");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
+const { getTotalPaidForOrder, getTotalRefundedForOrder } = require("./payment.service");
 const { REFUND_REASON, REFUND_STATUS } = require("../constants/refund.constants");
 const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { ORDER_STATUS } = require("../constants/order.constants");
+const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { logger } = require("../loaders/logging");
 
 function httpError(message, status) {
@@ -50,8 +52,22 @@ async function finalizeSucceededRefund({ refund, payment, order, amount, isFullR
   payment.amount_refunded += amount;
   await payment.save();
 
-  const isNowFullyRefunded = payment.amount_refunded >= payment.amount;
-  order.status = isNowFullyRefunded ? ORDER_STATUS.REFUNDED : ORDER_STATUS.PARTIALLY_REFUNDED;
+  // Order-scoped, not payment-scoped: comparing this one payment's own
+  // amount_refunded against its own amount marks the WHOLE order refunded
+  // the moment any single payment (e.g. just a deposit) is refunded in
+  // full, even though the order can have other, untouched payments still
+  // covering the rest of the total. getTotalRefundedForOrder sums every
+  // payment on the order, so a deposit-only refund can only ever reach
+  // PARTIALLY_REFUNDED unless it actually covers the whole order.
+  const totalRefunded = await getTotalRefundedForOrder(order._id);
+  if (totalRefunded === 0) {
+    const totalPaid = await getTotalPaidForOrder(order._id);
+    order.status = derivePaymentStatus(totalPaid, order.total);
+  } else if (totalRefunded >= order.total) {
+    order.status = ORDER_STATUS.REFUNDED;
+  } else {
+    order.status = ORDER_STATUS.PARTIALLY_REFUNDED;
+  }
 
   // Restock only on a full refund, and only when the admin asked for it
   // (explicit restock:true) or it's the default order-cancelled case — a
