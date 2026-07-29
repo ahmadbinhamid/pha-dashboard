@@ -382,4 +382,16 @@ async function handleChargeRefundUpdated(sr) {
   );
 }
 
-module.exports = { constructEvent, handleEvent };
+module.exports = {
+  constructEvent,
+  handleEvent,
+  // Exported for refund.reconciliation.service.js (corrections round) — the
+  // stuck-refund sweep reconciles a Stripe-allocation refund whose webhook
+  // never arrived by re-fetching its real status from Stripe and running it
+  // through the exact same handlers a webhook delivery would have used
+  // (reconcileStripeRefund for a succeeded/still-pending refund,
+  // handleChargeRefundUpdated for a failed/canceled one), rather than
+  // duplicating either's logic.
+  reconcileStripeRefund,
+  handleChargeRefundUpdated,
+};

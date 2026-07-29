@@ -224,6 +224,15 @@ const orderSchema = buildSchema({
   // refund.service.js#acquireRefundLock, not encoded here) lets a crashed
   // request's lock be reclaimed rather than wedging the order permanently.
   refund_lock_at: { type: Date, default: null },
+  // Fencing token (corrections round), paired with refund_lock_at. Without
+  // this, a holder whose critical section outlasted the staleness window
+  // would have its lock reclaimed by a new caller, and the original
+  // holder's own release (in a `finally`) would then clear the NEW
+  // holder's lock out from under it — reopening the exact admission race
+  // this field exists to prevent. Generated fresh per acquisition; release
+  // only clears the lock when the token still matches, so a stale holder's
+  // release harmlessly no-ops instead of clobbering whoever holds it now.
+  refund_lock_token: { type: String, default: null },
 
   // Which channel this order came from — orders live in one unified
   // collection regardless of origin, this just tags where each one is from.
