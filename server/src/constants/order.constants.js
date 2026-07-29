@@ -29,4 +29,34 @@ const ORDER_DELIVERY_METHOD = Object.freeze({
   PICKUP: "pickup",
 });
 
-module.exports = { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD };
+// refund-redesign-spec.md §1.2 — splits ORDER_STATUS's two mixed concerns
+// (payment state vs fulfilment state) apart, since finalizeSucceededRefund
+// overwriting FULFILLED with REFUNDED was exactly the bug that motivated the
+// split. Distinct name from payment.constants.js's PAYMENT_STATUS (that one
+// describes a single Payment/Stripe-intent's own lifecycle; this one
+// describes an Order's aggregate payment position across all its payments
+// and refunds) — same word, deliberately different enum, do not conflate.
+// Additive only for now: `status` (below) stays authoritative until the
+// derived-field backfill (§6.2) and the services that read it are migrated
+// (§9) — nothing writes or reads these two new fields yet.
+const ORDER_PAYMENT_STATUS = Object.freeze({
+  PENDING_PAYMENT: "pending_payment",
+  PARTIALLY_PAID: "partially_paid",
+  PAID: "paid",
+  PARTIALLY_REFUNDED: "partially_refunded",
+  REFUNDED: "refunded",
+});
+
+const ORDER_FULFILLMENT_STATUS = Object.freeze({
+  UNFULFILLED: "unfulfilled",
+  FULFILLED: "fulfilled",
+  CANCELLED: "cancelled",
+});
+
+module.exports = {
+  ORDER_STATUS,
+  ORDER_CHANNEL,
+  ORDER_DELIVERY_METHOD,
+  ORDER_PAYMENT_STATUS,
+  ORDER_FULFILLMENT_STATUS,
+};

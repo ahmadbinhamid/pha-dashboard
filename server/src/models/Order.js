@@ -5,7 +5,13 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
-const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
+const {
+  ORDER_STATUS,
+  ORDER_CHANNEL,
+  ORDER_DELIVERY_METHOD,
+  ORDER_PAYMENT_STATUS,
+  ORDER_FULFILLMENT_STATUS,
+} = require("../constants/order.constants");
 
 const orderItemSchema = new Schema(
   {
@@ -46,9 +52,46 @@ const orderItemSchema = new Schema(
       default: "not_applicable",
     },
     ebay_sync_error: { type: String, default: null },
+
+    // refund-redesign-spec.md §1.1 — cumulative, derived state (see
+    // refund.service.js#applyRefundEffects once §3.7 lands): recomputed by
+    // summing every succeeded Refund's lines for this item and assigned
+    // absolutely, never incremented — the same pattern
+    // stripe.webhook.service.js#handleChargeRefunded already uses correctly
+    // for payment.amount_refunded. Additive only for now: nothing writes
+    // these yet, they just sit at their defaults until §6.2's backfill and
+    // the orchestration rewrite (§3.7) start populating them.
+    quantity_refunded: { type: Number, default: 0, min: 0 },
+    amount_refunded: { type: Number, default: 0, min: 0 }, // cents, this line's share only
+    // Tracked separately from quantity_refunded because restock is opt-in
+    // per refund line — refunding 2 units with restock unchecked must never
+    // later be mistaken for units that came back into stock.
+    quantity_restocked: { type: Number, default: 0, min: 0 },
   },
-  { _id: false },
+  {
+    // §1.1: refund lines need a stable per-item reference that survives
+    // regardless of array position — index-based addressing (see
+    // order.service.js#updateOrderItemPrice/#updateOrderItemDiscount, still
+    // index-addressed and unaffected by this) breaks the moment items are
+    // ever reordered or removed. NOTE: this does not retroactively give
+    // historical items a persisted _id — see the §6.2 backfill and Order's
+    // own item_ids_migrated_at below for why POST /orders/:orderId/refunds
+    // must check that flag rather than trusting item._id's mere presence
+    // (Mongoose auto-generates one in memory on read even when nothing was
+    // ever actually persisted).
+    _id: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
+
+// refund_calculator.service.js (§3) is the actual source of truth for what a
+// refund may take — this virtual exists so nothing else (a controller, a
+// frontend view) has to reimplement "quantity minus already-refunded" by
+// hand and risk drifting from that.
+orderItemSchema.virtual("refundable_quantity").get(function () {
+  return this.quantity - this.quantity_refunded;
+});
 
 const addressSchema = new Schema(
   {
@@ -137,11 +180,40 @@ const orderSchema = buildSchema({
   total: { type: Number, required: true },
   currency: { type: String, required: true, default: "aud" },
 
+  // Deprecated (refund-redesign-spec.md §1.2/§9) — mixes payment state and
+  // fulfilment state in one enum, which is exactly why
+  // finalizeSucceededRefund used to overwrite FULFILLED with REFUNDED.
+  // Stays authoritative until the §6.2 backfill populates payment_status/
+  // fulfillment_status below for every existing order and the services that
+  // read `status` are migrated to read those instead (§9) — do not read or
+  // write payment_status/fulfillment_status yet, they're additive-only at
+  // this point and every order will have them at their defaults.
   status: {
     type: String,
     enum: Object.values(ORDER_STATUS),
     default: ORDER_STATUS.PENDING_PAYMENT,
   },
+  payment_status: {
+    type: String,
+    enum: Object.values(ORDER_PAYMENT_STATUS),
+    default: ORDER_PAYMENT_STATUS.PENDING_PAYMENT,
+  },
+  fulfillment_status: {
+    type: String,
+    enum: Object.values(ORDER_FULFILLMENT_STATUS),
+    default: ORDER_FULFILLMENT_STATUS.UNFULFILLED,
+  },
+
+  // Set by the §6.2 backfill script once every item on this order has a
+  // real, persisted _id (orderItemSchema was `{ _id: false }` before this
+  // change — see that schema's own comment). Deliberately NOT inferred by
+  // checking item._id's presence at read time: Mongoose auto-generates an
+  // in-memory _id for an `{ _id: true }` subdocument on every hydrate, even
+  // when nothing was ever actually persisted, so item._id looks "present"
+  // on an unmigrated order too. POST /orders/:orderId/refunds (§2.2) must
+  // check this flag directly for scope: line_items | full_order and fail
+  // loud with "order needs migration" rather than trust item shape.
+  item_ids_migrated_at: { type: Date, default: null },
 
   // Which channel this order came from — orders live in one unified
   // collection regardless of origin, this just tags where each one is from.
