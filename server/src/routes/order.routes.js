@@ -6,7 +6,9 @@ const { auth, admin } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/order.validation");
+const rv = require("../validators/refund.validation");
 const ctrl = require("../controllers/order.controller");
+const refundCtrl = require("../controllers/refund.controller");
 
 // Guest checkout only — the storefront has no customer accounts, so these
 // are intentionally unauthenticated. GET is gated by the per-order
@@ -66,5 +68,14 @@ router.patch(
   validate(v.updateOrderItemDiscount),
   asyncHandler(ctrl.updateOrderItemDiscount),
 );
+
+// ── Refunds (refund-redesign-spec.md §2) — order-scoped, not payment-scoped:
+// line items and multi-payment allocation are both order-level concerns.
+// Mounted under /order (this app's existing convention — see routes/index.js
+// — not the spec's literal /orders) for consistency with every other route
+// in this file.
+router.get("/:id/refundable", auth(), admin, validate(rv.getRefundable), asyncHandler(refundCtrl.getRefundable));
+router.get("/:id/refunds", auth(), admin, validate(rv.listRefunds), asyncHandler(refundCtrl.listRefunds));
+router.post("/:id/refunds", auth(), admin, validate(rv.createRefund), asyncHandler(refundCtrl.createRefund));
 
 module.exports = router;
