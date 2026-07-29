@@ -215,6 +215,16 @@ const orderSchema = buildSchema({
   // loud with "order needs migration" rather than trust item shape.
   item_ids_migrated_at: { type: Date, default: null },
 
+  // Per-order mutex for POST /order/:id/refunds (§3.1/§9's concurrency fix).
+  // Validation is read-then-act (refundable_quantity, remaining money) —
+  // the derived-state ledger makes effect APPLICATION idempotent but does
+  // nothing for admission: two concurrent requests can both read the same
+  // pre-refund refundable_quantity, both pass validation, both insert. This
+  // lock serializes admission per order. The staleness window (checked by
+  // refund.service.js#acquireRefundLock, not encoded here) lets a crashed
+  // request's lock be reclaimed rather than wedging the order permanently.
+  refund_lock_at: { type: Date, default: null },
+
   // Which channel this order came from — orders live in one unified
   // collection regardless of origin, this just tags where each one is from.
   channel: {

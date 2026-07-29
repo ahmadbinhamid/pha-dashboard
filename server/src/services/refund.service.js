@@ -68,8 +68,28 @@ function isWithinStripeRefundWindow(paidAt) {
 // {order:1, status:1} index (§1.3) — every succeeded, non-voided refund on
 // the order. A voided refund's status is "voided", not "succeeded", so it's
 // naturally excluded here without any separate "subtract it back out" logic.
+// Used by the LEDGER (recomputeLedger) — succeeded is the only status that
+// has actually moved money/quantity.
 async function getSucceededRefunds(orderId) {
   return Refund.find({ order: orderId, status: REFUND_STATUS.SUCCEEDED });
+}
+
+// Everything that could still resolve to succeeded — i.e. NOT already
+// terminally failed/canceled/voided. Used for ADMISSION (§3.1/§9's
+// concurrency fix): a Stripe allocation sits in "processing" between
+// creation and webhook confirmation, and its claimed quantity/amount must
+// be reserved against a NEW refund request during that window, or two
+// refunds issued moments apart (not just truly concurrent ones) could both
+// claim the same units/dollars before the first's webhook ever lands. The
+// per-order lock (acquireRefundLock) serializes concurrent ADMISSION, but
+// only counting `status: SUCCEEDED` here would still let request B under-
+// count request A's still-in-flight claim even though the lock correctly
+// serialized the two calls in time.
+async function getReservingRefunds(orderId) {
+  return Refund.find({
+    order: orderId,
+    status: { $in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCEEDED] },
+  });
 }
 
 function sumGst(refunds) {
@@ -78,6 +98,10 @@ function sumGst(refunds) {
 
 function sumShipping(refunds) {
   return refunds.reduce((sum, r) => sum + (r.shipping_amount || 0), 0);
+}
+
+function sumReservedTotal(refunds) {
+  return refunds.reduce((sum, r) => sum + (r.total_amount || 0), 0);
 }
 
 // This item's own cumulative line_discount already recorded across every
@@ -95,6 +119,86 @@ function priorLineDiscountByItem(refunds, itemIds) {
   return map;
 }
 
+// Total quantity of an item already claimed by ANY non-terminally-failed
+// refund (succeeded or still in-flight) — the admission-time counterpart to
+// order.items[i].quantity_refunded, which only reflects succeeded ones.
+// refunds MUST be getReservingRefunds' result here, not getSucceededRefunds'
+// — see that function's comment.
+function reservedQuantityByItem(refunds, itemIds) {
+  const map = new Map(itemIds.map((id) => [String(id), 0]));
+  for (const r of refunds) {
+    for (const l of r.lines) {
+      const key = String(l.order_item_id);
+      if (map.has(key)) map.set(key, map.get(key) + (l.quantity || 0));
+    }
+  }
+  return map;
+}
+
+// §9's concurrency fix — an atomic per-order mutex. findOneAndUpdate's
+// filter+update is a single atomic operation at the database level: only
+// one concurrent caller can ever match the "unlocked or stale" condition
+// and flip it to locked in the same instant, so this is race-free even
+// under genuine parallel requests (unlike a read-then-write check). Returns
+// the freshly-read order document itself (no separate Order.findById needed
+// afterward) so the caller works from the same snapshot the lock was taken
+// against. The 30s staleness window lets a crashed request's lock be
+// reclaimed rather than wedging the order permanently — long enough to
+// cover a real Stripe API round-trip, short enough that a genuine stall
+// self-heals quickly.
+const REFUND_LOCK_STALE_MS = 30_000;
+
+// A single claim attempt fails fast the instant another request holds the
+// lock — which is correct for THAT one attempt, but a burst of genuinely
+// concurrent requests (the exact scenario §9's stress test requires) needs
+// each one to get a fair turn as the lock frees up, not have all but the
+// winner reject immediately. Retrying with a short, jittered backoff lets
+// legitimate concurrent admissions queue and drain in turn; a request only
+// ever gives up with a "busy" 409 after genuinely failing to get a turn
+// within this window, not merely losing the very first race.
+const REFUND_LOCK_RETRY_BUDGET_MS = 10_000; // comfortably covers a live Stripe round-trip held by another request
+const REFUND_LOCK_RETRY_BASE_MS = 40;
+const REFUND_LOCK_RETRY_MAX_INTERVAL_MS = 400;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function acquireRefundLock(orderId) {
+  const deadline = Date.now() + REFUND_LOCK_RETRY_BUDGET_MS;
+  let attempt = 0;
+
+  while (true) {
+    const staleCutoff = new Date(Date.now() - REFUND_LOCK_STALE_MS);
+    const claimed = await Order.findOneAndUpdate(
+      {
+        _id: orderId,
+        $or: [{ refund_lock_at: null }, { refund_lock_at: { $lt: staleCutoff } }],
+      },
+      { $set: { refund_lock_at: new Date() } },
+      { new: true },
+    );
+    if (claimed) return claimed;
+
+    if (Date.now() >= deadline) {
+      // Either genuinely still locked after a fair chance to acquire it, or
+      // the order doesn't exist — distinguish so a bad orderId doesn't get
+      // miscast as "busy".
+      const exists = await Order.exists({ _id: orderId });
+      if (!exists) throw httpError("Order not found", 404);
+      throw httpError("Another refund is already in progress for this order — try again shortly", 409);
+    }
+
+    attempt += 1;
+    const backoff = Math.min(REFUND_LOCK_RETRY_BASE_MS * attempt, REFUND_LOCK_RETRY_MAX_INTERVAL_MS) + Math.random() * 25;
+    await sleep(backoff);
+  }
+}
+
+async function releaseRefundLock(orderId) {
+  await Order.updateOne({ _id: orderId }, { $set: { refund_lock_at: null } });
+}
+
 // ── §2.1 GET /orders/:orderId/refundable — server tells the UI what's
 // possible, the UI computes nothing. ────────────────────────────────────
 
@@ -110,25 +214,37 @@ async function getRefundableSummary(orderId) {
   const order = await Order.findById(orderId);
   if (!order) throw httpError("Order not found", 404);
 
-  const [payments, totalPaid, totalRefunded, priorRefunds] = await Promise.all([
+  const [payments, totalPaid, totalRefunded, reservingRefunds] = await Promise.all([
     Payment.find({ order: orderId, status: PAYMENT_STATUS.SUCCEEDED }).sort({ created_at: 1 }),
     getTotalPaidForOrder(orderId),
-    getTotalRefundedForOrder(orderId),
-    getSucceededRefunds(orderId),
+    getTotalRefundedForOrder(orderId), // confirmed only — for display
+    getReservingRefunds(orderId),
   ]);
-  const maxRefundable = Math.max(0, order.total - totalRefunded);
-  const shippingAlreadyRefunded = sumShipping(priorRefunds);
-  const priorLineDiscount = priorLineDiscountByItem(priorRefunds, order.items.map((i) => i._id));
+  // §9's concurrency fix, extended to the display endpoint for consistency:
+  // an in-flight (pending/processing) Stripe refund has already claimed
+  // quantity/money even though the ledger (order.items[i].quantity_refunded,
+  // payment.amount_refunded) won't reflect it until its webhook confirms —
+  // showing the pre-reservation figures here would let an admin start a
+  // second refund the server then has to reject, on a line the UI told them
+  // was fully available. max_refundable uses the reserved total (what's
+  // safe to claim right now); total_refunded above stays the confirmed
+  // figure (what's actually happened so far) — deliberately different
+  // numbers for deliberately different questions.
+  const reservedTotal = sumReservedTotal(reservingRefunds);
+  const maxRefundable = Math.max(0, order.total - reservedTotal);
+  const shippingAlreadyRefunded = sumShipping(reservingRefunds);
+  const priorLineDiscount = priorLineDiscountByItem(reservingRefunds, order.items.map((i) => i._id));
+  const reservedQty = reservedQuantityByItem(reservingRefunds, order.items.map((i) => i._id));
 
   const lines = order.items.map((item) => {
-    const refundableQuantity = item.quantity - item.quantity_refunded;
+    const refundableQuantity = Math.max(0, item.quantity - (reservedQty.get(String(item._id)) || 0));
     const effectiveUnitPrice = item.unit_price - calc.round(item.discount_amount / item.quantity);
     return {
       order_item_id: item._id,
       name: item.name,
       sku: item.sku,
       quantity: item.quantity,
-      quantity_refunded: item.quantity_refunded,
+      quantity_refunded: item.quantity_refunded, // confirmed only — see reservedQty for "available right now"
       refundable_quantity: refundableQuantity,
       unit_price: item.unit_price,
       effective_unit_price: effectiveUnitPrice,
@@ -234,143 +350,196 @@ async function createRefund(orderId, body, userId) {
   } = body;
 
   // §3.1.7 — return the existing refund, 200 not 409, on a genuine
-  // concurrent double-submit with the same client-generated key.
+  // concurrent double-submit with the same client-generated key. No lock
+  // needed for this: it's a read, and two requests with the SAME key are
+  // supposed to converge on the same document, not race over one.
   if (idempotencyKey) {
     const existing = await Refund.findOne({ idempotency_key: idempotencyKey });
     if (existing) return existing;
   }
 
-  const order = await Order.findById(orderId);
-  if (!order) throw httpError("Order not found", 404);
-
-  // §3.1.1
-  if (!REFUNDABLE_PAYMENT_STATUSES.includes(order.payment_status)) {
-    throw httpError(`Order payment_status "${order.payment_status}" is not refundable`, 400);
-  }
-
-  // Corrections round, condition 2(a) — fail loud per-order, never assume
-  // the §6.2 backfill ran. item._id's mere presence can't be trusted (see
-  // Order.js's item_ids_migrated_at comment: Mongoose auto-generates one in
-  // memory on every hydrate, persisted or not).
-  if ((scope === "line_items" || scope === "full_order") && !order.item_ids_migrated_at) {
-    throw httpError(
-      "This order needs migration before item/full-invoice refunds can be issued — run scripts/backfillRefundRedesign.js",
-      409,
-    );
-  }
-
-  const [totalRefundedSoFar, priorRefunds] = await Promise.all([
-    getTotalRefundedForOrder(order._id),
-    getSucceededRefunds(order._id),
-  ]);
-  const maxRefundable = order.total - totalRefundedSoFar;
-
-  let computed;
-  if (scope === "amount") {
-    computed = computeAmountScope({ amount, adjustmentAmountInput, maxRefundable });
-  } else if (scope === "full_order") {
-    computed = computeFullOrderScope({ order, priorRefunds, totalRefundedSoFar, refundShipping, restockAll, adjustmentAmountInput, requestedLines });
-  } else if (scope === "line_items") {
-    computed = computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, requestedLines, adjustmentAmountInput });
-  } else {
-    throw httpError('scope must be one of "full_order", "line_items", "amount"', 400);
-  }
-
-  // §3.1.4
-  if (computed.total_amount < 1) {
-    throw httpError("Discount/adjustment would make total_amount zero or negative", 400);
-  }
-  // §3.1.5 — absolute cap, checked LAST, after all other math. No exceptions.
-  if (computed.total_amount > maxRefundable) {
-    throw httpError(`total_amount (${computed.total_amount}) exceeds what's left refundable (${maxRefundable})`, 400);
-  }
-
-  // §3.1.6 — allocations
-  const allocations = await resolveAllocations({ order, totalAmount: computed.total_amount, requestedAllocations });
-
-  const refundNumber = await nextRefundNumber();
-  const refund = await Refund.create({
-    order: order._id,
-    // Legacy top-level fields, kept populated so any not-yet-migrated reader
-    // still sees something sane during the transition (§9 removes them).
-    payment: allocations[0].payment,
-    amount: computed.total_amount,
-    reason,
-    status: REFUND_STATUS.PENDING,
-    initiated_via: "admin_api",
-    initiated_by: userId || null,
-    // settled defaults true (schema) but MUST start false for a Stripe
-    // allocation — §3.7's "do NOT apply effects optimistically" means even
-    // a successful stripe.refunds.create() call below doesn't count as
-    // settled, only the charge.refunded/charge.refund.updated webhook does.
-    payment_allocations: allocations.map((a) => ({
-      payment: a.payment,
-      amount: a.amount,
-      provider: a.provider,
-      settled: a.provider !== PAYMENT_PROVIDER.STRIPE,
-    })),
-    refund_number: refundNumber,
-    scope,
-    lines: computed.lines,
-    shipping_amount: computed.shipping_amount,
-    adjustment_amount: computed.adjustment_amount,
-    items_amount: computed.items_amount,
-    gst_amount: computed.gst_amount,
-    total_amount: computed.total_amount,
-    internal_note: internalNote || null,
-    idempotency_key: idempotencyKey || null,
-  });
-
-  const stripeAllocationIndexes = refund.payment_allocations
-    .map((a, i) => (a.provider === PAYMENT_PROVIDER.STRIPE ? i : -1))
-    .filter((i) => i !== -1);
-
-  if (stripeAllocationIndexes.length > 0) {
-    const { getStripeClient } = require("./stripe/stripe.client.service");
-    const stripe = getStripeClient();
-    for (const i of stripeAllocationIndexes) {
-      const alloc = refund.payment_allocations[i];
-      const payment = await Payment.findById(alloc.payment);
-      try {
-        const stripeRefund = await stripe.refunds.create(
-          {
-            payment_intent: payment.stripe_payment_intent_id,
-            amount: alloc.amount,
-            reason: mapReasonToStripe(reason),
-            metadata: { refund_id: String(refund._id), refund_number: refundNumber, order_number: order.order_number },
-          },
-          { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}` },
-        );
-        refund.payment_allocations[i].stripe_refund_id = stripeRefund.id;
-      } catch (err) {
-        // §3.1's guardrail on partial failure: earlier allocations in this
-        // loop may have already succeeded at Stripe. Mark failed and surface
-        // exactly which allocations settled rather than silently retrying.
-        refund.status = REFUND_STATUS.FAILED;
-        refund.failure_reason = err.message;
-        await refund.save();
-        throw httpError(
-          `Stripe refund failed on allocation ${i + 1}/${stripeAllocationIndexes.length}: ${err.message}. ` +
-            `Earlier allocations on this refund may have already succeeded at Stripe — review refund ${refundNumber} manually.`,
-          502,
-        );
-      }
+  // §9's concurrency fix — the derived-state ledger makes effect
+  // APPLICATION idempotent; it does nothing for ADMISSION, which is
+  // read-then-act (refundable_quantity, remaining money). Two concurrent
+  // requests with DIFFERENT idempotency keys can both read the same
+  // pre-refund state, both pass validation, both insert — this lock
+  // serializes admission per order so the second request's validation runs
+  // against the first's already-committed claim. Released in finally,
+  // always, including on validation rejection.
+  const order = await acquireRefundLock(orderId);
+  try {
+    // §3.1.1
+    if (!REFUNDABLE_PAYMENT_STATUSES.includes(order.payment_status)) {
+      throw httpError(`Order payment_status "${order.payment_status}" is not refundable`, 400);
     }
-    refund.status = REFUND_STATUS.PROCESSING;
-    await refund.save();
-    // Do NOT apply effects here — charge.refunded confirms it (§3.7/§4).
-  } else {
+
+    // Corrections round, condition 2(a) — fail loud per-order, never assume
+    // the §6.2 backfill ran. item._id's mere presence can't be trusted (see
+    // Order.js's item_ids_migrated_at comment: Mongoose auto-generates one
+    // in memory on every hydrate, persisted or not).
+    if ((scope === "line_items" || scope === "full_order") && !order.item_ids_migrated_at) {
+      throw httpError(
+        "This order needs migration before item/full-invoice refunds can be issued — run scripts/backfillRefundRedesign.js",
+        409,
+      );
+    }
+
+    // getReservingRefunds (not getSucceededRefunds) — an in-flight Stripe
+    // allocation has already claimed quantity/money even though the ledger
+    // won't reflect it until its webhook confirms; validation must account
+    // for that claim or a second request slipping in before the first's
+    // webhook lands could still over-admit despite the lock serializing the
+    // two calls in time.
+    const priorRefunds = await getReservingRefunds(order._id);
+    const totalRefundedSoFar = sumReservedTotal(priorRefunds);
+    const maxRefundable = order.total - totalRefundedSoFar;
+
+    let computed;
+    if (scope === "amount") {
+      computed = computeAmountScope({ amount, adjustmentAmountInput, maxRefundable });
+    } else if (scope === "full_order") {
+      computed = computeFullOrderScope({ order, priorRefunds, totalRefundedSoFar, refundShipping, restockAll, adjustmentAmountInput, requestedLines });
+    } else if (scope === "line_items") {
+      computed = computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, requestedLines, adjustmentAmountInput });
+    } else {
+      throw httpError('scope must be one of "full_order", "line_items", "amount"', 400);
+    }
+
+    // §3.1.4
+    if (computed.total_amount < 1) {
+      throw httpError("Discount/adjustment would make total_amount zero or negative", 400);
+    }
+    // §3.1.5 — absolute cap, checked LAST, after all other math. No exceptions.
+    if (computed.total_amount > maxRefundable) {
+      throw httpError(`total_amount (${computed.total_amount}) exceeds what's left refundable (${maxRefundable})`, 400);
+    }
+
+    // §3.1.6 — allocations
+    const allocations = await resolveAllocations({ order, totalAmount: computed.total_amount, requestedAllocations });
+
+    const refundNumber = await nextRefundNumber();
+    const refund = await Refund.create({
+      order: order._id,
+      // Legacy top-level fields, kept populated so any not-yet-migrated
+      // reader still sees something sane during the transition (§9 removes
+      // them).
+      payment: allocations[0].payment,
+      amount: computed.total_amount,
+      reason,
+      status: REFUND_STATUS.PENDING,
+      initiated_via: "admin_api",
+      initiated_by: userId || null,
+      // settled defaults true (schema) but MUST start false for a Stripe
+      // allocation — §3.7's "do NOT apply effects optimistically" means
+      // even a successful stripe.refunds.create() call below doesn't count
+      // as settled, only the charge.refunded/charge.refund.updated webhook
+      // does.
+      payment_allocations: allocations.map((a) => ({
+        payment: a.payment,
+        amount: a.amount,
+        provider: a.provider,
+        settled: a.provider !== PAYMENT_PROVIDER.STRIPE,
+      })),
+      refund_number: refundNumber,
+      scope,
+      lines: computed.lines,
+      shipping_amount: computed.shipping_amount,
+      adjustment_amount: computed.adjustment_amount,
+      items_amount: computed.items_amount,
+      gst_amount: computed.gst_amount,
+      total_amount: computed.total_amount,
+      internal_note: internalNote || null,
+      idempotency_key: idempotencyKey || null,
+    });
+
+    const stripeAllocationIndexes = refund.payment_allocations
+      .map((a, i) => (a.provider === PAYMENT_PROVIDER.STRIPE ? i : -1))
+      .filter((i) => i !== -1);
+
+    if (stripeAllocationIndexes.length > 0) {
+      const { getStripeClient } = require("./stripe/stripe.client.service");
+      const stripe = getStripeClient();
+      for (const i of stripeAllocationIndexes) {
+        const alloc = refund.payment_allocations[i];
+        const payment = await Payment.findById(alloc.payment);
+        try {
+          const stripeRefund = await stripe.refunds.create(
+            {
+              payment_intent: payment.stripe_payment_intent_id,
+              amount: alloc.amount,
+              reason: mapReasonToStripe(reason),
+              metadata: { refund_id: String(refund._id), refund_number: refundNumber, order_number: order.order_number },
+            },
+            { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}` },
+          );
+          refund.payment_allocations[i].stripe_refund_id = stripeRefund.id;
+        } catch (err) {
+          // §3.1's guardrail on partial failure: earlier allocations in this
+          // loop may have already succeeded at Stripe. Mark failed and
+          // surface exactly which allocations settled rather than silently
+          // retrying.
+          refund.status = REFUND_STATUS.FAILED;
+          refund.failure_reason = err.message;
+          await refund.save();
+          throw httpError(
+            `Stripe refund failed on allocation ${i + 1}/${stripeAllocationIndexes.length}: ${err.message}. ` +
+              `Earlier allocations on this refund may have already succeeded at Stripe — review refund ${refundNumber} manually.`,
+            502,
+          );
+        }
+      }
+      refund.status = REFUND_STATUS.PROCESSING;
+      await refund.save();
+      // Do NOT apply effects here — charge.refunded confirms it (§3.7/§4).
+      return refund;
+    }
+
     refund.status = REFUND_STATUS.SUCCEEDED;
     await refund.save();
     // applyRefundEffects loads and mutates its OWN copy of this document —
-    // return that one, not this now-stale in-memory `refund`, so the API
+    // use that one, not this now-stale in-memory `refund`, so the API
     // response (and the idempotency-hit path above) reflect the actually-
     // settled state (effects_applied_at, ebay_sync_status, etc.) rather than
     // a pre-effects snapshot.
-    return applyRefundEffects(refund._id);
-  }
+    const settled = await applyRefundEffects(refund._id);
 
-  return refund;
+    // Belt-and-braces (§9): the lock closes the admission race, but assert
+    // the invariant anyway rather than trust it blindly — if it's ever
+    // violated (a bug in the lock, a manual DB edit, anything), self-heal by
+    // voiding the refund JUST created rather than leaving the ledger wrong.
+    // This is only checkable here because the ledger is derived state:
+    // voiding is a full, correct reversal by construction, not a guess.
+    const freshOrder = await Order.findById(order._id);
+    const violation = await findLedgerViolation(freshOrder);
+    if (violation) {
+      await voidRefund(settled._id, { reason: `Auto-voided: ${violation}`, userId: null });
+      logger.error(
+        `[refund.service] ALERT: refund ${settled.refund_number} (order ${order._id}) violated a ledger invariant and was auto-voided: ${violation}`,
+      );
+      throw httpError(`Refund rejected — ledger invariant violated (${violation}); the attempt was voided`, 409);
+    }
+
+    return settled;
+  } finally {
+    await releaseRefundLock(orderId);
+  }
+}
+
+// §9's belt-and-braces check — every line's cumulative quantity_refunded
+// must never exceed its quantity, and the order's total refunded must never
+// exceed order.total. Returns a human-readable description of the first
+// violation found, or null if everything's consistent.
+async function findLedgerViolation(order) {
+  for (const item of order.items) {
+    if (item.quantity_refunded > item.quantity) {
+      return `item ${item._id} quantity_refunded (${item.quantity_refunded}) exceeds quantity (${item.quantity})`;
+    }
+  }
+  const totalRefunded = await getTotalRefundedForOrder(order._id);
+  if (totalRefunded > order.total) {
+    return `total refunded (${totalRefunded}) exceeds order.total (${order.total})`;
+  }
+  return null;
 }
 
 function computeAmountScope({ amount, adjustmentAmountInput, maxRefundable }) {
@@ -389,19 +558,28 @@ function computeAmountScope({ amount, adjustmentAmountInput, maxRefundable }) {
 function computeFullOrderScope({ order, priorRefunds, totalRefundedSoFar, refundShipping, restockAll, adjustmentAmountInput, requestedLines }) {
   if (requestedLines) throw httpError('lines must not be provided for scope: "full_order"', 400);
 
-  const remainingItems = order.items.filter((i) => i.quantity - i.quantity_refunded > 0);
+  // reservedQuantityByItem, not the raw ledger field — priorRefunds is
+  // getReservingRefunds' result (succeeded + still-in-flight), so this
+  // correctly excludes quantity an unconfirmed Stripe allocation already
+  // claimed, not just what's been confirmed so far (§9's concurrency fix).
+  const reservedQty = reservedQuantityByItem(priorRefunds, order.items.map((i) => i._id));
+  const remainingItems = order.items.filter((i) => i.quantity - (reservedQty.get(String(i._id)) || 0) > 0);
   const priorLineDiscount = priorLineDiscountByItem(priorRefunds, remainingItems.map((i) => i._id));
   // Plain objects, not the live Mongoose subdocuments — computeFullOrderRefund
   // only reads a handful of fields and needs the extra
   // priorLineDiscountRefunded one bolted on, which a Mongoose subdocument
   // (a strict schema instance) won't accept an arbitrary property onto.
+  // quantity_refunded here is the RESERVED figure (not just confirmed) —
+  // computeFullOrderRefund only ever uses it as "quantity - quantity_refunded
+  // = how much is left", so feeding it the reserved total is exactly what
+  // makes that subtraction account for in-flight claims too.
   const itemsForCalc = remainingItems.map((i) => ({
     _id: i._id,
     sku: i.sku,
     name: i.name,
     unit_price: i.unit_price,
     quantity: i.quantity,
-    quantity_refunded: i.quantity_refunded,
+    quantity_refunded: reservedQty.get(String(i._id)) || 0,
     discount_amount: i.discount_amount,
     priorLineDiscountRefunded: priorLineDiscount.get(String(i._id)) || 0,
   }));
@@ -447,11 +625,15 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
   const ids = requestedLines.map((l) => String(l.order_item_id));
   if (new Set(ids).size !== ids.length) throw httpError("lines must not contain duplicate order_item_id", 400);
 
+  // reservedQuantityByItem, not the raw ledger field — see
+  // computeFullOrderScope's matching comment (§9's concurrency fix).
+  const reservedQty = reservedQuantityByItem(priorRefunds, order.items.map((i) => i._id));
+
   const itemsById = new Map(order.items.map((i) => [String(i._id), i]));
   for (const l of requestedLines) {
     const item = itemsById.get(String(l.order_item_id));
     if (!item) throw httpError(`order_item_id ${l.order_item_id} not found on this order`, 400);
-    const refundableQty = item.quantity - item.quantity_refunded;
+    const refundableQty = item.quantity - (reservedQty.get(String(item._id)) || 0);
     if (!Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > refundableQty) {
       throw httpError(`Invalid quantity for line ${l.order_item_id} — must be between 1 and ${refundableQty}`, 400);
     }
@@ -467,8 +649,14 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
 
   const computedLines = requestedLines.map((l) => {
     const item = itemsById.get(String(l.order_item_id));
+    // lineDiscount's exhaustion-residual check reads item.quantity_refunded
+    // directly — must be the RESERVED figure here too, not just confirmed,
+    // or a pending Stripe allocation on this same line would make this
+    // computation think it's not the exhausting refund when it actually is
+    // (or vice versa), throwing off which figure gets the exact residual.
+    const itemForCalc = { ...item.toObject(), quantity_refunded: reservedQty.get(String(item._id)) || 0 };
     const result = calc.computeLineItemsLine({
-      item,
+      item: itemForCalc,
       refundQuantity: l.quantity,
       priorLineDiscountRefunded: priorLineDiscount.get(String(l.order_item_id)) || 0,
       orderDiscountShare: shares.get(String(item._id)),
@@ -492,11 +680,12 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
 
   const naturalItemsAmount = computedLines.reduce((sum, l) => sum + l.line_amount, 0);
   // Exact-quantity signal (not a dollar comparison — see
-  // reconcileExhaustingTotal's own comment for why that's wrong).
+  // reconcileExhaustingTotal's own comment for why that's wrong). Reserved
+  // quantity, not just confirmed — same reasoning as above.
   const isExhausting = order.items.every((item) => {
     const req = requestedLines.find((l) => String(l.order_item_id) === String(item._id));
     const willRefundQty = req ? req.quantity : 0;
-    return item.quantity_refunded + willRefundQty >= item.quantity;
+    return (reservedQty.get(String(item._id)) || 0) + willRefundQty >= item.quantity;
   });
   const { totalAmount, adjustmentAmount } = calc.reconcileExhaustingTotal({
     naturalItemsAmount,
