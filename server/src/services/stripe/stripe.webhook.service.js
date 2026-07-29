@@ -12,10 +12,11 @@ const Refund = require("../../models/Refund");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
-const { getTotalPaidForOrder, getTotalRefundedForOrder } = require("../payment.service");
+const { getTotalPaidForOrder } = require("../payment.service");
+const refundService = require("../refund.service");
 const emailService = require("../email/email.service");
-const { PAYMENT_STATUS } = require("../../constants/payment.constants");
-const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
+const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../../constants/payment.constants");
+const { ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
 const { derivePaymentStatus } = require("../../utils/paymentStatus");
 const config = require("../../config");
@@ -53,6 +54,8 @@ async function handleEvent(event) {
         return await handlePaymentFailed(event.data.object);
       case "charge.refunded":
         return await handleChargeRefunded(event.data.object);
+      case "charge.refund.updated":
+        return await handleChargeRefundUpdated(event.data.object);
       default:
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
@@ -212,10 +215,25 @@ function mapStripeReasonToOurs(stripeReason) {
   return map[stripeReason] || REFUND_REASON.OTHER;
 }
 
+// refund-redesign-spec.md §4.1 — rewritten to look up by
+// payment_allocations.stripe_refund_id (now indexed and unique — see
+// Refund.js) instead of the legacy top-level field, and to apply effects
+// through refund.service.js's derived-state applyRefundEffects rather than
+// hand-rolling payment.amount_refunded/order.status here directly.
+//
 // Fires for every refund on a charge — including ones we just created
-// ourselves via stripe.refund.service.js (which also calls Stripe directly),
-// so this MUST reconcile by stripe_refund_id rather than blindly re-applying
-// effects, or our own admin-initiated refunds would double-count/restock here.
+// ourselves via refund.service.js#createRefund (which also calls Stripe
+// directly) — so this MUST reconcile by stripe_refund_id rather than
+// blindly re-applying effects, or our own admin-initiated refunds would
+// double-count/restock here.
+//
+// Still lists refunds for the payment intent rather than reading a single
+// id off the event, unlike handleChargeRefundUpdated below — charge.refunds
+// is not reliably expanded on the Charge object across API versions (see
+// the original version of this comment, kept accurate below), and this
+// event fires once per CHARGE, potentially covering several refunds at
+// once. handleChargeRefundUpdated (§4.2) is the leaner, non-listing path
+// for a single refund's own status transitions once it exists.
 async function handleChargeRefunded(charge) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: charge.payment_intent });
   if (!payment) {
@@ -237,69 +255,131 @@ async function handleChargeRefunded(charge) {
   const { data: stripeRefunds } = await stripe.refunds.list({ payment_intent: charge.payment_intent });
 
   for (const sr of stripeRefunds) {
-    const existing = await Refund.findOne({ stripe_refund_id: sr.id });
+    await reconcileStripeRefund(sr, payment, order);
+  }
+}
 
-    if (existing) {
-      // Already tracked via our own /refund endpoint — only confirm status,
-      // never re-apply amount_refunded or restock a second time.
-      if (existing.status !== REFUND_STATUS.SUCCEEDED && sr.status === "succeeded") {
-        existing.status = REFUND_STATUS.SUCCEEDED;
-        await existing.save();
-      }
-      continue;
+// One Stripe refund object reconciled against our Refund collection.
+async function reconcileStripeRefund(sr, payment, order) {
+  const existing = await Refund.findOne({ "payment_allocations.stripe_refund_id": sr.id });
+
+  if (existing) {
+    // Already tracked via our own createRefund (admin_api) — only confirm
+    // this allocation's settlement, never re-apply effects a second time
+    // (applyRefundEffects' own ledger recompute is idempotent regardless,
+    // but the restock/eBay leg is guarded by effects_applied_at precisely
+    // so redelivery like this can't double-run it).
+    const allocation = existing.payment_allocations.find((a) => a.stripe_refund_id === sr.id);
+    if (allocation && !allocation.settled && sr.status === "succeeded") {
+      allocation.settled = true;
+      await existing.save();
     }
+    const allSettled = existing.payment_allocations.every((a) => a.settled);
+    if (allSettled && existing.status === REFUND_STATUS.PROCESSING) {
+      existing.status = REFUND_STATUS.SUCCEEDED;
+      await existing.save();
+      await refundService.applyRefundEffects(existing._id);
+    }
+    return;
+  }
 
-    // Unknown stripe_refund_id => issued directly from the Stripe dashboard,
-    // bypassing our API entirely. Record it for the audit trail; no admin
-    // user in our system initiated it, and no restock option was presented
-    // to anyone, so stock is deliberately left untouched here — an admin can
-    // restock manually via the inventory screen if the return applies.
-    //
-    // Edge case: if sr.status is not yet "succeeded" here (status=PENDING
-    // below) while one of our own admin refunds for this same payment is
-    // also mid-flight, this create() can collide with the partial unique
-    // index on Refund{payment, status:pending} (see Refund model) and throw
-    // E11000. handleEvent releases the processed-event claim on any thrown
-    // error, so Stripe simply retries this charge.refunded delivery — it
-    // self-heals once our own admin refund finishes and stops holding the
-    // "pending" slot. If you see repeated retries of the same charge.refunded
-    // event in the Stripe dashboard, check for a concurrent admin-initiated
-    // refund on the same payment before assuming something is actually broken.
-    await Refund.create({
-      payment: payment._id,
+  // Unknown stripe_refund_id => issued directly from the Stripe dashboard,
+  // bypassing our API entirely. Recorded as scope: "amount" with
+  // needs_reconciliation: true (§4.1) — no admin user in our system
+  // initiated it and no restock option was ever presented to anyone, so
+  // stock is deliberately left untouched; an admin can restock manually via
+  // the inventory screen if the return applies. RefundHistoryList.tsx badges
+  // needs_reconciliation so this is never mistaken for a fully-attributed
+  // item refund.
+  //
+  // Guarded by the unique index on payment_allocations.stripe_refund_id
+  // (§1.3), not a read-then-act check — catches E11000 as "another delivery
+  // won the race" rather than an error, closing the race the old
+  // stripe_refund_id-with-no-index version of this code was exposed to.
+  let created;
+  try {
+    const refundNumber = await refundService.nextRefundNumber();
+    created = await Refund.create({
       order: order._id,
-      stripe_refund_id: sr.id,
+      payment: payment._id, // legacy field, kept populated during the transition
       amount: sr.amount,
       reason: mapStripeReasonToOurs(sr.reason),
-      status: sr.status === "succeeded" ? REFUND_STATUS.SUCCEEDED : REFUND_STATUS.PENDING,
+      status: sr.status === "succeeded" ? REFUND_STATUS.SUCCEEDED : REFUND_STATUS.PROCESSING,
       initiated_via: "stripe_dashboard",
       initiated_by: null,
+      refund_number: refundNumber,
+      scope: "amount",
+      lines: [],
+      items_amount: 0,
+      gst_amount: Math.round(sr.amount / 11),
+      total_amount: sr.amount,
+      payment_allocations: [
+        {
+          payment: payment._id,
+          amount: sr.amount,
+          provider: PAYMENT_PROVIDER.STRIPE,
+          stripe_refund_id: sr.id,
+          settled: sr.status === "succeeded",
+        },
+      ],
+      needs_reconciliation: true,
     });
+  } catch (err) {
+    if (err.code === 11000) {
+      logger.info(`[stripe.webhook] concurrent charge.refunded delivery already recorded refund for ${sr.id}`);
+      return;
+    }
+    throw err;
   }
 
-  // charge.amount_refunded is cumulative and authoritative from Stripe's
-  // side — set directly (never incremented) so this handler is idempotent
-  // regardless of redelivery or how many refunds (ours + dashboard) exist.
-  payment.amount_refunded = charge.amount_refunded;
-  await payment.save();
-
-  // Order-scoped, not payment-scoped: comparing this one payment's own
-  // amount_refunded against its own amount marks the WHOLE order refunded
-  // the moment any single payment (e.g. just a deposit) is refunded in
-  // full, even though other payments on the order can still be covering
-  // the rest of the total. getTotalRefundedForOrder sums every payment on
-  // the order, so a deposit-only refund can only ever reach
-  // PARTIALLY_REFUNDED unless it actually covers the whole order.
-  const totalRefunded = await getTotalRefundedForOrder(order._id);
-  if (totalRefunded === 0) {
-    const totalPaid = await getTotalPaidForOrder(order._id);
-    order.status = derivePaymentStatus(totalPaid, order.total);
-  } else if (totalRefunded >= order.total) {
-    order.status = ORDER_STATUS.REFUNDED;
-  } else {
-    order.status = ORDER_STATUS.PARTIALLY_REFUNDED;
+  if (created.status === REFUND_STATUS.SUCCEEDED) {
+    await refundService.applyRefundEffects(created._id);
   }
-  await order.save();
+}
+
+// refund-redesign-spec.md §4.2 — new subscription. event.data.object for
+// charge.refund.updated is the Stripe Refund object itself (not a Charge),
+// so this needs no list() call at all — it names the specific refund
+// directly. Requires enabling this event type on the Stripe webhook
+// endpoint's configuration in the Dashboard (Developers → Webhooks → this
+// endpoint → "+ Select events" → charge.refund.updated) — not something
+// this codebase can turn on by itself.
+async function handleChargeRefundUpdated(sr) {
+  if (sr.status !== "failed" && sr.status !== "canceled") return; // only a reversal is actionable here
+
+  const refund = await Refund.findOne({ "payment_allocations.stripe_refund_id": sr.id });
+  if (!refund) {
+    logger.warn(`[stripe.webhook] charge.refund.updated for unknown stripe refund ${sr.id}`);
+    return;
+  }
+
+  if (!refund.effects_applied_at) {
+    // Never actually applied (was still processing) — nothing to reverse,
+    // just record that it didn't go through.
+    refund.status = REFUND_STATUS.FAILED;
+    refund.failure_reason = `Stripe refund ${sr.status}`;
+    await refund.save();
+    logger.error(
+      `[stripe.webhook] refund ${refund.refund_number} failed at Stripe (${sr.status}) before its effects were ever applied`,
+    );
+    return;
+  }
+
+  // Effects were already applied (customer credited, stock restocked) and
+  // Stripe itself reversed the refund afterward — without this, we'd be
+  // left having restocked goods and credited a customer who was never
+  // actually paid back. Auto-reverse via the same void path an admin would
+  // use (§3.8), and alert loudly — this is exactly the scenario §4.2 exists
+  // to catch automatically instead of relying on someone noticing.
+  await refundService.voidRefund(refund._id, {
+    reason: `Auto-reversed: Stripe refund ${sr.id} transitioned to ${sr.status} after effects were already applied`,
+    userId: null,
+  });
+  logger.error(
+    `[stripe.webhook] ALERT: refund ${refund.refund_number} (order ${refund.order}) was auto-reversed — ` +
+      `Stripe's refund ${sr.id} moved to "${sr.status}" after we had already credited the customer and/or ` +
+      `restocked. Review this order manually.`,
+  );
 }
 
 module.exports = { constructEvent, handleEvent };
