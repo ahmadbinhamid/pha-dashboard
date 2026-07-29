@@ -1,32 +1,22 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, RotateCcw } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
-import { RefundDialog } from "@/components/payments/RefundDialog";
-import { ManualRefundModal } from "@/components/payments/ManualRefundModal";
+import { RefundDialog } from "@/components/refunds/RefundDialog";
+import { RefundHistoryList } from "@/components/refunds/RefundHistoryList";
 import { getPayment } from "@/lib/api/payments";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { getPaymentSourceLabel, getPaymentMethodDisplay } from "@/utils/paymentDisplay";
-import type { Refund, RefundStatus } from "@/types/payment";
-import { REFUND_REASON_LABEL } from "@/config/refundReasons";
 
 interface PaymentDetailDrawerProps {
   paymentId: string;
   onClose: () => void;
 }
 
-const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger"> = {
-  succeeded: "ok",
-  pending: "warn",
-  failed: "danger",
-};
-
 export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerProps) {
   const queryClient = useQueryClient();
   const [refunding, setRefunding] = useState(false);
-  const [manualRefunding, setManualRefunding] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["payment", paymentId],
@@ -36,19 +26,15 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   const payment = data?.data;
   const order = payment && typeof payment.order === "object" ? payment.order : null;
   const remaining = payment ? payment.amount - payment.amount_refunded : 0;
-  // Stripe payments refund through the real Stripe API (money actually
-  // moves); every other provider (manual cash/online transfer/EFPOS, or an
-  // eBay-collected order) has no gateway of ours to reverse, so they share a
-  // manual-refund action that just records the amount handed back outside
-  // the system.
-  const canRefundStripe = payment?.status === "succeeded" && payment?.provider === "stripe" && remaining > 0;
-  const canRefundManual = payment?.status === "succeeded" && payment?.provider !== "stripe" && remaining > 0;
+  // refund-redesign-spec.md §7 — one refund action regardless of settlement
+  // method now (the dialog auto-detects Stripe vs manual per payment
+  // allocation, and can even span more than just this one payment).
+  const canRefund = payment?.status === "succeeded" && remaining > 0;
 
   function handleRefunded() {
     queryClient.invalidateQueries({ queryKey: ["payment", paymentId] });
     queryClient.invalidateQueries({ queryKey: ["payments"] });
     setRefunding(false);
-    setManualRefunding(false);
   }
 
   return (
@@ -108,69 +94,28 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                 </div>
               </div>
 
-              {canRefundStripe && (
+              {canRefund && order && (
                 <Button variant="secondary" size="sm" className="w-full gap-2" onClick={() => setRefunding(true)}>
                   <RotateCcw className="h-3.5 w-3.5" />
-                  Refund Payment
-                </Button>
-              )}
-              {canRefundManual && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => setManualRefunding(true)}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Record Manual Refund
+                  Issue Refund
                 </Button>
               )}
 
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Refund History</div>
-                {payment.refunds.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-fg/45">
-                    No refunds yet
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {payment.refunds.map((refund: Refund) => (
-                      <div key={refund._id} className="rounded-lg border border-border bg-bg-2/40 p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-fg">{formatCurrencyFromCents(refund.amount)}</span>
-                          <Badge variant={REFUND_STATUS_VARIANT[refund.status]}>{refund.status}</Badge>
-                        </div>
-                        <div className="mt-1 text-xs text-fg/55">
-                          {REFUND_REASON_LABEL[refund.reason] ?? refund.reason}
-                          {refund.initiated_via === "stripe_dashboard" && " — via Stripe Dashboard"}
-                          {refund.initiated_via === "manual" && " — recorded manually"}
-                        </div>
-                        {refund.failure_reason && (
-                          <div className="mt-1 text-xs text-danger">{refund.failure_reason}</div>
-                        )}
-                        <div className="mt-1.5 text-[10px] text-fg/40">
-                          {new Date(refund.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* This payment's own refund attributions — a refund spanning
+                    several payments on the order shows fully on the Order
+                    Detail page's Refund History instead, which is
+                    order-scoped rather than filtered to one payment. */}
+                <RefundHistoryList orderId={order?._id ?? ""} refunds={payment.refunds} />
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {refunding && payment && (
-        <RefundDialog payment={payment} onClose={() => setRefunding(false)} onSuccess={handleRefunded} />
-      )}
-      {payment && (
-        <ManualRefundModal
-          payment={payment}
-          open={manualRefunding}
-          onOpenChange={setManualRefunding}
-          onSuccess={handleRefunded}
-        />
+      {order && (
+        <RefundDialog orderId={order._id} open={refunding} onOpenChange={setRefunding} onSuccess={handleRefunded} />
       )}
     </div>
   );

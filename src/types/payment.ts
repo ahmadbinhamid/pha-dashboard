@@ -42,29 +42,13 @@ export interface Payment {
   updated_at: string;
 }
 
-export type RefundReason =
-  | "customer_request"
-  | "duplicate_payment"
-  | "fraud_suspected"
-  | "payment_error"
-  | "order_cancelled"
-  | "other"; // "other" is only ever set by the backend reconciling a Stripe-dashboard-issued refund
-
-export type RefundStatus = "pending" | "succeeded" | "failed";
-
-export interface Refund {
-  _id: string;
-  payment: string;
-  order: string;
-  stripe_refund_id: string | null;
-  amount: number; // cents
-  reason: RefundReason;
-  status: RefundStatus;
-  failure_reason: string | null;
-  initiated_via: "admin_api" | "stripe_dashboard" | "manual";
-  initiated_by: string | null;
-  created_at: string;
-}
+// Moved to types/refund.ts (refund-redesign-spec.md §1.3/§1.4) — a refund is
+// now order-scoped with a scope/lines/payment_allocations shape, no longer
+// just "the refund a Payment has." Re-exported here so existing imports of
+// RefundReason/RefundStatus/Refund from "@/types/payment" keep working
+// during the transition.
+export type { RefundReason, RefundStatus, Refund } from "@/types/refund";
+import type { Refund } from "@/types/refund";
 
 export interface PaymentDetail extends Payment {
   refunds: Refund[];

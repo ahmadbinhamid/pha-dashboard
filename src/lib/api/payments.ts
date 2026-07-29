@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
-import type { Payment, PaymentDetail, Refund, RefundReason } from "@/types/payment";
+import type { Payment, PaymentDetail } from "@/types/payment";
 
 export interface PaymentListParams {
   page?: number;
@@ -18,23 +18,5 @@ export const getPayment = async (id: string) => {
   return data;
 };
 
-export interface RefundPaymentPayload {
-  amount: number; // cents
-  reason: RefundReason;
-  restock?: boolean;
-}
-
-export const refundPayment = async (id: string, payload: RefundPaymentPayload) => {
-  const { data } = await apiClient.post<BeResponse<Refund>>(`/payment/${id}/refund`, payload);
-  return data;
-};
-
-export interface ManualRefundPayload {
-  amount: number; // cents
-  reason: RefundReason;
-}
-
-export const refundPaymentManual = async (id: string, payload: ManualRefundPayload) => {
-  const { data } = await apiClient.post<BeResponse<Refund>>(`/payment/${id}/refund-manual`, payload);
-  return data;
-};
+// refundPayment/refundPaymentManual removed (refund-redesign-spec.md §9) —
+// see src/lib/api/refunds.ts#createRefund (POST /order/:orderId/refunds).

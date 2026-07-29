@@ -31,6 +31,11 @@ export interface OrderAddress {
 }
 
 export interface OrderItem {
+  // orderItemSchema was `{ _id: false }` before refund-redesign-spec.md §1.1
+  // — every item now carries a real, stable id (backend/models/Order.js).
+  // Not optional: the schema change is live, so every item the API returns
+  // from here on has one (older orders get theirs from the §6.2 backfill).
+  _id: string;
   product: string;
   variant: string | null;
   name: string;
@@ -50,6 +55,17 @@ export interface OrderItem {
   original_unit_price: number | null;
   unit_price_updated_at: string | null;
   unit_price_updated_by: string | null;
+  // Refund ledger (refund-redesign-spec.md §1.1) — cumulative across every
+  // succeeded, non-voided refund touching this line. Derived/recomputed
+  // server-side, never something the frontend should compute itself.
+  quantity_refunded: number;
+  amount_refunded: number; // cents, this line's share only
+  quantity_restocked: number; // <= quantity_refunded; restock is opt-in per refund
+  // Virtual — quantity - quantity_refunded. Server-computed (orderItemSchema
+  // virtual, serialized via toJSON/toObject virtuals:true) so nothing on the
+  // frontend re-derives it and risks drifting from the same rule refund-
+  // calculator.service.js uses.
+  refundable_quantity: number;
 }
 
 // Internal staff comment thread — distinct from Order.note (customer-facing,

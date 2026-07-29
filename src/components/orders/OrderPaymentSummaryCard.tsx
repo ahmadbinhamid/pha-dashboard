@@ -1,15 +1,17 @@
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { GeneratePaymentLink } from "@/components/orders/GeneratePaymentLink";
 import { RecordPaymentModal } from "@/components/orders/RecordPaymentModal";
 import { PaymentHistoryList } from "@/components/orders/PaymentHistoryList";
-import { RefundHistoryList } from "@/components/orders/RefundHistoryList";
+import { RefundHistoryList } from "@/components/refunds/RefundHistoryList";
+import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { BalanceDueBanner } from "@/components/orders/BalanceDueBanner";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderChannel, OrderStatus, OrderPaymentSummary } from "@/types/orders";
-import type { Refund } from "@/types/payment";
+import type { Refund } from "@/types/refund";
 
 export function OrderPaymentSummaryCard({
   orderId,
@@ -27,6 +29,7 @@ export function OrderPaymentSummaryCard({
   channel: OrderChannel;
 }) {
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const isManual = channel === "manual";
   const hasOutstandingBalance = orderStatus === "pending_payment" || orderStatus === "partially_paid";
@@ -34,6 +37,10 @@ export function OrderPaymentSummaryCard({
   // and eBay orders are always settled in full by Stripe/the marketplace
   // before they reach this card.
   const canCollectMore = isManual && hasOutstandingBalance;
+  // refund-redesign-spec.md §7 — one refund action regardless of channel or
+  // settlement method now (the dialog auto-detects Stripe vs manual per
+  // payment allocation) — any payment actually collected can be refunded.
+  const canRefund = getTotalPaid(payments) > 0;
 
   if (payments.length === 0 && !isManual) {
     return <div className="py-6 text-center text-sm text-fg/50">No payment recorded for this order yet.</div>;
@@ -71,6 +78,19 @@ export function OrderPaymentSummaryCard({
         </div>
       )}
 
+      {canRefund && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="w-full gap-2"
+          onClick={() => setRefundOpen(true)}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Issue Refund
+        </Button>
+      )}
+
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Payment History</div>
         <PaymentHistoryList payments={payments} onSelect={setSelectedPaymentId} />
@@ -78,7 +98,7 @@ export function OrderPaymentSummaryCard({
 
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Refund History</div>
-        <RefundHistoryList refunds={refunds} />
+        <RefundHistoryList orderId={orderId} refunds={refunds} />
       </div>
 
       <RecordPaymentModal
@@ -87,6 +107,8 @@ export function OrderPaymentSummaryCard({
         open={recordPaymentOpen}
         onOpenChange={setRecordPaymentOpen}
       />
+
+      <RefundDialog orderId={orderId} open={refundOpen} onOpenChange={setRefundOpen} onSuccess={() => setRefundOpen(false)} />
 
       {selectedPaymentId && (
         <PaymentDetailDrawer paymentId={selectedPaymentId} onClose={() => setSelectedPaymentId(null)} />
