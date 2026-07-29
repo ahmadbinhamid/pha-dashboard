@@ -1,7 +1,6 @@
 // validators/payment.validation.js
 
 const Joi = require("joi");
-const { REFUND_REASON } = require("../constants/refund.constants");
 
 const createIntent = {
   body: Joi.object({
@@ -25,27 +24,7 @@ const listPayments = {
   }),
 };
 
-const createRefund = {
-  params: Joi.object({ id: Joi.string().hex().length(24).required() }), // payment id
-  body: Joi.object({
-    amount: Joi.number().integer().min(1).required(),
-    reason: Joi.string()
-      .valid(...Object.values(REFUND_REASON).filter((r) => r !== REFUND_REASON.OTHER))
-      .required(),
-    restock: Joi.boolean().default(false),
-  }),
-};
+// createRefund/createManualRefund removed (refund-redesign-spec.md §9) —
+// refunds are issued via POST /order/:orderId/refunds now (validators/refund.validation.js).
 
-const createManualRefund = {
-  params: Joi.object({ id: Joi.string().hex().length(24).required() }), // payment id
-  body: Joi.object({
-    amount: Joi.number().integer().min(1).required(),
-    // Unlike the Stripe flow, "other" is a valid staff-entered reason here —
-    // there's no Stripe-dashboard reconciliation case to keep it reserved for.
-    reason: Joi.string()
-      .valid(...Object.values(REFUND_REASON))
-      .required(),
-  }),
-};
-
-module.exports = { createIntent, byIdParam, listPayments, createRefund, createManualRefund };
+module.exports = { createIntent, byIdParam, listPayments };

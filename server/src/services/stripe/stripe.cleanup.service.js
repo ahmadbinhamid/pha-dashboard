@@ -6,7 +6,7 @@
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
 const { getStripeClient } = require("./stripe.client.service");
-const { ORDER_STATUS } = require("../../constants/order.constants");
+const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { logger } = require("../../loaders/logging");
 
@@ -70,6 +70,9 @@ async function cleanupAbandonedOrders() {
       }
 
       order.status = ORDER_STATUS.CANCELLED;
+      // Keeps the new split field (§1.2) in sync — see the matching comment
+      // in order.service.js#sendOrderNotification for why this matters.
+      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.CANCELLED;
       await order.save();
       summary.cancelled += 1;
     } catch (err) {

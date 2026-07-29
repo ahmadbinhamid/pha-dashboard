@@ -11,7 +11,12 @@ const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
-const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
+const {
+  ORDER_STATUS,
+  ORDER_CHANNEL,
+  ORDER_DELIVERY_METHOD,
+  ORDER_FULFILLMENT_STATUS,
+} = require("../constants/order.constants");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { derivePaymentStatus } = require("../utils/paymentStatus");
@@ -660,6 +665,17 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status })
   }
 
   order.status = status;
+  // Only for an actual cancellation — a RETURNED status here means the
+  // order already shipped and came back, which isn't "cancelled" in the
+  // fulfillment sense, so fulfillment_status is deliberately left as-is.
+  // Note: eBay-channel refunds/returns settle entirely on eBay's own side
+  // (no local Payment/Refund record — see refund-redesign-spec.md §5), so
+  // there is no equivalent payment_status update to make here; that split
+  // was never modeled for this channel's cancellation path and stays a
+  // known, pre-existing gap rather than one introduced by this change.
+  if (status === ORDER_STATUS.CANCELLED) {
+    order.fulfillment_status = ORDER_FULFILLMENT_STATUS.CANCELLED;
+  }
   await order.save();
   return order;
 }
@@ -782,6 +798,12 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
       order.tracking_number = trimmedTracking;
       order.carrier_name = trimmedCarrier;
       order.status = ORDER_STATUS.FULFILLED;
+      // Keeps the new split field (§1.2) in sync with the one place in this
+      // codebase that actually marks an order fulfilled — refund.service.js's
+      // recomputeLedger reads fulfillment_status to decide whether a refund
+      // may legitimately overwrite the legacy `status` field; without this,
+      // it would never see "fulfilled" and would incorrectly revert it.
+      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.FULFILLED;
       await order.save();
     } else if (!order.tracking_number || !order.carrier_name) {
       throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);

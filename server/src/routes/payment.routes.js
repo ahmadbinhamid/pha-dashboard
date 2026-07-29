@@ -20,19 +20,7 @@ router.post("/webhook", asyncHandler(ctrl.handleWebhook));
 // ── Admin ─────────────────────────────────────────────────────────────────
 router.get("/", auth(), admin, pagination(), validate(v.listPayments), asyncHandler(ctrl.listPayments));
 router.get("/:id", auth(), admin, validate(v.byIdParam), asyncHandler(ctrl.getPayment));
-router.post(
-  "/:id/refund",
-  auth(),
-  admin,
-  validate(v.createRefund),
-  asyncHandler(ctrl.refundPayment),
-);
-router.post(
-  "/:id/refund-manual",
-  auth(),
-  admin,
-  validate(v.createManualRefund),
-  asyncHandler(ctrl.refundPaymentManual),
-);
+// /:id/refund and /:id/refund-manual removed (refund-redesign-spec.md §9) —
+// use POST /order/:orderId/refunds instead (order.routes.js).
 
 module.exports = router;
