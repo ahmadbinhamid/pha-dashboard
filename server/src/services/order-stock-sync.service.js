@@ -66,28 +66,24 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
   return { hasShortfall, note: notes.join("; ") || null };
 }
 
+// Never makes a live call to eBay inline — that used to mean every
+// order/refund request blocked on eBay's API being fast (or even up) before
+// it could respond. Handing the push to the same `push_quantity` job
+// ebay.worker.js already runs (previously only the retry path for a failed
+// inline push) means this only ever costs a fast Redis write, not a live
+// HTTP round trip. Trades off knowing synced/failed immediately — the order
+// now saves with "pending" and the job resolves it asynchronously.
 async function pushEbayQuantity(item, quantity) {
+  item.ebay_sync_status = "pending";
+  item.ebay_sync_error = null;
   try {
-    // Lazy-require to avoid a hard dependency on the eBay adapter module
-    // graph for stores that don't have eBay configured.
-    const { pushInventory } = require("./marketplace/adapters/ebay.adapter");
-    await pushInventory(item.sku, quantity);
-    item.ebay_sync_status = "synced";
-    item.ebay_sync_error = null;
-  } catch (err) {
-    // eBay availability must never block payment/refund processing — log,
-    // flag for retry, and enqueue a background retry job. Payment/refund
-    // success in our DB is authoritative regardless of eBay's availability.
-    logger.warn(`[order-stock-sync] eBay push failed for SKU ${item.sku}`, { error: err.message });
+    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity });
+  } catch (qErr) {
+    logger.warn(`[order-stock-sync] could not enqueue eBay push for SKU ${item.sku}`, {
+      error: qErr.message,
+    });
     item.ebay_sync_status = "failed";
-    item.ebay_sync_error = err.message;
-    try {
-      await enqueueEbayJob("push_quantity", { sku: item.sku, quantity });
-    } catch (qErr) {
-      logger.warn(`[order-stock-sync] could not enqueue eBay retry for SKU ${item.sku}`, {
-        error: qErr.message,
-      });
-    }
+    item.ebay_sync_error = qErr.message;
   }
 }
 

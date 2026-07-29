@@ -299,6 +299,15 @@ const TABLE_HEADER_HEIGHT = 22;
 // anything is what actually fixes it.
 const ITEM_NAME_MAX_LINES = 2;
 
+// Two-line column header ("UNIT PRICE" / "(EX GST)") for the two columns too
+// narrow (60pt/76pt) to fit a GST-qualified label on one line at the
+// header's normal font size — every other column stays single-line via the
+// caller's own font/fontSize state, untouched by this helper.
+function drawTwoLineColumnHeader(doc, x, y, width, mainLabel, subLabel) {
+  doc.font(FONT_BOLD).fontSize(7).fillColor(COLORS.muted).text(mainLabel, x, y + 4, { width, align: "right" });
+  doc.font(FONT).fontSize(6).fillColor(COLORS.muted).text(subLabel, x, y + 13, { width, align: "right" });
+}
+
 function drawItemsTableHeader(doc, y) {
   doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, TABLE_HEADER_HEIGHT).fill(COLORS.tint);
 
@@ -306,11 +315,12 @@ function drawItemsTableHeader(doc, y) {
   const headerTextY = y + 7;
   doc.text("#", PAGE_MARGIN + 6 + COLUMNS.number, headerTextY, { width: COLUMN_WIDTHS.number - 6 });
   doc.text("DESCRIPTION / ITEM CODE", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item });
-  doc.text("UNIT PRICE", PAGE_MARGIN + COLUMNS.unitPrice, headerTextY, { width: COLUMN_WIDTHS.unitPrice, align: "right" });
+  drawTwoLineColumnHeader(doc, PAGE_MARGIN + COLUMNS.unitPrice, y, COLUMN_WIDTHS.unitPrice, "UNIT PRICE", "(EX GST)");
+  doc.font(FONT_BOLD).fontSize(7.5).fillColor(COLORS.muted);
   doc.text("GST (11%)", PAGE_MARGIN + COLUMNS.gst, headerTextY, { width: COLUMN_WIDTHS.gst, align: "right" });
   doc.text("QTY", PAGE_MARGIN + COLUMNS.qty, headerTextY, { width: COLUMN_WIDTHS.qty, align: "right" });
   doc.text("DISCOUNT", PAGE_MARGIN + COLUMNS.discount, headerTextY, { width: COLUMN_WIDTHS.discount, align: "right" });
-  doc.text("TOTAL", PAGE_MARGIN + COLUMNS.total, headerTextY, { width: COLUMN_WIDTHS.total, align: "right" });
+  drawTwoLineColumnHeader(doc, PAGE_MARGIN + COLUMNS.total, y, COLUMN_WIDTHS.total, "TOTAL", "(INC GST)");
   doc.fillColor(COLORS.text);
   return y + TABLE_HEADER_HEIGHT;
 }
@@ -428,7 +438,7 @@ function drawItemsTable(doc, order) {
   doc.y = tableBottom + 22;
 }
 
-function drawPaymentAndTotals(doc, order, totalPaidCents) {
+function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents) {
   const startY = doc.y;
   // Totals only ever hold short currency strings, so it doesn't need as much
   // width as a straight half/half split gives it — handing that space to the
@@ -496,13 +506,18 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
   }
 
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  // Item-level discounts plus any legacy order-level discount (see Order.js's
+  // discount_amount comment) — order.subtotal already nets these out, so
+  // Subtotal below adds them back to show the pre-discount figure, same
+  // convention as the dashboard's order-detail page/InvoicePrintView.tsx.
+  const itemDiscount = order.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
+  const totalDiscount = itemDiscount + (order.discount_amount || 0);
+
   let rowY = startY;
-  const totalsRows = [["Subtotal", formatMoney(order.subtotal)]];
-  // Order-level manual discount (see order.service.js#updateOrderDiscount) —
-  // omitted when zero, same as the dashboard's order-detail page.
-  if (order.discount_amount > 0) {
-    totalsRows.push(["Discount", `-${formatMoney(order.discount_amount)}`]);
-  }
+  const totalsRows = [["Subtotal", formatMoney(order.subtotal + totalDiscount)]];
+  // Always shown, even at $0 — combines every line item's own discount with
+  // any legacy order-level discount.
+  totalsRows.push(["Discount", totalDiscount > 0 ? `-${formatMoney(totalDiscount)}` : formatMoney(0)]);
   totalsRows.push([isPickup ? "Pickup" : "Freight / Shipping", formatMoney(order.shipping_cost)]);
   totalsRows.forEach(([label, value]) => {
     doc.font(FONT).fontSize(9).fillColor(COLORS.muted).text(label, rightX, rowY, { width: totalsLabelWidth });
@@ -530,14 +545,41 @@ function drawPaymentAndTotals(doc, order, totalPaidCents) {
   // Every channel can now carry an outstanding balance — storefront/eBay
   // prices are editable after the fact (see updateOrderItemPrice), not just
   // manual sales — mirroring InvoicePrintView.tsx's generalized Balance
-  // Outstanding treatment. Only drawn when there's an actual balance
-  // (amountDue > 0) and the order isn't refunded — a refund nets out of
-  // totalPaidCents the same way an uncollected payment would, leaving the
-  // same arithmetic remainder, but it means the opposite thing: the
-  // customer already got that money back, they don't still owe it.
-  const isRefunded = order.status === "refunded" || order.status === "partially_refunded";
-  const amountDue = Math.max(0, order.total - (totalPaidCents || 0));
-  if (!isRefunded && amountDue > 0) {
+  // Outstanding treatment. A refund does NOT always mean "nothing more is
+  // owed" — see utils/paymentTotals.ts#getBalanceDue (the frontend twin of
+  // this logic) for the full reasoning: paid-in-full-then-refunded means due
+  // is 0 regardless of the raw remainder, but never-paid-in-full-then-
+  // refunded-on-top means the real shortfall is still owed. totalPaidCents
+  // is already net of refunds, so totalPaidCents + totalRefundedCents
+  // reconstructs the gross amount ever collected.
+  const grossPaidCents = (totalPaidCents || 0) + (totalRefundedCents || 0);
+  const wasEverPaidInFull = grossPaidCents >= order.total;
+  const isFullyRefunded = order.status === "refunded";
+  const amountDue = wasEverPaidInFull || isFullyRefunded ? 0 : Math.max(0, order.total - (totalPaidCents || 0));
+
+  // Total Paid / Total Due are always shown, even at $0 — same convention as
+  // the totals rows above. Total Refunded only appears when non-zero — most
+  // orders never have one. The colored bar further below still calls out an
+  // outstanding balance specifically, but only when there is one.
+  const paymentRows = [
+    ["Total Paid", formatMoney(totalPaidCents || 0)],
+  ];
+  if (totalRefundedCents > 0) {
+    paymentRows.push(["Total Refunded", formatMoney(totalRefundedCents)]);
+  }
+  paymentRows.push(["Total Due", formatMoney(amountDue)]);
+  paymentRows.forEach(([label, value]) => {
+    doc.font(FONT).fontSize(8.5).fillColor(COLORS.muted).text(label, rightX, rowY, { width: totalsLabelWidth });
+    doc
+      .font(FONT_BOLD)
+      .fontSize(9)
+      .fillColor(COLORS.text)
+      .text(value, rightX + totalsLabelWidth, rowY, { width: totalsValueWidth, align: "right" });
+    rowY += 16;
+  });
+  rowY += 4;
+
+  if (amountDue > 0) {
     const barWidth = totalsWidth;
     const barHeight = 28;
     doc.roundedRect(rightX, rowY, barWidth, barHeight, 6).fill(COLORS.accent);
@@ -602,6 +644,32 @@ function drawFooter(doc, bottomY) {
   return boxY + boxHeight;
 }
 
+// Drawn once per page, after every other page's worth of content already
+// exists (see buildInvoicePdfBuffer's bufferPages/switchToPage pass) — sits
+// in the true bottom margin, below both the items-table segment border on an
+// intermediate page and the card border/footer box on the final page, so it
+// never collides with either.
+//
+// pdfkit's .text() still auto-paginates against the page's own bottom
+// margin even when given explicit x/y coordinates below it — writing this
+// close to PAGE_HEIGHT silently triggered doc.addPage() and put the label on
+// a brand new blank page instead of the intended one. Zeroing the bottom
+// margin for the duration of this one call (the standard pdfkit workaround)
+// stops that check from firing.
+function drawPageNumber(doc, pageIndex, pageCount) {
+  const originalBottomMargin = doc.page.margins.bottom;
+  doc.page.margins.bottom = 0;
+  doc
+    .font(FONT)
+    .fontSize(7.5)
+    .fillColor(COLORS.muted)
+    .text(`Page ${pageIndex + 1} of ${pageCount}`, PAGE_MARGIN, PAGE_HEIGHT - 24, {
+      width: CONTENT_WIDTH,
+      align: "center",
+    });
+  doc.page.margins.bottom = originalBottomMargin;
+}
+
 // Frames the whole invoice in a rounded-corner card, matching
 // InvoicePrintView.tsx's card border — drawn last (as a stroke-only outline)
 // so it simply overlays the page edges without covering any already-drawn
@@ -614,12 +682,16 @@ function drawCardBorder(doc, bottomY) {
   doc.roundedRect(x, y, width, height, CARD_RADIUS).lineWidth(1.25).strokeColor(COLORS.border).stroke();
 }
 
-// totalPaidCents: sum of every succeeded Payment on the order (see
-// payment.service.js#getTotalPaidForOrder) — the caller computes this since
-// it requires a DB query this pure rendering function shouldn't make itself.
-function buildInvoicePdfBuffer(order, { totalPaidCents = 0 } = {}) {
+// totalPaidCents/totalRefundedCents: sums of Payment fields for the order
+// (see payment.service.js#getTotalPaidForOrder/#getTotalRefundedForOrder) —
+// the caller computes these since they require a DB query this pure
+// rendering function shouldn't make itself.
+function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents = 0 } = {}) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: PAGE_MARGIN });
+    // bufferPages: true is required to go back and draw onto earlier pages
+    // (switchToPage below) after later pages already exist — the total page
+    // count for "Page X of Y" isn't known until every page has been drawn.
+    const doc = new PDFDocument({ size: "A4", margin: PAGE_MARGIN, bufferPages: true });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -628,9 +700,15 @@ function buildInvoicePdfBuffer(order, { totalPaidCents = 0 } = {}) {
     drawHeader(doc, order);
     drawBillShipTransactionBlock(doc, order);
     drawItemsTable(doc, order);
-    drawPaymentAndTotals(doc, order, totalPaidCents);
+    drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents);
     const footerBottomY = drawFooter(doc, doc.y);
     drawCardBorder(doc, footerBottomY);
+
+    const pageRange = doc.bufferedPageRange();
+    for (let i = pageRange.start; i < pageRange.start + pageRange.count; i++) {
+      doc.switchToPage(i);
+      drawPageNumber(doc, i, pageRange.count);
+    }
 
     doc.end();
   });

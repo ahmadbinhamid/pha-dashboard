@@ -156,9 +156,9 @@ exports.updateOrderShippingCost = async (req, res) => {
   }
 };
 
-exports.updateOrderDiscount = async (req, res) => {
+exports.updateOrderItemDiscount = async (req, res) => {
   try {
-    const order = await orderService.updateOrderDiscount(req.params.id, {
+    const order = await orderService.updateOrderItemDiscount(req.params.id, req.params.itemIndex, {
       discount_amount: req.body.discount_amount,
     });
     return success(res, order, "Discount updated");

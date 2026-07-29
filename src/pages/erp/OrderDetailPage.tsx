@@ -16,9 +16,10 @@ import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
 import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal";
 import { EditableOrderAmount } from "@/components/orders/EditableOrderAmount";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
-import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost, updateOrderDiscount } from "@/lib/api/orders";
+import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderAddress } from "@/types/orders";
 
 function AddressBlock({ address }: { address: OrderAddress }) {
@@ -110,8 +111,21 @@ export default function OrderDetailPage() {
   if (isError || !order) return <NotFoundState />;
 
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
-  const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
-  const isEbayOrder = order.channel === "ebay";
+  // Item-level discounts plus any legacy order-level discount (see
+  // Order.js's discount_amount comment) — a single combined figure, no
+  // longer split into an "Item Discount" line vs a separately-editable
+  // order-level one. Always shown, even when $0.
+  const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, order.discount_amount);
+  // eBay and manual (in-store) orders can have their shipping cost and
+  // per-item price/discount corrected after the fact — storefront orders
+  // can't (see order.service.js#EDITABLE_CHANNELS).
+  const amountsEditable = order.channel === "ebay" || order.channel === "manual";
+  const totalPaid = getTotalPaid(order.payments);
+  const totalRefunded = getTotalRefunded(order.payments);
+  // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
+  // in full, then refunded" (due $0) from "never paid in full, then refunded
+  // on top of that" (due reflects the real remaining shortfall).
+  const totalDue = getBalanceDue(order.total, order.payments, order.status);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
@@ -173,40 +187,17 @@ export default function OrderDetailPage() {
                   <span>Subtotal</span>
                   <span>{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
                 </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-fg/60">
-                    <span>Item Discount</span>
-                    <span>-{formatCurrencyFromCents(totalDiscount)}</span>
-                  </div>
-                )}
-                {/* Discount/shipping edits are only offered for eBay orders —
-                    see order.service.js#updateOrderDiscount /
-                    #updateOrderShippingCost for why. Other channels still
-                    show a plain Discount line, but only when non-zero. */}
-                {isEbayOrder ? (
-                  <div className="flex justify-between text-fg/60">
-                    <span>Discount</span>
-                    <EditableOrderAmount
-                      orderId={order._id}
-                      label="Discount"
-                      amountCents={order.discount_amount}
-                      negative
-                      mutationFn={updateOrderDiscount}
-                      successMessage="Discount updated"
-                      errorMessage="Couldn't update discount"
-                    />
-                  </div>
-                ) : (
-                  order.discount_amount > 0 && (
-                    <div className="flex justify-between text-fg/60">
-                      <span>Discount</span>
-                      <span>-{formatCurrencyFromCents(order.discount_amount)}</span>
-                    </div>
-                  )
-                )}
+                {/* Sum of every line item's own discount (editable per line,
+                    in the items table above) plus any legacy order-level
+                    discount — always shown, even at $0, so it's never
+                    unclear whether an order has one. */}
+                <div className="flex justify-between text-fg/60">
+                  <span>Discount</span>
+                  <span>{totalDiscount > 0 ? `-${formatCurrencyFromCents(totalDiscount)}` : formatCurrencyFromCents(0)}</span>
+                </div>
                 <div className="flex justify-between text-fg/60">
                   <span>Shipping</span>
-                  {isEbayOrder ? (
+                  {amountsEditable ? (
                     <EditableOrderAmount
                       orderId={order._id}
                       label="Shipping"
@@ -222,6 +213,20 @@ export default function OrderDetailPage() {
                 <div className="flex justify-between border-t border-border pt-1.5 text-base font-semibold text-fg">
                   <span>Total</span>
                   <span>{formatCurrencyFromCents(order.total)}</span>
+                </div>
+                <div className="flex justify-between text-fg/60">
+                  <span>Total Paid</span>
+                  <span>{formatCurrencyFromCents(totalPaid)}</span>
+                </div>
+                {totalRefunded > 0 && (
+                  <div className="flex justify-between text-fg/60">
+                    <span>Total Refunded</span>
+                    <span>{formatCurrencyFromCents(totalRefunded)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-fg/60">
+                  <span>Total Due</span>
+                  <span>{formatCurrencyFromCents(totalDue)}</span>
                 </div>
               </div>
             </Card>

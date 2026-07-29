@@ -10,7 +10,7 @@ const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
-const { getTotalPaidForOrder, getPaymentsForOrder } = require("./payment.service");
+const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
 const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
@@ -116,21 +116,25 @@ async function resolveManualOrderItem({
     throw httpError("Invalid quantity", 400);
   }
 
-  const product = await Product.findById(productId);
+  // Product/variant lookups are independent of each other — run them
+  // concurrently rather than one-after-another, since createManualOrder
+  // itself already fans this whole function out across every line item.
+  const [product, variant] = await Promise.all([
+    Product.findById(productId),
+    variantId ? ProductVariant.findOne({ _id: variantId, product: productId }) : Promise.resolve(null),
+  ]);
   if (!product) {
     throw httpError("Product not found", 400);
   }
+  if (variantId && !variant) {
+    throw httpError("Product variant not found", 400);
+  }
 
-  let variant = null;
   let unitPriceDollars = product.price;
   let sku = product.sku;
   let name = product.title;
 
-  if (variantId) {
-    variant = await ProductVariant.findOne({ _id: variantId, product: productId });
-    if (!variant) {
-      throw httpError("Product variant not found", 400);
-    }
+  if (variant) {
     unitPriceDollars = variant.price ?? unitPriceDollars;
     sku = variant.sku || sku;
     name = `${product.title} — ${variant.display_name}`;
@@ -188,10 +192,10 @@ async function createManualOrder({
     throw httpError("Order must contain at least one item", 400);
   }
 
-  const resolvedItems = [];
-  for (const item of items) {
-    resolvedItems.push(await resolveManualOrderItem(item));
-  }
+  // Each line item's own product/variant/stock lookups are independent of
+  // every other line item — resolving them concurrently instead of one at a
+  // time is what actually made multi-item in-store sales slow to create.
+  const resolvedItems = await Promise.all(items.map(resolveManualOrderItem));
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const subtotal = resolvedItems.reduce(
@@ -348,26 +352,28 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
   return order;
 }
 
-// Corrects a single line item's price on an eBay order — e.g. a listing
-// that synced with the wrong price. Storefront/manual orders are out of
-// scope: storefront prices are the storefront's own listed price (editing
-// it here would desync from what the customer actually saw at checkout),
-// and manual orders set their price at creation via discount_amount instead
-// (see resolveManualOrderItem) — reopening unit_price after the fact would
-// give staff two conflicting ways to change the same number. Recomputes
-// subtotal/tax_amount/total the same way order creation does, so the invoice
-// always reflects live line-item data rather than a stale creation-time
-// snapshot. Note: if the order was already paid before this edit, the new
-// total can diverge from what was actually collected — that's surfaced to
-// staff via the order's Balance Outstanding figure for manual reconciliation,
-// not auto-resolved here (no refund/extra-charge is triggered).
+// Channels whose line items/shipping can be corrected after the fact —
+// storefront prices are the storefront's own listed price (editing it here
+// would desync from what the customer actually saw at checkout), so that
+// channel is deliberately excluded from all three functions below.
+const EDITABLE_CHANNELS = [ORDER_CHANNEL.EBAY, ORDER_CHANNEL.MANUAL];
+
+// Corrects a single line item's price on an eBay or manual order — e.g. a
+// listing that synced with the wrong price, or a staff mis-key at the
+// register. Recomputes subtotal/tax_amount/total the same way order creation
+// does, so the invoice always reflects live line-item data rather than a
+// stale creation-time snapshot. Note: if the order was already paid before
+// this edit, the new total can diverge from what was actually collected —
+// that's surfaced to staff via the order's Balance Outstanding figure for
+// manual reconciliation, not auto-resolved here (no refund/extra-charge is
+// triggered).
 async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }) {
   const order = await Order.findById(orderId);
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  if (order.channel !== ORDER_CHANNEL.EBAY) {
-    throw httpError("Only eBay order prices can be edited after the fact", 400);
+  if (!EDITABLE_CHANNELS.includes(order.channel)) {
+    throw httpError("Only eBay and in-store order prices can be edited after the fact", 400);
   }
   const item = order.items[itemIndex];
   if (!item) {
@@ -394,7 +400,7 @@ async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }) 
 }
 
 // Corrects the order's freight charge after the fact — e.g. a shipping quote
-// that turned out wrong. eBay orders only, same reasoning as
+// that turned out wrong. eBay and manual orders only, same reasoning as
 // updateOrderItemPrice. Mirrors its recompute of tax_amount/total; same "no
 // auto refund/extra-charge" caveat applies if the order was already paid.
 async function updateOrderShippingCost(orderId, { shipping_cost }) {
@@ -402,8 +408,8 @@ async function updateOrderShippingCost(orderId, { shipping_cost }) {
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  if (order.channel !== ORDER_CHANNEL.EBAY) {
-    throw httpError("Only eBay order shipping costs can be edited after the fact", 400);
+  if (!EDITABLE_CHANNELS.includes(order.channel)) {
+    throw httpError("Only eBay and in-store order shipping costs can be edited after the fact", 400);
   }
   if (!Number.isFinite(shipping_cost) || shipping_cost < 0) {
     throw httpError("Shipping cost cannot be negative", 400);
@@ -419,29 +425,38 @@ async function updateOrderShippingCost(orderId, { shipping_cost }) {
   return order;
 }
 
-// Applies (or clears, by passing 0) a manual order-level discount — a
-// goodwill credit or negotiated price break on top of whatever the line
-// items and shipping already total. Distinct from each item's own
-// discount_amount, which order.subtotal already nets out. eBay orders only,
-// same reasoning as updateOrderItemPrice.
-async function updateOrderDiscount(orderId, { discount_amount }) {
+// Corrects a single line item's discount on an eBay or manual order —
+// discount is applied per line item (not as one order-level lump), so
+// staff have exactly one place to change it. eBay and manual orders only,
+// same reasoning as updateOrderItemPrice. Mirrors its recompute of
+// subtotal/tax_amount/total; same "no auto refund/extra-charge" caveat
+// applies if the order was already paid.
+async function updateOrderItemDiscount(orderId, itemIndex, { discount_amount }) {
   const order = await Order.findById(orderId);
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  if (order.channel !== ORDER_CHANNEL.EBAY) {
-    throw httpError("Only eBay order discounts can be edited after the fact", 400);
+  if (!EDITABLE_CHANNELS.includes(order.channel)) {
+    throw httpError("Only eBay and in-store order discounts can be edited after the fact", 400);
+  }
+  const item = order.items[itemIndex];
+  if (!item) {
+    throw httpError("Order item not found", 404);
   }
   if (!Number.isFinite(discount_amount) || discount_amount < 0) {
     throw httpError("Discount cannot be negative", 400);
   }
 
   const discountCents = Math.round(discount_amount * 100);
-  if (discountCents > order.subtotal + order.shipping_cost) {
-    throw httpError("Discount cannot exceed the order total", 400);
+  const lineSubtotalCents = item.unit_price * item.quantity;
+  if (discountCents > lineSubtotalCents) {
+    throw httpError("Discount cannot exceed the line subtotal", 400);
   }
 
-  order.discount_amount = discountCents;
+  item.discount_amount = discountCents;
+
+  order.subtotal = order.items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount), 0);
+  order.tax_amount = Math.round(order.subtotal / GST_DIVISOR);
   order.total = order.subtotal - order.discount_amount + order.shipping_cost;
 
   await order.save();
@@ -732,7 +747,10 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   // Sums every succeeded Payment on the order, not just the most recently
   // created one (order.payment) — a manual sale can have a deposit plus a
   // separate follow-up payment, and the invoice must reflect both.
-  const totalPaidCents = await getTotalPaidForOrder(order._id);
+  const [totalPaidCents, totalRefundedCents] = await Promise.all([
+    getTotalPaidForOrder(order._id),
+    getTotalRefundedForOrder(order._id),
+  ]);
 
   // In-person sales are already complete when created — no shipped/pickup
   // framing applies, just the invoice (with the outstanding balance called
@@ -741,7 +759,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     if (!order.customer.email) {
       throw httpError("This customer has no email on file — add one before sending an invoice", 400);
     }
-    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
+    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents });
     const amountDueCents = order.total - totalPaidCents;
     await emailService.sendManualOrderReceipt({
       to: order.customer.email,
@@ -770,7 +788,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     }
   }
 
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents });
   const pdfBase64 = pdfBuffer.toString("base64");
   const pdfFilename = `${order.order_number}-invoice.pdf`;
 
@@ -807,8 +825,11 @@ async function getInvoicePdfForOrder(orderId) {
   const order = await Order.findById(orderId).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  const totalPaidCents = await getTotalPaidForOrder(order._id);
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents });
+  const [totalPaidCents, totalRefundedCents] = await Promise.all([
+    getTotalPaidForOrder(order._id),
+    getTotalRefundedForOrder(order._id),
+  ]);
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents });
 
   return { pdfBuffer, orderNumber: order.order_number };
 }
@@ -828,5 +849,5 @@ module.exports = {
   addOrderNote,
   updateOrderItemPrice,
   updateOrderShippingCost,
-  updateOrderDiscount,
+  updateOrderItemDiscount,
 };

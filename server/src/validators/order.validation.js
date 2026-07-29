@@ -145,9 +145,9 @@ const recordPayment = {
   }),
 };
 
-// Corrects a single line item's price on a storefront/eBay order — see
-// order.service.js#updateOrderItemPrice for why manual orders are excluded
-// (that check needs DB state, so it lives in the service, not here).
+// Corrects a single line item's price on an eBay/manual order — see
+// order.service.js#updateOrderItemPrice for why storefront orders are
+// excluded (that check needs DB state, so it lives in the service, not here).
 const updateOrderItemPrice = {
   params: Joi.object({
     id: Joi.string().hex().length(24).required(),
@@ -158,9 +158,8 @@ const updateOrderItemPrice = {
   }),
 };
 
-// See order.service.js#updateOrderShippingCost / #updateOrderDiscount —
-// negative-amount and exceeds-total checks need DB state, so they live in
-// the service, not here.
+// See order.service.js#updateOrderShippingCost — negative-amount and
+// exceeds-total checks need DB state, so they live in the service, not here.
 const updateOrderShippingCost = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -168,8 +167,14 @@ const updateOrderShippingCost = {
   }),
 };
 
-const updateOrderDiscount = {
-  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+// Corrects a single line item's discount on an eBay/manual order — see
+// order.service.js#updateOrderItemDiscount for the exceeds-line-subtotal
+// check, which needs DB state so it lives in the service, not here.
+const updateOrderItemDiscount = {
+  params: Joi.object({
+    id: Joi.string().hex().length(24).required(),
+    itemIndex: Joi.number().integer().min(0).required(),
+  }),
   body: Joi.object({
     discount_amount: Joi.number().min(0).required(), // dollars
   }),
@@ -216,5 +221,5 @@ module.exports = {
   updateOrderCustomerDetails,
   updateOrderItemPrice,
   updateOrderShippingCost,
-  updateOrderDiscount,
+  updateOrderItemDiscount,
 };

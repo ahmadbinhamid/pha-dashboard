@@ -92,9 +92,9 @@ export const addOrderNote = async (orderId: string, text: string) => {
   return data;
 };
 
-// Corrects a single line item's price on a storefront/eBay order — manual
-// orders reject this server-side (their pricing is set via discount at
-// creation instead). Recomputes subtotal/tax_amount/total on the backend.
+// Corrects a single line item's price on an eBay/manual order — storefront
+// orders reject this server-side (their pricing is the storefront's own
+// listed price). Recomputes subtotal/tax_amount/total on the backend.
 export const updateOrderItemPrice = async (orderId: string, itemIndex: number, unit_price: number) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/price`, {
     unit_price,
@@ -102,17 +102,20 @@ export const updateOrderItemPrice = async (orderId: string, itemIndex: number, u
   return data;
 };
 
-// Corrects the order's freight charge after the fact. Recomputes
-// tax_amount/total on the backend.
+// Corrects the order's freight charge after the fact (eBay/manual orders
+// only). Recomputes tax_amount/total on the backend.
 export const updateOrderShippingCost = async (orderId: string, shipping_cost: number) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/shipping-cost`, { shipping_cost });
   return data;
 };
 
-// Applies (or clears, by passing 0) a manual order-level discount — see
-// order.service.js#updateOrderDiscount.
-export const updateOrderDiscount = async (orderId: string, discount_amount: number) => {
-  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/discount`, { discount_amount });
+// Corrects a single line item's discount on an eBay/manual order — see
+// order.service.js#updateOrderItemDiscount. Recomputes subtotal/tax_amount/
+// total on the backend.
+export const updateOrderItemDiscount = async (orderId: string, itemIndex: number, discount_amount: number) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/discount`, {
+    discount_amount,
+  });
   return data;
 };
 

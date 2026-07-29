@@ -17,18 +17,20 @@ const orderItemSchema = new Schema(
     sku: { type: String, default: null },
     unit_price: { type: Number, required: true }, // cents, GST-inclusive
     quantity: { type: Number, required: true, min: 1 },
-    // Per-line discount (cents) — only ever set by admin-created manual
-    // orders today; storefront/eBay orders always leave this at 0.
+    // Per-line discount (cents) — set at creation by admin-created manual
+    // orders (storefront/eBay orders always leave this at 0 at creation), and
+    // editable after the fact on eBay/manual orders via
+    // order.service.js#updateOrderItemDiscount.
     discount_amount: { type: Number, default: 0 },
     // Customer-facing note about this specific line (e.g. "no engine oil
     // included") — captured by staff when building a manual order.
     note: { type: String, default: null },
 
-    // Price-edit audit trail — storefront/eBay orders only (see
-    // order.service.js#updateOrderItemPrice; manual orders price at creation
-    // via discount_amount instead). original_unit_price is set once, on the
-    // first edit, so it always reflects what was originally charged even if
-    // the price is edited more than once afterward.
+    // Price-edit audit trail — eBay/manual orders only (storefront prices are
+    // never reopened after the fact, see order.service.js#updateOrderItemPrice).
+    // original_unit_price is set once, on the first edit, so it always
+    // reflects what was originally charged even if the price is edited more
+    // than once afterward.
     original_unit_price: { type: Number, default: null },
     unit_price_updated_at: { type: Date, default: null },
     unit_price_updated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
@@ -122,10 +124,13 @@ const orderSchema = buildSchema({
   // subtotal already includes GST; tax_amount is informational (subtotal / 11),
   // not added on top. total = subtotal - discount_amount + shipping_cost.
   subtotal: { type: Number, required: true },
-  // Order-level manual adjustment (goodwill credit, negotiated discount) —
-  // distinct from each line item's own discount_amount, which is baked into
-  // subtotal already. Zero at creation on every channel; only ever set
-  // afterward via order.service.js#updateOrderDiscount.
+  // Legacy order-level manual adjustment (goodwill credit, negotiated
+  // discount) — distinct from each line item's own discount_amount, which is
+  // baked into subtotal already. Zero at creation on every channel. No
+  // longer editable after the fact (discounts are now applied per line item
+  // via order.service.js#updateOrderItemDiscount instead) — this field is
+  // kept only so historical orders that already had one keep reconciling
+  // correctly against their stored `total`.
   discount_amount: { type: Number, required: true, default: 0 },
   shipping_cost: { type: Number, required: true, default: 0 },
   tax_amount: { type: Number, required: true }, // GST extracted from subtotal, display-only

@@ -60,11 +60,11 @@ router.patch(
   asyncHandler(ctrl.updateOrderShippingCost),
 );
 router.patch(
-  "/:id/discount",
+  "/:id/items/:itemIndex/discount",
   auth(),
   admin,
-  validate(v.updateOrderDiscount),
-  asyncHandler(ctrl.updateOrderDiscount),
+  validate(v.updateOrderItemDiscount),
+  asyncHandler(ctrl.updateOrderItemDiscount),
 );
 
 module.exports = router;

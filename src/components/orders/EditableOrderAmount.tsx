@@ -102,15 +102,21 @@ export function EditableOrderAmount({
   return (
     <button
       type="button"
-      className="group inline-flex items-center gap-1.5 text-fg/60 hover:text-accent"
+      className="group/amount inline-flex items-center text-fg/60 hover:text-accent"
       onClick={() => {
         setValue(String(amountCents / 100));
         setEditing(true);
       }}
     >
-      {negative && amountCents > 0 ? "-" : ""}
-      {formatCurrencyFromCents(amountCents)}
-      <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      {/* The pencil is absolutely positioned (not a gap-ed flex sibling) so
+          it never reserves layout space — otherwise this value would sit
+          slightly left of every other plain-text row in the same column,
+          even while the pencil itself is invisible at opacity-0. */}
+      <span className="relative">
+        {negative && amountCents > 0 ? "-" : ""}
+        {formatCurrencyFromCents(amountCents)}
+        <Pencil className="absolute left-full top-1/2 ml-2.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/amount:opacity-100" />
+      </span>
     </button>
   );
 }

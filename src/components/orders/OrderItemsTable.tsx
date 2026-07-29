@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
-import { updateOrderItemPrice } from "@/lib/api/orders";
+import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import type { OrderChannel, OrderItem } from "@/types/orders";
 
@@ -81,14 +81,107 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
   return (
     <button
       type="button"
-      className="group inline-flex items-center gap-1.5 text-fg hover:text-accent"
+      className="group/price inline-flex items-center text-fg hover:text-accent"
       onClick={() => {
         setValue(String(item.unit_price / 100));
         setEditing(true);
       }}
     >
-      {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
-      <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      {/* Absolutely positioned so it never reserves layout space — otherwise
+          this value would sit left of the column's right edge even while
+          the pencil itself is invisible at opacity-0. */}
+      <span className="relative">
+        {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
+        <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/price:opacity-100" />
+      </span>
+    </button>
+  );
+}
+
+function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemIndex: number; item: OrderItem }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(item.discount_amount / 100));
+
+  const mutation = useMutation({
+    mutationFn: (discountAmount: number) => updateOrderItemDiscount(orderId, itemIndex, discountAmount),
+    onSuccess: () => {
+      toast({ title: "Discount updated", tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      setEditing(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update discount", description: err.message, tone: "danger" });
+    },
+  });
+
+  if (editing) {
+    return (
+      <form
+        className="flex items-center justify-end gap-0.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed) || parsed < 0) {
+            toast({ title: "Enter a valid discount", tone: "danger" });
+            return;
+          }
+          mutation.mutate(parsed);
+        }}
+      >
+        <Input
+          autoFocus
+          type="number"
+          step="0.01"
+          min="0"
+          size="sm"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-24 text-right"
+          disabled={mutation.isPending}
+        />
+        <Button
+          type="submit"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={mutation.isPending}
+          aria-label="Save discount"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={mutation.isPending}
+          onClick={() => setEditing(false)}
+          aria-label="Cancel"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="group/discount inline-flex items-center text-fg/60 hover:text-accent"
+      onClick={() => {
+        setValue(String(item.discount_amount / 100));
+        setEditing(true);
+      }}
+    >
+      {/* Absolutely positioned so it never reserves layout space — otherwise
+          this value would sit left of the column's right edge even while
+          the pencil itself is invisible at opacity-0. */}
+      <span className="relative">
+        {item.discount_amount > 0 ? `-${formatCurrencyFromCents(item.discount_amount)}` : formatCurrencyFromCents(0)}
+        <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/discount:opacity-100" />
+      </span>
     </button>
   );
 }
@@ -102,9 +195,10 @@ export function OrderItemsTable({
   orderId: string;
   channel: OrderChannel;
 }) {
-  // Only eBay order prices can be corrected after the fact — the backend
-  // rejects a price edit for any other channel, so don't offer it here.
-  const priceEditable = channel === "ebay";
+  // eBay and manual (in-store) order prices/discounts can be corrected after
+  // the fact — the backend rejects an edit for storefront orders, so don't
+  // offer it here.
+  const editable = channel === "ebay" || channel === "manual";
 
   return (
     <div className="max-h-140 overflow-auto">
@@ -115,11 +209,11 @@ export function OrderItemsTable({
               Item
             </TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
-            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price (ex GST)</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">GST (11%)</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Discount</TableHead>
-            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Total</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Total (inc GST)</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -133,7 +227,7 @@ export function OrderItemsTable({
               </TableCell>
               <TableCell className="text-fg/60">{item.sku ?? "—"}</TableCell>
               <TableCell className="text-right text-fg">
-                {priceEditable ? (
+                {editable ? (
                   <EditableUnitPrice orderId={orderId} itemIndex={i} item={item} />
                 ) : (
                   formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))
@@ -155,7 +249,13 @@ export function OrderItemsTable({
               </TableCell>
               <TableCell className="text-right text-fg">{item.quantity}</TableCell>
               <TableCell className="text-right text-fg/60">
-                {item.discount_amount > 0 ? `-${formatCurrencyFromCents(item.discount_amount)}` : "—"}
+                {editable ? (
+                  <EditableDiscount orderId={orderId} itemIndex={i} item={item} />
+                ) : item.discount_amount > 0 ? (
+                  `-${formatCurrencyFromCents(item.discount_amount)}`
+                ) : (
+                  "—"
+                )}
               </TableCell>
               <TableCell className="text-right font-medium text-fg">
                 {formatCurrencyFromCents(item.unit_price * item.quantity - item.discount_amount)}

@@ -8,7 +8,7 @@ import {
   LEGAL_DISCLAIMER_TEXT,
 } from "@/config/company";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
-import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
+import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
 // Print-only invoice, structured to match the tax-invoice PDF attached to
@@ -48,11 +48,19 @@ function HeaderMetaRow({ label, value, mutedValue = false }: { label: string; va
 export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
-  const amountDue = getBalanceDue(order.total, order.payments);
-  // A refund reduces getTotalPaid the same way an uncollected payment would,
-  // leaving the same arithmetic remainder — this order status distinguishes
-  // "still owed" from "already refunded" so the two don't get conflated.
-  const isRefunded = order.status === "refunded" || order.status === "partially_refunded";
+  const totalRefunded = getTotalRefunded(order.payments);
+  // Item-level discounts plus any legacy order-level discount (see Order.js's
+  // discount_amount comment) — order.subtotal already nets these out, so
+  // Subtotal below adds them back to show the pre-discount figure, same
+  // convention as the dashboard's order-detail page.
+  const itemDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
+  const totalDiscount = itemDiscount + order.discount_amount;
+  // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
+  // in full, then refunded" (due $0) from "never paid in full, then refunded
+  // on top of that" (due reflects the real remaining shortfall). The
+  // Balance Outstanding banner further below relies on this already being
+  // correct rather than separately suppressing itself for a refunded status.
+  const amountDue = getBalanceDue(order.total, order.payments, order.status);
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
     month: "short",
@@ -170,7 +178,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                 Description / Item Code
               </th>
               <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-                Unit Price
+                Unit Price (ex GST)
               </th>
               <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
                 GST (11%)
@@ -182,7 +190,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                 Discount
               </th>
               <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-                Total
+                Total (inc GST)
               </th>
             </tr>
           </thead>
@@ -271,14 +279,16 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between">
             <span style={{ color: MUTED }}>Subtotal</span>
-            <span className="font-semibold">{formatCurrencyFromCents(order.subtotal)}</span>
+            <span className="font-semibold">{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
           </div>
-          {order.discount_amount > 0 && (
-            <div className="flex justify-between">
-              <span style={{ color: MUTED }}>Discount</span>
-              <span className="font-semibold">-{formatCurrencyFromCents(order.discount_amount)}</span>
-            </div>
-          )}
+          {/* Always shown, even at $0 — combines every line item's own
+              discount with any legacy order-level discount. */}
+          <div className="flex justify-between">
+            <span style={{ color: MUTED }}>Discount</span>
+            <span className="font-semibold">
+              {totalDiscount > 0 ? `-${formatCurrencyFromCents(totalDiscount)}` : formatCurrencyFromCents(0)}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span style={{ color: MUTED }}>{isPickup ? "Pickup" : "Freight / Shipping"}</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.shipping_cost)}</span>
@@ -289,16 +299,31 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               {formatCurrencyFromCents(order.total)}
             </span>
           </div>
+          <div className="flex justify-between">
+            <span style={{ color: MUTED }}>Total Paid</span>
+            <span className="font-semibold">{formatCurrencyFromCents(amountPaid)}</span>
+          </div>
+          {totalRefunded > 0 && (
+            <div className="flex justify-between">
+              <span style={{ color: MUTED }}>Total Refunded</span>
+              <span className="font-semibold">{formatCurrencyFromCents(totalRefunded)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span style={{ color: MUTED }}>Total Due</span>
+            <span className="font-semibold">{formatCurrencyFromCents(amountDue)}</span>
+          </div>
 
           {/* Every channel can carry an outstanding balance now that
               storefront/eBay prices can be edited post-payment — not just
               manual sales, so this is no longer gated on order.channel.
-              Only rendered when there's an actual balance (amountDue > 0)
-              and the order isn't refunded — amountDue nets out a refund the
-              same way it nets out a payment, so a refunded order would
-              otherwise look like the customer still owed the refunded
-              amount instead of having received it back. */}
-          {!isRefunded && amountDue > 0 && (
+              Only rendered when there's an actual balance (amountDue > 0) —
+              getBalanceDue already correctly returns 0 for an order that was
+              paid in full before being refunded, so no separate refunded-
+              status check is needed here (and one would incorrectly hide a
+              real balance on an order that was never paid in full and later
+              had a partial refund on top of that). */}
+          {amountDue > 0 && (
             <div className="mt-3 flex items-center justify-between rounded-lg px-4 py-3" style={{ background: ACCENT }}>
               <span className="text-xs font-bold uppercase tracking-wider text-white">Balance Outstanding</span>
               <span className="text-sm font-bold text-white">{formatCurrencyFromCents(amountDue)}</span>

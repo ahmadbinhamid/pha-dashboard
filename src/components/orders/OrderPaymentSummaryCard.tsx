@@ -40,7 +40,7 @@ export function OrderPaymentSummaryCard({
   }
 
   const totalPaid = getTotalPaid(payments);
-  const balanceDue = getBalanceDue(total, payments);
+  const balanceDue = getBalanceDue(total, payments, orderStatus);
 
   return (
     <div className="space-y-4">

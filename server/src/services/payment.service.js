@@ -15,6 +15,17 @@ async function getTotalPaidForOrder(orderId) {
   return payments.reduce((sum, p) => sum + Math.max(0, p.amount - p.amount_refunded), 0);
 }
 
+// Sums every payment's own amount_refunded, regardless of that payment's
+// current status — the other half of the same figure getTotalPaidForOrder
+// nets out, not a separate ledger. Used to distinguish "still owed" from
+// "already refunded" (see invoicePdf.js's isRefunded handling) — a refunded
+// order was paid in full, and the refund was a deliberate decision
+// afterward, not an unpaid balance.
+async function getTotalRefundedForOrder(orderId) {
+  const payments = await Payment.find({ order: orderId });
+  return payments.reduce((sum, p) => sum + (p.amount_refunded || 0), 0);
+}
+
 // Full payment history for an order, newest first — used by the admin order
 // detail view instead of the old single `order.payment` populate, which only
 // ever reflected the most recently created Payment.
@@ -52,4 +63,10 @@ async function getPaymentWithRefunds(paymentId) {
   return { ...payment.toObject(), refunds };
 }
 
-module.exports = { listPayments, getPaymentWithRefunds, getTotalPaidForOrder, getPaymentsForOrder };
+module.exports = {
+  listPayments,
+  getPaymentWithRefunds,
+  getTotalPaidForOrder,
+  getTotalRefundedForOrder,
+  getPaymentsForOrder,
+};
