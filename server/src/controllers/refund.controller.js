@@ -40,7 +40,11 @@ exports.createRefund = async (req, res) => {
 
 exports.voidRefund = async (req, res) => {
   try {
-    const refund = await refundService.voidRefund(req.params.id, { reason: req.body.reason, userId: req.user?._id });
+    const refund = await refundService.voidRefund(req.params.id, {
+      reason: req.body.reason,
+      userId: req.user?._id,
+      force: req.body.force,
+    });
     return success(res, refund, "Refund voided");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);

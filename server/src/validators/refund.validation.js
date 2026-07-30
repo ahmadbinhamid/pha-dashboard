@@ -74,6 +74,11 @@ const voidRefund = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }), // refund id
   body: Joi.object({
     reason: Joi.string().trim().min(1).required(),
+    // Corrections round — required to void a refund with a settled Stripe
+    // allocation, since that money already left and voiding here only
+    // updates our books, not Stripe (refund.service.js#voidRefund). Left
+    // false by default so voiding an all-manual refund needs nothing extra.
+    force: Joi.boolean().default(false),
   }),
 };
 

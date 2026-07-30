@@ -87,18 +87,35 @@ async function getSucceededRefunds(orderId) {
 // count request A's still-in-flight claim even though the lock correctly
 // serialized the two calls in time.
 //
-// PENDING/PROCESSING only count while younger than RESERVATION_STALE_AFTER_MS
-// (corrections round). Without an age bound, a Stripe allocation whose
-// webhook never arrives (dropped delivery, worker down, Stripe outage)
-// would reserve its quantity/money against this order FOREVER — the line
-// or order would look permanently partially-refunded with no way to issue
-// a further legitimate refund, and nothing would tell an admin why.
-// refund.reconciliation.service.js's hourly sweep is what actually resolves
-// those stuck refunds (by asking Stripe for their real state); this bound
-// only stops them silently locking out admission in the meantime.
-// getRefundableSummary's own `stuck_refunds` list surfaces the ones this
-// excludes, so the gap is visible rather than silent. SUCCEEDED refunds
-// have no age bound — they drive the ledger directly and are never "stuck".
+// PENDING only counts while younger than RESERVATION_STALE_AFTER_MS
+// (corrections round). PENDING means Refund.create() wrote the doc but no
+// Stripe call has succeeded yet — settleRefund's catch block sets FAILED
+// the moment a Stripe call actually fails, so a refund stuck in PENDING
+// past this window means the PROCESS crashed before ever reaching Stripe
+// (or partway through a multi-allocation loop with SOME calls still
+// unresolved); nothing has committed externally, so ageing it out and
+// letting a new refund proceed is safe — refund.reconciliation.service.js's
+// sweep resumes it via settleRefund regardless (safe to call again).
+//
+// PROCESSING is DELIBERATELY NOT age-bounded — Stripe has ALREADY ACCEPTED
+// the refund and money is moving at Stripe's end. There is no API to
+// "un-refund" at Stripe: voidRefund only reverses OUR books (restock,
+// ledger). If a PROCESSING refund aged out of this reservation, a second
+// refund could be admitted for the same units/dollars, settle, and then the
+// first refund's delayed webhook would land, recompute the ledger, see a
+// quantity/total violation, and auto-void ITSELF — even though Stripe had
+// already paid it out. That leaves the customer refunded twice at Stripe,
+// the books showing only one refund, and inventory restocked short. A
+// webhook arriving late (Stripe incident, queue backlog, endpoint
+// misconfigured) must never mean "treat the money as not having moved."
+// refund.reconciliation.service.js's sweep is what actually resolves a
+// stuck PROCESSING refund — by asking Stripe directly. Only if Stripe
+// itself reports failed/canceled (or has no record of it at all) does the
+// reservation legitimately release, via that refund flipping to FAILED for
+// a real, verified reason — never via a mere clock.
+//
+// SUCCEEDED refunds have no age bound either — they drive the ledger
+// directly and are never "stuck".
 const RESERVATION_STALE_AFTER_MS = 60 * 60 * 1000;
 
 async function getReservingRefunds(orderId) {
@@ -106,8 +123,8 @@ async function getReservingRefunds(orderId) {
   return Refund.find({
     order: orderId,
     $or: [
-      { status: REFUND_STATUS.SUCCEEDED },
-      { status: { $in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] }, created_at: { $gte: cutoff } },
+      { status: { $in: [REFUND_STATUS.SUCCEEDED, REFUND_STATUS.PROCESSING] } },
+      { status: REFUND_STATUS.PENDING, created_at: { $gte: cutoff } },
     ],
   });
 }
@@ -268,15 +285,18 @@ async function getRefundableSummary(orderId) {
     getTotalPaidForOrder(orderId),
     getTotalRefundedForOrder(orderId), // confirmed only — for display
     getReservingRefunds(orderId),
-    // getReservingRefunds' age bound (RESERVATION_STALE_AFTER_MS) means a
-    // refund stuck in PENDING/PROCESSING past an hour silently stops
-    // reserving quantity/money — necessary so it can't lock out admission
-    // forever, but "silent" is the wrong word for money an admin can't
-    // account for. This surfaces exactly the refunds that bound excludes,
-    // so max_refundable not adding up has a visible explanation instead of
-    // just looking wrong. Resolved automatically by
-    // refund.reconciliation.service.js's hourly sweep, or investigable
-    // manually via refund_number in the meantime.
+    // A refund stuck past an hour is worth an admin's attention either way,
+    // but the two statuses mean very different things (corrections round):
+    // a stuck PENDING one has ALREADY dropped out of getReservingRefunds'
+    // count (nothing committed externally, safe to stop reserving) — this
+    // is what makes that silent exclusion visible instead of just looking
+    // like max_refundable doesn't add up. A stuck PROCESSING one is STILL
+    // fully reserved (Stripe already accepted it — see getReservingRefunds'
+    // own comment on why that must never age out) and listed here purely as
+    // an FYI that its webhook is overdue, not because anything's being
+    // excluded. Both resolved automatically by
+    // refund.reconciliation.service.js's sweep, or investigable manually via
+    // refund_number in the meantime.
     Refund.find({
       order: orderId,
       status: { $in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
@@ -358,6 +378,11 @@ async function getRefundableSummary(orderId) {
       status: r.status,
       created_at: r.created_at,
       total_amount: r.total_amount,
+      // PENDING has already stopped reserving (excluded from max_refundable
+      // above); PROCESSING still fully reserves it — see getReservingRefunds'
+      // comment. Told apart explicitly so this list isn't misread as "all of
+      // these are blocking a refund you could otherwise issue".
+      still_reserved: r.status === REFUND_STATUS.PROCESSING,
     })),
   };
 }
@@ -553,6 +578,21 @@ async function createRefund(orderId, body, userId) {
 // calls made) — safe to call more than once for the same refund because it
 // skips any allocation that already has a stripe_refund_id recorded, rather
 // than re-sending it to Stripe.
+// Corrections round — Stripe's idempotency keys expire after 24 HOURS.
+// settleRefund's own idempotency key (below) protects a quick retry, but
+// refund.reconciliation.service.js exists specifically for a refund stuck
+// this long: if stripe.refunds.create() actually succeeded at Stripe but
+// the response never made it back here (crash, timeout, process killed
+// mid-call), and resumption happens more than a day later, the idempotency
+// key alone no longer prevents Stripe from creating a second, genuinely
+// duplicate refund. Every create call sets metadata.refund_id — checking
+// Stripe's own refund list for this payment intent and matching on that
+// BEFORE ever creating one recovers the lost id in exactly that case.
+async function findExistingStripeRefund(stripe, paymentIntentId, refundId) {
+  const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 });
+  return data.find((r) => r.metadata?.refund_id === String(refundId)) || null;
+}
+
 async function settleRefund(refund) {
   const stripeAllocationIndexes = refund.payment_allocations
     .map((a, i) => (a.provider === PAYMENT_PROVIDER.STRIPE ? i : -1))
@@ -574,6 +614,16 @@ async function settleRefund(refund) {
       if (alloc.stripe_refund_id) continue; // already sent to Stripe on a prior (crashed) attempt — resuming, not resending
       const payment = paymentById.get(String(alloc.payment));
       try {
+        // Check for a refund Stripe already has on file for this exact
+        // refund_id before creating a new one — see findExistingStripeRefund's
+        // own comment on why the idempotency key below isn't enough on its
+        // own for a resume that happens more than 24h later.
+        const existing = await findExistingStripeRefund(stripe, payment.stripe_payment_intent_id, refund._id);
+        if (existing) {
+          refund.payment_allocations[i].stripe_refund_id = existing.id;
+          continue;
+        }
+
         const stripeRefund = await stripe.refunds.create(
           {
             payment_intent: payment.stripe_payment_intent_id,
@@ -926,15 +976,38 @@ async function applyRefundEffects(refundId) {
   // meant this protected manual refunds and never card refunds — backwards,
   // since card refunds are the majority and the ones where money actually
   // left. A webhook can't usefully reject with a 409 the way an API caller
-  // can, so on violation this voids (safe — the ledger is derived, void is
-  // a full correct reversal by construction) and flags
+  // can, so on violation this voids when it's SAFE to (see below) and flags
   // needs_reconciliation rather than throwing; the synchronous caller
   // (settleRefund, above) is the one that turns a VOIDED result back into a
   // 409 for whoever's waiting on it.
   const freshOrder = await Order.findById(order._id);
   const violation = await findLedgerViolation(freshOrder);
   if (violation) {
-    await voidRefund(refund._id, { reason: `Auto-voided: ${violation}`, userId: null });
+    // voidRefund only reverses OUR books — there is no Stripe API to
+    // "un-refund" a charge. If this refund has a Stripe allocation that
+    // ALREADY SETTLED (webhook-confirmed), the money is a fact about the
+    // real world now: voiding here would desync the books from it (Stripe
+    // says refunded, our ledger says not) rather than fix anything — a
+    // quieter, second money bug on top of whatever caused the violation.
+    // Surface it for a human instead of automating a reversal that can't
+    // actually happen at Stripe's end. Auto-void stays correct (and stays
+    // below) for an all-manual refund, where nothing external has committed
+    // and the ledger genuinely IS the whole picture.
+    const hasSettledStripeMoney = refund.payment_allocations.some(
+      (a) => a.provider === PAYMENT_PROVIDER.STRIPE && a.settled,
+    );
+    if (hasSettledStripeMoney) {
+      await Refund.updateOne({ _id: refund._id }, { $set: { needs_reconciliation: true } });
+      logger.error(
+        `[refund.service] ALERT: refund ${refund.refund_number} (order ${order._id}) violated a ledger invariant ` +
+          `(${violation}) AFTER a Stripe allocation already settled — left INTACT, not auto-voided (there is no ` +
+          `Stripe un-refund API; voiding here would only desync our books from what Stripe actually did). ` +
+          `Needs manual reconciliation.`,
+      );
+      return Refund.findById(refund._id);
+    }
+
+    await voidRefund(refund._id, { reason: `Auto-voided: ${violation}`, userId: null, source: "system_auto_void" });
     await Refund.updateOne({ _id: refund._id }, { $set: { needs_reconciliation: true } });
     logger.error(
       `[refund.service] ALERT: refund ${refund.refund_number} (order ${order._id}) violated a ledger invariant after settlement and was auto-voided: ${violation}`,
@@ -1062,11 +1135,34 @@ async function recomputeLedger(order) {
 
 // ── §3.8 void / reversal ─────────────────────────────────────────────────
 
-async function voidRefund(refundId, { reason: voidReason, userId }) {
+async function voidRefund(refundId, { reason: voidReason, userId, source = "admin", force = false }) {
   const refund = await Refund.findById(refundId);
   if (!refund) throw httpError("Refund not found", 404);
   if (refund.status !== REFUND_STATUS.SUCCEEDED) {
     throw httpError(`Only a succeeded refund can be voided (current status: ${refund.status})`, 400);
+  }
+
+  // Corrections round — voidRefund only reverses OUR books (ledger,
+  // restock). There is no Stripe API to "un-refund" a charge. If a Stripe
+  // allocation on this refund actually settled (webhook-confirmed
+  // sr.status === "succeeded", tracked via payment_allocations[].settled),
+  // the money has already left; voiding here would desync the books from
+  // reality — Stripe says refunded, our ledger says not, and the customer
+  // keeps the money regardless of what this function does. §4.2's
+  // charge.refund.updated reversal is the one legitimate exception: Stripe
+  // itself reporting the refund failed/canceled AFTER we thought it settled
+  // means the money genuinely came back, so that call site passes
+  // source: "stripe_reversal" and is exempt. Every other caller touching a
+  // Stripe-settled refund (the admin void endpoint, or a bug anywhere else)
+  // needs an explicit, human-justified `force`.
+  const hasSettledStripeMoney = refund.payment_allocations.some(
+    (a) => a.provider === PAYMENT_PROVIDER.STRIPE && a.settled,
+  );
+  if (hasSettledStripeMoney && source !== "stripe_reversal" && !force) {
+    throw httpError(
+      `Refund ${refund.refund_number} has a Stripe allocation that already settled — voiding here would only update our books, not Stripe, leaving them permanently out of sync. Pass force: true (with a recorded reason) only if this is genuinely intended.`,
+      409,
+    );
   }
 
   const order = await Order.findById(refund.order);

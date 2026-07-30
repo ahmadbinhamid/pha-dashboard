@@ -371,9 +371,17 @@ async function handleChargeRefundUpdated(sr) {
   // actually paid back. Auto-reverse via the same void path an admin would
   // use (§3.8), and alert loudly — this is exactly the scenario §4.2 exists
   // to catch automatically instead of relying on someone noticing.
+  // source: "stripe_reversal" — this is the one legitimate exception to
+  // voidRefund's "never void a settled Stripe refund" guard (corrections
+  // round). Everywhere else, a settled Stripe allocation means real money
+  // already moved and can't be un-refunded; HERE, Stripe itself is
+  // reporting that this specific refund just moved to failed/canceled —
+  // i.e. the money genuinely came back — so voiding to match that is
+  // correct, not a desync.
   await refundService.voidRefund(refund._id, {
     reason: `Auto-reversed: Stripe refund ${sr.id} transitioned to ${sr.status} after effects were already applied`,
     userId: null,
+    source: "stripe_reversal",
   });
   logger.error(
     `[stripe.webhook] ALERT: refund ${refund.refund_number} (order ${refund.order}) was auto-reversed — ` +
