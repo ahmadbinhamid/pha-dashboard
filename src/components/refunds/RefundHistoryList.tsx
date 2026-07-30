@@ -61,7 +61,8 @@ export function RefundHistoryList({ orderId, refunds }: { orderId: string; refun
             </div>
           </div>
           <div className="mt-1 text-xs text-fg/55">
-            {refund.refund_number} · {refund.scope.replace("_", " ")} · {REFUND_REASON_LABEL[refund.reason] ?? refund.reason}
+            {refund.refund_number ?? "—"} · {refund.scope ? refund.scope.replace("_", " ") : "unmigrated"} ·{" "}
+            {REFUND_REASON_LABEL[refund.reason] ?? refund.reason}
             {refund.initiated_via === "stripe_dashboard" && " — via Stripe Dashboard"}
             {refund.initiated_via === "manual" && " — recorded manually"}
           </div>
