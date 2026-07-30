@@ -138,7 +138,21 @@ async function handlePaymentSucceeded(intent) {
   // the last money owed... though in practice it always is, since nothing
   // else currently lets more than one payment attempt be in flight at once.
   const totalPaidCents = await getTotalPaidForOrder(order._id);
-  order.status = derivePaymentStatus(totalPaidCents, order.total);
+  const derivedStatus = derivePaymentStatus(totalPaidCents, order.total);
+  order.status = derivedStatus;
+  // §1.2/§9 — payment_status is the field refund.service.js#createRefund
+  // actually gates admission on (REFUNDABLE_PAYMENT_STATUSES). Found live:
+  // this webhook — the ONE place that marks a storefront order (or a manual
+  // order's payment-link top-up) as paid — was only ever writing the LEGACY
+  // `status` field, never this one. payment_status stays stuck at its
+  // schema default ("pending_payment") for every order paid through this
+  // path, forever, since nothing else sets it until a refund is attempted —
+  // which is exactly what createRefund's own admission check then rejects,
+  // even for a fully, genuinely paid order. ORDER_STATUS and
+  // ORDER_PAYMENT_STATUS share identical string values for every payment
+  // state (see order.constants.js) — derivePaymentStatus's return value is
+  // valid for both fields directly, no re-mapping needed.
+  order.payment_status = derivedStatus;
 
   // Manual/in-store sales already had their stock deducted in full at
   // creation time (the goods left with the customer then, regardless of how

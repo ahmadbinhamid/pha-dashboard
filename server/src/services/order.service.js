@@ -16,6 +16,7 @@ const {
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
   ORDER_FULFILLMENT_STATUS,
+  ORDER_PAYMENT_STATUS,
 } = require("../constants/order.constants");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
@@ -247,7 +248,13 @@ async function createManualOrder({
     tax_amount,
     total,
     currency: "aud",
+    // §1.2/§9 — payment_status alongside the legacy status (see
+    // stripe.webhook.service.js#handlePaymentSucceeded's own comment on why
+    // this pairing is required everywhere status gets a payment-derived
+    // value: createRefund's admission check gates on payment_status
+    // specifically, not status).
     status: derivePaymentStatus(amountPaidCents, total),
+    payment_status: derivePaymentStatus(amountPaidCents, total),
     channel: ORDER_CHANNEL.MANUAL,
     guest_access_token: generateGuestAccessToken(),
   });
@@ -320,7 +327,11 @@ async function recordOrderPayment(orderId, { payment_method, amount }) {
   });
 
   order.payment = payment._id;
-  order.status = derivePaymentStatus(totalPaidCents + amountCents, order.total);
+  // See createManualOrder's matching comment — payment_status alongside the
+  // legacy status, not instead of it.
+  const derivedStatus = derivePaymentStatus(totalPaidCents + amountCents, order.total);
+  order.status = derivedStatus;
+  order.payment_status = derivedStatus;
   await order.save();
 
   return order;
@@ -604,6 +615,19 @@ async function createOrderFromEbayOrder(rawEbayOrder) {
     total: mapped.totalCents,
     currency: "aud",
     status: mapped.status,
+    // eBay orders arrive already paid — eBay Managed Payments settles
+    // before the order is ever pushed to us, so there's no "pending" state
+    // to model here, unlike storefront/manual. mapped.status is only ever
+    // ORDER_STATUS.PAID or ORDER_STATUS.FULFILLED (see mapStatus), so
+    // payment_status is unconditionally PAID and fulfillment_status follows
+    // mapped.status the same way sendOrderNotification's own comment
+    // describes for the storefront/manual path — see this file's other two
+    // payment_status write sites (createManualOrder, recordOrderPayment)
+    // and stripe.webhook.service.js#handlePaymentSucceeded for why this
+    // pairing is required everywhere `status` gets a payment-derived value.
+    payment_status: ORDER_PAYMENT_STATUS.PAID,
+    fulfillment_status:
+      mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.FULFILLED : ORDER_FULFILLMENT_STATUS.UNFULFILLED,
     channel: ORDER_CHANNEL.EBAY,
     external_order_id: mapped.externalOrderId,
     external_buyer_username: mapped.externalBuyerUsername,
