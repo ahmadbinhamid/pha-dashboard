@@ -83,6 +83,12 @@ export interface Refund {
   // presented, badge it as needing manual reconciliation.
   needs_reconciliation: boolean;
 
+  // §5 — set true when this refund touches an eBay payment allocation; the
+  // admin explicitly confirmed (via RefundEbayConfirmation) the refund was
+  // already issued in eBay Seller Hub. Always false for a refund with no
+  // eBay allocation.
+  ebay_refund_confirmed: boolean;
+
   initiated_via: "admin_api" | "stripe_dashboard" | "manual";
   initiated_by: string | null;
 
@@ -123,6 +129,19 @@ export interface RefundablePayment {
   settlement: "stripe" | "manual";
 }
 
+// A refund whose reservation is stuck long enough to be worth an admin's
+// attention — see getRefundableSummary's own comment server-side for why a
+// PENDING one has already stopped counting toward max_refundable above
+// while a PROCESSING one is still fully counted (Stripe already accepted
+// it — see `still_reserved`).
+export interface StuckRefund {
+  refund_number: string;
+  status: RefundStatus;
+  created_at: string;
+  total_amount: number;
+  still_reserved: boolean;
+}
+
 export interface RefundableSummary {
   order_total: number;
   total_paid: number;
@@ -131,6 +150,7 @@ export interface RefundableSummary {
   shipping: { amount: number; refunded: number; refundable: number };
   lines: RefundableLine[];
   payments: RefundablePayment[];
+  stuck_refunds: StuckRefund[];
 }
 
 // ── POST /order/:orderId/refunds request body (§2.2) — the client NEVER
@@ -155,4 +175,7 @@ export interface CreateRefundPayload {
   reason: RefundReason;
   internal_note?: string | null;
   payment_allocations?: { payment_id: string; amount: number }[]; // optional — server auto-allocates
+  // §5 — required true whenever this refund resolves to an eBay payment
+  // allocation; the server rejects otherwise (see RefundEbayConfirmation).
+  ebay_refund_confirmed?: boolean;
 }

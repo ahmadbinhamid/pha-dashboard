@@ -441,6 +441,7 @@ async function createRefund(orderId, body, userId) {
     internal_note: internalNote,
     payment_allocations: requestedAllocations,
     restock_all: restockAll = false,
+    ebay_refund_confirmed: ebayRefundConfirmed = false,
   } = body;
 
   // §3.1.7 — return the existing refund, 200 not 409, on a genuine
@@ -525,6 +526,22 @@ async function createRefund(orderId, body, userId) {
     // keep inside the lock.
     const allocations = await resolveAllocations({ order, totalAmount: computed.total_amount, requestedAllocations });
 
+    // §5 — an eBay allocation settles through eBay Managed Payments, so this
+    // is bookkeeping only, and restocking pushes the SKU's quantity back UP
+    // on the live eBay listing. Which payments actually get used isn't known
+    // until allocations resolve above, so this can only be checked here, not
+    // earlier — the admin must have already explicitly acknowledged issuing
+    // the refund in eBay Seller Hub before proceeding, or a restock here
+    // would silently push stock up on both eBay and locally for a refund
+    // that was never actually issued on eBay's side.
+    const touchesEbayPayment = allocations.some((a) => a.provider === PAYMENT_PROVIDER.EBAY);
+    if (touchesEbayPayment && !ebayRefundConfirmed) {
+      throw httpError(
+        "This refund settles against an eBay payment — confirm the refund has already been issued in eBay Seller Hub (ebay_refund_confirmed) before continuing.",
+        400,
+      );
+    }
+
     const refundNumber = await nextRefundNumber();
     refund = await Refund.create({
       order: order._id,
@@ -558,6 +575,7 @@ async function createRefund(orderId, body, userId) {
       total_amount: computed.total_amount,
       internal_note: internalNote || null,
       idempotency_key: idempotencyKey || null,
+      ebay_refund_confirmed: touchesEbayPayment ? true : false,
     });
     // Reservation is durable from here — getReservingRefunds counts this
     // PENDING doc immediately. Safe to release the lock and move the actual
@@ -847,14 +865,39 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
   });
 
   const naturalItemsAmount = computedLines.reduce((sum, l) => sum + l.line_amount, 0);
-  // Exact-quantity signal (not a dollar comparison — see
-  // reconcileExhaustingTotal's own comment for why that's wrong). Reserved
-  // quantity, not just confirmed — same reasoning as above.
-  const isExhausting = order.items.every((item) => {
+
+  // Design correction — quantity-exhaustion ≠ dollar-exhaustion. Every item's
+  // quantity being fully claimed does NOT mean there's nothing left owed on
+  // the order: shipping attaches to no line item at all (scope: line_items
+  // never touches it — shipping_amount is hardcoded 0 below), so if shipping
+  // was never separately refunded (via a scope: full_order request),
+  // reconcileExhaustingTotal's "take the exact remaining order.total balance"
+  // shortcut would silently hand THIS items-only refund the leftover
+  // shipping money too — a real customer over-refund, not just a rounding
+  // slip, dressed up as ordinary item money. All three conditions must hold
+  // before this is genuinely "nothing left to claim":
+  //   - quantities: every item's cumulative refunded quantity (reserved,
+  //     same reasoning as reservedQty above) reaches its own quantity.
+  //   - shipping: either there was never any shipping cost, or it's already
+  //     been fully refunded elsewhere — nothing left on that side either.
+  //   - no pending adjustment: THIS request carries no manual
+  //     adjustmentAmountInput. reconcileExhaustingTotal computes total_amount
+  //     as `order.total - priorTotalRefunded` when exhausting — a manual
+  //     adjustment gets added ON TOP of that in the return below, which
+  //     would stack an extra goodwill/restocking-fee amount onto an already
+  //     "claim everything left" total rather than onto the natural
+  //     (non-exhausting) proportional total. An admin adding a deliberate
+  //     manual adjustment is doing something bespoke, not naturally
+  //     finishing off the order — fall back to the ordinary proportional
+  //     math in that case and let their adjustment sit on top of THAT.
+  const quantitiesExhausted = order.items.every((item) => {
     const req = requestedLines.find((l) => String(l.order_item_id) === String(item._id));
     const willRefundQty = req ? req.quantity : 0;
     return (reservedQty.get(String(item._id)) || 0) + willRefundQty >= item.quantity;
   });
+  const shippingCovered = order.shipping_cost === 0 || sumShipping(priorRefunds) >= order.shipping_cost;
+  const noPendingAdjustment = !adjustmentAmountInput;
+  const isExhausting = quantitiesExhausted && shippingCovered && noPendingAdjustment;
   const { totalAmount, adjustmentAmount } = calc.reconcileExhaustingTotal({
     naturalItemsAmount,
     shippingAmount: 0, // §3.4 — scope: line_items never touches shipping

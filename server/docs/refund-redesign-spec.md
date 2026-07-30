@@ -643,41 +643,57 @@ click, so a double-click reuses it.
 
 ## 8. Edge-case matrix
 
-| # | Scenario | Expected behaviour |
-|---|---|---|
-| 1 | Refund 2 of 3 units, then 1 more | Both allowed; third attempt rejected — `refundable_quantity` hits 0 |
-| 2 | Refund 2 units twice concurrently | One succeeds; other rejected by validation or idempotency key. Never 4 units off a 3-unit line |
-| 3 | Line was price-edited after order | Refund against current `unit_price`, not `original_unit_price` |
-| 4 | Line has `discount_amount: 500` | Refund `(unit_price × qty) − pro-rata line discount` |
-| 5 | Order-level discount set post-hoc | Apportion pro-rata across lines by gross contribution |
-| 6 | Order total not divisible by 11, three uneven partial refunds | Final refund's GST = `order.tax_amount − sum(prior GST)`; totals tie out |
-| 7 | Item refund on a discounted, price-edited, partially-refunded line | All three adjustments compose; total still capped by §3.1.5 |
-| 8 | `scope: amount` for $20 on a $200 order | No line quantities touched, no restock, `payment_status: partially_refunded` |
-| 9 | Sum of amount-only refunds reaches order total | `payment_status: refunded`, but every line's `quantity_refunded` stays 0 — correct; goods were never returned |
-| 10 | Refund exceeds order total | Rejected by the absolute cap |
-| 11 | Order paid via deposit (cash) + Stripe balance | Server auto-allocates: manual portion off the cash payment, rest off Stripe. Both recorded on one Refund |
-| 12 | Refund larger than any single payment | Split across allocations; rejected only if it exceeds total refundable |
-| 13 | Stripe refund window (~180d) expired | `/refundable` returns `stripe_window_open: false`; UI forces manual; server rejects a Stripe allocation |
-| 14 | Stripe API errors mid-multi-allocation | Earlier allocations already created at Stripe. Mark refund `failed`, record which allocations settled, surface for manual completion. Do not silently retry |
-| 15 | Stripe returns `pending`, then `succeeded` via webhook | Effects applied once, on the webhook, guarded by `effects_applied_at` |
-| 16 | Stripe refund succeeds then flips to `failed` | `charge.refund.updated` triggers automatic reversal (§3.8), including re-deducting restocked stock |
-| 17 | Duplicate `charge.refunded` delivery | `claimEvent` dedupes the event; `effects_applied_at` dedupes the effects |
-| 18 | Two different `charge.refunded` events, same charge, concurrent | Unique index on `stripe_refund_id` prevents duplicate Refund docs |
-| 19 | Refund issued from the Stripe dashboard | Recorded as `scope: amount`, `needs_reconciliation: true`, no restock, badged in the UI |
-| 20 | Dashboard refund racing an admin refund on the same payment | No pending-slot collision any more — the partial unique index is gone |
-| 21 | Restock on a line with `sku: null` | Money refunded; restock skipped with a per-line warning in the response |
-| 22 | Restock on a SKU with no `Inventory` record | `adjustStockForSku` returns null → line flagged, order flagged, refund still succeeds |
-| 23 | eBay push fails during restock | Local stock is authoritative; line gets `ebay_sync_status: failed`, `push_quantity` retry enqueued, refund succeeds |
-| 24 | eBay retry never succeeds | `POST /refunds/:id/retry-restock` re-runs only the eBay leg |
-| 25 | Refund an eBay-channel order | Manual settlement, `ebay_refund_confirmed` required, restock still pushes quantity up |
-| 26 | Refund a `FULFILLED` order | `payment_status` changes; `fulfillment_status` stays `fulfilled` |
-| 27 | Refund a `MANUAL` channel order | Stock was deducted at creation, so restock is valid and symmetric |
-| 28 | Refund shipping twice | Second attempt rejected — cumulative shipping cap |
-| 29 | Item refund on a pickup order | `shipping_cost` is 0; assert rather than assume |
-| 30 | Restocking fee larger than the item value | `total_amount` would be ≤ 0 → rejected at validation |
-| 31 | Admin voids a manual refund that restocked | Stock re-deducted, eBay quantity lowered, `status: voided`, nothing deleted |
-| 32 | Order items reordered or removed after a refund exists | `order_item_id` references survive; guard any item-removal path against removing a refunded line |
-| 33 | Concurrent refund + `updateOrderDiscount` | Discount change invalidates line math. Recompute inside the transaction and re-assert the §3.2 sanity check |
+Test coverage column added in the corrections round — every row is either a
+named test (`file.js — "test name"`, and for a nested subtest,
+`file.js — "parent" > "child"`) or `untested — <reason>`. "Untested" is
+never silent: if a row lacks a name here, it lacks a test, full stop.
+
+| # | Scenario | Expected behaviour | Test coverage |
+|---|---|---|---|
+| 1 | Refund 2 of 3 units, then 1 more | Both allowed; third attempt rejected — `refundable_quantity` hits 0 | Partial — the "reject once quantity is exhausted" path is exercised by `refund.service.concurrency.test.js` — `"concurrency: ... exactly 5 succeed"` (rejects on hitting 0, just via parallel not sequential requests) and `refund.service.stale-processing.test.js` — `"... blocks a conflicting refund, not admitted"`. No test does the literal sequential 2-then-1-then-reject on one line |
+| 2 | Refund 2 units twice concurrently | One succeeds; other rejected by validation or idempotency key. Never 4 units off a 3-unit line | `refund.service.concurrency.test.js` — `"concurrency: N parallel single-unit refunds on a 5-unit line — exactly 5 succeed, run repeatedly"` |
+| 3 | Line was price-edited after order | Refund against current `unit_price`, not `original_unit_price` | `refund-calculator.service.test.js` — `"lineDiscount: price-edited line — discount is independent of unit_price"` (calculator-level; refund.service.js always reads `item.unit_price`, never `original_unit_price`, so this is the correct layer) |
+| 4 | Line has `discount_amount: 500` | Refund `(unit_price × qty) − pro-rata line discount` | `refund-calculator.service.test.js` — `"lineDiscount: proportional share when not exhausting the line"` |
+| 5 | Order-level discount set post-hoc | Apportion pro-rata across lines by gross contribution | `refund-calculator.service.test.js` — `"apportionOrderDiscount: reproduces the exact Phase-0(c) one-cent bug and confirms the fix"` and `"apportionOrderDiscount: deterministic regardless of input array order"` |
+| 6 | Order total not divisible by 11, three uneven partial refunds | Final refund's GST = `order.tax_amount − sum(prior GST)`; totals tie out | `refund-calculator.service.test.js` — `"invariant: a sequence of partial refunds that exhausts an order sums exactly to order.total and order.tax_amount"`; end-to-end at the service layer via `refund.service.exhaustion.test.js` — `"shipping covered (none owed) — legitimate exhaustion still takes the exact GST residual"` |
+| 7 | Item refund on a discounted, price-edited, partially-refunded line | All three adjustments compose; total still capped by §3.1.5 | Partial — `refund-calculator.service.test.js` — `"computeLineItemsLine: composes gross, discount, and order share correctly"` composes discount + order-share, not price-edit in the same case. Untested — no test combines all three (discount + price-edit + partial-refund-in-progress) on one line at once |
+| 8 | `scope: amount` for $20 on a $200 order | No line quantities touched, no restock, `payment_status: partially_refunded` | Untested — no test asserts this specific shape (quantities untouched, correct partial status) for a bare `scope: amount` refund |
+| 9 | Sum of amount-only refunds reaches order total | `payment_status: refunded`, but every line's `quantity_refunded` stays 0 — correct; goods were never returned | Untested |
+| 10 | Refund exceeds order total | Rejected by the absolute cap | Partial — the `total_amount > maxRefundable` guardrail is exercised (for other reasons) by `refund.service.stale-processing.test.js` and `refund.service.exhaustion.test.js`'s `max_refundable` assertions, but no test submits a request literally exceeding `order.total` and asserts the specific rejection |
+| 11 | Order paid via deposit (cash) + Stripe balance | Server auto-allocates: manual portion off the cash payment, rest off Stripe. Both recorded on one Refund | Untested — `resolveAllocations`'s auto-split IS tested for two Stripe payments (row 12/14), not a mixed cash+Stripe combination |
+| 12 | Refund larger than any single payment | Split across allocations; rejected only if it exceeds total refundable | `stripe.webhook.service.fixture.test.js` — `"row 14: mid-multi-allocation Stripe failure marks the refund failed and records which allocation settled"` (exercises the auto-split across 2 payments as setup) |
+| 13 | Stripe refund window (~180d) expired | `/refundable` returns `stripe_window_open: false`; UI forces manual; server rejects a Stripe allocation | Untested — `isWithinStripeRefundWindow` has no direct test |
+| 14 | Stripe API errors mid-multi-allocation | Earlier allocations already created at Stripe. Mark refund `failed`, record which allocations settled, surface for manual completion. Do not silently retry | `stripe.webhook.service.fixture.test.js` — `"row 14: mid-multi-allocation Stripe failure marks the refund failed and records which allocation settled"` |
+| 15 | Stripe returns `pending`, then `succeeded` via webhook | Effects applied once, on the webhook, guarded by `effects_applied_at` | `stripe.webhook.service.fixture.test.js` — `"row 15: effects apply once, on webhook confirmation, guarded by effects_applied_at"` |
+| 16 | Stripe refund succeeds then flips to `failed` | `charge.refund.updated` triggers automatic reversal (§3.8), including re-deducting restocked stock | `stripe.webhook.service.fixture.test.js` — `"row 16: charge.refund.updated auto-reverses, including re-deducting restocked stock"` |
+| 17 | Duplicate `charge.refunded` delivery | `claimEvent` dedupes the event; `effects_applied_at` dedupes the effects | `stripe.webhook.service.fixture.test.js` — `"row 17: claimEvent dedupes the event; a redelivered event never re-processes"` |
+| 18 | Two different `charge.refunded` events, same charge, concurrent | Unique index on `stripe_refund_id` prevents duplicate Refund docs | `stripe.webhook.service.fixture.test.js` — `"rows 18/19: an unknown (dashboard-issued) Stripe refund is recorded once, correctly shaped"` (genuinely concurrent via `Promise.allSettled`) |
+| 19 | Refund issued from the Stripe dashboard | Recorded as `scope: amount`, `needs_reconciliation: true`, no restock, badged in the UI | `stripe.webhook.service.fixture.test.js` — `"rows 18/19: an unknown (dashboard-issued) Stripe refund is recorded once, correctly shaped"`. Badging itself is a frontend concern — `RefundHistoryList.tsx` renders `needs_reconciliation`, not separately tested (no frontend test infra in this repo) |
+| 20 | Dashboard refund racing an admin refund on the same payment | No pending-slot collision any more — the partial unique index is gone | Untested |
+| 21 | Restock on a line with `sku: null` | Money refunded; restock skipped with a per-line warning in the response | Untested — every test using `sku: null` also passes `restock: false`, so `syncOrderStock`'s `sku`-less branch (`ebay_sync_status: "not_applicable"`) is never actually exercised with `restock: true` |
+| 22 | Restock on a SKU with no `Inventory` record | `adjustStockForSku` returns null → line flagged, order flagged, refund still succeeds | Untested |
+| 23 | eBay push fails during restock | Local stock is authoritative; line gets `ebay_sync_status: failed`, `push_quantity` retry enqueued, refund succeeds | Partial — `refund.service.ledger-violation.test.js` — `"eBay was re-pushed for both the apply and the void reversal"` confirms pushes are enqueued (via a real Redis queue) but doesn't force a push failure and assert `ebay_sync_status: "failed"` |
+| 24 | eBay retry never succeeds | `POST /refunds/:id/retry-restock` re-runs only the eBay leg | Untested — `retryRestockForRefund` has no dedicated test file |
+| 25 | Refund an eBay-channel order | Manual settlement, `ebay_refund_confirmed` required, restock still pushes quantity up | `refund.service.ebay-confirmation.test.js` — `"rejected without ebay_refund_confirmed"` and `"succeeds and persists the acknowledgement when confirmed"` |
+| 26 | Refund a `FULFILLED` order | `payment_status` changes; `fulfillment_status` stays `fulfilled` | Untested — `recomputeLedger`'s `fulfillment_status`-preservation branch has no dedicated test (Phase 0's original bug fix predates this test suite) |
+| 27 | Refund a `MANUAL` channel order | Stock was deducted at creation, so restock is valid and symmetric | Adjacent coverage — every restock-bearing test (`refund.service.ledger-violation.test.js`, `stripe.webhook.service.fixture.test.js` row 16) uses a manual-channel disposable order as its fixture and confirms restock works correctly there, but none assert the "symmetric with deduction at creation" framing specifically |
+| 28 | Refund shipping twice | Second attempt rejected — cumulative shipping cap | `refund-calculator.service.test.js` — `"computeShippingRefund: cumulative cap — can't refund shipping twice"` (calculator-level; refund.service.js always passes the correct `shippingAlreadyRefunded` through, untested end-to-end) |
+| 29 | Item refund on a pickup order | `shipping_cost` is 0; assert rather than assume | `refund.service.exhaustion.test.js` — `"shipping covered (none owed) — legitimate exhaustion still takes the exact GST residual"` and `"a manual adjustment on the final refund disables the exhaustion shortcut"` (both use pickup orders with `shipping_cost: 0`) |
+| 30 | Restocking fee larger than the item value | `total_amount` would be ≤ 0 → rejected at validation | Untested — the underlying `computed.total_amount < 1` guardrail is generic and shared but never exercised via an oversized restocking-fee scenario specifically |
+| 31 | Admin voids a manual refund that restocked | Stock re-deducted, eBay quantity lowered, `status: voided`, nothing deleted | Partial — `refund.service.ledger-violation.test.js` exercises the exact mechanism (`voidRefund` reversing restock + re-pushing eBay + preserving the document) but via the AUTO-void path, not literally through an admin calling `POST /refund/:id/void`. `refund.service.void-guard.test.js` — `"an all-manual refund voids normally with no force needed"` covers the admin-void call path itself, but on a refund with no restock to reverse |
+| 32 | Order items reordered or removed after a refund exists | `order_item_id` references survive; guard any item-removal path against removing a refunded line | Untested |
+| 33 | Concurrent refund + `updateOrderDiscount` | Discount change invalidates line math. Recompute inside the transaction and re-assert the §3.2 sanity check | Untested — no Mongo transaction exists in this codebase (standalone mongod, see §3.7's revised reasoning), so this row's literal expected behaviour ("recompute inside the transaction") was never implementable as originally scoped; a non-transactional mitigation was never designed either |
+| 34 | Every unit refunded individually (never `scope: full_order`), shipping never refunded | Quantity-exhaustion ≠ dollar-exhaustion — `total_amount` stays items-only; `payment_status` stays `partially_refunded`, not `refunded`, until shipping is separately claimed | `refund.service.exhaustion.test.js` — `"all quantities claimed, shipping outstanding — total_amount stays items-only"` |
+| 35 | Quantities fully claimed AND shipping covered (zero, or already refunded) AND no manual `adjustment_amount` on the request | Genuinely exhausting — the exact-residual rounding correction still fires (regression guard on the row 34 fix). A manual adjustment present on what would otherwise be the final refund disables the residual shortcut instead; natural proportional math is used, with the adjustment applied on top | `refund.service.exhaustion.test.js` — `"shipping covered (none owed) — legitimate exhaustion still takes the exact GST residual"` and `"a manual adjustment on the final refund disables the exhaustion shortcut"` |
+
+Summary: 22 of 35 rows have direct or partial test coverage; 13 are genuinely
+untested (rows 8, 9, 11, 13, 20, 22, 24, 26, 30, 32, 33, plus the fully-
+uncovered halves of rows 1 and 7). None of the untested rows are known bugs
+— they're gaps in test coverage for behaviour the code paths above already
+implement, not missing implementation. Highest-value next additions, if
+picked up: row 26 (fulfillment_status preservation — a real historical bug
+this suite exists partly to prevent regressing) and row 24 (`retryRestockForRefund`
+has zero coverage today).
 
 ---
 

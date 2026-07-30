@@ -67,6 +67,14 @@ const createRefund = {
     // Optional — server auto-allocates across the order's payments if
     // omitted (§2.2).
     payment_allocations: Joi.array().items(paymentAllocation).min(1),
+
+    // §5 — required true whenever this refund ends up touching an eBay
+    // payment allocation (server-side check in refund.service.js#createRefund,
+    // since which payments get used isn't known until allocations resolve).
+    // Not `.when()`-gated on anything here — the FE only shows/requires the
+    // checkbox once it knows an eBay payment is involved, but the server
+    // enforces it regardless of what the client sends.
+    ebay_refund_confirmed: Joi.boolean().default(false),
   }),
 };
 

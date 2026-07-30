@@ -183,6 +183,17 @@ const refundSchema = buildSchema({
   // dashboard refund carries no line data telling us which products came back.
   needs_reconciliation: { type: Boolean, default: false },
 
+  // §5 — an eBay-channel payment settles through eBay Managed Payments, so a
+  // refund against it is bookkeeping only: there is no gateway call, and
+  // restocking pushes the SKU's quantity back UP on the live eBay listing.
+  // If the admin hasn't actually issued the refund in eBay Seller Hub yet,
+  // that restock push is a lie — stock rises locally and on eBay while the
+  // sale (and eBay's own cut) still stands. Required true (validated in
+  // refund.validation.js, enforced in refund.service.js#createRefund)
+  // whenever any payment_allocations entry has provider: "ebay"; stored here
+  // as the acknowledgement record, not just a transient request flag.
+  ebay_refund_confirmed: { type: Boolean, default: false },
+
   // Reversal trail (§3.8) for a refund that failed after succeeding, or a
   // mistaken manual refund. Never hard-delete a Refund.
   voided_at: { type: Date, default: null },

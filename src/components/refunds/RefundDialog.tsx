@@ -21,6 +21,8 @@ import { RefundLineItemsSection, type LineSelection } from "./RefundLineItemsSec
 import { RefundFullOrderSection } from "./RefundFullOrderSection";
 import { RefundAmountSection } from "./RefundAmountSection";
 import { RefundSummary, type RefundSummaryFigures } from "./RefundSummary";
+import { RefundEbayConfirmation } from "./RefundEbayConfirmation";
+import { RefundStuckWarning } from "./RefundStuckWarning";
 import type { RefundReason, RefundScope, CreateRefundPayload } from "@/types/refund";
 
 interface RefundDialogProps {
@@ -54,6 +56,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
   const [amountDollars, setAmountDollars] = useState("");
   const [reason, setReason] = useState<RefundReason>("customer_request");
   const [internalNote, setInternalNote] = useState("");
+  const [ebayConfirmed, setEbayConfirmed] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   // Generated once per dialog OPEN, not per submit click — a double-click
@@ -70,6 +73,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
       setAmountDollars("");
       setReason("customer_request");
       setInternalNote("");
+      setEbayConfirmed(false);
       setError(undefined);
     }
   }, [open]);
@@ -82,6 +86,11 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
   const refundable = refundableResp?.data;
 
   const restockDefault = RESTOCK_DEFAULT_REASONS.has(reason);
+
+  // §5 — an eBay payment allocation only shows up once there's still
+  // something refundable on it; the acknowledgement gate only needs to
+  // appear when it could actually be used.
+  const hasEbayPayment = refundable?.payments.some((p) => p.provider === "ebay" && p.refundable > 0) ?? false;
 
   const mutation = useMutation({
     mutationFn: (payload: CreateRefundPayload) => createRefund(orderId, payload),
@@ -138,10 +147,16 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
     setError(undefined);
     if (!refundable) return;
 
+    if (hasEbayPayment && !ebayConfirmed) {
+      setError("Confirm the refund has already been issued in eBay Seller Hub before continuing");
+      return;
+    }
+
     const base = {
       idempotency_key: idempotencyKey,
       reason,
       internal_note: internalNote || null,
+      ebay_refund_confirmed: ebayConfirmed,
     };
 
     let payload: CreateRefundPayload;
@@ -210,6 +225,8 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
           </RadioGroup>
         ) : (
           <div className="space-y-4">
+            <RefundStuckWarning stuckRefunds={refundable.stuck_refunds} />
+
             {scope === "line_items" && (
               <RefundLineItemsSection
                 lines={refundable.lines}
@@ -234,6 +251,8 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
                 maxRefundable={refundable.max_refundable}
               />
             )}
+
+            {hasEbayPayment && <RefundEbayConfirmation confirmed={ebayConfirmed} onChange={setEbayConfirmed} />}
 
             <FormField label="Reason" required>
               <NativeSelect value={reason} onChange={(e) => setReason(e.target.value as RefundReason)}>
