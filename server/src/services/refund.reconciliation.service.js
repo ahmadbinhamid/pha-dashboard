@@ -67,17 +67,38 @@ async function reconcileStuckRefunds() {
       for (const alloc of refund.payment_allocations) {
         if (alloc.provider !== PAYMENT_PROVIDER.STRIPE || alloc.settled) continue;
 
-        const sr = await stripe.refunds.retrieve(alloc.stripe_refund_id);
-        if (sr.status === "succeeded") {
-          const payment = await Payment.findById(alloc.payment);
-          await reconcileStripeRefund(sr, payment, order);
-        } else if (sr.status === "failed" || sr.status === "canceled") {
-          await handleChargeRefundUpdated(sr);
-        } else {
-          // Still genuinely pending at Stripe's end — nothing to do yet,
-          // this allocation stays unsettled and will be checked again next
-          // sweep. Not an error, just not resolved this round.
-          unresolved = true;
+        try {
+          const sr = await stripe.refunds.retrieve(alloc.stripe_refund_id);
+          if (sr.status === "succeeded") {
+            const payment = await Payment.findById(alloc.payment);
+            await reconcileStripeRefund(sr, payment, order);
+          } else if (sr.status === "failed" || sr.status === "canceled") {
+            await handleChargeRefundUpdated(sr);
+          } else {
+            // Still genuinely pending at Stripe's end — nothing to do yet,
+            // this allocation stays unsettled and will be checked again
+            // next sweep. Not an error, just not resolved this round.
+            unresolved = true;
+          }
+        } catch (err) {
+          // Only "the refund genuinely doesn't exist at Stripe" is a real
+          // answer that legitimately releases the reservation — everything
+          // else (a transient 500, a timeout, a rate limit) is Stripe being
+          // temporarily unreachable, NOT proof the refund didn't happen.
+          // PROCESSING has no age bound (see getReservingRefunds) precisely
+          // because "we couldn't confirm it" must never be treated the same
+          // as "it didn't happen" — misreading a transient error as
+          // resource_missing would release a reservation for money that's
+          // actually still moving at Stripe. Leave it PROCESSING and retry
+          // next sweep for anything but a confirmed resource_missing.
+          if (err.code === "resource_missing") {
+            await handleChargeRefundUpdated({ status: "canceled", id: alloc.stripe_refund_id });
+          } else {
+            logger.warn(
+              `[refund.reconciliation] transient Stripe error on ${alloc.stripe_refund_id} (refund ${refund.refund_number}): ${err.message}`,
+            );
+            unresolved = true;
+          }
         }
       }
 

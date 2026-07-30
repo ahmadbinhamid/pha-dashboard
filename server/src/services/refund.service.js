@@ -589,8 +589,16 @@ async function createRefund(orderId, body, userId) {
 // Stripe's own refund list for this payment intent and matching on that
 // BEFORE ever creating one recovers the lost id in exactly that case.
 async function findExistingStripeRefund(stripe, paymentIntentId, refundId) {
-  const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 });
-  return data.find((r) => r.metadata?.refund_id === String(refundId)) || null;
+  // A single .list({ limit: 100 }) call only returns page 1 — on a payment
+  // intent with more than 100 refunds (a busy order over its lifetime),
+  // this refund_id could sit on a later page, findExistingStripeRefund
+  // would wrongly return null, and settleRefund would create a genuine
+  // duplicate at Stripe. The Stripe SDK's async iterator walks every page
+  // automatically (auto-pagination) — use that instead of a single .list().
+  for await (const r of stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 })) {
+    if (r.metadata?.refund_id === String(refundId)) return r;
+  }
+  return null;
 }
 
 async function settleRefund(refund) {
