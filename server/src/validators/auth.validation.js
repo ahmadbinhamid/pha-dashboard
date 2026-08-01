@@ -28,6 +28,10 @@ const register = {
     email: Joi.string().trim().lowercase().email().required(),
     password: Joi.string().min(6).max(128).required(),
     role: Joi.string().valid("user", "admin").default("user"),
+    // Which tenant this staff account joins — required now that every User
+    // is tenant-scoped. The storefront/dashboard client knows this from its
+    // own deployment config (see CLAUDE.md's tenant provisioning notes).
+    tenant_slug: Joi.string().trim().lowercase().required(),
   }),
 };
 

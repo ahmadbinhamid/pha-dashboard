@@ -33,8 +33,8 @@ async function getPaymentsForOrder(orderId) {
   return Payment.find({ order: orderId }).sort({ created_at: -1 });
 }
 
-async function listPayments({ page = 1, limit = 20, skip = 0, status } = {}) {
-  const filter = {};
+async function listPayments({ page = 1, limit = 20, skip = 0, status } = {}, tenantId) {
+  const filter = { tenant_id: tenantId };
   if (status) filter.status = status;
 
   const [items, total] = await Promise.all([
@@ -55,8 +55,8 @@ async function listPayments({ page = 1, limit = 20, skip = 0, status } = {}) {
   };
 }
 
-async function getPaymentWithRefunds(paymentId) {
-  const payment = await Payment.findById(paymentId).populate("order");
+async function getPaymentWithRefunds(paymentId, tenantId) {
+  const payment = await Payment.findOne({ _id: paymentId, tenant_id: tenantId }).populate("order");
   if (!payment) return null;
 
   const refunds = await Refund.find({ payment: payment._id }).sort({ created_at: -1 });

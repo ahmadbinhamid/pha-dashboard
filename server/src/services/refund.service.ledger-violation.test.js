@@ -41,6 +41,7 @@ const { REFUND_STATUS } = require("../constants/refund.constants");
 
 const UNIT_PRICE = 1000; // $10.00/unit
 const LINE_QUANTITY = 2; // order has 2 units total on the one line
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
 
 async function countPushJobsForSku(sku) {
   const jobs = await ebayQueue.getJobs(["waiting", "active", "completed", "failed", "delayed"], 0, -1);
@@ -64,6 +65,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
   });
 
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-LEDGER-${suffix}`,
     invoice_number: `TEST-LEDGER-INV-${suffix}`,
     items: [
@@ -94,6 +96,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
   const itemId = order.items[0]._id.toString();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "manual",
     payment_method: "cash",
@@ -116,6 +119,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
         reason: "customer_request",
       },
       null,
+      TEST_TENANT_ID,
     );
     assert.equal(refund1.status, REFUND_STATUS.SUCCEEDED);
 
@@ -128,8 +132,9 @@ test("ledger violation: effects already applied, then auto-voided — restock re
     // admission validation entirely (simulating a bug in the lock, a manual
     // DB edit — whatever gets a bad refund into "succeeded" despite already
     // exceeding the line's quantity: 1 (refund 1) + 2 (this one) = 3 > 2).
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund2 = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: UNIT_PRICE * 2,

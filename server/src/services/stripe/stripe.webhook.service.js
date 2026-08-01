@@ -9,6 +9,7 @@
 const Payment = require("../../models/Payment");
 const Order = require("../../models/Order");
 const Refund = require("../../models/Refund");
+const Tenant = require("../../models/Tenant");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const { getStripeClient } = require("./stripe.client.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
@@ -31,7 +32,15 @@ function constructEvent(rawBody, signatureHeader) {
 // the caller treats as "already handled, no-op" rather than an error.
 async function claimEvent(event) {
   try {
-    await StripeProcessedEvent.create({ stripe_event_id: event.id, type: event.type });
+    // event.account is present for every event delivered for a connected
+    // account (this platform's Connect webhook endpoint) — absent for a
+    // platform-level event. Stored for debugging only, not idempotency
+    // (event.id is already globally unique across every connected account).
+    await StripeProcessedEvent.create({
+      stripe_event_id: event.id,
+      type: event.type,
+      stripe_account_id: event.account || null,
+    });
     return true;
   } catch (err) {
     if (err.code === 11000) return false;
@@ -46,16 +55,18 @@ async function handleEvent(event) {
     return;
   }
 
+  const stripeAccountId = event.account || null;
+
   try {
     switch (event.type) {
       case "payment_intent.succeeded":
-        return await handlePaymentSucceeded(event.data.object);
+        return await handlePaymentSucceeded(event.data.object, stripeAccountId);
       case "payment_intent.payment_failed":
         return await handlePaymentFailed(event.data.object);
       case "charge.refunded":
-        return await handleChargeRefunded(event.data.object);
+        return await handleChargeRefunded(event.data.object, stripeAccountId);
       case "charge.refund.updated":
-        return await handleChargeRefundUpdated(event.data.object);
+        return await handleChargeRefundUpdated(event.data.object, stripeAccountId);
       default:
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
@@ -68,7 +79,7 @@ async function handleEvent(event) {
   }
 }
 
-async function handlePaymentSucceeded(intent) {
+async function handlePaymentSucceeded(intent, stripeAccountId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: intent.id });
   if (!payment) {
     logger.error(`[stripe.webhook] payment_intent.succeeded for unknown intent ${intent.id}`);
@@ -81,6 +92,21 @@ async function handlePaymentSucceeded(intent) {
   const order = await Order.findById(payment.order).select("+guest_access_token");
   if (!order) {
     logger.error(`[stripe.webhook] order ${payment.order} missing for intent ${intent.id}`);
+    return;
+  }
+
+  // Defense-in-depth: the local Payment/Order lookup above is what actually
+  // resolves which tenant this event belongs to (stripe_payment_intent_id is
+  // unique regardless of connected account) — this just confirms the
+  // resolved tenant's own connected account matches what Stripe says
+  // delivered the event, catching a misconfigured webhook or a future bug
+  // before it can apply effects to the wrong tenant's order.
+  const tenant = await Tenant.findById(order.tenant_id);
+  if (stripeAccountId && tenant?.stripe_account_id && tenant.stripe_account_id !== stripeAccountId) {
+    logger.error(
+      `[stripe.webhook] tenant mismatch on intent ${intent.id}: event.account=${stripeAccountId}, ` +
+        `resolved tenant's stripe_account_id=${tenant.stripe_account_id} — refusing to apply effects`,
+    );
     return;
   }
 
@@ -117,9 +143,11 @@ async function handlePaymentSucceeded(intent) {
   // rejects "latest_charge.payment_method" as an unsupported expand path.
   // Never rely on the legacy `charges.data[]` shape either way.
   const stripe = getStripeClient();
-  const fullIntent = await stripe.paymentIntents.retrieve(intent.id, {
-    expand: ["payment_method"],
-  });
+  const fullIntent = await stripe.paymentIntents.retrieve(
+    intent.id,
+    { expand: ["payment_method"] },
+    { stripeAccount: stripeAccountId },
+  );
   const paymentMethod =
     fullIntent.payment_method && typeof fullIntent.payment_method === "object"
       ? fullIntent.payment_method
@@ -248,7 +276,7 @@ function mapStripeReasonToOurs(stripeReason) {
 // event fires once per CHARGE, potentially covering several refunds at
 // once. handleChargeRefundUpdated (§4.2) is the leaner, non-listing path
 // for a single refund's own status transitions once it exists.
-async function handleChargeRefunded(charge) {
+async function handleChargeRefunded(charge, stripeAccountId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: charge.payment_intent });
   if (!payment) {
     logger.warn(`[stripe.webhook] charge.refunded for unknown intent ${charge.payment_intent}`);
@@ -258,6 +286,15 @@ async function handleChargeRefunded(charge) {
   const order = await Order.findById(payment.order);
   if (!order) return;
 
+  const tenant = await Tenant.findById(order.tenant_id);
+  if (stripeAccountId && tenant?.stripe_account_id && tenant.stripe_account_id !== stripeAccountId) {
+    logger.error(
+      `[stripe.webhook] tenant mismatch on charge.refunded for intent ${charge.payment_intent}: ` +
+        `event.account=${stripeAccountId}, resolved tenant's stripe_account_id=${tenant?.stripe_account_id} — refusing to apply effects`,
+    );
+    return;
+  }
+
   // charge.refunds is NOT auto-expanded on the Charge object as of Stripe API
   // version 2022-11-15+ — and the payload shape follows the API version
   // configured on the Stripe account/webhook endpoint, not our SDK-pinned
@@ -266,7 +303,10 @@ async function handleChargeRefunded(charge) {
   // shows it. Never rely on optional sub-objects being present in webhook
   // payloads — re-fetch explicitly instead.
   const stripe = getStripeClient();
-  const { data: stripeRefunds } = await stripe.refunds.list({ payment_intent: charge.payment_intent });
+  const { data: stripeRefunds } = await stripe.refunds.list(
+    { payment_intent: charge.payment_intent },
+    { stripeAccount: stripeAccountId },
+  );
 
   for (const sr of stripeRefunds) {
     await reconcileStripeRefund(sr, payment, order);
@@ -312,8 +352,9 @@ async function reconcileStripeRefund(sr, payment, order) {
   // stripe_refund_id-with-no-index version of this code was exposed to.
   let created;
   try {
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(order.tenant_id);
     created = await Refund.create({
+      tenant_id: order.tenant_id,
       order: order._id,
       payment: payment._id, // legacy field, kept populated during the transition
       amount: sr.amount,
@@ -392,11 +433,15 @@ async function handleChargeRefundUpdated(sr) {
   // reporting that this specific refund just moved to failed/canceled —
   // i.e. the money genuinely came back — so voiding to match that is
   // correct, not a desync.
-  await refundService.voidRefund(refund._id, {
-    reason: `Auto-reversed: Stripe refund ${sr.id} transitioned to ${sr.status} after effects were already applied`,
-    userId: null,
-    source: "stripe_reversal",
-  });
+  await refundService.voidRefund(
+    refund._id,
+    {
+      reason: `Auto-reversed: Stripe refund ${sr.id} transitioned to ${sr.status} after effects were already applied`,
+      userId: null,
+      source: "stripe_reversal",
+    },
+    refund.tenant_id,
+  );
   logger.error(
     `[stripe.webhook] ALERT: refund ${refund.refund_number} (order ${refund.order}) was auto-reversed — ` +
       `Stripe's refund ${sr.id} moved to "${sr.status}" after we had already credited the customer and/or ` +

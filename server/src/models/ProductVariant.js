@@ -11,6 +11,8 @@ const combinationSchema = new Schema(
 );
 
 const productVariantSchema = buildSchema({
+  // Backfilled onto every existing ProductVariant by scripts/backfillTenantId.js.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   product: {
     type: Schema.Types.ObjectId,
     ref: "Product",

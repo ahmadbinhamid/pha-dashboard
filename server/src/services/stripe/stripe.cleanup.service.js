@@ -5,6 +5,7 @@
 
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
+const Tenant = require("../../models/Tenant");
 const { getStripeClient } = require("./stripe.client.service");
 const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
@@ -28,6 +29,14 @@ async function cleanupAbandonedOrders() {
   }
 
   const stripe = getStripeClient();
+  // Cached per run — many abandoned orders typically belong to the same
+  // handful of tenants, no need to re-fetch the Tenant doc for each one.
+  const tenantCache = new Map();
+  async function getTenantCached(tenantId) {
+    const key = String(tenantId);
+    if (!tenantCache.has(key)) tenantCache.set(key, await Tenant.findById(tenantId));
+    return tenantCache.get(key);
+  }
 
   for (const order of orders) {
     try {
@@ -41,9 +50,11 @@ async function cleanupAbandonedOrders() {
       }
 
       if (payment && payment.stripe_payment_intent_id) {
+        const tenant = await getTenantCached(order.tenant_id);
+        const stripeAccount = tenant?.stripe_account_id;
         let intentStatus = null;
         try {
-          const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+          const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id, { stripeAccount });
           intentStatus = cancelled.status;
         } catch (err) {
           if (err.code !== "payment_intent_unexpected_state") throw err;
@@ -51,7 +62,7 @@ async function cleanupAbandonedOrders() {
           // state — fetch the real status rather than guessing from the
           // error text, since "already succeeded" and "already canceled"
           // require opposite handling below.
-          const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+          const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { stripeAccount });
           intentStatus = intent.status;
         }
 

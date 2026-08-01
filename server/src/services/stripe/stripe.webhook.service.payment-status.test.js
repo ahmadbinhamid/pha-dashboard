@@ -73,7 +73,9 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
   // is left at its schema default (pending_payment), exactly like real
   // order creation does, NOT hand-set to "paid" like every other test
   // fixture in this suite.
+  const TEST_TENANT_ID = new mongoose.Types.ObjectId();
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-PAYSTATUS-${suffix}`,
     invoice_number: `TEST-PAYSTATUS-INV-${suffix}`,
     items: [
@@ -106,6 +108,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
 
   const intentId = `pi_test_${suffix}`;
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "stripe",
     payment_method: null,
@@ -164,6 +167,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
           reason: "customer_request",
         },
         null,
+        TEST_TENANT_ID,
       );
       assert.equal(refund.status, "processing");
     });

@@ -36,8 +36,8 @@ async function getOrderStatsByCustomer(customerIds) {
   return new Map(stats.map((s) => [s._id.toString(), s]));
 }
 
-async function listCustomers({ skip = 0, limit = 20, search = "" } = {}) {
-  const filter = {};
+async function listCustomers({ skip = 0, limit = 20, search = "" } = {}, tenantId) {
+  const filter = { tenant_id: tenantId };
   if (search) {
     const re = new RegExp(escapeRegex(search), "i");
     filter.$or = [{ name: re }, { email: re }, { phone: re }];
@@ -61,8 +61,8 @@ async function listCustomers({ skip = 0, limit = 20, search = "" } = {}) {
   return { items: withStats, total };
 }
 
-async function getCustomerById(id) {
-  const customer = await Customer.findById(id);
+async function getCustomerById(id, tenantId) {
+  const customer = await Customer.findOne({ _id: id, tenant_id: tenantId });
   if (!customer) return null;
 
   const [orders, statsMap] = await Promise.all([
@@ -88,8 +88,9 @@ async function getCustomerById(id) {
   };
 }
 
-async function createCustomer({ name, email, phone, has_online_account, shipping_address, billing_address }) {
+async function createCustomer({ name, email, phone, has_online_account, shipping_address, billing_address }, tenantId) {
   return Customer.create({
+    tenant_id: tenantId,
     name,
     email: email || null,
     phone: phone || null,
@@ -99,8 +100,12 @@ async function createCustomer({ name, email, phone, has_online_account, shipping
   });
 }
 
-async function updateCustomer(id, { name, email, phone, has_online_account, shipping_address, billing_address }) {
-  const customer = await Customer.findById(id);
+async function updateCustomer(
+  id,
+  { name, email, phone, has_online_account, shipping_address, billing_address },
+  tenantId,
+) {
+  const customer = await Customer.findOne({ _id: id, tenant_id: tenantId });
   if (!customer) return null;
 
   if (name !== undefined) customer.name = name;
@@ -114,8 +119,8 @@ async function updateCustomer(id, { name, email, phone, has_online_account, ship
   return customer;
 }
 
-async function deleteCustomer(id) {
-  const customer = await Customer.findById(id);
+async function deleteCustomer(id, tenantId) {
+  const customer = await Customer.findOne({ _id: id, tenant_id: tenantId });
   if (!customer) return null;
   await customer.softDelete();
   return customer;

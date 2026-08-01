@@ -38,17 +38,22 @@ const {
 } = require("../services/email/email.service");
 const { toPublicUser, fullName } = require("../utils/user");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
+const Tenant = require("../models/Tenant");
 const config = require("../config");
 
 exports.register = async (req, res) => {
   try {
-    const { first_name, last_name, email, password, role } = req.body || {};
+    const { first_name, last_name, email, password, role, tenant_slug } = req.body || {};
 
-    const existing = await findUserByEmail(email);
+    const tenant = await Tenant.findOne({ slug: tenant_slug });
+    if (!tenant) return badRequest(res, "Unknown tenant");
+
+    const existing = await findUserByEmail(email, tenant._id);
     if (existing)
       return requestConflict(res, "User with this email already exists");
 
     const user = await createUser({
+      tenant_id: tenant._id,
       first_name,
       last_name,
       email,
@@ -96,6 +101,7 @@ exports.login = async (req, res) => {
     const token = signJwt({
       sub: user._id.toString(),
       role: user.role,
+      tenant_id: user.tenant_id?.toString() || null,
       email: user.email,
       name: fullName(user),
     });
@@ -135,6 +141,7 @@ exports.verifyOTP = async (req, res) => {
     const token = signJwt({
       sub: user._id.toString(),
       role: user.role,
+      tenant_id: user.tenant_id?.toString() || null,
       email: user.email,
       name: fullName(user),
     });
@@ -149,7 +156,9 @@ exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
 
-    const user = await findUserByEmail(email);
+    // Scoped to the calling superadmin's own tenant — verifying a
+    // self-registered user in another tenant is not this endpoint's job.
+    const user = await findUserByEmail(email, req.tenantId);
     if (!user) return unauthorized(res, "Invalid email");
 
     user.status = status;

@@ -51,8 +51,10 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
   // one.
   const { reconcileStuckRefunds } = require("./refund.reconciliation.service");
 
+  const TEST_TENANT_ID = new mongoose.Types.ObjectId();
   const suffix = crypto.randomUUID();
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-RECON-${suffix}`,
     invoice_number: `TEST-RECON-INV-${suffix}`,
     items: [
@@ -83,6 +85,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
   const itemId = order.items[0]._id.toString();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "stripe",
     payment_method: null,
@@ -95,8 +98,9 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
   });
 
   try {
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: 2000,
@@ -163,6 +167,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
               reason: "customer_request",
             },
             null,
+            TEST_TENANT_ID,
           ),
         (err) => {
           assert.match(err.message, /exceeds what's left refundable|Invalid quantity/);

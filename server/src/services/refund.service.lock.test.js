@@ -24,9 +24,12 @@ const config = require("../config");
 const Order = require("../models/Order");
 const refundService = require("./refund.service");
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 async function createDisposableOrder() {
   const suffix = crypto.randomUUID();
   return Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-LOCK-${suffix}`,
     invoice_number: `TEST-LOCK-INV-${suffix}`,
     items: [
@@ -72,7 +75,7 @@ test("refund lock: a stale holder's release does not clear a new holder's lock",
     let tokenB;
 
     await t.test("holder B can reclaim a stale lock", async () => {
-      const claim = await refundService.acquireRefundLock(order._id.toString());
+      const claim = await refundService.acquireRefundLock(order._id.toString(), TEST_TENANT_ID);
       tokenB = claim.token;
       assert.notEqual(tokenB, tokenA, "B must get its own, different token");
 

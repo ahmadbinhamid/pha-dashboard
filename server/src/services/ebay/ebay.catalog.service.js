@@ -1,13 +1,15 @@
 // services/ebay/ebay.catalog.service.js
 // eBay Taxonomy (category suggestions) and Sell Metadata (condition policies)
+//
+// Category tree/suggestions use the app-level catalog token (client_credentials
+// — no seller consent involved, so not tenant-scoped); condition policies use
+// the seller's own access token and so need that tenant's settings.
 
-const config = require("../../config");
-const { getAccessToken, getCatalogToken, ebayHeaders } = require("./ebay.api.service");
+const { getAccessToken, getCatalogToken, ebayHeaders, apiBaseUrlFor } = require("./ebay.api.service");
 const { logger } = require("../../loaders/logging");
 
-const BASE_URL = config.ebay.apiBaseUrl;
-const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
-const METADATA_BASE = `${BASE_URL}/sell/metadata/v1`;
+const TAXONOMY_BASE = `${apiBaseUrlFor(false)}/commerce/taxonomy/v1`;
+const METADATA_BASE = `${apiBaseUrlFor(false)}/sell/metadata/v1`;
 
 // ── In-memory caches ──────────────────────────────────────────────────────────
 
@@ -18,12 +20,12 @@ const CONDITION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ── Category tree ID (cached indefinitely — eBay tree IDs are very stable) ────
 
-async function getCategoryTreeId(token) {
+async function getCategoryTreeId(token, marketplaceId) {
   if (_treeId) return _treeId;
 
   const res = await fetch(
-    `${TAXONOMY_BASE}/get_default_category_tree_id?marketplace_id=${config.ebay.marketplaceId}`,
-    { headers: ebayHeaders(token) },
+    `${TAXONOMY_BASE}/get_default_category_tree_id?marketplace_id=${marketplaceId}`,
+    { headers: ebayHeaders(token, marketplaceId) },
   );
 
   if (!res.ok) {
@@ -39,22 +41,23 @@ async function getCategoryTreeId(token) {
 
 // ── Category suggestions ──────────────────────────────────────────────────────
 // Sandbox caveat: eBay's getCategorySuggestions endpoint is not functional in
-// sandbox — it returns boilerplate rather than real suggestions. When
-// config.ebay.sandbox is true we return a { sandbox: true } sentinel so the
+// sandbox — it returns boilerplate rather than real suggestions. When this
+// tenant's sandbox flag is true we return a { sandbox: true } sentinel so the
 // frontend can fall back to the manual ID input without showing fake data.
 
-async function getCategorySuggestions(q) {
-  if (config.ebay.sandbox) {
+async function getCategorySuggestions(q, settings) {
+  if (settings?.sandbox) {
     return { sandbox: true, suggestions: [] };
   }
 
+  const marketplaceId = settings?.marketplace_id || "EBAY_AU";
   const token = await getCatalogToken();
   if (!token) throw new Error("Could not obtain eBay catalog token");
 
-  const treeId = await getCategoryTreeId(token);
+  const treeId = await getCategoryTreeId(token, marketplaceId);
   const url = `${TAXONOMY_BASE}/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(q)}`;
 
-  const res = await fetch(url, { headers: ebayHeaders(token) });
+  const res = await fetch(url, { headers: ebayHeaders(token, marketplaceId) });
 
   if (!res.ok) {
     const text = await res.text();
@@ -111,18 +114,20 @@ const CONDITION_ID_TO_ENUM = {
 // access token; refurbished conditions (SELLER_REFURBISHED, etc.) would
 // additionally require the sell.inventory scope to be reflected.
 
-async function getConditionPolicies(categoryId) {
-  const cached = _conditionCache.get(categoryId);
+async function getConditionPolicies(categoryId, settings) {
+  const cacheKey = `${settings?.tenant_id}:${categoryId}`;
+  const cached = _conditionCache.get(cacheKey);
   if (cached && Date.now() < cached.expiry) return cached.data;
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(settings);
   if (!token) throw new Error("Could not obtain eBay access token");
 
+  const marketplaceId = settings.marketplace_id;
   // filter=categoryIds:{id} selects exactly this one category
   const filter = `categoryIds:{${categoryId}}`;
-  const url = `${METADATA_BASE}/marketplace/${config.ebay.marketplaceId}/get_item_condition_policies?filter=${encodeURIComponent(filter)}`;
+  const url = `${METADATA_BASE}/marketplace/${marketplaceId}/get_item_condition_policies?filter=${encodeURIComponent(filter)}`;
 
-  const res = await fetch(url, { headers: ebayHeaders(token) });
+  const res = await fetch(url, { headers: ebayHeaders(token, marketplaceId) });
 
   if (!res.ok) {
     const text = await res.text();
@@ -145,7 +150,7 @@ async function getConditionPolicies(categoryId) {
       }
     : { conditionRequired: false, conditions: [] };
 
-  _conditionCache.set(categoryId, { data: result, expiry: Date.now() + CONDITION_TTL_MS });
+  _conditionCache.set(cacheKey, { data: result, expiry: Date.now() + CONDITION_TTL_MS });
   return result;
 }
 

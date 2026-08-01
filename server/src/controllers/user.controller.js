@@ -12,7 +12,7 @@ exports.getUsers = async (req, res) => {
     const { page = 1, limit = 20, skip = 0 } = req.pagination || {};
     const { status } = req.query || {};
 
-    const filter = {};
+    const filter = { tenant_id: req.tenantId };
     if (status === USER_STATUS.ACTIVE) filter.status = USER_STATUS.ACTIVE;
     if (status === USER_STATUS.INACTIVE) filter.status = USER_STATUS.INACTIVE;
 
@@ -57,7 +57,7 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
-    const doc = await deleteUser(req.params.id);
+    const doc = await deleteUser(req.params.id, req.tenantId);
     if (!doc) return notFound(res, "User not found");
     return success(res, null, "User deleted");
   } catch (err) {

@@ -40,8 +40,11 @@ const internalNoteSchema = new Schema(
 );
 
 const productSchema = buildSchema({
+  // Backfilled onto every existing Product by scripts/backfillTenantId.js —
+  // slug's unique index below is compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   title: { type: String, required: true, trim: true },
-  slug: { type: String, unique: true },
+  slug: { type: String },
   description: { type: String, default: "" },
   type: {
     type: String,
@@ -91,6 +94,7 @@ const productSchema = buildSchema({
   internal_notes: { type: [internalNoteSchema], default: [] },
 });
 
+productSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });
 productSchema.index({ sku: 1 }, { sparse: true });
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });

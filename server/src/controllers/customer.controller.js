@@ -7,11 +7,10 @@ exports.getCustomers = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const { items, total } = await customerService.listCustomers({
-      skip,
-      limit,
-      search: req.query.search,
-    });
+    const { items, total } = await customerService.listCustomers(
+      { skip, limit, search: req.query.search },
+      req.tenantId,
+    );
 
     return success(res, {
       items,
@@ -27,7 +26,7 @@ exports.getCustomers = async (req, res) => {
 
 exports.getCustomer = async (req, res) => {
   try {
-    const customer = await customerService.getCustomerById(req.params.id);
+    const customer = await customerService.getCustomerById(req.params.id, req.tenantId);
     if (!customer) return notFound(res, "Customer not found");
     return success(res, customer);
   } catch (err) {
@@ -37,7 +36,7 @@ exports.getCustomer = async (req, res) => {
 
 exports.createCustomer = async (req, res) => {
   try {
-    const customer = await customerService.createCustomer(req.body);
+    const customer = await customerService.createCustomer(req.body, req.tenantId);
     return created(res, customer, "Customer created");
   } catch (err) {
     if (err.code === 11000) return requestConflict(res, "A customer with this email already exists");
@@ -47,7 +46,7 @@ exports.createCustomer = async (req, res) => {
 
 exports.updateCustomer = async (req, res) => {
   try {
-    const customer = await customerService.updateCustomer(req.params.id, req.body);
+    const customer = await customerService.updateCustomer(req.params.id, req.body, req.tenantId);
     if (!customer) return notFound(res, "Customer not found");
     return success(res, customer, "Customer updated");
   } catch (err) {
@@ -58,7 +57,7 @@ exports.updateCustomer = async (req, res) => {
 
 exports.deleteCustomer = async (req, res) => {
   try {
-    const customer = await customerService.deleteCustomer(req.params.id);
+    const customer = await customerService.deleteCustomer(req.params.id, req.tenantId);
     if (!customer) return notFound(res, "Customer not found");
     return success(res, null, "Customer deleted");
   } catch (err) {

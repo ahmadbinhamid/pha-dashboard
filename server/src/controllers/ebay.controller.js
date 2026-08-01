@@ -1,32 +1,35 @@
 // controllers/ebay.controller.js
 
-const ebayService = require("../services/ebay/ebay.service");
 const ebayApiService = require("../services/ebay/ebay.api.service");
 const webhookService = require("../services/ebay/ebay.webhook.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
+const oauthService = require("../services/ebay/ebay.oauth.service");
 const catalogService = require("../services/ebay/ebay.catalog.service");
 const policiesService = require("../services/ebay/ebay.policies.service");
-const config = require("../config");
+const Tenant = require("../models/Tenant");
 const { logger } = require("../loaders/logging");
+const config = require("../config");
 const {
   success,
   badRequest,
+  notFound,
   unauthorized,
   systemfailure,
 } = require("../utils/http/response");
 
 exports.getStatus = async (req, res) => {
   try {
-    const configured = ebayService.credentialsConfigured();
+    const settings = await settingsService.getSettings(req.tenantId);
+    const configured = ebayApiService.credentialsConfigured(settings);
 
     if (!configured) {
       return success(res, {
         connected: false,
-        reason: "EBAY_CLIENT_ID, EBAY_CLIENT_SECRET or EBAY_REFRESH_TOKEN missing",
+        reason: "eBay is not connected for this store — set a refresh token in eBay settings",
       });
     }
 
-    const token = await ebayService.getAccessToken();
+    const token = await ebayApiService.getAccessToken(settings);
     return success(res, { connected: !!token });
   } catch (err) {
     return systemfailure(res, err);
@@ -35,7 +38,7 @@ exports.getStatus = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
   try {
-    const settings = await settingsService.getSettings();
+    const settings = await settingsService.getSettings(req.tenantId);
     return success(res, settings);
   } catch (err) {
     return systemfailure(res, err);
@@ -45,50 +48,66 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
   try {
     const {
+      marketplace_id,
+      sandbox,
       merchant_location_key,
       fulfillment_policy_id,
       payment_policy_id,
       return_policy_id,
+      warehouse_street,
+      warehouse_city,
+      warehouse_state,
+      warehouse_postcode,
+      warehouse_country,
+      warehouse_phone,
+      fallback_image_url,
     } = req.body || {};
 
+    // refresh_token is intentionally not accepted here — it's only ever set
+    // via the OAuth callback (oauthCallback below), never pasted by an admin.
     const update = {};
-    if (merchant_location_key !== undefined)
-      update.merchant_location_key = merchant_location_key || null;
-    if (fulfillment_policy_id !== undefined)
-      update.fulfillment_policy_id = fulfillment_policy_id || null;
-    if (payment_policy_id !== undefined)
-      update.payment_policy_id = payment_policy_id || null;
-    if (return_policy_id !== undefined)
-      update.return_policy_id = return_policy_id || null;
+    if (marketplace_id !== undefined) update.marketplace_id = marketplace_id || "EBAY_AU";
+    if (sandbox !== undefined) update.sandbox = !!sandbox;
+    if (merchant_location_key !== undefined) update.merchant_location_key = merchant_location_key || null;
+    if (fulfillment_policy_id !== undefined) update.fulfillment_policy_id = fulfillment_policy_id || null;
+    if (payment_policy_id !== undefined) update.payment_policy_id = payment_policy_id || null;
+    if (return_policy_id !== undefined) update.return_policy_id = return_policy_id || null;
+    if (warehouse_street !== undefined) update.warehouse_street = warehouse_street || null;
+    if (warehouse_city !== undefined) update.warehouse_city = warehouse_city || null;
+    if (warehouse_state !== undefined) update.warehouse_state = warehouse_state || null;
+    if (warehouse_postcode !== undefined) update.warehouse_postcode = warehouse_postcode || null;
+    if (warehouse_country !== undefined) update.warehouse_country = warehouse_country || "AU";
+    if (warehouse_phone !== undefined) update.warehouse_phone = warehouse_phone || null;
+    if (fallback_image_url !== undefined) update.fallback_image_url = fallback_image_url || null;
 
     if (!Object.keys(update).length) {
       return badRequest(res, "No fields provided to update");
     }
 
-    const settings = await settingsService.upsertSettings(update);
+    const settings = await settingsService.upsertSettings(req.tenantId, update);
     return success(res, settings, "eBay settings updated");
   } catch (err) {
     return systemfailure(res, err);
   }
 };
 
+// Webhook URL carries an opaque `wt` (webhook_token) instead of this
+// tenant's real _id — see EbaySettings.webhook_token. Anyone who guesses/
+// enumerates it still can't do anything without also forging the HMAC
+// signature checked in handleWebhook, but not leaking a real database id in
+// a public URL closes off tenant enumeration entirely.
 exports.handleWebhookChallenge = async (req, res) => {
   try {
-    const { challenge_code } = req.query;
+    const { challenge_code, wt } = req.query;
     if (!challenge_code) return badRequest(res, "Missing challenge_code");
+    if (!wt) return badRequest(res, "Missing wt");
 
-    const settings = await settingsService.getSettings();
-    if (!settings.verification_token)
-      return badRequest(res, "Webhook not configured — call POST /webhook/subscribe first");
+    const settings = await settingsService.findByWebhookToken(wt);
+    if (!settings || !settings.verification_token) return notFound(res, "Webhook not configured");
 
-    let endpointUrl = config.ebay.webhookEndpointUrl;
-    if (!endpointUrl) {
-      logger.warn(
-        "[ebay.controller] EBAY_WEBHOOK_ENDPOINT_URL is not set — falling back to request-derived URL. " +
-        "Set this env var to the exact URL registered in eBay's Marketplace Account Deletion form."
-      );
-      endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
-    }
+    // Must byte-for-byte match the URL eBay was given when registering this
+    // subscription (see subscribeWebhook below) — including the query string.
+    const endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook?wt=${wt}`;
 
     const challengeResponse = webhookService.verifyChallenge(
       challenge_code,
@@ -104,9 +123,11 @@ exports.handleWebhookChallenge = async (req, res) => {
 
 exports.handleWebhook = async (req, res) => {
   try {
-    const settings = await settingsService.getSettings();
-    if (!settings.verification_token)
-      return unauthorized(res, "Webhook not configured — call POST /webhook/subscribe first");
+    const { wt } = req.query;
+    if (!wt) return badRequest(res, "Missing wt");
+
+    const settings = await settingsService.findByWebhookToken(wt);
+    if (!settings || !settings.verification_token) return unauthorized(res, "Webhook not configured");
 
     const signatureHeader = req.headers["x-ebay-signature"];
     const valid = webhookService.verifySignature(
@@ -116,10 +137,13 @@ exports.handleWebhook = async (req, res) => {
     );
     if (!valid) return unauthorized(res, "Invalid signature");
 
+    const tenant = await Tenant.findById(settings.tenant_id);
+    if (!tenant) return notFound(res, "Tenant not found");
+
     // Respond immediately — eBay retries on non-2xx
     success(res, { received: true });
 
-    webhookService.processNotification(req.body).catch((err) => {
+    webhookService.processNotification(req.body, tenant).catch((err) => {
       logger.error("[ebay.controller] processNotification error", { error: err.message });
     });
   } catch (err) {
@@ -129,20 +153,14 @@ exports.handleWebhook = async (req, res) => {
 
 exports.subscribeWebhook = async (req, res) => {
   try {
-    const { endpoint_url } = req.body || {};
+    const settings = await settingsService.getSettings(req.tenantId);
+    const verificationToken = await settingsService.ensureVerificationToken(req.tenantId);
+    const webhookToken = await settingsService.ensureWebhookToken(req.tenantId);
 
-    const verificationToken = await settingsService.ensureVerificationToken();
+    const endpointUrl =
+      req.body?.endpoint_url || `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook?wt=${webhookToken}`;
 
-    let endpointUrl = endpoint_url || config.ebay.webhookEndpointUrl;
-    if (!endpointUrl) {
-      logger.warn(
-        "[ebay.controller] EBAY_WEBHOOK_ENDPOINT_URL is not set — falling back to request-derived URL. " +
-        "Set this env var to the exact URL registered in eBay's Marketplace Account Deletion form."
-      );
-      endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook`;
-    }
-
-    const subscriptions = await webhookService.subscribeToTopics(endpointUrl, verificationToken);
+    const subscriptions = await webhookService.subscribeToTopics(endpointUrl, verificationToken, settings);
 
     return success(res, { subscriptions, endpoint: endpointUrl }, "Webhook subscriptions registered");
   } catch (err) {
@@ -150,11 +168,52 @@ exports.subscribeWebhook = async (req, res) => {
   }
 };
 
+// ── OAuth consent flow ───────────────────────────────────────────────────────
+
+// Authenticated — returns the URL the dashboard should navigate to so the
+// tenant's admin can grant consent on eBay's own hosted screen.
+exports.getConnectUrl = async (req, res) => {
+  try {
+    const sandbox = req.query.sandbox === "true";
+    const url = oauthService.buildConsentUrl({ tenantId: req.tenantId, sandbox });
+    return success(res, { url });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+// Public — eBay redirects the browser here directly after consent, so there
+// is no JWT to authenticate the request with. Trust is instead placed in the
+// signed `state` round-tripped through eBay (see ebay.oauth.service.js).
+exports.oauthCallback = async (req, res) => {
+  const dashboardUrl = config.emailBrand.clientUrl;
+  const redirect = (params) => res.redirect(`${dashboardUrl}/settings?${new URLSearchParams(params).toString()}`);
+
+  try {
+    const { code, state, error: consentError } = req.query;
+    if (consentError) return redirect({ ebay_connect: "error", reason: consentError });
+    if (!code || !state) return redirect({ ebay_connect: "error", reason: "missing_code_or_state" });
+
+    const { tenantId, sandbox } = oauthService.resolveState(state);
+    const refreshToken = await oauthService.exchangeCodeForRefreshToken(code, sandbox);
+
+    await settingsService.upsertSettings(tenantId, { refresh_token: refreshToken, sandbox });
+    ebayApiService.clearTokenCache(tenantId);
+
+    logger.info("[ebay.controller] Tenant connected via OAuth", { tenantId });
+    return redirect({ ebay_connect: "success" });
+  } catch (err) {
+    logger.error("[ebay.controller] oauthCallback error", { error: err.message });
+    return redirect({ ebay_connect: "error", reason: "exchange_failed" });
+  }
+};
+
 exports.getCategorySuggestions = async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
     if (!q) return badRequest(res, "Query parameter 'q' is required");
-    const result = await catalogService.getCategorySuggestions(q);
+    const settings = await settingsService.getSettings(req.tenantId);
+    const result = await catalogService.getCategorySuggestions(q, settings);
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
@@ -165,7 +224,8 @@ exports.getConditionPolicies = async (req, res) => {
   try {
     const categoryId = (req.query.categoryId || "").trim();
     if (!categoryId) return badRequest(res, "Query parameter 'categoryId' is required");
-    const result = await catalogService.getConditionPolicies(categoryId);
+    const settings = await settingsService.getSettings(req.tenantId);
+    const result = await catalogService.getConditionPolicies(categoryId, settings);
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
@@ -174,7 +234,8 @@ exports.getConditionPolicies = async (req, res) => {
 
 exports.getBusinessPolicies = async (req, res) => {
   try {
-    const result = await policiesService.getBusinessPolicies();
+    const settings = await settingsService.getSettings(req.tenantId);
+    const result = await policiesService.getBusinessPolicies(settings);
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
@@ -185,10 +246,10 @@ exports.getCategoryAspects = async (req, res) => {
   try {
     const categoryId = (req.query.categoryId || "").trim();
     if (!categoryId) return badRequest(res, "categoryId is required");
-    const aspects = await ebayApiService.getItemAspectsForCategory(categoryId);
+    const settings = await settingsService.getSettings(req.tenantId);
+    const aspects = await ebayApiService.getItemAspectsForCategory(categoryId, settings.marketplace_id);
     return success(res, { aspects });
   } catch (err) {
     return systemfailure(res, err);
   }
 };
-

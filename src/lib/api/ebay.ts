@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 import type { BeResponse } from "./base";
-import type { EbaySettings, EbayStatus } from "@/types/product";
+import type { EbaySettings, EbayStatus, UpdateEbaySettingsPayload, EbayConnectUrlResponse } from "@/types/ebaySettings";
 import type {
   CategorySuggestionsResponse,
   ConditionPoliciesResponse,
@@ -18,10 +18,26 @@ export const getEbaySettings = async () => {
   return data;
 };
 
-export const updateEbaySettings = async (payload: Partial<EbaySettings>) => {
+export const updateEbaySettings = async (payload: UpdateEbaySettingsPayload) => {
   const { data } = await apiClient.put<BeResponse<EbaySettings>>(
     "/ebay/settings",
     payload,
+  );
+  return data;
+};
+
+// Returns eBay's hosted consent-screen URL — the caller navigates the
+// browser there directly (window.location.href), it's not fetched via XHR.
+export const getEbayConnectUrl = async (sandbox: boolean) => {
+  const { data } = await apiClient.get<BeResponse<EbayConnectUrlResponse>>("/ebay/oauth/connect-url", {
+    params: { sandbox },
+  });
+  return data;
+};
+
+export const subscribeEbayWebhook = async () => {
+  const { data } = await apiClient.post<BeResponse<{ subscriptions: unknown; endpoint: string }>>(
+    "/ebay/webhook/subscribe",
   );
   return data;
 };

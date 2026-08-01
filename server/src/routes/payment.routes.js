@@ -3,13 +3,14 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth, admin } = require("../middlewares/auth");
+const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/payment.validation");
 const ctrl = require("../controllers/payment.controller");
 
 // ── Guest-facing — no auth; storefront calls this to start checkout payment ──
-router.post("/create-intent", validate(v.createIntent), asyncHandler(ctrl.createIntent));
+router.post("/create-intent", resolveGuestTenant(), validate(v.createIntent), asyncHandler(ctrl.createIntent));
 
 // ── Stripe webhook — no JWT auth (Stripe calls this), signature-verified ────
 // Raw body is already captured globally for every request in app.js

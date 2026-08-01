@@ -1,6 +1,7 @@
 // controllers/ebay.listing.controller.js
 
 const listingService = require("../services/ebay/ebay.listing.service");
+const settingsService = require("../services/ebay/ebay.settings.service");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { endListing } = require("../services/marketplace/sync.service");
 const { logger } = require("../loaders/logging");
@@ -19,7 +20,7 @@ exports.createListing = async (req, res) => {
     const { product } = req.body;
     if (!product) return badRequest(res, "product is required");
 
-    const listing = await listingService.createListing(req.body);
+    const listing = await listingService.createListing(req.body, req.tenantId);
     return created(res, listing, "Listing created");
   } catch (err) {
     if (err.code === 11000) {
@@ -31,9 +32,14 @@ exports.createListing = async (req, res) => {
 
 exports.getListing = async (req, res) => {
   try {
-    const listing = await listingService.getListingById(req.params.id);
+    const listing = await listingService.getListingById(req.params.id, req.tenantId);
     if (!listing) return notFound(res, "Listing not found");
-    return success(res, listing);
+
+    const settings = await settingsService.getSettings(req.tenantId);
+    const obj = listing.toObject();
+    obj.ebay_item_url = listingService.buildEbayItemUrl(obj.external_listing_id, settings);
+
+    return success(res, obj);
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -43,14 +49,13 @@ exports.getListings = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
     const { product, state, sync_status } = req.query;
+    const settings = await settingsService.getSettings(req.tenantId);
 
-    const { items, total } = await listingService.listListings({
-      skip,
-      limit,
-      product,
-      state,
-      sync_status,
-    });
+    const { items, total } = await listingService.listListings(
+      { skip, limit, product, state, sync_status },
+      req.tenantId,
+      settings,
+    );
 
     return success(res, {
       items,
@@ -66,7 +71,7 @@ exports.getListings = async (req, res) => {
 
 exports.updateListing = async (req, res) => {
   try {
-    const listing = await listingService.updateListing(req.params.id, req.body);
+    const listing = await listingService.updateListing(req.params.id, req.body, req.tenantId);
     if (!listing) return notFound(res, "Listing not found");
     return success(res, listing, "Listing updated");
   } catch (err) {
@@ -76,7 +81,7 @@ exports.updateListing = async (req, res) => {
 
 exports.deleteListing = async (req, res) => {
   try {
-    const listing = await listingService.getListingById(req.params.id);
+    const listing = await listingService.getListingById(req.params.id, req.tenantId);
     if (!listing) return notFound(res, "Listing not found");
 
     if (listing.external_listing_id || listing.external_offer_id) {
@@ -86,7 +91,7 @@ exports.deleteListing = async (req, res) => {
       }
     }
 
-    await listingService.deleteListing(req.params.id);
+    await listingService.deleteListing(req.params.id, req.tenantId);
     return success(res, null, "Listing deleted");
   } catch (err) {
     return systemfailure(res, err);
@@ -95,7 +100,7 @@ exports.deleteListing = async (req, res) => {
 
 exports.pushListing = async (req, res) => {
   try {
-    const listing = await listingService.getListingById(req.params.id);
+    const listing = await listingService.getListingById(req.params.id, req.tenantId);
     if (!listing) return notFound(res, "Listing not found");
 
     const product = listing.product && typeof listing.product === "object" ? listing.product : null;

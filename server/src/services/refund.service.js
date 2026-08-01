@@ -28,6 +28,7 @@ const { REFUND_STATUS, REFUND_REASON } = require("../constants/refund.constants"
 const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { ORDER_PAYMENT_STATUS, ORDER_STATUS } = require("../constants/order.constants");
 const { derivePaymentStatus } = require("../utils/paymentStatus");
+const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const emailService = require("./email/email.service");
 const { logger } = require("../loaders/logging");
 
@@ -35,9 +36,9 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-async function nextRefundNumber() {
+async function nextRefundNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
-    { _id: "refund_number" },
+    { _id: tenantCounterKey(tenantId, "refund_number") },
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
@@ -218,7 +219,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function acquireRefundLock(orderId) {
+async function acquireRefundLock(orderId, tenantId) {
   const deadline = Date.now() + REFUND_LOCK_RETRY_BUDGET_MS;
   let attempt = 0;
 
@@ -228,6 +229,7 @@ async function acquireRefundLock(orderId) {
     const claimed = await Order.findOneAndUpdate(
       {
         _id: orderId,
+        tenant_id: tenantId,
         $or: [{ refund_lock_at: null }, { refund_lock_at: { $lt: staleCutoff } }],
       },
       { $set: { refund_lock_at: new Date(), refund_lock_token: token } },
@@ -239,7 +241,7 @@ async function acquireRefundLock(orderId) {
       // Either genuinely still locked after a fair chance to acquire it, or
       // the order doesn't exist — distinguish so a bad orderId doesn't get
       // miscast as "busy".
-      const exists = await Order.exists({ _id: orderId });
+      const exists = await Order.exists({ _id: orderId, tenant_id: tenantId });
       if (!exists) throw httpError("Order not found", 404);
       throw httpError("Another refund is already in progress for this order — try again shortly", 409);
     }
@@ -270,14 +272,14 @@ async function releaseRefundLock(orderId, token) {
 
 // §2.3 GET /orders/:orderId/refunds — history, lines already populated
 // (embedded, not a ref — no populate() needed).
-async function listRefundsForOrder(orderId) {
-  const order = await Order.findById(orderId).select("_id");
+async function listRefundsForOrder(orderId, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).select("_id");
   if (!order) throw httpError("Order not found", 404);
   return Refund.find({ order: orderId }).sort({ created_at: -1 });
 }
 
-async function getRefundableSummary(orderId) {
-  const order = await Order.findById(orderId);
+async function getRefundableSummary(orderId, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) throw httpError("Order not found", 404);
 
   const [payments, totalPaid, totalRefunded, reservingRefunds, stuckRefunds] = await Promise.all([
@@ -429,7 +431,7 @@ const REFUNDABLE_PAYMENT_STATUSES = [
   ORDER_PAYMENT_STATUS.PARTIALLY_REFUNDED,
 ];
 
-async function createRefund(orderId, body, userId) {
+async function createRefund(orderId, body, userId, tenantId) {
   const {
     idempotency_key: idempotencyKey,
     scope,
@@ -449,7 +451,7 @@ async function createRefund(orderId, body, userId) {
   // needed for this: it's a read, and two requests with the SAME key are
   // supposed to converge on the same document, not race over one.
   if (idempotencyKey) {
-    const existing = await Refund.findOne({ idempotency_key: idempotencyKey });
+    const existing = await Refund.findOne({ idempotency_key: idempotencyKey, tenant_id: tenantId });
     if (existing) return existing;
   }
 
@@ -473,7 +475,7 @@ async function createRefund(orderId, body, userId) {
   // and a slow/hanging Stripe call would have blocked every other refund on
   // this order for its entire duration. Released in finally, always,
   // including on validation rejection.
-  const { order, token } = await acquireRefundLock(orderId);
+  const { order, token } = await acquireRefundLock(orderId, tenantId);
   let refund;
   try {
     // §3.1.1
@@ -542,8 +544,9 @@ async function createRefund(orderId, body, userId) {
       );
     }
 
-    const refundNumber = await nextRefundNumber();
+    const refundNumber = await nextRefundNumber(tenantId);
     refund = await Refund.create({
+      tenant_id: tenantId,
       order: order._id,
       // Legacy top-level fields, kept populated so any not-yet-migrated
       // reader still sees something sane during the transition (§9 removes
@@ -606,14 +609,17 @@ async function createRefund(orderId, body, userId) {
 // duplicate refund. Every create call sets metadata.refund_id — checking
 // Stripe's own refund list for this payment intent and matching on that
 // BEFORE ever creating one recovers the lost id in exactly that case.
-async function findExistingStripeRefund(stripe, paymentIntentId, refundId) {
+async function findExistingStripeRefund(stripe, paymentIntentId, refundId, stripeAccount) {
   // A single .list({ limit: 100 }) call only returns page 1 — on a payment
   // intent with more than 100 refunds (a busy order over its lifetime),
   // this refund_id could sit on a later page, findExistingStripeRefund
   // would wrongly return null, and settleRefund would create a genuine
   // duplicate at Stripe. The Stripe SDK's async iterator walks every page
   // automatically (auto-pagination) — use that instead of a single .list().
-  for await (const r of stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 })) {
+  for await (const r of stripe.refunds.list(
+    { payment_intent: paymentIntentId, limit: 100 },
+    { stripeAccount },
+  )) {
     if (r.metadata?.refund_id === String(refundId)) return r;
   }
   return null;
@@ -626,6 +632,7 @@ async function settleRefund(refund) {
 
   if (stripeAllocationIndexes.length > 0) {
     const { getStripeClient } = require("./stripe/stripe.client.service");
+    const Tenant = require("../models/Tenant");
     const stripe = getStripeClient();
 
     // Batched, not per-iteration — the lock no longer covers this loop, but
@@ -634,6 +641,8 @@ async function settleRefund(refund) {
     const payments = await Payment.find({ _id: { $in: paymentIds } });
     const paymentById = new Map(payments.map((p) => [String(p._id), p]));
     const order = await Order.findById(refund.order).select("order_number");
+    const tenant = await Tenant.findById(refund.tenant_id);
+    const stripeAccount = tenant?.stripe_account_id;
 
     for (const i of stripeAllocationIndexes) {
       const alloc = refund.payment_allocations[i];
@@ -644,7 +653,12 @@ async function settleRefund(refund) {
         // refund_id before creating a new one — see findExistingStripeRefund's
         // own comment on why the idempotency key below isn't enough on its
         // own for a resume that happens more than 24h later.
-        const existing = await findExistingStripeRefund(stripe, payment.stripe_payment_intent_id, refund._id);
+        const existing = await findExistingStripeRefund(
+          stripe,
+          payment.stripe_payment_intent_id,
+          refund._id,
+          stripeAccount,
+        );
         if (existing) {
           refund.payment_allocations[i].stripe_refund_id = existing.id;
           continue;
@@ -661,7 +675,7 @@ async function settleRefund(refund) {
               order_number: order?.order_number,
             },
           },
-          { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}` },
+          { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}`, stripeAccount },
         );
         refund.payment_allocations[i].stripe_refund_id = stripeRefund.id;
       } catch (err) {
@@ -1058,7 +1072,11 @@ async function applyRefundEffects(refundId) {
       return Refund.findById(refund._id);
     }
 
-    await voidRefund(refund._id, { reason: `Auto-voided: ${violation}`, userId: null, source: "system_auto_void" });
+    await voidRefund(
+      refund._id,
+      { reason: `Auto-voided: ${violation}`, userId: null, source: "system_auto_void" },
+      refund.tenant_id,
+    );
     await Refund.updateOne({ _id: refund._id }, { $set: { needs_reconciliation: true } });
     logger.error(
       `[refund.service] ALERT: refund ${refund.refund_number} (order ${order._id}) violated a ledger invariant after settlement and was auto-voided: ${violation}`,
@@ -1186,8 +1204,8 @@ async function recomputeLedger(order) {
 
 // ── §3.8 void / reversal ─────────────────────────────────────────────────
 
-async function voidRefund(refundId, { reason: voidReason, userId, source = "admin", force = false }) {
-  const refund = await Refund.findById(refundId);
+async function voidRefund(refundId, { reason: voidReason, userId, source = "admin", force = false }, tenantId) {
+  const refund = await Refund.findOne({ _id: refundId, tenant_id: tenantId });
   if (!refund) throw httpError("Refund not found", 404);
   if (refund.status !== REFUND_STATUS.SUCCEEDED) {
     throw httpError(`Only a succeeded refund can be voided (current status: ${refund.status})`, 400);
@@ -1252,8 +1270,8 @@ async function voidRefund(refundId, { reason: voidReason, userId, source = "admi
 // lines whose push previously failed. Never re-touches local stock (already
 // correctly adjusted) or already-synced lines. ──────────────────────────
 
-async function retryRestockForRefund(refundId) {
-  const refund = await Refund.findById(refundId);
+async function retryRestockForRefund(refundId, tenantId) {
+  const refund = await Refund.findOne({ _id: refundId, tenant_id: tenantId });
   if (!refund) throw httpError("Refund not found", 404);
   if (!refund.effects_applied_at) {
     throw httpError("This refund's restock leg has not been attempted yet — nothing to retry", 400);

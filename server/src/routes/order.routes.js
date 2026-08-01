@@ -3,6 +3,7 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth, admin } = require("../middlewares/auth");
+const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/order.validation");
@@ -12,9 +13,10 @@ const refundCtrl = require("../controllers/refund.controller");
 
 // Guest checkout only — the storefront has no customer accounts, so these
 // are intentionally unauthenticated. GET is gated by the per-order
-// guest_access_token (query param) instead of a JWT.
-router.post("/", validate(v.createOrder), asyncHandler(ctrl.createOrder));
-router.get("/:id", validate(v.byIdParam), asyncHandler(ctrl.getOrder));
+// guest_access_token (query param) instead of a JWT. resolveGuestTenant()
+// reads the storefront's own tenant identifier (X-Tenant-Slug header).
+router.post("/", resolveGuestTenant(), validate(v.createOrder), asyncHandler(ctrl.createOrder));
+router.get("/:id", resolveGuestTenant(), validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 
 // ── Admin ─────────────────────────────────────────────────────────────────
 // "/:id/detail" (not a bare "/:id") deliberately avoids colliding with the

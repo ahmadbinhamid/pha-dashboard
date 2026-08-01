@@ -7,7 +7,7 @@ const { created, success, notFound, requestfailure, systemfailure } = require(".
 
 exports.createOrder = async (req, res) => {
   try {
-    const order = await orderService.createOrder(req.body);
+    const order = await orderService.createOrder(req.body, req.tenant);
     return created(res, order);
   } catch (err) {
     if (err.status) return requestfailure(res, err);
@@ -17,7 +17,7 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrder = async (req, res) => {
   try {
-    const order = await orderService.getOrderForGuest(req.params.id, req.query.token);
+    const order = await orderService.getOrderForGuest(req.params.id, req.query.token, req.tenantId);
     // getOrderForGuest explicitly re-selects guest_access_token to verify it —
     // strip it back out before responding so it isn't echoed on every poll.
     const safeOrder = order.toObject();
@@ -35,14 +35,17 @@ exports.getOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
-    const result = await orderService.listOrders({
-      page,
-      limit,
-      skip,
-      status: req.query.status,
-      channel: req.query.channel,
-      search: req.query.search,
-    });
+    const result = await orderService.listOrders(
+      {
+        page,
+        limit,
+        skip,
+        status: req.query.status,
+        channel: req.query.channel,
+        search: req.query.search,
+      },
+      req.tenantId,
+    );
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
@@ -51,7 +54,7 @@ exports.listOrders = async (req, res) => {
 
 exports.createManualOrder = async (req, res) => {
   try {
-    const order = await orderService.createManualOrder(req.body);
+    const order = await orderService.createManualOrder(req.body, req.tenant);
     return created(res, order);
   } catch (err) {
     if (err.status) return requestfailure(res, err);
@@ -61,7 +64,7 @@ exports.createManualOrder = async (req, res) => {
 
 exports.getOrderDetail = async (req, res) => {
   try {
-    const order = await orderService.getOrderDetailForAdmin(req.params.id);
+    const order = await orderService.getOrderDetailForAdmin(req.params.id, req.tenantId);
     return success(res, order);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -72,7 +75,7 @@ exports.getOrderDetail = async (req, res) => {
 
 exports.sendOrderEmail = async (req, res) => {
   try {
-    const order = await orderService.sendOrderNotification(req.params.id, req.body);
+    const order = await orderService.sendOrderNotification(req.params.id, req.body, req.tenantId);
     return success(res, order);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -83,7 +86,7 @@ exports.sendOrderEmail = async (req, res) => {
 
 exports.downloadInvoicePdf = async (req, res) => {
   try {
-    const { pdfBuffer, orderNumber } = await orderService.getInvoicePdfForOrder(req.params.id);
+    const { pdfBuffer, orderNumber } = await orderService.getInvoicePdfForOrder(req.params.id, req.tenantId);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${orderNumber}-invoice.pdf"`);
     return res.send(pdfBuffer);
@@ -97,7 +100,7 @@ exports.downloadInvoicePdf = async (req, res) => {
 exports.generatePaymentLink = async (req, res) => {
   try {
     // +guest_access_token: select:false by default — needed to build the link.
-    const order = await Order.findById(req.params.id).select("+guest_access_token");
+    const order = await Order.findOne({ _id: req.params.id, tenant_id: req.tenantId }).select("+guest_access_token");
     if (!order) return notFound(res, "Order not found");
     const { url } = createPaymentLinkForOrder(order);
     return success(res, { url });
@@ -109,7 +112,7 @@ exports.generatePaymentLink = async (req, res) => {
 
 exports.recordPayment = async (req, res) => {
   try {
-    const order = await orderService.recordOrderPayment(req.params.id, req.body);
+    const order = await orderService.recordOrderPayment(req.params.id, req.body, req.tenantId);
     return created(res, order);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -120,7 +123,7 @@ exports.recordPayment = async (req, res) => {
 
 exports.updateOrderCustomerDetails = async (req, res) => {
   try {
-    const order = await orderService.updateOrderCustomerDetails(req.params.id, req.body);
+    const order = await orderService.updateOrderCustomerDetails(req.params.id, req.body, req.tenantId);
     return success(res, order, "Order updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -131,10 +134,12 @@ exports.updateOrderCustomerDetails = async (req, res) => {
 
 exports.updateOrderItemPrice = async (req, res) => {
   try {
-    const order = await orderService.updateOrderItemPrice(req.params.id, req.params.itemIndex, {
-      unit_price: req.body.unit_price,
-      userId: req.user?._id,
-    });
+    const order = await orderService.updateOrderItemPrice(
+      req.params.id,
+      req.params.itemIndex,
+      { unit_price: req.body.unit_price, userId: req.user?._id },
+      req.tenantId,
+    );
     return success(res, order, "Price updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -145,9 +150,11 @@ exports.updateOrderItemPrice = async (req, res) => {
 
 exports.updateOrderShippingCost = async (req, res) => {
   try {
-    const order = await orderService.updateOrderShippingCost(req.params.id, {
-      shipping_cost: req.body.shipping_cost,
-    });
+    const order = await orderService.updateOrderShippingCost(
+      req.params.id,
+      { shipping_cost: req.body.shipping_cost },
+      req.tenantId,
+    );
     return success(res, order, "Shipping cost updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -158,9 +165,12 @@ exports.updateOrderShippingCost = async (req, res) => {
 
 exports.updateOrderItemDiscount = async (req, res) => {
   try {
-    const order = await orderService.updateOrderItemDiscount(req.params.id, req.params.itemIndex, {
-      discount_amount: req.body.discount_amount,
-    });
+    const order = await orderService.updateOrderItemDiscount(
+      req.params.id,
+      req.params.itemIndex,
+      { discount_amount: req.body.discount_amount },
+      req.tenantId,
+    );
     return success(res, order, "Discount updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -171,10 +181,11 @@ exports.updateOrderItemDiscount = async (req, res) => {
 
 exports.addOrderNote = async (req, res) => {
   try {
-    const order = await orderService.addOrderNote(req.params.id, {
-      text: req.body.text,
-      userId: req.user?._id,
-    });
+    const order = await orderService.addOrderNote(
+      req.params.id,
+      { text: req.body.text, userId: req.user?._id },
+      req.tenantId,
+    );
     return created(res, order);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);

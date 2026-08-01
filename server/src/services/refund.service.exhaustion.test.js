@@ -27,11 +27,14 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 async function createDisposableOrder({ unitPrice, quantity, shippingCost }) {
   const suffix = crypto.randomUUID();
   const itemTotal = unitPrice * quantity;
   const total = itemTotal + shippingCost;
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-EXHAUST-${suffix}`,
     invoice_number: `TEST-EXHAUST-INV-${suffix}`,
     items: [
@@ -63,6 +66,7 @@ async function createDisposableOrder({ unitPrice, quantity, shippingCost }) {
   await order.save();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "manual",
     payment_method: "cash",
@@ -102,6 +106,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
             reason: "customer_request",
           },
           null,
+          TEST_TENANT_ID,
         );
 
         assert.equal(refund.total_amount, 3000, "must be items-only (3 × $10) — the $5 shipping must NOT be absorbed in here");
@@ -114,7 +119,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
           "the $5 shipping is still genuinely outstanding — the order must not read as fully refunded",
         );
 
-        const summary = await refundService.getRefundableSummary(order._id.toString());
+        const summary = await refundService.getRefundableSummary(order._id.toString(), TEST_TENANT_ID);
         assert.equal(summary.max_refundable, 500, "the $5 shipping must still show as refundable, not silently consumed");
       } finally {
         await cleanup(order, payment);
@@ -138,6 +143,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
             reason: "customer_request",
           },
           null,
+          TEST_TENANT_ID,
         );
         assert.equal(refund1.total_amount, 101);
         assert.equal(refund1.gst_amount, 9, "proportional: round(101/11)");
@@ -151,6 +157,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
             reason: "customer_request",
           },
           null,
+          TEST_TENANT_ID,
         );
         assert.equal(refund2.total_amount, 202, "exact residual: order.total(303) - priorTotalRefunded(101)");
         assert.equal(refund2.gst_amount, 19, "exact residual: order.tax_amount(28) - priorGstRefunded(9), not round(202/11)=18");
@@ -183,6 +190,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
             reason: "customer_request",
           },
           null,
+          TEST_TENANT_ID,
         );
         assert.equal(refund1.gst_amount, 9);
 
@@ -199,6 +207,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
             reason: "customer_request",
           },
           null,
+          TEST_TENANT_ID,
         );
 
         assert.equal(refund2.gst_amount, 18, "must use the NATURAL proportional GST (round(202/11)), not the exact residual (19)");

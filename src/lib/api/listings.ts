@@ -3,6 +3,8 @@ import type { BeResponse, PaginatedData } from "./base";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { ProductVehicle } from "@/types/product";
 import { generateListingHtml } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
+import { getEbaySettings } from "@/lib/api/ebay";
+import { getTenantSettings } from "@/lib/api/tenantSettings";
 
 export interface ListingListParams {
   page?: number;
@@ -12,12 +14,23 @@ export interface ListingListParams {
   sync_status?: string;
 }
 
-function formStateToPayload(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined) {
+// Only passed through while the tenant's eBay connection is in sandbox mode
+// (see ebayDescriptionGenerator.ts) — never fetched/used for a production save.
+async function getSandboxFallbackImageUrl(): Promise<string | null> {
+  const { data: settings } = await getEbaySettings();
+  return settings.sandbox ? settings.fallback_image_url : null;
+}
+
+async function formStateToPayload(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined) {
+  const [sandboxFallbackImageUrl, { data: tenant }] = await Promise.all([
+    getSandboxFallbackImageUrl(),
+    getTenantSettings(),
+  ]);
   return {
     product: form.product_id,
     variant: form.variant_id || null,
     title_override: form.title_override || null,
-    description_override: generateListingHtml(form, vehicle),
+    description_override: generateListingHtml(form, vehicle, sandboxFallbackImageUrl, tenant.company_name, tenant.logo_url),
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
@@ -61,10 +74,8 @@ function formStateToPayload(form: EbayListingFormState, vehicle: ProductVehicle 
 }
 
 export const createListing = async (form: EbayListingFormState, vehicle?: ProductVehicle | null) => {
-  const { data } = await apiClient.post<BeResponse<EbayListing>>(
-    "/ebay/listings",
-    formStateToPayload(form, vehicle),
-  );
+  const payload = await formStateToPayload(form, vehicle);
+  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", payload);
   return data;
 };
 
@@ -86,11 +97,8 @@ export const updateListing = async (
   form: Partial<EbayListingFormState>,
   vehicle?: ProductVehicle | null,
 ) => {
-  const payload = form as EbayListingFormState;
-  const { data } = await apiClient.put<BeResponse<EbayListing>>(
-    `/ebay/listings/${id}`,
-    formStateToPayload(payload, vehicle),
-  );
+  const payload = await formStateToPayload(form as EbayListingFormState, vehicle);
+  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, payload);
   return data;
 };
 

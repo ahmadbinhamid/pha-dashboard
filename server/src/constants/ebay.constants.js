@@ -25,4 +25,15 @@ const EBAY_ERROR_CODE = Object.freeze({
   PRICE_LOCKED_BY_ACTIVE_SALE: 25019,
 });
 
-module.exports = { EBAY_SCOPES, EBAY_ERROR_CODE };
+// A tenant's eBay connection health — surfaced in Settings so a revoked
+// consent or a broken refresh shows up as a visible state, not a silently
+// failing background sync.
+const EBAY_CONNECTION_STATUS = Object.freeze({
+  NOT_CONNECTED: "not_connected",
+  CONNECTED: "connected",
+  TOKEN_EXPIRED: "token_expired",
+  REVOKED: "revoked",
+  ERROR: "error",
+});
+
+module.exports = { EBAY_SCOPES, EBAY_ERROR_CODE, EBAY_CONNECTION_STATUS };

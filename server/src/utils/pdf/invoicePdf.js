@@ -12,13 +12,6 @@
 
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const {
-  COMPANY_INFO,
-  PICKUP_LOCATION,
-  BANK_DETAILS,
-  WARRANTY_TEXT,
-  LEGAL_DISCLAIMER_TEXT,
-} = require("../../constants/company.constants");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 
 const PAGE_MARGIN = 54;
@@ -138,7 +131,7 @@ function drawInlineLabel(doc, x, y, width, segments) {
 const HEADER_RIGHT_WIDTH = 210;
 const HEADER_GAP = 16;
 
-function drawHeader(doc, order) {
+function drawHeader(doc, order, companyProfile) {
   const textX = PAGE_MARGIN + LOGO_SIZE + LOGO_TEXT_GAP;
   const leftWidth = CONTENT_WIDTH - HEADER_RIGHT_WIDTH - HEADER_GAP - LOGO_SIZE - LOGO_TEXT_GAP;
   doc.image(LOGO_PATH, PAGE_MARGIN, PAGE_MARGIN, { width: LOGO_SIZE, height: LOGO_SIZE });
@@ -147,21 +140,26 @@ function drawHeader(doc, order) {
     .font(FONT_BOLD)
     .fontSize(15)
     .fillColor(COLORS.text)
-    .text(COMPANY_INFO.name.toUpperCase(), textX, PAGE_MARGIN, { width: leftWidth });
+    .text((companyProfile.company_name || "").toUpperCase(), textX, PAGE_MARGIN, { width: leftWidth });
   doc
     .font(FONT)
     .fontSize(8.5)
     .fillColor(COLORS.text)
-    .text(`${PICKUP_LOCATION.address}, ${PICKUP_LOCATION.country}`, textX, doc.y + 5, { width: leftWidth });
+    .text(
+      `${companyProfile.pickup_location?.address || ""}, ${companyProfile.pickup_location?.country || ""}`,
+      textX,
+      doc.y + 5,
+      { width: leftWidth },
+    );
   drawInlineLabel(doc, textX, doc.y + 4, leftWidth, [
     { text: "ABN: ", bold: true, color: COLORS.text },
-    { text: `${COMPANY_INFO.abn}   |   `, color: COLORS.muted },
+    { text: `${companyProfile.abn || ""}   |   `, color: COLORS.muted },
     { text: "PH: ", bold: true, color: COLORS.text },
-    { text: COMPANY_INFO.phone, color: COLORS.muted },
+    { text: companyProfile.phone || "", color: COLORS.muted },
   ]);
   drawInlineLabel(doc, textX, doc.y + 3, leftWidth, [
     { text: "EMAIL: ", bold: true, color: COLORS.text },
-    { text: COMPANY_INFO.email, color: COLORS.muted },
+    { text: companyProfile.email || "", color: COLORS.muted },
   ]);
   doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.accent).text("Official Tax Invoice", textX, doc.y + 5);
   const leftBottomY = doc.y;
@@ -438,7 +436,7 @@ function drawItemsTable(doc, order) {
   doc.y = tableBottom + 22;
 }
 
-function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents) {
+function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents, companyProfile) {
   const startY = doc.y;
   // Totals only ever hold short currency strings, so it doesn't need as much
   // width as a straight half/half split gives it — handing that space to the
@@ -466,11 +464,12 @@ function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents) {
     });
 
   const gridColWidth = (halfWidth - 24) / 2;
+  const bankDetails = companyProfile.bank_details || {};
   const bankRows = [
-    ["BANK NAME", BANK_DETAILS.bankName || "—"],
-    ["ACCOUNT NAME", BANK_DETAILS.accountName || COMPANY_INFO.name],
-    ["BSB", BANK_DETAILS.bsb || "—"],
-    ["ACCOUNT NO", BANK_DETAILS.accountNumber || "—"],
+    ["BANK NAME", bankDetails.bank_name || "—"],
+    ["ACCOUNT NAME", bankDetails.account_name || companyProfile.company_name || "—"],
+    ["BSB", bankDetails.bsb || "—"],
+    ["ACCOUNT NO", bankDetails.account_number || "—"],
   ];
   const gridStartY = startY + 30;
   bankRows.forEach(([label, value], idx) => {
@@ -599,14 +598,16 @@ function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents) {
 // Warranty & Returns / Legal Disclaimer footer, matching
 // InvoicePrintView.tsx's tinted footer section — replaces the old single
 // italic INVOICE_NOTE line that used to sit under Payment Information.
-function drawFooter(doc, bottomY) {
+function drawFooter(doc, bottomY, companyProfile) {
   const boxPad = 16;
   const colGap = 24;
   const colWidth = CONTENT_WIDTH / 2 - colGap / 2 - boxPad * 2;
+  const warrantyText = companyProfile.warranty_text || "";
+  const legalDisclaimerText = companyProfile.legal_disclaimer_text || "";
 
   doc.font(FONT).fontSize(7.5);
-  const leftTextHeight = doc.heightOfString(WARRANTY_TEXT, { width: colWidth, lineGap: 1.5 });
-  const rightTextHeight = doc.heightOfString(LEGAL_DISCLAIMER_TEXT, { width: colWidth, lineGap: 1.5 });
+  const leftTextHeight = doc.heightOfString(warrantyText, { width: colWidth, lineGap: 1.5 });
+  const rightTextHeight = doc.heightOfString(legalDisclaimerText, { width: colWidth, lineGap: 1.5 });
   const headerHeight = 16;
   const boxHeight = boxPad * 2 + headerHeight + Math.max(leftTextHeight, rightTextHeight);
 
@@ -630,7 +631,7 @@ function drawFooter(doc, bottomY) {
     .font(FONT)
     .fontSize(7.5)
     .fillColor(COLORS.muted)
-    .text(WARRANTY_TEXT, PAGE_MARGIN + boxPad, doc.y + 4, { width: colWidth, lineGap: 1.5 });
+    .text(warrantyText, PAGE_MARGIN + boxPad, doc.y + 4, { width: colWidth, lineGap: 1.5 });
 
   const col2X = PAGE_MARGIN + CONTENT_WIDTH / 2 + colGap / 2;
   doc.font(FONT_BOLD).fontSize(8).fillColor(COLORS.text).text("LEGAL DISCLAIMER", col2X, textY, { width: colWidth });
@@ -638,7 +639,7 @@ function drawFooter(doc, bottomY) {
     .font(FONT)
     .fontSize(7.5)
     .fillColor(COLORS.muted)
-    .text(LEGAL_DISCLAIMER_TEXT, col2X, doc.y + 4, { width: colWidth, lineGap: 1.5 });
+    .text(legalDisclaimerText, col2X, doc.y + 4, { width: colWidth, lineGap: 1.5 });
 
   doc.fillColor(COLORS.text);
   return boxY + boxHeight;
@@ -686,7 +687,7 @@ function drawCardBorder(doc, bottomY) {
 // (see payment.service.js#getTotalPaidForOrder/#getTotalRefundedForOrder) —
 // the caller computes these since they require a DB query this pure
 // rendering function shouldn't make itself.
-function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents = 0 } = {}) {
+function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents = 0, companyProfile = {} } = {}) {
   return new Promise((resolve, reject) => {
     // bufferPages: true is required to go back and draw onto earlier pages
     // (switchToPage below) after later pages already exist — the total page
@@ -697,11 +698,11 @@ function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents =
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    drawHeader(doc, order);
+    drawHeader(doc, order, companyProfile);
     drawBillShipTransactionBlock(doc, order);
     drawItemsTable(doc, order);
-    drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents);
-    const footerBottomY = drawFooter(doc, doc.y);
+    drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents, companyProfile);
+    const footerBottomY = drawFooter(doc, doc.y, companyProfile);
     drawCardBorder(doc, footerBottomY);
 
     const pageRange = doc.bufferedPageRange();

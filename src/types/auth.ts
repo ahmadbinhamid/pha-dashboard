@@ -1,5 +1,6 @@
 export interface AuthUser {
   _id: string;
+  tenant_id: string | null;
   first_name: string;
   last_name: string;
   email: string;

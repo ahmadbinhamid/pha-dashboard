@@ -1,6 +1,5 @@
 const { enqueueEmailJob } = require("../../queues/email.queue");
 const config = require("../../config");
-const { PICKUP_LOCATION } = require("../../constants/company.constants");
 
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
@@ -123,7 +122,7 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
  * the tax invoice attached as a PDF (base64-encoded — Bull job payloads are
  * JSON over Redis, so a raw Buffer wouldn't round-trip to the worker intact).
  */
-async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename }) {
+async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {} }) {
   return enqueueEmailJob({
     from: defaultFrom(),
     to,
@@ -132,10 +131,10 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
     variables: {
       name,
       order_number: orderNumber,
-      pickup_location_name: PICKUP_LOCATION.name,
-      pickup_address: PICKUP_LOCATION.address,
-      pickup_country: PICKUP_LOCATION.country,
-      trading_hours: PICKUP_LOCATION.tradingHours,
+      pickup_location_name: pickupLocation.name || "",
+      pickup_address: pickupLocation.address || "",
+      pickup_country: pickupLocation.country || "",
+      trading_hours: pickupLocation.trading_hours || [],
     },
     attachments: [
       {

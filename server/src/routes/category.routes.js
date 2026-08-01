@@ -3,19 +3,29 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth, admin } = require("../middlewares/auth");
+const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/category.validation");
 const ctrl = require("../controllers/category.controller");
 
-// Public routes
+// Public routes — auth(false) resolves req.tenant from a staff JWT when
+// present, resolveGuestTenant() fills in from X-Tenant-Slug otherwise.
 router.get(
   "/",
+  auth(false),
+  resolveGuestTenant(),
   pagination(),
   validate(v.listCategories),
   asyncHandler(ctrl.getCategories),
 );
-router.get("/:id", validate(v.byIdParam), asyncHandler(ctrl.getCategory));
+router.get(
+  "/:id",
+  auth(false),
+  resolveGuestTenant(),
+  validate(v.byIdParam),
+  asyncHandler(ctrl.getCategory),
+);
 
 // Protected routes — require admin role
 router.post(

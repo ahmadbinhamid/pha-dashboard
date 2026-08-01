@@ -19,10 +19,10 @@ exports.createIntent = async (req, res) => {
     // Same guest-token gate as GET /orders/:id — generic 404 on a bad/missing
     // token so a guessed order_id can't be used to probe order existence,
     // read its total, or start a payment on someone else's order.
-    const order = await orderService.getOrderForGuest(req.body.order_id, req.body.token);
+    const order = await orderService.getOrderForGuest(req.body.order_id, req.body.token, req.tenantId);
 
-    const { payment, client_secret } = await createPaymentIntentForOrder(order);
-    return created(res, { payment_id: payment._id, client_secret });
+    const { payment, client_secret, stripe_account_id } = await createPaymentIntentForOrder(order);
+    return created(res, { payment_id: payment._id, client_secret, stripe_account_id });
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);
@@ -33,7 +33,7 @@ exports.createIntent = async (req, res) => {
 exports.listPayments = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
-    const result = await paymentService.listPayments({ page, limit, skip, status: req.query.status });
+    const result = await paymentService.listPayments({ page, limit, skip, status: req.query.status }, req.tenantId);
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);
@@ -42,7 +42,7 @@ exports.listPayments = async (req, res) => {
 
 exports.getPayment = async (req, res) => {
   try {
-    const payment = await paymentService.getPaymentWithRefunds(req.params.id);
+    const payment = await paymentService.getPaymentWithRefunds(req.params.id, req.tenantId);
     if (!payment) return notFound(res, "Payment not found");
     return success(res, payment);
   } catch (err) {

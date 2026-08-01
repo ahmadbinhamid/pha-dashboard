@@ -64,10 +64,13 @@ function buildFakeStripe({ createImpl, listImpl, retrieveImpl } = {}) {
   };
 }
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 async function createDisposableOrder({ quantity = 1, unitPrice = 1000, sku = null } = {}) {
   const suffix = crypto.randomUUID();
   const total = unitPrice * quantity;
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-WHFIX-${suffix}`,
     invoice_number: `TEST-WHFIX-INV-${suffix}`,
     items: [
@@ -92,6 +95,7 @@ async function createDisposableOrder({ quantity = 1, unitPrice = 1000, sku = nul
 
 async function createStripePayment(order, { amount, suffix }) {
   return Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "stripe",
     payment_method: null,
@@ -141,6 +145,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
             order._id.toString(),
             { idempotency_key: `row14-${suffix}`, scope: "amount", amount: 2000, reason: "customer_request" },
             null,
+            TEST_TENANT_ID,
           ),
         (err) => {
           assert.equal(err.status, 502);
@@ -180,8 +185,9 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     const itemId = order.items[0]._id.toString();
     const stripeRefundId = `re_row15_${suffix}`;
 
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: 2000,
@@ -246,8 +252,9 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
 
     const payment = await createStripePayment(order, { amount: 1000, suffix });
     const stripeRefundId = `re_row16_${suffix}`;
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: 1000,
@@ -303,8 +310,9 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     const refundService = require("../refund.service");
     const { handleEvent } = require("./stripe.webhook.service");
 
-    const refundNumber = await refundService.nextRefundNumber();
+    const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: 1000,

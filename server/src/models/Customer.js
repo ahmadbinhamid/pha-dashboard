@@ -14,6 +14,9 @@ const addressSchema = new Schema(
 );
 
 const customerSchema = buildSchema({
+  // Backfilled onto every existing Customer by scripts/backfillTenantId.js —
+  // email's unique partial index below is compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   name: { type: String, required: true, trim: true },
   email: { type: String, lowercase: true, trim: true, default: null },
   phone: { type: String, trim: true, default: null },
@@ -28,7 +31,7 @@ const customerSchema = buildSchema({
 // Partial index: only enforce uniqueness among documents that actually have
 // an email, so multiple walk-in customers with no email never collide.
 customerSchema.index(
-  { email: 1 },
+  { tenant_id: 1, email: 1 },
   { unique: true, partialFilterExpression: { deleted_at: null, email: { $type: "string" } } },
 );
 customerSchema.index({ name: 1 });

@@ -205,14 +205,4 @@ export interface ProductEditFormState {
   choices: Choice[];
 }
 
-export interface EbaySettings {
-  merchant_location_key: string | null;
-  fulfillment_policy_id: string | null;
-  payment_policy_id: string | null;
-  return_policy_id: string | null;
-}
-
-export interface EbayStatus {
-  connected: boolean;
-  reason?: string;
-}
+export type { EbaySettings, EbayStatus } from "./ebaySettings";

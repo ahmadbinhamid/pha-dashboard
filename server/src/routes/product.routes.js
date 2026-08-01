@@ -3,6 +3,7 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth } = require("../middlewares/auth");
+const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/product.validation");
@@ -11,14 +12,24 @@ const { upload } = require("../middlewares/upload");
 
 const formFields = upload.none();
 
+// auth(false) resolves req.tenant from a staff JWT when present (admin
+// dashboard browsing); resolveGuestTenant() fills in from X-Tenant-Slug
+// otherwise (public storefront browsing).
 router.get(
   "/",
   auth(false),
+  resolveGuestTenant(),
   pagination(),
   validate(v.listProducts),
   asyncHandler(ctrl.getProducts),
 );
-router.get("/:slug", auth(false), validate(v.bySlugParam), asyncHandler(ctrl.getProduct));
+router.get(
+  "/:slug",
+  auth(false),
+  resolveGuestTenant(),
+  validate(v.bySlugParam),
+  asyncHandler(ctrl.getProduct),
+);
 
 router.post("/", auth(), formFields, asyncHandler(ctrl.createProduct));
 router.put(

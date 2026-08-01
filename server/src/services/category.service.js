@@ -36,14 +36,15 @@ async function getProductCountsByCategory(categoryIds, extraFilter = {}) {
   return new Map(counts.map((c) => [c._id.toString(), c.count]));
 }
 
-async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {}) {
+async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {}, tenantId) {
+  const filter = { tenant_id: tenantId };
   const [items, total] = await Promise.all([
-    Category.find({})
+    Category.find(filter)
       .populate("thumbnail")
       .sort({ sort_order: 1, name: 1 })
       .skip(skip)
       .limit(limit),
-    Category.countDocuments({}),
+    Category.countDocuments(filter),
   ]);
 
   // The category facet itself is excluded so every category keeps showing its
@@ -63,26 +64,32 @@ async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {})
   return { items: withCounts, total };
 }
 
-async function getCategoryById(id) {
-  return Category.findById(id).populate("parent").populate("thumbnail");
+async function getCategoryById(id, tenantId) {
+  return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
 
-async function createCategory({ name, description, thumbnail, parent, sort_order }) {
+async function createCategory({ name, description, thumbnail, parent, sort_order }, tenantId) {
   const baseSlug = generateSlug(name);
   // Race-safe: retries on a genuine slug conflict instead of trusting a
   // single check-then-insert (see utils/slug.js for why).
-  return createWithUniqueSlug(Category, baseSlug, (slug) => ({
-    name,
-    slug,
-    description: description || "",
-    thumbnail: thumbnail || null,
-    parent: parent || null,
-    sort_order: sort_order || 0,
-  }));
+  return createWithUniqueSlug(
+    Category,
+    baseSlug,
+    (slug) => ({
+      tenant_id: tenantId,
+      name,
+      slug,
+      description: description || "",
+      thumbnail: thumbnail || null,
+      parent: parent || null,
+      sort_order: sort_order || 0,
+    }),
+    { tenantId },
+  );
 }
 
-async function updateCategory(id, { name, description, thumbnail, parent, sort_order, slug: slugOverride }) {
-  const category = await Category.findById(id);
+async function updateCategory(id, { name, description, thumbnail, parent, sort_order, slug: slugOverride }, tenantId) {
+  const category = await Category.findOne({ _id: id, tenant_id: tenantId });
   if (!category) return null;
 
   let pendingSlugBase = null;
@@ -101,15 +108,15 @@ async function updateCategory(id, { name, description, thumbnail, parent, sort_o
   // Race-safe: retries on a genuine slug conflict instead of trusting a
   // single check-then-save (see utils/slug.js for why).
   if (pendingSlugBase) {
-    await saveWithUniqueSlug(category, Category, pendingSlugBase, category._id.toString());
+    await saveWithUniqueSlug(category, Category, pendingSlugBase, category._id.toString(), { tenantId });
   } else {
     await category.save();
   }
   return category;
 }
 
-async function deleteCategory(id) {
-  const category = await Category.findById(id);
+async function deleteCategory(id, tenantId) {
+  const category = await Category.findOne({ _id: id, tenant_id: tenantId });
   if (!category) return null;
   await category.softDelete();
   return category;
