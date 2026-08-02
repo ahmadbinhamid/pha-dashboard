@@ -7,12 +7,14 @@ const upload = multer();
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
 const { auth, superadmin } = require("../middlewares/auth");
+const { loginLimiter } = require("../middlewares/rateLimit");
 const V = require("../validators/auth.validation");
 const ctrl = require("../controllers/auth.controller");
 
 // register
 router.post(
   "/register",
+  loginLimiter,
   upload.none(),
   validate(V.register),
   asyncHandler(ctrl.register)
@@ -21,6 +23,7 @@ router.post(
 // login
 router.post(
   "/login",
+  loginLimiter,
   upload.none(),
   validate(V.login),
   asyncHandler(ctrl.login)
@@ -29,6 +32,7 @@ router.post(
 // verify OTP for login
 router.post(
   "/verify-otp",
+  loginLimiter,
   upload.none(),
   validate(V.verifyOTP),
   asyncHandler(ctrl.verifyOTP)
@@ -37,6 +41,7 @@ router.post(
 // resend OTP for login
 router.post(
   "/resend-otp",
+  loginLimiter,
   upload.none(),
   validate(V.resendOTP),
   asyncHandler(ctrl.resendOTP)
@@ -45,6 +50,7 @@ router.post(
 // forgot password
 router.post(
   "/forgot-password",
+  loginLimiter,
   upload.none(),
   validate(V.forgotPassword),
   asyncHandler(ctrl.forgotPassword)
@@ -53,6 +59,7 @@ router.post(
 // reset password
 router.post(
   "/reset-password",
+  loginLimiter,
   upload.none(),
   validate(V.resetPassword),
   asyncHandler(ctrl.resetPassword)

@@ -96,6 +96,12 @@ const productSchema = buildSchema({
 
 productSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });
 productSchema.index({ sku: 1 }, { sparse: true });
+// partialFilterExpression, NOT sparse — sku is stored as literal null on
+// products without one, and sparse only excludes an entirely unset field.
+productSchema.index(
+  { tenant_id: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $type: "string" } } },
+);
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });

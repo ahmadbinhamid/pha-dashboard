@@ -21,7 +21,7 @@ const config = {
 
   jwt: {
     secret: get("JWT_SECRET", "change_me"),
-    expiresIn: get("JWT_EXPIRES_IN", "1d"),
+    expiresIn: get("JWT_EXPIRES_IN", "2h"),
   },
 
   security: {

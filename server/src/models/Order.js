@@ -287,5 +287,7 @@ orderSchema.index(
   { tenant_id: 1, external_order_id: 1 },
   { unique: true, partialFilterExpression: { external_order_id: { $type: "string" } } },
 );
+// Backs the per-tenant order list view (default sort: newest first).
+orderSchema.index({ tenant_id: 1, created_at: -1 });
 
 module.exports = model("Order", orderSchema);
