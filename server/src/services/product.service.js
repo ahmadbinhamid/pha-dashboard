@@ -16,15 +16,15 @@ const { LISTING_STATE } = require("../constants/marketplace.constants");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
 
-async function generateNextSku() {
+async function generateNextSku(tenant) {
   // SKUs are zero-padded to 6 digits, so lexicographic desc = numeric desc
   const last = await Product.findOne(
-    { sku: /^PHA-\d{6}$/ },
+    { tenant_id: tenant._id, sku: new RegExp(`^${tenant.code}-\\d{6}$`) },
     { sku: 1 },
   ).sort({ sku: -1 });
 
-  const num = last?.sku ? parseInt(last.sku.slice(4), 10) : 0;
-  return `PHA-${String(num + 1).padStart(6, "0")}`;
+  const num = last?.sku ? parseInt(last.sku.slice(tenant.code.length + 1), 10) : 0;
+  return `${tenant.code}-${String(num + 1).padStart(6, "0")}`;
 }
 
 // ── Variant generation ────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ async function generateVariantsForProduct(product) {
 
     if (!alreadyExists) {
       const variant = await ProductVariant.create({
+        tenant_id: product.tenant_id,
         product: product._id,
         combination,
         display_name,
@@ -183,14 +184,14 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   };
 }
 
-async function findProductById(id) {
-  return Product.findById(id);
+async function findProductById(id, tenantId) {
+  return Product.findOne({ _id: id, tenant_id: tenantId });
 }
 
 // Adds a staff comment to a product's internal notes thread — never shown
 // to customers. Mirrors order.service.js#addOrderNote exactly.
-async function addProductNote(productId, { text, userId }) {
-  const product = await Product.findById(productId);
+async function addProductNote(productId, { text, userId }, tenantId) {
+  const product = await Product.findOne({ _id: productId, tenant_id: tenantId });
   if (!product) return null;
 
   product.internal_notes.push({ text, author: userId || null, created_at: new Date() });
@@ -198,8 +199,8 @@ async function addProductNote(productId, { text, userId }) {
   return product;
 }
 
-async function getProductBySlug(slug) {
-  const product = await Product.findOne({ slug })
+async function getProductBySlug(slug, tenantId) {
+  const product = await Product.findOne({ slug, tenant_id: tenantId })
     .populate("attachments")
     .populate("categories")
     .populate("digital_file")
@@ -248,8 +249,8 @@ async function getProductBySlug(slug) {
   return product;
 }
 
-async function getPopulatedProduct(id) {
-  return Product.findById(id)
+async function getPopulatedProduct(id, tenantId) {
+  return Product.findOne({ _id: id, tenant_id: tenantId })
     .populate("attachments")
     .populate("categories")
     .populate("digital_file");
@@ -257,29 +258,29 @@ async function getPopulatedProduct(id) {
 
 // Retries on a genuine slug conflict instead of trusting a single
 // check-then-insert (see utils/slug.js for why).
-async function createProductRecordWithSlug(data, baseSlug) {
-  return createWithUniqueSlug(Product, baseSlug, (slug) => ({ ...data, slug }));
+async function createProductRecordWithSlug(data, baseSlug, tenantId) {
+  return createWithUniqueSlug(Product, baseSlug, (slug) => ({ ...data, tenant_id: tenantId, slug }), { tenantId });
 }
 
 // ── Variant CRUD ──────────────────────────────────────────────────────────────
 
-async function findVariantsByProductId(productId) {
-  return ProductVariant.find({ product: productId });
+async function findVariantsByProductId(productId, tenantId) {
+  return ProductVariant.find({ product: productId, tenant_id: tenantId });
 }
 
-async function getVariantsByProduct(productId) {
-  return ProductVariant.find({ product: productId })
+async function getVariantsByProduct(productId, tenantId) {
+  return ProductVariant.find({ product: productId, tenant_id: tenantId })
     .populate("attachments")
     .populate("digital_file")
     .sort({ display_name: 1 });
 }
 
-async function findVariant(variantId, productId) {
-  return ProductVariant.findOne({ _id: variantId, product: productId });
+async function findVariant(variantId, productId, tenantId) {
+  return ProductVariant.findOne({ _id: variantId, product: productId, tenant_id: tenantId });
 }
 
-async function getPopulatedVariant(id) {
-  return ProductVariant.findById(id)
+async function getPopulatedVariant(id, tenantId) {
+  return ProductVariant.findOne({ _id: id, tenant_id: tenantId })
     .populate("attachments")
     .populate("digital_file");
 }
@@ -295,7 +296,7 @@ async function saveProduct(product) {
 // For renames: retries on a genuine slug conflict instead of trusting a
 // single check-then-save (see utils/slug.js for why).
 async function saveProductWithUniqueSlug(product, baseSlug) {
-  return saveWithUniqueSlug(product, Product, baseSlug, product._id.toString());
+  return saveWithUniqueSlug(product, Product, baseSlug, product._id.toString(), { tenantId: product.tenant_id });
 }
 
 async function softDeleteProduct(product) {

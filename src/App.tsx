@@ -3,6 +3,7 @@ import { AppProviders } from "@/components/providers/AppProviders";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { GuestRoute } from "@/components/auth/GuestRoute";
 import { ErpLayout } from "@/components/layouts/ErpLayout";
+import { SettingsLayout } from "@/components/layouts/SettingsLayout";
 import { useAuth } from "@/context/auth";
 
 // Auth pages
@@ -25,6 +26,11 @@ import ListingsPage from "@/pages/erp/ListingsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
+import BusinessInfoPage from "@/pages/erp/settings/BusinessInfoPage";
+import PaymentAccountPage from "@/pages/erp/settings/PaymentAccountPage";
+import EmailSettingsPage from "@/pages/erp/settings/EmailSettingsPage";
+import EbaySettingsPage from "@/pages/erp/settings/EbaySettingsPage";
+import PayOrderPage from "@/pages/PayOrderPage";
 
 function HomeRedirect() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,6 +51,10 @@ export default function App() {
     >
       <AppProviders>
         <Routes>
+          {/* Public — no login, no tenant context beyond the order id + guest
+              token in the URL. Shared across every tenant's payment links. */}
+          <Route path="/pay/:orderId" element={<PayOrderPage />} />
+
           <Route
             path="/login"
             element={
@@ -77,6 +87,14 @@ export default function App() {
             <Route path="/listings/new" element={<ListingCreatePage />} />
             <Route path="/listings/:id/edit" element={<ListingEditPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />
+
+            <Route path="/settings" element={<SettingsLayout />}>
+              <Route index element={<Navigate to="/settings/business-info" replace />} />
+              <Route path="business-info" element={<BusinessInfoPage />} />
+              <Route path="payment-account" element={<PaymentAccountPage />} />
+              <Route path="email" element={<EmailSettingsPage />} />
+              <Route path="ebay" element={<EbaySettingsPage />} />
+            </Route>
           </Route>
 
           <Route path="/" element={<HomeRedirect />} />

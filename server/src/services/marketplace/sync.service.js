@@ -10,13 +10,16 @@ const MarketplaceListing = require("../../models/MarketplaceListing");
 const ProductVariant = require("../../models/ProductVariant");
 const { getAdapter } = require("./registry");
 const { resolveListing } = require("./listing.resolver");
-const { loadSettings: loadEbaySettings } = require("../ebay/ebay.api.service");
+const { getSettings: getEbaySettings } = require("../ebay/ebay.settings.service");
 const { LISTING_STATE, LISTING_SYNC_STATUS, MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 
-async function loadPlatformSettings(platform) {
+// tenantId is derived from the listing's own (already tenant-scoped) Product,
+// not from a request context — this dispatcher is called from queue jobs with
+// no req available.
+async function loadPlatformSettings(platform, tenantId) {
   switch (platform) {
     case MARKETPLACE_PLATFORM.EBAY:
-      return loadEbaySettings();
+      return getEbaySettings(tenantId);
     default:
       throw new Error(`No settings loader registered for platform: ${platform}`);
   }
@@ -38,7 +41,7 @@ async function syncListing(listingId) {
     : null;
 
   const resolved = resolveListing(listing, listing.product, variant);
-  const settings = await loadPlatformSettings(listing.platform);
+  const settings = await loadPlatformSettings(listing.platform, listing.product.tenant_id);
 
   await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.PENDING });
   logger.info(`[marketplace.sync] syncing listing ${listingId} on ${listing.platform} (sku: ${resolved.sku})`);

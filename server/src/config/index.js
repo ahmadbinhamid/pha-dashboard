@@ -24,6 +24,13 @@ const config = {
     expiresIn: get("JWT_EXPIRES_IN", "1d"),
   },
 
+  security: {
+    // 32-byte hex string (64 hex chars) — `openssl rand -hex 32`. Used to
+    // encrypt long-lived third-party credentials at rest (currently: each
+    // tenant's eBay refresh_token — see utils/crypto/tokenCipher.js).
+    encryptionKey: get("ENCRYPTION_KEY", null),
+  },
+
   otp: {
     expiryMinutes: getNum("OTP_EXPIRY_MINUTES", 2),
   },
@@ -44,7 +51,6 @@ const config = {
     user: get("SMTP_USER"),
     pass: get("SMTP_PASS"),
     alertsTo: get("ALERTS_TO"),
-    salesEmail: get("SALES_EMAIL", "sales@partshubaustralia.com.au"),
     // Conservative defaults for shared/free SMTP sandboxes (e.g. Mailtrap
     // testing plans) that throttle to a handful of messages per second.
     // Bump these via env once on a real provider with higher limits.
@@ -79,36 +85,29 @@ const config = {
   },
 
   ebay: {
+    // Multi-tenant — client_id/client_secret belong to OUR eBay Application
+    // (shared across every tenant, like a Stripe platform key) and stay
+    // global. Everything seller-specific (refresh_token, marketplace,
+    // sandbox, policies, warehouse address, webhook token) now lives per-
+    // tenant on the EbaySettings model — see ebay.settings.service.js.
     clientId: get("EBAY_CLIENT_ID", null),
     clientSecret: get("EBAY_CLIENT_SECRET", null),
-    refreshToken: get("EBAY_REFRESH_TOKEN", null),
-    marketplaceId: get("EBAY_MARKETPLACE_ID", "EBAY_AU"),
-    sandbox: get("EBAY_SANDBOX", "false") === "true",
+    // Global override (e.g. a proxy) — normally left unset so each tenant's
+    // own `sandbox` flag derives the right base URL (see ebay.api.service.js).
     apiBaseUrl: get("EBAY_API_BASE_URL"),
     taxonomyBaseUrl: get("EBAY_TAXONOMY_BASE_URL"),
-    // Fallback settings — used when the EbaySettings DB record has no value set
-    merchantLocationKey: get("EBAY_MERCHANT_LOCATION_KEY", null),
-    fulfillmentPolicyId: get("EBAY_FULFILLMENT_POLICY_ID", null),
-    paymentPolicyId: get("EBAY_PAYMENT_POLICY_ID", null),
-    returnPolicyId: get("EBAY_RETURN_POLICY_ID", null),
-    fallbackImageUrl: get("EBAY_FALLBACK_IMAGE_URL", null),
-    // Must byte-for-byte match the URL registered in eBay's Marketplace Account Deletion form
-    webhookEndpointUrl: get("EBAY_WEBHOOK_ENDPOINT_URL", null),
-    // Warehouse address — used to auto-create the merchant location if it doesn't exist on eBay
-    warehouseStreet: get("EBAY_WAREHOUSE_STREET", null),
-    warehouseCity: get("EBAY_WAREHOUSE_CITY", null),
-    warehouseState: get("EBAY_WAREHOUSE_STATE", null),
-    warehousePostcode: get("EBAY_WAREHOUSE_POSTCODE", null),
-    warehouseCountry: get("EBAY_WAREHOUSE_COUNTRY", "AU"),
-    warehousePhone: get("EBAY_WAREHOUSE_PHONE", null),
+    // eBay's "RuName" — a redirect-URL identifier you register once in the
+    // eBay Developer Portal against this application, pointed at
+    // /api/v1/ebay/oauth/callback. Required for the OAuth consent flow
+    // (ebay.oauth.service.js) — eBay will not redirect anywhere else.
+    redirectUri: get("EBAY_REDIRECT_URI", null),
   },
 
   stripe: {
-    secretKey: get("STRIPE_SECRET_KEY", null),
-    webhookSecret: get("STRIPE_WEBHOOK_SECRET", null),
-    // Only used server-side as a documented default; the storefront reads its
-    // own VITE_STRIPE_PUBLISHABLE_KEY directly and never calls this API for it.
-    publishableKey: get("STRIPE_PUBLISHABLE_KEY", null),
+    // BYOK — no platform-level secret/webhook/publishable key anymore; each
+    // tenant supplies their own via Settings → Payment Account, stored
+    // encrypted on their Tenant document (see stripe.keys.service.js).
+    // Only the default currency stays global/env-configurable.
     currency: get("STRIPE_CURRENCY", "aud"),
   },
 };

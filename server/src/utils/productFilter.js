@@ -8,9 +8,11 @@ const { PRODUCT_STATUS } = require("../constants/product.constants");
 // aggregation, so both stay in sync on what "matches the current search/filters"
 // means. `authenticated: false` (public/storefront callers) always restricts to
 // published+active products.
-function buildProductFilter(query = {}, { authenticated = false } = {}) {
+function buildProductFilter(query = {}, { authenticated = false, tenantId = null } = {}) {
   const filter = {};
   const and = [];
+
+  if (tenantId) filter.tenant_id = tenantId;
 
   if (query.search) {
     const re = new RegExp(escapeRegex(query.search.trim()), "i");

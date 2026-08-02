@@ -23,8 +23,8 @@ async function updateUserProfile(id, { first_name, last_name }) {
   );
 }
 
-async function deleteUser(id) {
-  const user = await User.findById(id);
+async function deleteUser(id, tenantId) {
+  const user = await User.findOne({ _id: id, tenant_id: tenantId });
   if (!user) return null;
   await user.softDelete();
   return user;
@@ -32,8 +32,15 @@ async function deleteUser(id) {
 
 // ── Auth-related lookups ──────────────────────────────────────────────────
 
-async function findUserByEmail(email) {
-  return User.findOne({ email });
+// tenantId is required at registration (a new user always belongs to exactly
+// one tenant) but optional for login/password-reset lookups, which are
+// email-only today — see auth.controller.js's login/verifyOTP/forgotPassword
+// for the known ambiguity risk if the same email is ever registered against
+// more than one tenant.
+async function findUserByEmail(email, tenantId = null) {
+  const filter = { email };
+  if (tenantId) filter.tenant_id = tenantId;
+  return User.findOne(filter);
 }
 
 async function createUser(data) {

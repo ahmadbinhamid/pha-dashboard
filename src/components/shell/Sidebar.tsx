@@ -2,7 +2,8 @@
 import { Suspense } from "react";
 import { cn } from "@/utils/cn";
 import { useOrgSettings } from "@/context";
-import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
+import { TenantLogo } from "@/components/branding/TenantLogo";
+import { APP_NAME } from "@/components/branding/AppLogoMark";
 import { NavItemsList } from "@/components/shell/NavItemsList";
 
 type SidebarProps = {
@@ -22,8 +23,10 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           collapsed && "justify-center px-0",
         )}
       >
-        <div className="shrink-0 rounded-xs bg-black p-1 ring-1 ring-[hsl(var(--accent)/0.28)]">
-          <PartsHubLogoImage
+        <div className="shrink-0 overflow-hidden rounded-xs ring-1 ring-[hsl(var(--accent)/0.28)]">
+          <TenantLogo
+            logoUrl={settings.logoUrl}
+            name={settings.storeName}
             sizeClass={collapsed ? "h-6" : "h-7"}
             maxWidthClass={collapsed ? "max-w-6" : "max-w-7"}
             priority
@@ -32,9 +35,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         {!collapsed ? (
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] font-semibold leading-tight tracking-tight text-fg">
-              {settings.storeName}
+              {settings.storeName || APP_NAME}
             </div>
-            <div className="truncate text-[10.5px] text-fg/45">Parts Hub ERP</div>
+            <div className="truncate text-[10.5px] text-fg/45">{APP_NAME}</div>
           </div>
         ) : null}
       </div>

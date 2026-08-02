@@ -1,5 +1,12 @@
 // services/ebay/ebay.api.service.js
 // Pure eBay API communication layer — no database access, no orchestration
+//
+// Multi-tenant: client_id/client_secret belong to OUR eBay Application
+// (config.ebay.*, shared across every tenant, like a Stripe platform key).
+// Everything else — refresh_token, marketplace, sandbox, policies, warehouse
+// address — is per-tenant and passed in as a `settings` object (the shape
+// returned by ebay.settings.service.js#getSettings(tenantId)). OAuth tokens
+// are cached per-tenant (keyed by tenant_id), not as a single global value.
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
@@ -57,141 +64,142 @@ function toPlainText(html, maxLen = 4000) {
     .slice(0, maxLen);
 }
 
-const BASE_URL = config.ebay.apiBaseUrl;
-const TOKEN_ENDPOINT = `${BASE_URL}/identity/v1/oauth2/token`;
-const INVENTORY_BASE = `${BASE_URL}/sell/inventory/v1`;
-const FULFILLMENT_BASE = `${BASE_URL}/sell/fulfillment/v1`;
-
-let _cachedToken = null;
-let _tokenExpiry = 0;
-
-let _cachedAppToken = null;
-let _appTokenExpiry = 0;
-
-let _cachedCatalogToken = null;
-let _catalogTokenExpiry = 0;
-
-let _cachedCategoryTreeId = null;
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-
-function credentialsConfigured() {
-  return !!(
-    config.ebay.clientId &&
-    config.ebay.clientSecret &&
-    config.ebay.refreshToken
-  );
+// ── Base URLs ────────────────────────────────────────────────────────────────
+// EBAY_API_BASE_URL/EBAY_TAXONOMY_BASE_URL remain a global override (e.g. for
+// a proxy) when set; otherwise derived from each tenant's own `sandbox` flag.
+function apiBaseUrlFor(sandbox) {
+  return config.ebay.apiBaseUrl || (sandbox ? "https://api.sandbox.ebay.com" : "https://api.ebay.com");
+}
+function taxonomyBaseUrlFor(sandbox) {
+  return config.ebay.taxonomyBaseUrl || `${apiBaseUrlFor(sandbox)}/commerce/taxonomy/v1`;
+}
+function inventoryBaseFor(sandbox) {
+  return `${apiBaseUrlFor(sandbox)}/sell/inventory/v1`;
+}
+function fulfillmentBaseFor(sandbox) {
+  return `${apiBaseUrlFor(sandbox)}/sell/fulfillment/v1`;
+}
+function tokenEndpointFor(sandbox) {
+  return `${apiBaseUrlFor(sandbox)}/identity/v1/oauth2/token`;
 }
 
-async function getAccessToken() {
-  if (!credentialsConfigured()) {
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// Token caches keyed by tenant_id — a single global variable would leak one
+// tenant's access token into every other tenant's API calls.
+const _tokenCache = new Map(); // tenantId -> { token, expiry }
+const _appTokenCache = new Map(); // tenantId -> { token, expiry }
+
+// Catalog/Taxonomy tokens use client_credentials (the app's own credentials,
+// no seller consent involved) — genuinely app-level, safe to share globally.
+let _cachedCatalogToken = null;
+let _catalogTokenExpiry = 0;
+let _cachedCategoryTreeId = null;
+
+// Called after a tenant (re)connects via OAuth so a stale access token minted
+// against their previous refresh_token can never be served from cache.
+function clearTokenCache(tenantId) {
+  const key = String(tenantId);
+  _tokenCache.delete(key);
+  _appTokenCache.delete(key);
+}
+
+function credentialsConfigured(settings) {
+  return !!(config.ebay.clientId && config.ebay.clientSecret && settings?.refresh_token);
+}
+
+async function getAccessToken(settings) {
+  if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] Credentials not configured — skipping token fetch");
     return null;
   }
 
+  const key = String(settings.tenant_id);
   const now = Date.now();
-  if (_cachedToken && now < _tokenExpiry - 30_000) {
-    return _cachedToken;
-  }
+  const cached = _tokenCache.get(key);
+  if (cached && now < cached.expiry - 30_000) return cached.token;
 
-  const credentials = Buffer.from(
-    `${config.ebay.clientId}:${config.ebay.clientSecret}`,
-  ).toString("base64");
+  const credentials = Buffer.from(`${config.ebay.clientId}:${config.ebay.clientSecret}`).toString("base64");
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",
-    refresh_token: config.ebay.refreshToken,
-    scope:
-      `${EBAY_SCOPES.SELL_INVENTORY} ${EBAY_SCOPES.SELL_ACCOUNT} ${EBAY_SCOPES.SELL_FULFILLMENT}`,
+    refresh_token: settings.refresh_token,
+    scope: `${EBAY_SCOPES.SELL_INVENTORY} ${EBAY_SCOPES.SELL_ACCOUNT} ${EBAY_SCOPES.SELL_FULFILLMENT}`,
   });
 
-  const res = await fetch(TOKEN_ENDPOINT, {
+  const res = await fetch(tokenEndpointFor(settings.sandbox), {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    logger.error(`[eBay] Token fetch failed: ${res.status} ${text}`);
+    logger.error(`[eBay] Token fetch failed for tenant ${key}: ${res.status} ${text}`);
     return null;
   }
 
   const data = await res.json();
-  _cachedToken = data.access_token;
-  _tokenExpiry = now + (data.expires_in || 7200) * 1000;
-  return _cachedToken;
+  _tokenCache.set(key, { token: data.access_token, expiry: now + (data.expires_in || 7200) * 1000 });
+  return data.access_token;
 }
 
-async function getAppToken() {
+async function getAppToken(settings) {
+  const key = String(settings?.tenant_id);
   const now = Date.now();
-  if (_cachedAppToken && now < _appTokenExpiry - 30_000) return _cachedAppToken;
+  const cached = _appTokenCache.get(key);
+  if (cached && now < cached.expiry - 30_000) return cached.token;
 
-  if (!credentialsConfigured()) {
+  if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] Credentials not configured — skipping notification token fetch");
     return null;
   }
 
-  const credentials = Buffer.from(
-    `${config.ebay.clientId}:${config.ebay.clientSecret}`,
-  ).toString("base64");
+  const credentials = Buffer.from(`${config.ebay.clientId}:${config.ebay.clientSecret}`).toString("base64");
 
   // Uses refresh_token grant so the notification scope rides on the seller's existing OAuth consent
   const body = new URLSearchParams({
     grant_type: "refresh_token",
-    refresh_token: config.ebay.refreshToken,
+    refresh_token: settings.refresh_token,
     scope: EBAY_SCOPES.NOTIFICATION_SUBSCRIPTION,
   });
 
-  const res = await fetch(TOKEN_ENDPOINT, {
+  const res = await fetch(tokenEndpointFor(settings.sandbox), {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    logger.error(`[eBay] Notification token fetch failed: ${res.status} ${text}`);
+    logger.error(`[eBay] Notification token fetch failed for tenant ${key}: ${res.status} ${text}`);
     return null;
   }
 
   const data = await res.json();
-  _cachedAppToken = data.access_token;
-  _appTokenExpiry = now + (data.expires_in || 7200) * 1000;
-  return _cachedAppToken;
+  _appTokenCache.set(key, { token: data.access_token, expiry: now + (data.expires_in || 7200) * 1000 });
+  return data.access_token;
 }
 
 // App token scoped for Taxonomy / Catalog APIs (client_credentials, base scope)
+// — not tenant-specific, cached once for the whole process.
 async function getCatalogToken() {
   const now = Date.now();
   if (_cachedCatalogToken && now < _catalogTokenExpiry - 30_000) return _cachedCatalogToken;
 
-  if (!credentialsConfigured()) {
-    logger.warn("[eBay] Credentials not configured — skipping catalog token fetch");
+  if (!config.ebay.clientId || !config.ebay.clientSecret) {
+    logger.warn("[eBay] App credentials not configured — skipping catalog token fetch");
     return null;
   }
 
-  const credentials = Buffer.from(
-    `${config.ebay.clientId}:${config.ebay.clientSecret}`,
-  ).toString("base64");
+  const credentials = Buffer.from(`${config.ebay.clientId}:${config.ebay.clientSecret}`).toString("base64");
 
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    scope: EBAY_SCOPES.BASE,
-  });
+  const body = new URLSearchParams({ grant_type: "client_credentials", scope: EBAY_SCOPES.BASE });
 
-  const res = await fetch(TOKEN_ENDPOINT, {
+  // Catalog/Taxonomy calls are never sandboxed per-tenant today — production
+  // app credentials against the production endpoint.
+  const res = await fetch(tokenEndpointFor(false), {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
@@ -217,36 +225,19 @@ const MARKETPLACE_LANGUAGE = {
   EBAY_FR: "fr-FR",
 };
 
-function ebayHeaders(token, extra = {}) {
-  const contentLanguage =
-    MARKETPLACE_LANGUAGE[config.ebay.marketplaceId] || "en-US";
+function ebayHeaders(token, marketplaceId, extra = {}) {
+  const contentLanguage = MARKETPLACE_LANGUAGE[marketplaceId] || "en-US";
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     "Content-Language": contentLanguage,
     "Accept-Language": contentLanguage,
-    "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
+    "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
     ...extra,
   };
 }
 
-async function loadSettings() {
-  // Lazy-load to avoid circular dep at module load time
-  const EbaySettings = require("../../models/EbaySettings");
-  const db = (await EbaySettings.findOne().lean()) || {};
-  return {
-    merchant_location_key:
-      db.merchant_location_key || config.ebay.merchantLocationKey || null,
-    fulfillment_policy_id:
-      db.fulfillment_policy_id || config.ebay.fulfillmentPolicyId || null,
-    payment_policy_id:
-      db.payment_policy_id || config.ebay.paymentPolicyId || null,
-    return_policy_id:
-      db.return_policy_id || config.ebay.returnPolicyId || null,
-  };
-}
-
-async function upsertInventoryItem(token, inventoryItem) {
+async function upsertInventoryItem(token, settings, inventoryItem) {
   const { sku } = inventoryItem;
 
   const imageUrls = inventoryItem.product?.imageUrls || [];
@@ -257,10 +248,10 @@ async function upsertInventoryItem(token, inventoryItem) {
   }
 
   const res = await fetch(
-    `${INVENTORY_BASE}/inventory_item/${encodeURIComponent(sku)}`,
+    `${inventoryBaseFor(settings.sandbox)}/inventory_item/${encodeURIComponent(sku)}`,
     {
       method: "PUT",
-      headers: ebayHeaders(token),
+      headers: ebayHeaders(token, settings.marketplace_id),
       body: JSON.stringify(inventoryItem),
     },
   );
@@ -274,7 +265,7 @@ async function upsertInventoryItem(token, inventoryItem) {
 
 // ── Resolved-based builders (used by EbayAdapter / MarketplaceListing path) ──
 
-function resolveImageUrls(photos) {
+function resolveImageUrls(photos, settings) {
   const uploadsUrl = config.uploads.url;
   const allUrls = (photos || [])
     .filter((a) => a && a.type === "image" && (a.url || a.file_name))
@@ -291,16 +282,17 @@ function resolveImageUrls(photos) {
 
   if (httpsUrls.length > 0) return httpsUrls;
 
-  // In sandbox/dev, fall back to EBAY_FALLBACK_IMAGE_URL so the sync flow can
-  // be tested without a public HTTPS upload server. Production requires real images.
-  if (config.ebay.sandbox && config.ebay.fallbackImageUrl) {
+  // In sandbox/dev, fall back to this tenant's fallback image so the sync
+  // flow can be tested without a public HTTPS upload server. Production
+  // requires real images.
+  if (settings?.sandbox && settings?.fallback_image_url) {
     if (allUrls.length > 0) {
       logger.warn(
         `[eBay] resolveImageUrls: ${allUrls.length} image(s) found but none are HTTPS — ` +
         `using fallback image for sandbox. In production set UPLOADS_URL to your public HTTPS URL.`,
       );
     }
-    return [config.ebay.fallbackImageUrl];
+    return [settings.fallback_image_url];
   }
 
   if (allUrls.length > 0) {
@@ -351,9 +343,9 @@ function buildVehicleAspects(product) {
   return aspects;
 }
 
-function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null) {
+function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null, settings = null) {
   const { sku, title, description, brand, photos, listing, product } = resolved;
-  const imageUrls = resolveImageUrls(photos);
+  const imageUrls = resolveImageUrls(photos, settings);
   const condition = conditionOverride || normalizeCondition(listing.condition);
 
   // Resolve brand/mpn once — used for both aspects and the product-level fields.
@@ -441,7 +433,7 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const { sku, price, description, title, listing } = resolved;
 
-  // Policy IDs: listing-level override ?? EbaySettings account default
+  // Policy IDs: listing-level override ?? this tenant's EbaySettings default
   const fulfillmentPolicyId = listing.fulfillment_policy_id || settings.fulfillment_policy_id;
   const paymentPolicyId = listing.payment_policy_id || settings.payment_policy_id;
   const returnPolicyId = listing.return_policy_id || settings.return_policy_id;
@@ -454,7 +446,7 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
 
   return {
     sku,
-    marketplaceId: config.ebay.marketplaceId,
+    marketplaceId: settings.marketplace_id,
     format: listing.format || "FIXED_PRICE",
     availableQuantity: quantity,
     ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
@@ -479,10 +471,10 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
   };
 }
 
-async function createOffer(token, offerBody) {
-  const res = await fetch(`${INVENTORY_BASE}/offer`, {
+async function createOffer(token, settings, offerBody) {
+  const res = await fetch(`${inventoryBaseFor(settings.sandbox)}/offer`, {
     method: "POST",
-    headers: ebayHeaders(token),
+    headers: ebayHeaders(token, settings.marketplace_id),
     body: JSON.stringify(offerBody),
   });
 
@@ -492,12 +484,12 @@ async function createOffer(token, offerBody) {
   return data.offerId;
 }
 
-async function updateOffer(token, offerId, offerBody) {
+async function updateOffer(token, settings, offerId, offerBody) {
   const res = await fetch(
-    `${INVENTORY_BASE}/offer/${encodeURIComponent(offerId)}`,
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
     {
       method: "PUT",
-      headers: ebayHeaders(token),
+      headers: ebayHeaders(token, settings.marketplace_id),
       body: JSON.stringify(offerBody),
     },
   );
@@ -508,12 +500,12 @@ async function updateOffer(token, offerId, offerBody) {
 
 // ── Step 3: Publish ───────────────────────────────────────────────────────────
 
-async function publishOffer(token, offerId) {
+async function publishOffer(token, settings, offerId) {
   const res = await fetch(
-    `${INVENTORY_BASE}/offer/${encodeURIComponent(offerId)}/publish`,
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}/publish`,
     {
       method: "POST",
-      headers: ebayHeaders(token),
+      headers: ebayHeaders(token, settings.marketplace_id),
       body: JSON.stringify({}),
     },
   );
@@ -526,13 +518,13 @@ async function publishOffer(token, offerId) {
 
 // ── Inventory quantity update ─────────────────────────────────────────────────
 
-async function updateInventoryQuantity(sku, quantity) {
-  if (!credentialsConfigured()) {
+async function updateInventoryQuantity(settings, sku, quantity) {
+  if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] updateInventoryQuantity skipped — credentials not configured");
     return { skipped: true };
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(settings);
   if (!token) return { error: "Could not obtain access token" };
 
   try {
@@ -545,9 +537,9 @@ async function updateInventoryQuantity(sku, quantity) {
       ],
     };
 
-    const res = await fetch(`${INVENTORY_BASE}/bulk_update_price_quantity`, {
+    const res = await fetch(`${inventoryBaseFor(settings.sandbox)}/bulk_update_price_quantity`, {
       method: "POST",
-      headers: ebayHeaders(token),
+      headers: ebayHeaders(token, settings.marketplace_id),
       body: JSON.stringify(body),
     });
 
@@ -567,21 +559,21 @@ async function updateInventoryQuantity(sku, quantity) {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
-async function deleteProduct(sku, offerId = null) {
-  if (!credentialsConfigured()) {
+async function deleteProduct(settings, sku, offerId = null) {
+  if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] deleteProduct skipped — credentials not configured");
     return { skipped: true };
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(settings);
   if (!token) return { error: "Could not obtain access token" };
 
   try {
     // Step 1 — withdraw the offer first (eBay blocks inventory item deletion while an offer exists)
     if (offerId) {
       const offerRes = await fetch(
-        `${INVENTORY_BASE}/offer/${encodeURIComponent(offerId)}`,
-        { method: "DELETE", headers: ebayHeaders(token) },
+        `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
+        { method: "DELETE", headers: ebayHeaders(token, settings.marketplace_id) },
       );
       if (!offerRes.ok && offerRes.status !== 404) {
         const text = await offerRes.text();
@@ -593,8 +585,8 @@ async function deleteProduct(sku, offerId = null) {
 
     // Step 2 — delete the inventory item
     const res = await fetch(
-      `${INVENTORY_BASE}/inventory_item/${encodeURIComponent(sku)}`,
-      { method: "DELETE", headers: ebayHeaders(token) },
+      `${inventoryBaseFor(settings.sandbox)}/inventory_item/${encodeURIComponent(sku)}`,
+      { method: "DELETE", headers: ebayHeaders(token, settings.marketplace_id) },
     );
 
     if (!res.ok && res.status !== 404) {
@@ -613,13 +605,13 @@ async function deleteProduct(sku, offerId = null) {
 
 // ── Merchant Location ─────────────────────────────────────────────────────────
 
-async function ensureLocation(token) {
-  const key = config.ebay.merchantLocationKey;
-  if (!key) throw new Error("EBAY_MERCHANT_LOCATION_KEY is not set — set it to the location key registered in eBay Seller Hub");
+async function ensureLocation(token, settings) {
+  const key = settings.merchant_location_key;
+  if (!key) throw new Error("This tenant has no merchant_location_key set — configure it in eBay settings first");
 
   const checkRes = await fetch(
-    `${INVENTORY_BASE}/location/${encodeURIComponent(key)}`,
-    { headers: ebayHeaders(token) },
+    `${inventoryBaseFor(settings.sandbox)}/location/${encodeURIComponent(key)}`,
+    { headers: ebayHeaders(token, settings.marketplace_id) },
   );
 
   if (checkRes.ok) {
@@ -632,42 +624,41 @@ async function ensureLocation(token) {
     throw new Error(`GET location/${key} failed: ${checkRes.status} ${text}`);
   }
 
-  // Location doesn't exist — build from env vars
-  const { warehouseStreet, warehouseCity, warehouseState, warehousePostcode, warehouseCountry, warehousePhone } = config.ebay;
+  // Location doesn't exist — build from this tenant's warehouse address
   const missing = [];
-  if (!warehouseStreet) missing.push("EBAY_WAREHOUSE_STREET");
-  if (!warehouseCity) missing.push("EBAY_WAREHOUSE_CITY");
-  if (!warehouseState) missing.push("EBAY_WAREHOUSE_STATE");
-  if (!warehousePostcode) missing.push("EBAY_WAREHOUSE_POSTCODE");
+  if (!settings.warehouse_street) missing.push("warehouse_street");
+  if (!settings.warehouse_city) missing.push("warehouse_city");
+  if (!settings.warehouse_state) missing.push("warehouse_state");
+  if (!settings.warehouse_postcode) missing.push("warehouse_postcode");
 
   if (missing.length) {
     throw new Error(
       `Merchant location "${key}" does not exist on eBay and cannot be auto-created. ` +
-      `Set these env vars with your warehouse address: ${missing.join(", ")}`,
+      `Set these fields in this tenant's eBay settings: ${missing.join(", ")}`,
     );
   }
 
   const body = {
     location: {
       address: {
-        addressLine1: warehouseStreet,
-        city: warehouseCity,
-        stateOrProvince: warehouseState,
-        postalCode: warehousePostcode,
-        country: warehouseCountry,
+        addressLine1: settings.warehouse_street,
+        city: settings.warehouse_city,
+        stateOrProvince: settings.warehouse_state,
+        postalCode: settings.warehouse_postcode,
+        country: settings.warehouse_country,
       },
     },
     locationTypes: ["WAREHOUSE"],
     name: key,
     merchantLocationStatus: "ENABLED",
-    ...(warehousePhone ? { phone: warehousePhone } : {}),
+    ...(settings.warehouse_phone ? { phone: settings.warehouse_phone } : {}),
   };
 
   const createRes = await fetch(
-    `${INVENTORY_BASE}/location/${encodeURIComponent(key)}`,
+    `${inventoryBaseFor(settings.sandbox)}/location/${encodeURIComponent(key)}`,
     {
       method: "POST",
-      headers: ebayHeaders(token),
+      headers: ebayHeaders(token, settings.marketplace_id),
       body: JSON.stringify(body),
     },
   );
@@ -677,22 +668,22 @@ async function ensureLocation(token) {
     throw new Error(`Create merchant location "${key}" failed: ${createRes.status} ${text}`);
   }
 
-  logger.info(`[eBay] merchant location created: "${key}" (${warehouseCity}, ${warehouseState})`);
+  logger.info(`[eBay] merchant location created: "${key}" (${settings.warehouse_city}, ${settings.warehouse_state})`);
 }
 
 // ── Fulfillment / Orders ──────────────────────────────────────────────────────
 
-async function getOrders({ limit = 50, offset = 0 } = {}) {
-  const token = await getAccessToken();
+async function getOrders(settings, { limit = 50, offset = 0 } = {}) {
+  const token = await getAccessToken(settings);
   if (!token) throw new Error("[eBay] getOrders: could not obtain access token");
 
-  const url = `${FULFILLMENT_BASE}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
+  const url = `${fulfillmentBaseFor(settings.sandbox)}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
 
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "X-EBAY-C-MARKETPLACE-ID": config.ebay.marketplaceId,
+      "X-EBAY-C-MARKETPLACE-ID": settings.marketplace_id,
     },
   });
 
@@ -709,8 +700,8 @@ async function getOrders({ limit = 50, offset = 0 } = {}) {
 // Bulk-fetches every inventory item on the account (paginated) so the
 // inventory-sync poller can diff eBay's live quantities against ours in a
 // handful of calls instead of one GET per SKU.
-async function getAllInventoryItems({ pageSize = 100 } = {}) {
-  const token = await getAccessToken();
+async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
+  const token = await getAccessToken(settings);
   if (!token) throw new Error("[eBay] getAllInventoryItems: could not obtain access token");
 
   const items = [];
@@ -718,8 +709,8 @@ async function getAllInventoryItems({ pageSize = 100 } = {}) {
 
   while (true) {
     const res = await fetch(
-      `${INVENTORY_BASE}/inventory_item?limit=${pageSize}&offset=${offset}`,
-      { headers: ebayHeaders(token) },
+      `${inventoryBaseFor(settings.sandbox)}/inventory_item?limit=${pageSize}&offset=${offset}`,
+      { headers: ebayHeaders(token, settings.marketplace_id) },
     );
 
     if (!res.ok) {
@@ -739,17 +730,19 @@ async function getAllInventoryItems({ pageSize = 100 } = {}) {
 }
 
 // ── Taxonomy ──────────────────────────────────────────────────────────────────
+// Not tenant-scoped — client_credentials app token, same category tree
+// regardless of which tenant is asking (categories are eBay-marketplace-wide,
+// not seller-specific). marketplaceId still matters (different sites have
+// different trees), so it's passed explicitly rather than pulled from a
+// per-tenant settings object.
 
-const TAXONOMY_BASE = config.ebay.taxonomyBaseUrl;
-
-async function getDefaultCategoryTreeId() {
+async function getDefaultCategoryTreeId(marketplaceId = "EBAY_AU") {
   if (_cachedCategoryTreeId) return _cachedCategoryTreeId;
 
   const token = await getCatalogToken();
-  const marketplaceId = config.ebay.marketplaceId;
   const res = await fetch(
-    `${TAXONOMY_BASE}/get_default_category_tree_id?marketplace_id=${marketplaceId}`,
-    { headers: ebayHeaders(token) },
+    `${taxonomyBaseUrlFor(false)}/get_default_category_tree_id?marketplace_id=${marketplaceId}`,
+    { headers: ebayHeaders(token, marketplaceId) },
   );
   if (!res.ok) {
     const text = await res.text();
@@ -762,12 +755,12 @@ async function getDefaultCategoryTreeId() {
   return _cachedCategoryTreeId;
 }
 
-async function getItemAspectsForCategory(categoryId) {
+async function getItemAspectsForCategory(categoryId, marketplaceId = "EBAY_AU") {
   const token = await getCatalogToken();
-  const treeId = await getDefaultCategoryTreeId();
+  const treeId = await getDefaultCategoryTreeId(marketplaceId);
   const res = await fetch(
-    `${TAXONOMY_BASE}/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`,
-    { headers: ebayHeaders(token) },
+    `${taxonomyBaseUrlFor(false)}/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`,
+    { headers: ebayHeaders(token, marketplaceId) },
   );
   if (!res.ok) {
     const text = await res.text();
@@ -796,10 +789,13 @@ module.exports = {
   getAccessToken,
   getAppToken,
   getCatalogToken,
+  tokenEndpointFor,
+  clearTokenCache,
   getOrders,
   getAllInventoryItems,
-  loadSettings,
   ebayHeaders,
+  apiBaseUrlFor,
+  inventoryBaseFor,
   buildInventoryItemFromResolved,
   normalizeCondition,
   upsertInventoryItem,
@@ -810,5 +806,6 @@ module.exports = {
   updateInventoryQuantity,
   deleteProduct,
   ensureLocation,
+  getDefaultCategoryTreeId,
   getItemAspectsForCategory,
 };

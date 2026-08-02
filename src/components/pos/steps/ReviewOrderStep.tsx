@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { User, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -12,7 +12,7 @@ import { useToast } from "@/context";
 import { createManualOrder } from "@/lib/api/orders";
 import type { CreateManualOrderItemPayload } from "@/lib/api/orders";
 import { formatCurrency } from "@/utils/format";
-import { PICKUP_LOCATION } from "@/config/company";
+import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { ORDER_PAYMENT_CHOICE_LABEL } from "@/config/paymentMethods";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
@@ -54,6 +54,12 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   const { toast } = useToast();
   const { items, clearCart } = useCart();
   const { customer, deliveryMethod, shippingAddress, useDifferentBilling, billingAddress } = customerDelivery;
+
+  const { data: tenantSettingsData } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: getTenantSettings,
+  });
+  const pickupLocation = tenantSettingsData?.data?.pickup_location;
 
   const [paymentMethodError, setPaymentMethodError] = useState<string | undefined>();
 
@@ -279,7 +285,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <div className="flex items-start gap-2">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-fg/40" />
                   <div>
-                    <div className="text-fg">{PICKUP_LOCATION.address}</div>
+                    <div className="text-fg">{pickupLocation?.address || "—"}</div>
                     <p className="mt-1 text-xs text-fg/50">Customer will collect from this location.</p>
                   </div>
                 </div>

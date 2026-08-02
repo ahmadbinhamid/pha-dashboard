@@ -104,6 +104,10 @@ const paymentAllocationSchema = new Schema(
 );
 
 const refundSchema = buildSchema({
+  // Backfilled onto every existing Refund by scripts/backfillTenantId.js —
+  // every unique/partial index below is compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
+
   // ── Existing fields — untouched, still read/written by the current
   // refund.service.js / stripe.refund.service.js / stripe.webhook.service.js.
   payment: { type: Schema.Types.ObjectId, ref: "Payment", required: true },
@@ -226,7 +230,7 @@ const refundSchema = buildSchema({
 // just missing ones. Same reasoning applies below to idempotency_key and
 // refund_number — both are also nullable scalars, not just newly-added ones.
 refundSchema.index(
-  { stripe_refund_id: 1 },
+  { tenant_id: 1, stripe_refund_id: 1 },
   { unique: true, partialFilterExpression: { stripe_refund_id: { $type: "string" } } },
 );
 
@@ -237,7 +241,7 @@ refundSchema.index({ payment: 1 }, { name: "payment_1" });
 // one "pending" Refund per payment can exist at the database level. Dropped
 // per §6.3 once idempotency_key is live end-to-end, not before.
 refundSchema.index(
-  { payment: 1 },
+  { tenant_id: 1, payment: 1 },
   {
     name: "payment_1_pending_unique",
     unique: true,
@@ -260,7 +264,14 @@ refundSchema.index({ "payment_allocations.payment": 1 });
 // the moment two manual-only refunds' allocations both indexed a null. As
 // long as every write site omits the key entirely for a non-Stripe
 // allocation instead of nulling it, sparse is sufficient and correct.
-refundSchema.index({ "payment_allocations.stripe_refund_id": 1 }, { unique: true, sparse: true });
+// partialFilterExpression, NOT sparse — some existing allocations have
+// stripe_refund_id stored as literal null rather than omitted (legacy data,
+// likely from a raw-driver migration bypassing Mongoose validation), and
+// sparse doesn't exclude an explicit null, only a fully-absent field.
+refundSchema.index(
+  { tenant_id: 1, "payment_allocations.stripe_refund_id": 1 },
+  { unique: true, partialFilterExpression: { "payment_allocations.stripe_refund_id": { $type: "string" } } },
+);
 // partialFilterExpression, NOT sparse — same reasoning as stripe_refund_id
 // above: both fields default to null, not "unset", so sparse alone doesn't
 // exclude them once any existing Refund is next saved by old code that
@@ -270,11 +281,11 @@ refundSchema.index({ "payment_allocations.stripe_refund_id": 1 }, { unique: true
 // that's exactly why this had to be fixed now, before the first such save
 // makes it a live 500 the moment a second one follows.
 refundSchema.index(
-  { idempotency_key: 1 },
+  { tenant_id: 1, idempotency_key: 1 },
   { unique: true, partialFilterExpression: { idempotency_key: { $type: "string" } } },
 );
 refundSchema.index(
-  { refund_number: 1 },
+  { tenant_id: 1, refund_number: 1 },
   { unique: true, partialFilterExpression: { refund_number: { $type: "string" } } },
 );
 

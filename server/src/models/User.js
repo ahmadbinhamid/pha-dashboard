@@ -1,12 +1,15 @@
 // models/User.js
 
-const { model } = require("mongoose");
+const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
 const passwordHashingPlugin = require("./plugins/passwordHashing.plugin");
 const { hashPassword } = require("../utils/auth/crypto");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
 const userSchema = buildSchema({
+  // Backfilled onto every existing User by scripts/backfillTenantId.js —
+  // email's unique partial index below is compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   first_name: { type: String, required: true, trim: true },
   last_name: { type: String, required: true, trim: true },
   email: {
@@ -63,7 +66,7 @@ userSchema.virtual("full_name").get(function () {
 });
 
 userSchema.index(
-  { email: 1 },
+  { tenant_id: 1, email: 1 },
   { unique: true, partialFilterExpression: { deleted_at: null } },
 );
 

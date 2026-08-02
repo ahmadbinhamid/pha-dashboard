@@ -33,12 +33,14 @@ const { REFUND_STATUS } = require("../constants/refund.constants");
 
 const UNIT_PRICE = 1000;
 const LINE_QUANTITY = 2;
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
 
 test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not auto-voided on late confirmation", async (t) => {
   await mongoose.connect(config.mongoUri);
 
   const suffix = crypto.randomUUID();
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-STALEPROC-${suffix}`,
     invoice_number: `TEST-STALEPROC-INV-${suffix}`,
     items: [
@@ -69,6 +71,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
   const itemId = order.items[0]._id.toString();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "stripe",
     payment_method: null,
@@ -85,8 +88,9 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
     // for the FULL line quantity — created directly rather than through
     // createRefund, since we're simulating a webhook that's simply very
     // late, not exercising the create path itself.
-    const refundNumberA = await refundService.nextRefundNumber();
+    const refundNumberA = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refundA = await Refund.create({
+      tenant_id: TEST_TENANT_ID,
       order: order._id,
       payment: payment._id,
       amount: UNIT_PRICE * LINE_QUANTITY,
@@ -153,6 +157,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
               reason: "customer_request",
             },
             null,
+            TEST_TENANT_ID,
           ),
         (err) => {
           // Rejected for exceeding what's left refundable — refund A's

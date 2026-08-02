@@ -4,10 +4,9 @@ import { useMutation } from "@tanstack/react-query";
 
 import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
-import { useOrgSettings } from "@/context";
 
 import { ArrowRight } from "lucide-react";
-import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
+import { AppLogoMark, APP_NAME } from "@/components/branding/AppLogoMark";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +19,6 @@ export function LoginCard() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setAuth } = useAuth();
-  const { settings } = useOrgSettings();
 
   const redirectTo =
     (location.state as { from?: { pathname: string } } | null)?.from
@@ -121,17 +119,9 @@ export function LoginCard() {
   return (
     <div className="w-full max-w-105">
       <div className="mb-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <div className="rounded-2xl bg-black p-2 ring-1 ring-inset ring-[hsl(var(--accent)/0.28)] shadow-soft">
-          <PartsHubLogoImage
-            sizeClass="h-20"
-            maxWidthClass="max-w-20"
-            priority
-          />
-        </div>
+        <AppLogoMark className="h-20 w-20 shadow-soft ring-1 ring-inset ring-[hsl(var(--accent)/0.28)]" />
         <div className="text-left">
-          <div className="text-sm font-semibold tracking-tight">
-            {settings.storeName}
-          </div>
+          <div className="text-sm font-semibold tracking-tight">{APP_NAME}</div>
           <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
         </div>
       </div>

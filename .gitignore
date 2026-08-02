@@ -1,6 +1,7 @@
 node_modules/
 docker-compose.override.yml
 logs/
+backup-*/
 .next/
 out/
 build/

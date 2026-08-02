@@ -14,14 +14,30 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const LOGO_SVG_INLINE = `<img src="https://admin.partshubaustralia.com.au/logo.svg" alt="Parts Hub Australia" style="max-height:80px;max-width:280px;display:block;">`;
-
 // vehicle comes from the PRODUCT's own `vehicle` field, fetched fresh by the
 // caller (never a copy stored on the listing/form) — this is what guarantees
 // Technical Specifications always matches the Product page and is never
 // affected by the listing's own (unrelated) Vehicle Fitment compatibility list.
-export function generateListingHtml(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined): string {
-  const title = esc(form.title_override.trim() || "Parts Hub Australia Product");
+export function generateListingHtml(
+  form: EbayListingFormState,
+  vehicle: ProductVehicle | null | undefined,
+  // Sandbox-only fallback (EbaySettings.fallback_image_url) — passed in by the
+  // caller only while eBay sandbox mode is on, same gating the backend uses
+  // in ebay.api.service.js#resolveImageUrls, so it can never end up in a
+  // production listing's saved description.
+  sandboxFallbackImageUrl?: string | null,
+  // This tenant's own branding (TenantSettings.company_name/logo_url) — every
+  // tenant shares this one generator, so nothing here may hardcode a specific
+  // tenant's name/logo.
+  businessName?: string | null,
+  logoUrl?: string | null,
+): string {
+  const business = esc(businessName?.trim() || "Your Store");
+  const headerLogo = logoUrl?.startsWith("https://")
+    ? `<img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:280px;display:block;">`
+    : `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
+
+  const title = esc(form.title_override.trim() || `${businessName?.trim() || "Store"} Product`);
   const make = esc(vehicle?.make?.trim() || "—");
   const model = esc(vehicle?.model?.trim() || "—");
   const series = esc(vehicle?.model_code?.trim() || "—");
@@ -39,7 +55,19 @@ export function generateListingHtml(form: EbayListingFormState, vehicle: Product
   const condition = esc(CONDITION_LABEL[form.condition] ?? form.condition);
   const notes = esc(form.condition_notes.trim() || "—");
 
-  const firstImage = form.photo_overrides?.[0]?.url || "";
+  // eBay's security policy rejects any HTTP resource embedded in listing
+  // content — only ever inline the image if it's actually served over HTTPS
+  // (e.g. local dev's UPLOADS_URL is plain http:// and would otherwise get
+  // baked into the saved description, failing publishOffer with error 25002).
+  // Falls back to the tenant's sandbox placeholder image, if provided, so
+  // staging/dev listings still preview and publish with a real photo instead
+  // of the "NO IMAGE" placeholder.
+  const rawImage = form.photo_overrides?.[0]?.url || "";
+  const firstImage = rawImage.startsWith("https://")
+    ? rawImage
+    : sandboxFallbackImageUrl?.startsWith("https://")
+      ? sandboxFallbackImageUrl
+      : "";
 
   const validFitment = form.fitment.filter((r) => r.make.trim() || r.model.trim());
 
@@ -125,7 +153,7 @@ export function generateListingHtml(form: EbayListingFormState, vehicle: Product
   <div class="pha-sec" style="background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);border-bottom:2px solid #c5a059;">
     <table class="pha-hdr-tbl" cellpadding="0" cellspacing="0" border="0">
       <tr>
-        <td class="pha-hdr-logo">${LOGO_SVG_INLINE}</td>
+        <td class="pha-hdr-logo">${headerLogo}</td>
         <td class="pha-hdr-badge">
           <div style="font-family:Arial,sans-serif;font-size:10px;color:#8a8070;letter-spacing:2px;">AUTHORISED RESELLER</div>
           <div style="font-family:Arial,sans-serif;font-size:11px;color:#c5a059;letter-spacing:1px;margin-top:4px;">&#9733; &#9733; &#9733; &#9733; &#9733;</div>
@@ -285,7 +313,7 @@ export function generateListingHtml(form: EbayListingFormState, vehicle: Product
             <div style="font-family:Georgia,serif;font-size:13px;color:#d1c5b4;line-height:1.7;">&#183; Managed Payments via eBay AU<br>&#183; Visa, Mastercard, PayPal, Apple Pay<br>&#183; Full Tax Invoice supplied with every order<br>&#183; Buy Now, Pay Later available</div>
           </div>
           <div style="background:#141414;border:1px solid #2a2520;border-top:2px solid #c5a059;padding:24px;">
-            <div style="font-family:Georgia,serif;font-size:16px;color:#e9c176;margin-bottom:14px;">About Parts Hub Australia</div>
+            <div style="font-family:Georgia,serif;font-size:16px;color:#e9c176;margin-bottom:14px;">About ${business}</div>
             <div style="font-family:Georgia,serif;font-size:13px;color:#d1c5b4;line-height:1.7;">Specialist supplier of premium automotive components. Based in Australia, serving professional workshops and enthusiasts with mechanical excellence and uncompromising service.</div>
           </div>
         </td>
@@ -297,7 +325,7 @@ export function generateListingHtml(form: EbayListingFormState, vehicle: Product
     <div style="font-family:Georgia,serif;font-size:18px;color:#e9c176;font-style:italic;letter-spacing:1px;margin-bottom:8px;">Thank you for shopping with us</div>
     <div style="font-family:Arial,sans-serif;font-size:10px;color:#8a8070;letter-spacing:4px;">&mdash; YOUR BUSINESS IS APPRECIATED &mdash;</div>
     <div style="margin-top:24px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;">
-      &#9733; &#9733; &#9733; &#9733; &#9733; &nbsp;&nbsp; PARTSHUB &middot; AUSTRALIA &nbsp;&nbsp; &#9733; &#9733; &#9733; &#9733; &#9733;
+      &#9733; &#9733; &#9733; &#9733; &#9733; &nbsp;&nbsp; ${business.toUpperCase()} &nbsp;&nbsp; &#9733; &#9733; &#9733; &#9733; &#9733;
     </div>
   </div>
 

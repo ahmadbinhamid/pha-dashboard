@@ -9,18 +9,19 @@ const { buildSchema } = require("./base.model");
 const { PAYMENT_PROVIDER, PAYMENT_METHOD, PAYMENT_STATUS } = require("../constants/payment.constants");
 
 const paymentSchema = buildSchema({
+  // Backfilled onto every existing Payment by scripts/backfillTenantId.js —
+  // stripe_payment_intent_id's unique index below is compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   order: { type: Schema.Types.ObjectId, ref: "Order", required: true },
   provider: {
     type: String,
     enum: Object.values(PAYMENT_PROVIDER),
     default: PAYMENT_PROVIDER.STRIPE,
   },
-  // Only Stripe payments have one — sparse so manual payments (which never
-  // set this field) don't collide on the unique index.
+  // Only Stripe payments have one — uniqueness/partial-filtering handled by
+  // the explicit compound index below, not a field-level sparse index.
   stripe_payment_intent_id: {
     type: String,
-    unique: true,
-    sparse: true,
     required: function () {
       return this.provider === PAYMENT_PROVIDER.STRIPE;
     },
@@ -51,5 +52,13 @@ const paymentSchema = buildSchema({
 });
 
 paymentSchema.index({ order: 1 });
+// partialFilterExpression, NOT sparse — some existing Payment docs have
+// stripe_payment_intent_id stored as literal null (not absent), and sparse
+// only excludes a field that's entirely unset, not one explicitly null (see
+// Refund.js's extensive comment on the identical issue). $type excludes both.
+paymentSchema.index(
+  { tenant_id: 1, stripe_payment_intent_id: 1 },
+  { unique: true, partialFilterExpression: { stripe_payment_intent_id: { $type: "string" } } },
+);
 
 module.exports = model("Payment", paymentSchema);

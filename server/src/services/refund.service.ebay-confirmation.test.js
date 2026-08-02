@@ -22,11 +22,14 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 test("eBay refund confirmation gate", async (t) => {
   await mongoose.connect(config.mongoUri);
 
   const suffix = crypto.randomUUID();
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-EBAYCONF-${suffix}`,
     invoice_number: `TEST-EBAYCONF-INV-${suffix}`,
     items: [
@@ -58,6 +61,7 @@ test("eBay refund confirmation gate", async (t) => {
   const itemId = order.items[0]._id.toString();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "ebay",
     payment_method: null,
@@ -81,6 +85,7 @@ test("eBay refund confirmation gate", async (t) => {
               reason: "customer_request",
             },
             null,
+            TEST_TENANT_ID,
           ),
         (err) => {
           assert.equal(err.status, 400);
@@ -104,6 +109,7 @@ test("eBay refund confirmation gate", async (t) => {
           ebay_refund_confirmed: true,
         },
         null,
+        TEST_TENANT_ID,
       );
 
       assert.equal(refund.ebay_refund_confirmed, true);

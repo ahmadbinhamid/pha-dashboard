@@ -1,68 +1,45 @@
-import {
-  createContext,
-  startTransition,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, useContext, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { OrgSettings } from "@/types";
+import { useAuth } from "@/context/auth";
+import { getTenantSettings } from "@/lib/api/tenantSettings";
 
-const DEFAULTS: OrgSettings = {
-  storeName: "Parts Hub Australia",
-  displayName: "Avery Chen",
-  location: "Campbellfield",
-  currency: "AUD",
-  abn: "00 000 000 000",
-  invoicePrefix: "PHA",
-  nextInvoiceNumber: 10520,
+const FALLBACK: OrgSettings = {
+  storeName: "",
+  logoUrl: null,
 };
-
-const STORAGE_KEY = "ppg-org-settings";
 
 type OrgSettingsApi = {
   settings: OrgSettings;
-  update: (patch: Partial<OrgSettings>) => void;
-  reset: () => void;
+  isLoading: boolean;
 };
 
 const OrgSettingsContext = createContext<OrgSettingsApi | null>(null);
 
-function readStored(): OrgSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<OrgSettings>;
-    return { ...DEFAULTS, ...parsed, currency: "AUD" };
-  } catch {
-    return DEFAULTS;
-  }
-}
-
+// Backed by the authenticated user's own Tenant record (Settings → Business
+// Info) — replaces the old localStorage-only mock, which meant every tenant
+// saw the same hardcoded "Parts Hub Australia" name/logo in the sidebar
+// regardless of who was actually logged in. Only fetched once authenticated:
+// pre-login there is no tenant context yet (see AppLogoMark for that screen).
 export function OrgSettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<OrgSettings>(DEFAULTS);
+  const { isAuthenticated } = useAuth();
 
-  useEffect(() => {
-    startTransition(() => {
-      setSettings(readStored());
-    });
-  }, []);
+  const { data, isLoading } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: getTenantSettings,
+    enabled: isAuthenticated,
+  });
 
-  const update = useCallback((patch: Partial<OrgSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch, currency: "AUD" as const };
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const tenant = data?.data;
+  const settings: OrgSettings = useMemo(
+    () => ({
+      storeName: tenant?.company_name || tenant?.name || FALLBACK.storeName,
+      logoUrl: tenant?.logo_url ?? FALLBACK.logoUrl,
+    }),
+    [tenant],
+  );
 
-  const reset = useCallback(() => {
-    setSettings(DEFAULTS);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS)); } catch {}
-  }, []);
-
-  const api = useMemo(() => ({ settings, update, reset }), [settings, update, reset]);
+  const api = useMemo(() => ({ settings, isLoading }), [settings, isLoading]);
 
   return <OrgSettingsContext.Provider value={api}>{children}</OrgSettingsContext.Provider>;
 }

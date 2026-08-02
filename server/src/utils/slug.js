@@ -11,13 +11,14 @@ function generateSlug(title) {
     .replace(/^-+|-+$/g, "");
 }
 
-async function ensureUniqueSlug(Model, baseSlug, excludeId = null) {
+async function ensureUniqueSlug(Model, baseSlug, excludeId = null, tenantId = null) {
   let slug = baseSlug;
   let counter = 2;
 
   while (true) {
     const query = { slug };
     if (excludeId) query._id = { $ne: excludeId };
+    if (tenantId) query.tenant_id = tenantId;
 
     const exists = await Model.findOne(query);
     if (!exists) return slug;
@@ -34,9 +35,9 @@ async function ensureUniqueSlug(Model, baseSlug, excludeId = null) {
 // trusting the pre-check alone, retry the whole check-then-create cycle on
 // a genuine slug conflict — ensureUniqueSlug will see the just-committed
 // competitor on the next attempt and bump the suffix further.
-async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5 } = {}) {
+async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5, tenantId = null } = {}) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const slug = await ensureUniqueSlug(Model, baseSlug);
+    const slug = await ensureUniqueSlug(Model, baseSlug, null, tenantId);
     try {
       return await Model.create(buildDoc(slug));
     } catch (err) {
@@ -51,9 +52,9 @@ async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5
 // check before either commits. Retries the slug-then-save cycle on a
 // genuine conflict so the loser converges on the next free suffix instead
 // of surfacing a confusing "slug already exists" error.
-async function saveWithUniqueSlug(doc, Model, baseSlug, excludeId, { maxAttempts = 5 } = {}) {
+async function saveWithUniqueSlug(doc, Model, baseSlug, excludeId, { maxAttempts = 5, tenantId = null } = {}) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    doc.slug = await ensureUniqueSlug(Model, baseSlug, excludeId);
+    doc.slug = await ensureUniqueSlug(Model, baseSlug, excludeId, tenantId);
     try {
       return await doc.save();
     } catch (err) {

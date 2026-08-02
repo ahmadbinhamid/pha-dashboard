@@ -60,7 +60,7 @@ exports.getProducts = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const filter = buildProductFilter(req.query, { authenticated: !!req.user });
+    const filter = buildProductFilter(req.query, { authenticated: !!req.user, tenantId: req.tenantId });
 
     const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
     const stockFilter = req.query.stock || undefined;
@@ -81,7 +81,7 @@ exports.getProducts = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   try {
-    const product = await getProductBySlug(req.params.slug);
+    const product = await getProductBySlug(req.params.slug, req.tenantId);
     if (!product) return notFound(res, "Product not found");
     // Unauthenticated callers can't see unpublished/draft products by slug either
     if (
@@ -129,7 +129,7 @@ exports.createProduct = async (req, res) => {
       parseFormDataArrays(body);
     const parsedVehicle = parseField(vehicle, null);
 
-    const autoSku = await generateNextSku();
+    const autoSku = await generateNextSku(req.tenant);
 
     const product = await createProductRecordWithSlug({
       title,
@@ -157,7 +157,7 @@ exports.createProduct = async (req, res) => {
       related_products,
       choices,
       digital_file: digital_file || null,
-    }, generateSlug(title));
+    }, generateSlug(title), req.tenantId);
 
     await syncVehicleModelCatalog(parsedVehicle);
 
@@ -178,7 +178,7 @@ exports.createProduct = async (req, res) => {
       }
     }
 
-    return created(res, await getPopulatedProduct(product._id), "Product created");
+    return created(res, await getPopulatedProduct(product._id, req.tenantId), "Product created");
   } catch (err) {
     if (err.code === 11000)
       return requestConflict(res, "Product slug already exists");
@@ -188,7 +188,7 @@ exports.createProduct = async (req, res) => {
 
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const product = await findProductById(req.params.id, req.tenantId);
     if (!product) return notFound(res, "Product not found");
 
     const body = req.body || {};
@@ -288,7 +288,7 @@ exports.updateProduct = async (req, res) => {
       await ensureInventoryForProduct(product._id, null);
     }
 
-    return success(res, await getPopulatedProduct(product._id), "Product updated");
+    return success(res, await getPopulatedProduct(product._id, req.tenantId), "Product updated");
   } catch (err) {
     if (err.code === 11000)
       return requestConflict(res, "Product slug already exists");
@@ -298,7 +298,7 @@ exports.updateProduct = async (req, res) => {
 
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const product = await findProductById(req.params.id, req.tenantId);
     if (!product) return notFound(res, "Product not found");
 
     const hasListing = await hasMarketplaceListings(product._id);
@@ -343,13 +343,13 @@ exports.duplicateProduct = async (req, res) => {
       tags: original.tags,
       choices: original.choices,
       digital_file: original.digital_file,
-    }, generateSlug(`${original.title} copy`));
+    }, generateSlug(`${original.title} copy`), req.tenantId);
 
     if (clone.has_variants && clone.choices.length > 0) {
       await generateVariantsForProduct(clone);
     }
 
-    return created(res, await getPopulatedProduct(clone._id), "Product duplicated");
+    return created(res, await getPopulatedProduct(clone._id, req.tenantId), "Product duplicated");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -357,10 +357,10 @@ exports.duplicateProduct = async (req, res) => {
 
 exports.getVariants = async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const product = await findProductById(req.params.id, req.tenantId);
     if (!product) return notFound(res, "Product not found");
 
-    const variants = await getVariantsByProduct(product._id);
+    const variants = await getVariantsByProduct(product._id, req.tenantId);
     return success(res, variants);
   } catch (err) {
     return systemfailure(res, err);
@@ -369,7 +369,7 @@ exports.getVariants = async (req, res) => {
 
 exports.updateVariant = async (req, res) => {
   try {
-    const variant = await findVariant(req.params.variantId, req.params.id);
+    const variant = await findVariant(req.params.variantId, req.params.id, req.tenantId);
     if (!variant) return notFound(res, "Variant not found");
 
     const body = req.body || {};
@@ -403,7 +403,7 @@ exports.updateVariant = async (req, res) => {
 
     await saveVariant(variant);
 
-    return success(res, await getPopulatedVariant(variant._id), "Variant updated");
+    return success(res, await getPopulatedVariant(variant._id, req.tenantId), "Variant updated");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -411,10 +411,11 @@ exports.updateVariant = async (req, res) => {
 
 exports.addProductNote = async (req, res) => {
   try {
-    const product = await addProductNote(req.params.id, {
-      text: req.body.text,
-      userId: req.user?._id,
-    });
+    const product = await addProductNote(
+      req.params.id,
+      { text: req.body.text, userId: req.user?._id },
+      req.tenantId,
+    );
     if (!product) return notFound(res, "Product not found");
     return created(res, product, "Note added");
   } catch (err) {

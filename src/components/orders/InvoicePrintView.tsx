@@ -1,12 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Landmark } from "lucide-react";
-import { PartsHubLogoImage } from "@/components/branding/PartsHubLogoImage";
-import {
-  COMPANY_INFO,
-  PICKUP_LOCATION,
-  BANK_DETAILS,
-  WARRANTY_TEXT,
-  LEGAL_DISCLAIMER_TEXT,
-} from "@/config/company";
+import { TenantLogo } from "@/components/branding/TenantLogo";
+import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
@@ -46,6 +41,12 @@ function HeaderMetaRow({ label, value, mutedValue = false }: { label: string; va
 }
 
 export function InvoicePrintView({ order }: { order: OrderDetail }) {
+  const { data: tenantSettingsData } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: getTenantSettings,
+  });
+  const tenant = tenantSettingsData?.data;
+
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
@@ -85,27 +86,29 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
     >
       <div className="flex flex-wrap items-start justify-between gap-6 border-b pb-6" style={{ borderColor: BORDER }}>
         <div className="flex items-start gap-4">
-          <PartsHubLogoImage sizeClass="h-14" maxWidthClass="max-w-[60px]" />
+          <TenantLogo logoUrl={tenant?.logo_url} name={tenant?.company_name} sizeClass="h-14" maxWidthClass="max-w-[60px]" />
           <div>
-            <h2 className="text-2xl font-black uppercase tracking-tight">{COMPANY_INFO.name}</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tight">{tenant?.company_name || "—"}</h2>
             <div className="mt-1.5 text-xs" style={{ color: INK }}>
-              {PICKUP_LOCATION.address}, {PICKUP_LOCATION.country}
+              {tenant?.pickup_location.address}
+              {tenant?.pickup_location.address && tenant?.pickup_location.country ? ", " : ""}
+              {tenant?.pickup_location.country}
             </div>
             <div className="mt-1 text-[11px]" style={{ color: MUTED }}>
               <span className="font-semibold" style={{ color: INK }}>
                 ABN:
               </span>{" "}
-              {COMPANY_INFO.abn} &nbsp;|&nbsp;{" "}
+              {tenant?.abn || "—"} &nbsp;|&nbsp;{" "}
               <span className="font-semibold" style={{ color: INK }}>
                 PH:
               </span>{" "}
-              {COMPANY_INFO.phone}
+              {tenant?.phone || "—"}
             </div>
             <div className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
               <span className="font-semibold" style={{ color: INK }}>
                 EMAIL:
               </span>{" "}
-              {COMPANY_INFO.email}
+              {tenant?.email || "—"}
             </div>
             <div className="mt-1.5 text-xs font-semibold" style={{ color: ACCENT }}>
               Official Tax Invoice
@@ -239,25 +242,25 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
                   Bank Name
                 </div>
-                <div className="font-semibold">{BANK_DETAILS.bankName || "—"}</div>
+                <div className="font-semibold">{tenant?.bank_details.bank_name || "—"}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
                   Account Name
                 </div>
-                <div className="font-semibold">{BANK_DETAILS.accountName || COMPANY_INFO.name}</div>
+                <div className="font-semibold">{tenant?.bank_details.account_name || tenant?.company_name || "—"}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
                   BSB
                 </div>
-                <div className="font-semibold">{BANK_DETAILS.bsb || "—"}</div>
+                <div className="font-semibold">{tenant?.bank_details.bsb || "—"}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
                   Account No
                 </div>
-                <div className="font-semibold">{BANK_DETAILS.accountNumber || "—"}</div>
+                <div className="font-semibold">{tenant?.bank_details.account_number || "—"}</div>
               </div>
             </div>
           </div>
@@ -340,13 +343,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
             Warranty &amp; Returns
           </div>
-          <p className="mt-1.5 leading-relaxed">{WARRANTY_TEXT}</p>
+          <p className="mt-1.5 leading-relaxed">{tenant?.warranty_text || "—"}</p>
         </div>
         <div>
           <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
             Legal Disclaimer
           </div>
-          <p className="mt-1.5 leading-relaxed">{LEGAL_DISCLAIMER_TEXT}</p>
+          <p className="mt-1.5 leading-relaxed">{tenant?.legal_disclaimer_text || "—"}</p>
         </div>
       </div>
     </div>

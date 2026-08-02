@@ -31,7 +31,7 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 const { reconcileStripeRefund, handleChargeRefundUpdated } = require("./stripe/stripe.webhook.service");
-const { getStripeClient } = require("./stripe/stripe.client.service");
+const stripeKeysService = require("./stripe/stripe.keys.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 const { PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { logger } = require("../loaders/logging");
@@ -50,8 +50,6 @@ async function reconcileStuckRefunds() {
     return summary;
   }
 
-  const stripe = getStripeClient();
-
   for (const refund of stuck) {
     try {
       if (refund.status === REFUND_STATUS.PENDING) {
@@ -62,6 +60,7 @@ async function reconcileStuckRefunds() {
 
       // status === PROCESSING
       const order = await Order.findById(refund.order);
+      const stripe = await stripeKeysService.getStripeClient(refund.tenant_id);
       let unresolved = false;
 
       for (const alloc of refund.payment_allocations) {

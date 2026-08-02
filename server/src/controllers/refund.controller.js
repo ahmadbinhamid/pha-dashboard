@@ -7,7 +7,7 @@ const { success, created, notFound, requestfailure, systemfailure } = require(".
 
 exports.getRefundable = async (req, res) => {
   try {
-    const summary = await refundService.getRefundableSummary(req.params.id);
+    const summary = await refundService.getRefundableSummary(req.params.id, req.tenantId);
     return success(res, summary);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -18,7 +18,7 @@ exports.getRefundable = async (req, res) => {
 
 exports.listRefunds = async (req, res) => {
   try {
-    const refunds = await refundService.listRefundsForOrder(req.params.id);
+    const refunds = await refundService.listRefundsForOrder(req.params.id, req.tenantId);
     return success(res, refunds);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -29,7 +29,7 @@ exports.listRefunds = async (req, res) => {
 
 exports.createRefund = async (req, res) => {
   try {
-    const refund = await refundService.createRefund(req.params.id, req.body, req.user?._id);
+    const refund = await refundService.createRefund(req.params.id, req.body, req.user?._id, req.tenantId);
     return created(res, refund);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -40,11 +40,11 @@ exports.createRefund = async (req, res) => {
 
 exports.voidRefund = async (req, res) => {
   try {
-    const refund = await refundService.voidRefund(req.params.id, {
-      reason: req.body.reason,
-      userId: req.user?._id,
-      force: req.body.force,
-    });
+    const refund = await refundService.voidRefund(
+      req.params.id,
+      { reason: req.body.reason, userId: req.user?._id, force: req.body.force },
+      req.tenantId,
+    );
     return success(res, refund, "Refund voided");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -55,7 +55,7 @@ exports.voidRefund = async (req, res) => {
 
 exports.retryRestock = async (req, res) => {
   try {
-    const { refund, retried } = await refundService.retryRestockForRefund(req.params.id);
+    const { refund, retried } = await refundService.retryRestockForRefund(req.params.id, req.tenantId);
     return success(res, refund, retried > 0 ? `Retried ${retried} line(s)` : "Nothing needed retrying");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);

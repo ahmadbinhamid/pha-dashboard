@@ -116,13 +116,17 @@ const internalNoteSchema = new Schema(
 );
 
 const orderSchema = buildSchema({
-  order_number: { type: String, required: true, unique: true }, // e.g. "PHA-00001"
+  // Backfilled onto every existing Order by scripts/backfillTenantId.js —
+  // order_number/invoice_number/external_order_id's unique indexes below are
+  // compound with this.
+  tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
+  order_number: { type: String, required: true }, // e.g. "PHA-00001"
   // Separate sequence from order_number, minted at the same time — orders
   // and invoices are 1:1 today, but this keeps the financial/tax-invoice
   // document number independent of the operational order reference, since
   // they diverge the moment partial shipments, credit notes, or consolidated
   // billing exist. See scripts/migrateInvoiceNumbers.js for backfill.
-  invoice_number: { type: String, required: true, unique: true }, // e.g. "INV-00001"
+  invoice_number: { type: String, required: true }, // e.g. "INV-00001"
   items: { type: [orderItemSchema], required: true },
 
   // Required for storefront/eBay orders (enforced by their own request
@@ -273,8 +277,15 @@ const orderSchema = buildSchema({
 orderSchema.index({ "customer.email": 1 });
 orderSchema.index({ customer_id: 1 });
 orderSchema.index({ status: 1 });
-// Sparse so storefront orders (no external_order_id) don't collide on null;
-// unique so a re-poll of the same eBay order can never create a duplicate.
-orderSchema.index({ external_order_id: 1 }, { unique: true, sparse: true });
+orderSchema.index({ tenant_id: 1, order_number: 1 }, { unique: true });
+orderSchema.index({ tenant_id: 1, invoice_number: 1 }, { unique: true });
+// partialFilterExpression, NOT sparse — many existing (storefront) orders
+// have external_order_id stored as literal null rather than absent, and
+// sparse only excludes a field that's entirely unset. Unique (per tenant) so
+// a re-poll of the same eBay order can never create a duplicate.
+orderSchema.index(
+  { tenant_id: 1, external_order_id: 1 },
+  { unique: true, partialFilterExpression: { external_order_id: { $type: "string" } } },
+);
 
 module.exports = model("Order", orderSchema);

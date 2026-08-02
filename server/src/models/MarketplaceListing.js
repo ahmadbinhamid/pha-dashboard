@@ -17,6 +17,9 @@ const {
 
 const baseSchema = new Schema(
   {
+    // Denormalized from product.tenant_id at creation — avoids a populate
+    // just to scope admin list/read queries by tenant.
+    tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
     product: {
       type: Schema.Types.ObjectId,
       ref: "Product",

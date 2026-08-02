@@ -5,7 +5,7 @@
 
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
-const { getStripeClient } = require("./stripe.client.service");
+const stripeKeysService = require("./stripe.keys.service");
 const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { logger } = require("../../loaders/logging");
@@ -27,7 +27,16 @@ async function cleanupAbandonedOrders() {
     return summary;
   }
 
-  const stripe = getStripeClient();
+  // Cached per run — many abandoned orders typically belong to the same
+  // handful of tenants, no need to re-resolve a Stripe client for each one
+  // (stripe.keys.service.js also caches internally, but this avoids the
+  // decrypt + Mongo round trip on every order too).
+  const clientCache = new Map();
+  async function getStripeClientCached(tenantId) {
+    const key = String(tenantId);
+    if (!clientCache.has(key)) clientCache.set(key, await stripeKeysService.getStripeClient(tenantId));
+    return clientCache.get(key);
+  }
 
   for (const order of orders) {
     try {
@@ -41,6 +50,7 @@ async function cleanupAbandonedOrders() {
       }
 
       if (payment && payment.stripe_payment_intent_id) {
+        const stripe = await getStripeClientCached(order.tenant_id);
         let intentStatus = null;
         try {
           const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);

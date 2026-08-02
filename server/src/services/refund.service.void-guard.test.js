@@ -23,9 +23,12 @@ const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 async function makeSettledStripeRefund(order, payment, suffix, idemSuffix) {
-  const refundNumber = await refundService.nextRefundNumber();
+  const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
   return Refund.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     payment: payment._id,
     amount: 1000,
@@ -49,6 +52,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
 
   const suffix = crypto.randomUUID();
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: `TEST-VOIDGUARD-${suffix}`,
     invoice_number: `TEST-VOIDGUARD-INV-${suffix}`,
     items: [
@@ -76,6 +80,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
   });
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "stripe",
     payment_method: null,
@@ -91,7 +96,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
     await t.test("blocked without force", async () => {
       const refund = await makeSettledStripeRefund(order, payment, suffix, `a-${suffix}`);
       await assert.rejects(
-        () => refundService.voidRefund(refund._id, { reason: "test void attempt", userId: null }),
+        () => refundService.voidRefund(refund._id, { reason: "test void attempt", userId: null }, TEST_TENANT_ID),
         (err) => {
           assert.equal(err.status, 409);
           assert.match(err.message, /force/);
@@ -104,23 +109,24 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
 
     await t.test("allowed with force: true", async () => {
       const refund = await makeSettledStripeRefund(order, payment, suffix, `b-${suffix}`);
-      const voided = await refundService.voidRefund(refund._id, { reason: "test void with force", userId: null, force: true });
+      const voided = await refundService.voidRefund(refund._id, { reason: "test void with force", userId: null, force: true }, TEST_TENANT_ID);
       assert.equal(voided.status, REFUND_STATUS.VOIDED);
     });
 
     await t.test("allowed for source: stripe_reversal without force (the §4.2 path)", async () => {
       const refund = await makeSettledStripeRefund(order, payment, suffix, `c-${suffix}`);
-      const voided = await refundService.voidRefund(refund._id, {
-        reason: "test stripe reversal",
-        userId: null,
-        source: "stripe_reversal",
-      });
+      const voided = await refundService.voidRefund(
+        refund._id,
+        { reason: "test stripe reversal", userId: null, source: "stripe_reversal" },
+        TEST_TENANT_ID,
+      );
       assert.equal(voided.status, REFUND_STATUS.VOIDED);
     });
 
     await t.test("an all-manual refund voids normally with no force needed", async () => {
-      const refundNumber = await refundService.nextRefundNumber();
+      const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
       const manualRefund = await Refund.create({
+        tenant_id: TEST_TENANT_ID,
         order: order._id,
         payment: payment._id,
         amount: 1000,
@@ -137,7 +143,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
         total_amount: 1000,
         idempotency_key: `void-guard-manual-${suffix}`,
       });
-      const voided = await refundService.voidRefund(manualRefund._id, { reason: "test manual void", userId: null });
+      const voided = await refundService.voidRefund(manualRefund._id, { reason: "test manual void", userId: null }, TEST_TENANT_ID);
       assert.equal(voided.status, REFUND_STATUS.VOIDED);
     });
   } finally {

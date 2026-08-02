@@ -1,16 +1,21 @@
 // services/ebay/ebay.webhook.service.js
+//
+// Multi-tenant: each tenant registers their OWN subscription, pointed at the
+// one shared callback URL with their own opaque ?wt= token appended
+// (/api/v1/ebay/webhook?wt=<webhook_token> — see ebay.routes.js), verified
+// with their own EbaySettings.verification_token. The tenant is resolved
+// from that token by the controller before any of these functions run, so
+// nothing here has to guess whose notification this is.
 
 const crypto = require("crypto");
-const { getAppToken } = require("./ebay.api.service");
+const { getAppToken, apiBaseUrlFor } = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { updateEbayOrderStatus } = require("../order.service");
 const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
-const config = require("../../config");
 
-const EBAY_NOTIFICATION_API = `${config.ebay.apiBaseUrl}/commerce/notification/v1`;
 const TOPICS = ["ORDER.LINE_ITEMS_CREATED", "ORDER.LINE_ITEMS_UPDATED"];
 
 function verifyChallenge(challengeCode, endpointUrl, verificationToken) {
@@ -54,7 +59,7 @@ async function claimEvent(orderId, action) {
   }
 }
 
-async function processNotification(payload) {
+async function processNotification(payload, tenant) {
   const topic = payload?.metadata?.topic;
   const data = payload?.notification?.data;
 
@@ -95,7 +100,7 @@ async function processNotification(payload) {
       { $set: { lineItems: [{ sku, quantity: qty }] } },
     );
 
-    logger.info(`[ebay.webhook] Deducted ${qty} × ${sku} for order ${orderId}`);
+    logger.info(`[ebay.webhook] tenant ${tenant._id}: deducted ${qty} × ${sku} for order ${orderId}`);
     return { processed: true, topic, sku, qty: -qty };
   }
 
@@ -128,7 +133,7 @@ async function processNotification(payload) {
       // correction is the critical side effect and has already committed.
       const localStatus = status === "CANCELLED" ? ORDER_STATUS.CANCELLED : ORDER_STATUS.REFUNDED;
       try {
-        await updateEbayOrderStatus(orderId, { sku, quantity: qty, status: localStatus });
+        await updateEbayOrderStatus(orderId, { sku, quantity: qty, status: localStatus }, tenant._id);
       } catch (err) {
         logger.error(`[ebay.webhook] Failed to update order status for ${orderId}: ${err.message}`);
       }
@@ -138,7 +143,7 @@ async function processNotification(payload) {
         { $set: { lineItems: [{ sku, quantity: qty }] } },
       );
 
-      logger.info(`[ebay.webhook] Restored ${qty} × ${sku} for order ${orderId} (${status}), order status → ${localStatus}`);
+      logger.info(`[ebay.webhook] tenant ${tenant._id}: restored ${qty} × ${sku} for order ${orderId} (${status}), order status → ${localStatus}`);
       return { processed: true, topic, sku, qty };
     }
 
@@ -149,17 +154,18 @@ async function processNotification(payload) {
   return { processed: false, topic, reason: "unhandled topic" };
 }
 
-async function subscribeToTopics(endpointUrl, verificationToken) {
-  const token = await getAppToken();
+async function subscribeToTopics(endpointUrl, verificationToken, settings) {
+  const token = await getAppToken(settings);
+  const notificationApi = `${apiBaseUrlFor(settings.sandbox)}/commerce/notification/v1`;
   const results = [];
 
   for (const topicId of TOPICS) {
-    const res = await fetch(`${EBAY_NOTIFICATION_API}/subscription`, {
+    const res = await fetch(`${notificationApi}/subscription`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_AU",
+        "X-EBAY-C-MARKETPLACE-ID": settings.marketplace_id,
       },
       body: JSON.stringify({
         topicId,

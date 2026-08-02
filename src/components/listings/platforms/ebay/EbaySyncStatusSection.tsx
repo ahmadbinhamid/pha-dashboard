@@ -37,9 +37,9 @@ export function EbaySyncStatusSection({ listing }: Props) {
           </div>
         )}
 
-        {listing?.external_listing_id && (
+        {listing?.ebay_item_url && (
           <a
-            href={`https://www.ebay.com.au/itm/${listing.external_listing_id}`}
+            href={listing.ebay_item_url}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"

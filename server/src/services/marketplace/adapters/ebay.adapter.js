@@ -4,6 +4,10 @@
 // Wraps the existing eBay API service so the underlying HTTP sequence
 // (upsert inventory item → create/recover offer → publish) is unchanged.
 //
+// Multi-tenant: `settings` (an EbaySettings doc, see ebay.settings.service.js)
+// carries this tenant's refresh_token/marketplace/policies and is threaded
+// into every eBay API call instead of a single global credential.
+//
 // Interface:
 //   key                                            -> "ebay"
 //   publish(resolved, settings, hooks?)            -> { external_listing_id, external_offer_id }
@@ -32,6 +36,7 @@ const {
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
 const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
+const { getSettings: getEbaySettings } = require("../../ebay/ebay.settings.service");
 const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
@@ -66,12 +71,12 @@ const CONDITION_FALLBACK_ORDER = {
 // listing's primary category, cross-checking against the Sell Metadata API's
 // per-category condition policy instead of assuming a static mapping is
 // always valid (it isn't — accepted conditions vary by category).
-async function resolveCategoryCondition(rawCondition, categoryId) {
+async function resolveCategoryCondition(rawCondition, categoryId, settings) {
   const fallback = normalizeCondition(rawCondition);
   if (!categoryId) return fallback;
 
   try {
-    const { conditions } = await getConditionPolicies(categoryId);
+    const { conditions } = await getConditionPolicies(categoryId, settings);
     const validIds = conditions.map((c) => c.conditionId);
     if (validIds.length === 0 || validIds.includes(fallback)) return fallback;
 
@@ -99,9 +104,9 @@ function isPriceLockedBySaleError(err) {
 // retrying or erroring out helps with, it resolves itself once the sale ends
 // or is reconfigured on eBay, so this is treated as a soft skip (logged, not
 // thrown) rather than the same hard failure as every other updateOffer error.
-async function updateOfferTolerant(token, offerId, offerBody, sku) {
+async function updateOfferTolerant(token, settings, offerId, offerBody, sku) {
   try {
-    await updateOffer(token, offerId, offerBody);
+    await updateOffer(token, settings, offerId, offerBody);
     return { priceLocked: false };
   } catch (err) {
     if (!isPriceLockedBySaleError(err)) throw err;
@@ -121,11 +126,11 @@ async function resolveQuantity(resolved) {
 }
 
 async function publish(resolved, settings, hooks = {}) {
-  if (!credentialsConfigured()) {
-    throw new Error("[EbayAdapter] eBay credentials not configured");
+  if (!credentialsConfigured(settings)) {
+    throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(settings);
   if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
 
   const { listing } = resolved;
@@ -137,9 +142,9 @@ async function publish(resolved, settings, hooks = {}) {
   }
 
   // Step 1 — inventory item
-  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id);
-  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
-  await upsertInventoryItem(token, inventoryItem);
+  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings);
+  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
+  await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity})`);
   await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
 
@@ -147,8 +152,9 @@ async function publish(resolved, settings, hooks = {}) {
     throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
   }
 
-  // Step 2 — ensure merchant location exists (creates it from env vars if missing)
-  await ensureLocation(token);
+  // Step 2 — ensure merchant location exists (creates it from this tenant's
+  // warehouse address if missing)
+  await ensureLocation(token, settings);
 
   // Step 4 — create offer (recover from 25002 if it already exists)
   logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
@@ -157,18 +163,18 @@ async function publish(resolved, settings, hooks = {}) {
   let priceLocked = false;
 
   if (offerId) {
-    ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+    ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
     if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
   } else {
     try {
-      offerId = await createOffer(token, offerBody);
+      offerId = await createOffer(token, settings, offerBody);
       logger.info(`[EbayAdapter] offer created: ${offerId}`);
     } catch (createErr) {
       const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
       if (existingMatch) {
         offerId = existingMatch[1];
         logger.warn(`[EbayAdapter] offer already exists (${offerId}), switching to updateOffer`);
-        ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+        ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
         if (!priceLocked) logger.info(`[EbayAdapter] offer updated (recovered from 25002): ${offerId}`);
       } else {
         throw createErr;
@@ -183,7 +189,7 @@ async function publish(resolved, settings, hooks = {}) {
   await hooks.onOfferCreated?.(offerId);
 
   // Step 5 — publish
-  const listingId = await publishOffer(token, offerId);
+  const listingId = await publishOffer(token, settings, offerId);
   logger.info(`[EbayAdapter] offer published, listingId: ${listingId}`);
 
   return {
@@ -194,11 +200,11 @@ async function publish(resolved, settings, hooks = {}) {
 }
 
 async function update(resolved, settings, hooks = {}) {
-  if (!credentialsConfigured()) {
-    throw new Error("[EbayAdapter] eBay credentials not configured");
+  if (!credentialsConfigured(settings)) {
+    throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(settings);
   if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
 
   const { listing } = resolved;
@@ -210,9 +216,9 @@ async function update(resolved, settings, hooks = {}) {
   }
 
   // Step 1 — sync inventory item
-  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id);
-  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition);
-  await upsertInventoryItem(token, inventoryItem);
+  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings);
+  const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
+  await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku}`);
   await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
 
@@ -229,7 +235,7 @@ async function update(resolved, settings, hooks = {}) {
   let offerId = listing.external_offer_id || null;
 
   if (offerId) {
-    const { priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku);
+    const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku);
     if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
     return {
       external_listing_id: listing.external_listing_id || null,
@@ -241,12 +247,12 @@ async function update(resolved, settings, hooks = {}) {
   // Listing is "active" but we lost the offerId — re-create and re-publish
   let priceLocked = false;
   try {
-    offerId = await createOffer(token, offerBody);
+    offerId = await createOffer(token, settings, offerBody);
   } catch (createErr) {
     const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
     if (existingMatch) {
       offerId = existingMatch[1];
-      ({ priceLocked } = await updateOfferTolerant(token, offerId, offerBody, resolved.sku));
+      ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
     } else {
       throw createErr;
     }
@@ -254,7 +260,7 @@ async function update(resolved, settings, hooks = {}) {
   // Persist immediately — see the comment in publish() for why this can't
   // wait until after publishOffer() succeeds.
   await hooks.onOfferCreated?.(offerId);
-  const listingId = await publishOffer(token, offerId);
+  const listingId = await publishOffer(token, settings, offerId);
   return {
     external_listing_id: listingId,
     external_offer_id: offerId,
@@ -266,33 +272,45 @@ async function end(listing) {
   const offerId = listing.external_offer_id || null;
 
   let sku = listing.store_sku || null;
-  if (!sku) {
-    // Derive SKU the same way publish() does — store_sku → variant.sku → product.sku → ph-<id>
-    const productId = listing.product?._id || listing.product;
-    const variantId = listing.variant?._id || listing.variant || null;
-    const [product, variant] = await Promise.all([
-      Product.findById(productId).select("_id sku").lean(),
-      variantId ? ProductVariant.findById(variantId).select("_id sku").lean() : Promise.resolve(null),
-    ]);
-    if (product) sku = resolveSku(listing, product, variant);
-  }
+  const productId = listing.product?._id || listing.product;
+  const variantId = listing.variant?._id || listing.variant || null;
+  const [product, variant] = await Promise.all([
+    Product.findById(productId).select("_id sku tenant_id").lean(),
+    variantId ? ProductVariant.findById(variantId).select("_id sku").lean() : Promise.resolve(null),
+  ]);
+  if (!sku && product) sku = resolveSku(listing, product, variant);
 
   if (!sku) {
     logger.warn("[EbayAdapter] end called with no resolvable SKU — nothing to withdraw");
     return;
   }
+  if (!product) {
+    logger.warn(`[EbayAdapter] end: product not found for listing ${listing._id} — cannot resolve tenant, nothing to withdraw`);
+    return;
+  }
 
-  const result = await deleteProduct(sku, offerId);
+  const settings = await getEbaySettings(product.tenant_id);
+  const result = await deleteProduct(settings, sku, offerId);
   if (result.error) throw new Error(result.error);
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
 async function pushInventory(sku, quantity) {
-  const result = await updateInventoryQuantity(sku, quantity);
+  const ids = await resolveSkuToIds(sku);
+  if (!ids) {
+    throw new Error(`[EbayAdapter] pushInventory: could not resolve SKU ${sku} to a product`);
+  }
+
+  const product = await Product.findById(ids.productId).select("_id tenant_id").lean();
+  if (!product) {
+    throw new Error(`[EbayAdapter] pushInventory: product ${ids.productId} not found for SKU ${sku}`);
+  }
+
+  const settings = await getEbaySettings(product.tenant_id);
+  const result = await updateInventoryQuantity(settings, sku, quantity);
   if (result.error) throw new Error(result.error);
 
-  const ids = await resolveSkuToIds(sku);
-  if (ids) await updateSyncBaseline(ids.productId, ids.variantId, quantity);
+  await updateSyncBaseline(ids.productId, ids.variantId, quantity);
 }
 
 module.exports = { key, publish, update, end, pushInventory };

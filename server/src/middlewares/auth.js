@@ -3,6 +3,7 @@
 const { unauthorized, forbidden } = require("../utils/http/response");
 const { verifyJwt } = require("../utils/auth/jwt");
 const User = require("../models/User");
+const Tenant = require("../models/Tenant");
 
 const ROLES = { superadmin: "superadmin", admin: "admin", user: "user" };
 
@@ -37,6 +38,13 @@ const auth =
 
       req.auth = decoded;
       req.user = user;
+      // Sourced from the User doc (not the JWT payload) so a tenant change
+      // takes effect immediately rather than waiting for the token to expire.
+      req.tenantId = user.tenant_id;
+      if (user.tenant_id) {
+        req.tenant = await Tenant.findById(user.tenant_id);
+        if (!req.tenant) return forbidden(res, "Tenant not found or disabled");
+      }
       return next();
     } catch (err) {
       return next(err);

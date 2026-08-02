@@ -1,7 +1,8 @@
 // services/stripe/stripe.payment.service.js
 
 const Payment = require("../../models/Payment");
-const { getStripeClient } = require("./stripe.client.service");
+const Tenant = require("../../models/Tenant");
+const stripeKeysService = require("./stripe.keys.service");
 const { getTotalPaidForOrder } = require("../payment.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
@@ -20,7 +21,12 @@ async function createPaymentIntentForOrder(order) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
   }
 
-  const stripe = getStripeClient();
+  const tenant = await Tenant.findById(order.tenant_id);
+  if (!tenant?.stripe_publishable_key) {
+    throw Object.assign(new Error("This store has not added its Stripe keys yet"), { status: 409 });
+  }
+  const stripe = await stripeKeysService.getStripeClient(order.tenant_id);
+  const publishableKey = tenant.stripe_publishable_key;
 
   const totalPaidCents = await getTotalPaidForOrder(order._id);
   const remainingCents = order.total - totalPaidCents;
@@ -38,7 +44,7 @@ async function createPaymentIntentForOrder(order) {
     if (payment.amount === remainingCents) {
       const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
       if (!["canceled", "succeeded"].includes(intent.status)) {
-        return { payment, client_secret: intent.client_secret };
+        return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
       }
     } else {
       // The outstanding balance changed since this intent was created (e.g.
@@ -74,6 +80,7 @@ async function createPaymentIntentForOrder(order) {
 
   try {
     payment = await Payment.create({
+      tenant_id: order.tenant_id,
       order: order._id,
       provider: PAYMENT_PROVIDER.STRIPE,
       stripe_payment_intent_id: intent.id,
@@ -94,20 +101,24 @@ async function createPaymentIntentForOrder(order) {
   await order.save();
 
   // client_secret is returned here only — never persisted to Mongo.
-  return { payment, client_secret: intent.client_secret };
+  // stripe_publishable_key (this tenant's own, not secret) is what the
+  // caller needs to initialize Stripe.js (loadStripe(publishableKey)) to
+  // confirm this intent — BYOK means no Connect account-context is needed.
+  return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
 }
 
-// Builds a link to the storefront's own branded payment page for an
-// admin-created manual order whose staff member chose "payment link"
-// instead of collecting cash/online transfer on the spot. No Stripe object
-// is created here at all — the storefront's /checkout/payment page creates
-// (or reuses) the PaymentIntent itself via the exact same guest
-// POST /payment/create-intent endpoint the normal storefront checkout uses
-// (see createPaymentIntentForOrder above), keyed off the order's own
-// guest_access_token. That keeps this one code path — and its webhook
-// handling — the single source of truth for turning a Stripe payment into a
-// paid order, regardless of whether the order came from the storefront or
-// this admin-generated link.
+// Builds a link to the shared, platform-hosted payment page (lives in this
+// dashboard app at /pay/:orderId — NOT any tenant's own storefront, since a
+// payment link is just "pay this specific amount", not a shopping
+// experience, and building/maintaining that page once per tenant storefront
+// deployment would be pure duplication). No Stripe object is created here at
+// all — that page creates (or reuses) the PaymentIntent itself via the exact
+// same guest POST /payment/create-intent endpoint the normal storefront
+// checkout uses (see createPaymentIntentForOrder above), keyed off the
+// order's own guest_access_token. That keeps this one code path — and its
+// webhook handling — the single source of truth for turning a Stripe
+// payment into a paid order, regardless of whether the order came from a
+// tenant's storefront or this admin-generated link.
 function createPaymentLinkForOrder(order) {
   if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
@@ -116,7 +127,7 @@ function createPaymentLinkForOrder(order) {
     throw Object.assign(new Error("This order is missing its guest access token"), { status: 500 });
   }
 
-  const url = `${config.emailBrand.storefrontUrl}/checkout/payment?order_id=${order._id}&token=${order.guest_access_token}`;
+  const url = `${config.emailBrand.clientUrl}/pay/${order._id}?token=${order.guest_access_token}`;
   return { url };
 }
 

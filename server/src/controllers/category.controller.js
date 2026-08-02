@@ -13,11 +13,10 @@ exports.getCategories = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const { items, total } = await categoryService.listCategories({
-      skip,
-      limit,
-      productFilters: req.query,
-    });
+    const { items, total } = await categoryService.listCategories(
+      { skip, limit, productFilters: req.query },
+      req.tenantId,
+    );
 
     return success(res, {
       items,
@@ -33,7 +32,7 @@ exports.getCategories = async (req, res) => {
 
 exports.getCategory = async (req, res) => {
   try {
-    const category = await categoryService.getCategoryById(req.params.id);
+    const category = await categoryService.getCategoryById(req.params.id, req.tenantId);
     if (!category) return notFound(res, "Category not found");
     return success(res, category);
   } catch (err) {
@@ -43,7 +42,7 @@ exports.getCategory = async (req, res) => {
 
 exports.createCategory = async (req, res) => {
   try {
-    const category = await categoryService.createCategory(req.body);
+    const category = await categoryService.createCategory(req.body, req.tenantId);
     return created(res, category, "Category created");
   } catch (err) {
     if (err.code === 11000) return requestConflict(res, "Category slug already exists");
@@ -53,7 +52,7 @@ exports.createCategory = async (req, res) => {
 
 exports.updateCategory = async (req, res) => {
   try {
-    const category = await categoryService.updateCategory(req.params.id, req.body);
+    const category = await categoryService.updateCategory(req.params.id, req.body, req.tenantId);
     if (!category) return notFound(res, "Category not found");
     return success(res, category, "Category updated");
   } catch (err) {
@@ -64,7 +63,7 @@ exports.updateCategory = async (req, res) => {
 
 exports.deleteCategory = async (req, res) => {
   try {
-    const category = await categoryService.deleteCategory(req.params.id);
+    const category = await categoryService.deleteCategory(req.params.id, req.tenantId);
     if (!category) return notFound(res, "Category not found");
     return success(res, null, "Category deleted");
   } catch (err) {

@@ -15,6 +15,7 @@
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");
+const { getConfiguredTenants } = require("./ebay.tenant");
 const { resolveSku } = require("../marketplace/listing.resolver");
 const { adjustStockForSku } = require("../inventory.service");
 const { deleteListing } = require("./ebay.listing.service");
@@ -48,7 +49,39 @@ async function handleMissingFromEbay(listing, sku) {
 }
 
 async function reconcileEbayInventory() {
+  const configured = await getConfiguredTenants();
+  const summary = { checked: 0, reconciled: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
+
+  if (!configured.length) {
+    logger.info("[ebay.inventory-sync] no tenants have eBay configured — skipping");
+    return summary;
+  }
+
+  for (const { tenant, settings } of configured) {
+    try {
+      const tenantSummary = await reconcileEbayInventoryForTenant(tenant, settings);
+      summary.checked += tenantSummary.checked;
+      summary.reconciled += tenantSummary.reconciled;
+      summary.baselined += tenantSummary.baselined;
+      summary.deletedFromEbay += tenantSummary.deletedFromEbay;
+      summary.errors += tenantSummary.errors;
+    } catch (err) {
+      summary.errors++;
+      logger.error(`[ebay.inventory-sync] tenant ${tenant._id} reconciliation failed: ${err.message}`);
+    }
+  }
+
+  logger.info(
+    `[ebay.inventory-sync] run complete: checked=${summary.checked} reconciled=${summary.reconciled} ` +
+      `baselined=${summary.baselined} deletedFromEbay=${summary.deletedFromEbay} errors=${summary.errors}`,
+  );
+
+  return summary;
+}
+
+async function reconcileEbayInventoryForTenant(tenant, settings) {
   const listings = await MarketplaceListing.find({
+    tenant_id: tenant._id,
     platform: MARKETPLACE_PLATFORM.EBAY,
     state: LISTING_STATE.ACTIVE,
     external_offer_id: { $ne: null },
@@ -60,11 +93,10 @@ async function reconcileEbayInventory() {
   const summary = { checked: 0, reconciled: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
 
   if (!listings.length) {
-    logger.info("[ebay.inventory-sync] no active eBay listings to reconcile");
     return summary;
   }
 
-  const ebayItems = await ebayApi.getAllInventoryItems();
+  const ebayItems = await ebayApi.getAllInventoryItems(settings);
 
   const ebayQtyBySku = new Map();
   for (const item of ebayItems) {
@@ -130,7 +162,7 @@ async function reconcileEbayInventory() {
   }
 
   logger.info(
-    `[ebay.inventory-sync] run complete: checked=${summary.checked} reconciled=${summary.reconciled} ` +
+    `[ebay.inventory-sync] tenant ${tenant._id}: checked=${summary.checked} reconciled=${summary.reconciled} ` +
       `baselined=${summary.baselined} deletedFromEbay=${summary.deletedFromEbay} errors=${summary.errors}`,
   );
 

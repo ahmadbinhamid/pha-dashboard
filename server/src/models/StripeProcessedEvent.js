@@ -10,6 +10,11 @@ const schema = new Schema(
   {
     stripe_event_id: { type: String, required: true },
     type: { type: String, required: true }, // e.g. "payment_intent.succeeded"
+    // Which tenant's webhook endpoint this event was delivered to (BYOK —
+    // resolved from the opaque `wt` token in the URL, not from the event
+    // payload). Not required for idempotency (stripe_event_id is already
+    // globally unique), kept for debugging.
+    tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", default: null },
     processedAt: { type: Date, default: Date.now },
   },
   { timestamps: false, versionKey: false },

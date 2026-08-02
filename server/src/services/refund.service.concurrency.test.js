@@ -30,11 +30,14 @@ const LINE_QUANTITY = 5;
 const PARALLEL_REQUESTS = 10; // > LINE_QUANTITY on purpose — see the file header
 const REPEAT_RUNS = 5; // "run it repeatedly not once"
 
+const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+
 async function createDisposableOrder() {
   const suffix = crypto.randomUUID();
   const orderNumber = `TEST-CONC-${suffix}`;
 
   const order = await Order.create({
+    tenant_id: TEST_TENANT_ID,
     order_number: orderNumber,
     invoice_number: `TEST-INV-${suffix}`,
     items: [
@@ -68,6 +71,7 @@ async function createDisposableOrder() {
   await order.save();
 
   const payment = await Payment.create({
+    tenant_id: TEST_TENANT_ID,
     order: order._id,
     provider: "manual",
     payment_method: "cash",
@@ -102,6 +106,7 @@ async function runOneRound(roundIndex) {
           reason: "customer_request",
         },
         null,
+        TEST_TENANT_ID,
       ),
     );
 

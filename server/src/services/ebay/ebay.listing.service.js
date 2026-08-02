@@ -2,10 +2,10 @@
 // CRUD operations for MarketplaceListing documents (eBay discriminator).
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
+const Product = require("../../models/Product");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
-const config = require("../../config");
 
 // Production eBay item URLs are marketplace-specific; sandbox uses one shared
 // domain regardless of marketplace. Extend this map as new marketplaces are enabled.
@@ -17,10 +17,10 @@ const EBAY_SITE_DOMAINS = {
   EBAY_DE: "ebay.de",
 };
 
-function buildEbayItemUrl(externalListingId) {
+function buildEbayItemUrl(externalListingId, settings) {
   if (!externalListingId) return null;
-  if (config.ebay.sandbox) return `https://sandbox.ebay.com/itm/${externalListingId}`;
-  const domain = EBAY_SITE_DOMAINS[config.ebay.marketplaceId] || "ebay.com";
+  if (settings?.sandbox) return `https://sandbox.ebay.com/itm/${externalListingId}`;
+  const domain = EBAY_SITE_DOMAINS[settings?.marketplace_id] || "ebay.com";
   return `https://www.${domain}/itm/${externalListingId}`;
 }
 
@@ -38,7 +38,7 @@ async function syncFitmentCatalog(fitment) {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-async function createListing(payload) {
+async function createListing(payload, tenantId) {
   const {
     product,
     variant = null,
@@ -67,7 +67,11 @@ async function createListing(payload) {
     package: pkg = {},
   } = payload;
 
+  const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
+  if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
+
   const listing = await MarketplaceListing.create({
+    tenant_id: tenantId,
     platform: MARKETPLACE_PLATFORM.EBAY,
     product,
     variant,
@@ -109,24 +113,25 @@ async function createListing(payload) {
 
 // ── Read ──────────────────────────────────────────────────────────────────────
 
-async function getListingById(id) {
-  return MarketplaceListing.findById(id)
+async function getListingById(id, tenantId) {
+  return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate("product", "title slug sku price brand mpn attachments vehicle")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }
 
-async function getListingsByProduct(productId) {
+async function getListingsByProduct(productId, tenantId) {
   return MarketplaceListing.find({
     product: productId,
+    tenant_id: tenantId,
     platform: MARKETPLACE_PLATFORM.EBAY,
   })
     .populate("variant", "display_name sku")
     .sort({ created_at: -1 });
 }
 
-async function listListings({ skip, limit, product, state, sync_status } = {}) {
-  const filter = { platform: MARKETPLACE_PLATFORM.EBAY };
+async function listListings({ skip, limit, product, state, sync_status } = {}, tenantId, settings) {
+  const filter = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
   if (product) filter.product = product;
   if (state) filter.state = state;
   if (sync_status) filter.sync_status = sync_status;
@@ -143,7 +148,7 @@ async function listListings({ skip, limit, product, state, sync_status } = {}) {
 
   const shapedItems = items.map((item) => {
     const obj = item.toJSON();
-    obj.ebay_item_url = buildEbayItemUrl(item.external_listing_id);
+    obj.ebay_item_url = buildEbayItemUrl(item.external_listing_id, settings);
     return obj;
   });
 
@@ -152,7 +157,7 @@ async function listListings({ skip, limit, product, state, sync_status } = {}) {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
-async function updateListing(id, payload) {
+async function updateListing(id, payload, tenantId) {
   const allowed = [
     "title_override", "description_override", "price_override", "photo_overrides",
     "ebay_category_id", "store_category_id", "store_sku",
@@ -200,7 +205,7 @@ async function updateListing(id, payload) {
 
   if (update.fitment) await syncFitmentCatalog(update.fitment);
 
-  return MarketplaceListing.findByIdAndUpdate(id, { $set: update }, { new: true, strict: false })
+  return MarketplaceListing.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: update }, { new: true, strict: false })
     .populate("product", "title slug sku price brand mpn attachments vehicle")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
@@ -208,8 +213,9 @@ async function updateListing(id, payload) {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
-async function deleteListing(id) {
-  const listing = await MarketplaceListing.findById(id);
+async function deleteListing(id, tenantId) {
+  const filter = tenantId ? { _id: id, tenant_id: tenantId } : { _id: id };
+  const listing = await MarketplaceListing.findOne(filter);
   if (!listing) return null;
   await listing.softDelete();
   return listing;
@@ -222,4 +228,5 @@ module.exports = {
   listListings,
   updateListing,
   deleteListing,
+  buildEbayItemUrl,
 };

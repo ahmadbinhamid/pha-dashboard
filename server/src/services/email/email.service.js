@@ -1,9 +1,21 @@
 const { enqueueEmailJob } = require("../../queues/email.queue");
 const config = require("../../config");
-const { PICKUP_LOCATION } = require("../../constants/company.constants");
 
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
+
+// Customer-facing order emails (shipped/pickup/confirmation/receipt) must
+// look like they came from the tenant's own business, not the platform.
+// Only the display NAME can be pre-built here — the actual address depends
+// on which SMTP account ends up sending it (the tenant's own, if they've
+// configured one, otherwise the platform's), which mailer.js resolves at
+// send time (see mailer.js#sendEmail's fromName/tenantId handling).
+const tenantFromName = (companyProfile) => companyProfile?.company_name || null;
+
+const tenantBrandVars = (companyProfile) => ({
+  app_name: companyProfile?.company_name || config.emailBrand.appName,
+  support_email: companyProfile?.email || config.emailBrand.supportEmail,
+});
 
 /**
  * Send OTP for Login Verification
@@ -56,12 +68,16 @@ async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
 }
 
 /**
- * Send storefront inquiry notification to sales inbox
+ * Notify a tenant's own inbox of a storefront inquiry submitted by one of
+ * their customers — `to` is that tenant's own email (resolved by the
+ * caller, e.g. inquiry.controller.js via getCompanyProfile), never a
+ * platform-wide address, since a different tenant's inquiry must never land
+ * in another tenant's (or the platform's own) inbox.
  */
-async function sendInquiryNotification({ customerName, customerEmail, customerPhone, subject, message }) {
+async function sendInquiryNotification({ to, customerName, customerEmail, customerPhone, subject, message }) {
   return enqueueEmailJob({
     from: defaultFrom(),
-    to: config.smtp.salesEmail,
+    to,
     subject: `[Inquiry] ${subject} — ${customerName}`,
     template: "inquiryNotification",
     variables: {
@@ -76,12 +92,13 @@ async function sendInquiryNotification({ customerName, customerEmail, customerPh
 }
 
 /**
- * Notify the sales inbox of a new newsletter subscriber
+ * Notify a tenant's own inbox of a new storefront newsletter subscriber —
+ * same reasoning as sendInquiryNotification: `to` is that tenant's own email.
  */
-async function sendNewsletterSignupNotification({ subscriberEmail }) {
+async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
   return enqueueEmailJob({
     from: defaultFrom(),
-    to: config.smtp.salesEmail,
+    to,
     subject: `[Newsletter] New subscriber — ${subscriberEmail}`,
     template: "newsletterNotification",
     variables: {
@@ -96,9 +113,10 @@ async function sendNewsletterSignupNotification({ subscriberEmail }) {
  * payloads are JSON over Redis, so a raw Buffer wouldn't round-trip to the
  * worker intact).
  */
-async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename }) {
+async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    from: defaultFrom(),
+    fromName: tenantFromName(companyProfile),
+    tenantId,
     to,
     subject: "Your Order Has Been Shipped",
     template: "orderShipped",
@@ -107,6 +125,7 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
       order_number: orderNumber,
       tracking_number: trackingNumber,
       carrier_name: carrierName,
+      ...tenantBrandVars(companyProfile),
     },
     attachments: [
       {
@@ -123,19 +142,21 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
  * the tax invoice attached as a PDF (base64-encoded — Bull job payloads are
  * JSON over Redis, so a raw Buffer wouldn't round-trip to the worker intact).
  */
-async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename }) {
+async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {}, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    from: defaultFrom(),
+    fromName: tenantFromName(companyProfile),
+    tenantId,
     to,
     subject: "Your Order Is Ready for Pickup",
     template: "orderReadyForPickup",
     variables: {
       name,
       order_number: orderNumber,
-      pickup_location_name: PICKUP_LOCATION.name,
-      pickup_address: PICKUP_LOCATION.address,
-      pickup_country: PICKUP_LOCATION.country,
-      trading_hours: PICKUP_LOCATION.tradingHours,
+      pickup_location_name: pickupLocation.name || "",
+      pickup_address: pickupLocation.address || "",
+      pickup_country: pickupLocation.country || "",
+      trading_hours: pickupLocation.trading_hours || [],
+      ...tenantBrandVars(companyProfile),
     },
     attachments: [
       {
@@ -153,15 +174,17 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
  * (see stripe.webhook.service.js). No invoice attached here; that's sent
  * manually later via the admin's "Send Email" action (sendOrderShipped above).
  */
-async function sendOrderConfirmation({ to, name, orderNumber }) {
+async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    from: defaultFrom(),
+    fromName: tenantFromName(companyProfile),
+    tenantId,
     to,
     subject: "Order Confirmation",
     template: "orderConfirmation",
     variables: {
       name,
       order_number: orderNumber,
+      ...tenantBrandVars(companyProfile),
     },
   });
 }
@@ -172,15 +195,17 @@ async function sendOrderConfirmation({ to, name, orderNumber }) {
  * stripe.webhook.service.js). No invoice attached here; that's sent manually
  * later via the admin's "Send Email" action (sendOrderReadyForPickup above).
  */
-async function sendOrderReceivedPickup({ to, name, orderNumber }) {
+async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    from: defaultFrom(),
+    fromName: tenantFromName(companyProfile),
+    tenantId,
     to,
     subject: "Your Order Has Been Received",
     template: "orderReceivedPickup",
     variables: {
       name,
       order_number: orderNumber,
+      ...tenantBrandVars(companyProfile),
     },
   });
 }
@@ -191,9 +216,10 @@ async function sendOrderReceivedPickup({ to, name, orderNumber }) {
  * complete), just the invoice and, if the customer still owes money, the
  * outstanding balance called out up front.
  */
-async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename }) {
+async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    from: defaultFrom(),
+    fromName: tenantFromName(companyProfile),
+    tenantId,
     to,
     subject: `Your Invoice — Order ${orderNumber}`,
     template: "manualOrderReceipt",
@@ -201,6 +227,7 @@ async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBas
       name,
       order_number: orderNumber,
       amount_due: amountDue || null,
+      ...tenantBrandVars(companyProfile),
     },
     attachments: [
       {

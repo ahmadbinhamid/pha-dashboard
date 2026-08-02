@@ -1,10 +1,17 @@
 const { sendInquiryNotification } = require("../services/email/email.service");
-const { success, systemfailure } = require("../utils/http/response");
+const { getCompanyProfile } = require("../services/tenantSettings.service");
+const { success, requestfailure, systemfailure } = require("../utils/http/response");
 
 async function submit(req, res) {
   const { name, email, phone, subject, message } = req.body;
 
+  const companyProfile = await getCompanyProfile(req.tenantId);
+  if (!companyProfile.email) {
+    return requestfailure(res, { message: "This store hasn't configured an inquiry inbox yet", status: 409 });
+  }
+
   const ok = await sendInquiryNotification({
+    to: companyProfile.email,
     customerName: name,
     customerEmail: email,
     customerPhone: phone,
