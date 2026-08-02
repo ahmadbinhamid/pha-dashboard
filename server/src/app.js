@@ -40,7 +40,7 @@ app.use(
           }
         : true, // dev fallback: allow all
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Tenant-Slug"],
     credentials: true,
   })
 );
