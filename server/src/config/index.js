@@ -51,7 +51,6 @@ const config = {
     user: get("SMTP_USER"),
     pass: get("SMTP_PASS"),
     alertsTo: get("ALERTS_TO"),
-    salesEmail: get("SALES_EMAIL", "sales@partshubaustralia.com.au"),
     // Conservative defaults for shared/free SMTP sandboxes (e.g. Mailtrap
     // testing plans) that throttle to a handful of messages per second.
     // Bump these via env once on a real provider with higher limits.
@@ -105,11 +104,10 @@ const config = {
   },
 
   stripe: {
-    secretKey: get("STRIPE_SECRET_KEY", null),
-    webhookSecret: get("STRIPE_WEBHOOK_SECRET", null),
-    // Only used server-side as a documented default; the storefront reads its
-    // own VITE_STRIPE_PUBLISHABLE_KEY directly and never calls this API for it.
-    publishableKey: get("STRIPE_PUBLISHABLE_KEY", null),
+    // BYOK — no platform-level secret/webhook/publishable key anymore; each
+    // tenant supplies their own via Settings → Payment Account, stored
+    // encrypted on their Tenant document (see stripe.keys.service.js).
+    // Only the default currency stays global/env-configurable.
     currency: get("STRIPE_CURRENCY", "aud"),
   },
 };

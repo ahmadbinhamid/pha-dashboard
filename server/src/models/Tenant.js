@@ -4,7 +4,7 @@ const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
 const {
   TENANT_STATUS,
-  STRIPE_ONBOARDING_STATUS,
+  CONNECTION_STATUS,
 } = require("../constants/tenant.constants");
 
 const bankDetailsSchema = new Schema(
@@ -57,15 +57,59 @@ const tenantSchema = buildSchema({
   brand_colour: { type: String, default: "#000000" },
   accent_colour: { type: String, default: "#FFFFFF" },
 
-  // Stripe Connect
-  stripe_account_id: { type: String, default: null },
-  stripe_onboarding_status: {
+  // Stripe BYOK — each tenant supplies their own Stripe account's keys
+  // instead of onboarding a connected sub-account under a platform account.
+  // secret_key/webhook_secret are encrypted at rest (AES-256-GCM — see
+  // utils/crypto/tokenCipher.js), same pattern as EbaySettings.refresh_token;
+  // stripe.keys.service.js is the only place that encrypts/decrypts them.
+  stripe_secret_key_ciphertext: { type: String, default: null, select: false },
+  stripe_secret_key_iv: { type: String, default: null, select: false },
+  stripe_secret_key_tag: { type: String, default: null, select: false },
+  // Not secret — safe to read directly, used to init Stripe.js client-side.
+  stripe_publishable_key: { type: String, default: null },
+
+  // Webhook — an opaque, unguessable identifier (NOT this tenant's real _id)
+  // embedded in the query string of the one shared callback URL
+  // (/api/v1/payment/webhook?wt=<this>), registered by the tenant in their
+  // own Stripe Dashboard. webhook_secret is the signing secret Stripe gives
+  // them for that endpoint, encrypted the same way as the API secret key.
+  stripe_webhook_token: { type: String, default: null, unique: true, sparse: true },
+  stripe_webhook_secret_ciphertext: { type: String, default: null, select: false },
+  stripe_webhook_secret_iv: { type: String, default: null, select: false },
+  stripe_webhook_secret_tag: { type: String, default: null, select: false },
+
+  stripe_connection_status: {
     type: String,
-    enum: Object.values(STRIPE_ONBOARDING_STATUS),
-    default: STRIPE_ONBOARDING_STATUS.NOT_STARTED,
+    enum: Object.values(CONNECTION_STATUS),
+    default: CONNECTION_STATUS.NOT_CONNECTED,
   },
-  stripe_charges_enabled: { type: Boolean, default: false },
-  stripe_payouts_enabled: { type: Boolean, default: false },
+  stripe_connected_at: { type: Date, default: null },
+  stripe_last_error: { type: String, default: null },
+
+  // Email BYOK — each tenant's own SMTP account, used for customer-facing
+  // order emails (order confirmed/shipped/ready-for-pickup/receipt) so those
+  // arrive from the tenant's own mailbox instead of the platform's shared
+  // sender. Falls back to the platform's SMTP (config.smtp) when unset —
+  // see mailer.js — so nothing breaks for a tenant who hasn't configured
+  // this yet. Platform-level system email (login OTP, password reset, error
+  // alerts) always uses the platform SMTP regardless, never this.
+  smtp_host: { type: String, default: null },
+  smtp_port: { type: Number, default: null },
+  smtp_user: { type: String, default: null },
+  smtp_pass_ciphertext: { type: String, default: null, select: false },
+  smtp_pass_iv: { type: String, default: null, select: false },
+  smtp_pass_tag: { type: String, default: null, select: false },
+  // Optional overrides for the "From" header — default to company_name/smtp_user.
+  smtp_from_name: { type: String, default: null },
+  smtp_from_email: { type: String, default: null },
+
+  smtp_connection_status: {
+    type: String,
+    enum: Object.values(CONNECTION_STATUS),
+    default: CONNECTION_STATUS.NOT_CONNECTED,
+  },
+  smtp_connected_at: { type: Date, default: null },
+  smtp_last_error: { type: String, default: null },
 });
 
 module.exports = model("Tenant", tenantSchema);

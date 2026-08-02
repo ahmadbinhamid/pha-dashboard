@@ -9,20 +9,17 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
 import { formatCurrencyFromCents } from "@/utils/format";
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
-
-// A PaymentIntent created on a tenant's Stripe Connect account can only be
-// confirmed by a Stripe.js instance initialized IN that account's context —
-// the publishable key alone isn't enough. Cached per account id so switching
-// between orders from different tenants (in principle; this page is shared)
-// doesn't re-instantiate Stripe.js unnecessarily.
+// BYOK — this page is shared across every tenant's admin-generated "payment
+// link" orders, and each tenant now has their own Stripe account/publishable
+// key (see stripe.payment.service.js#createPaymentIntentForOrder), returned
+// alongside the client_secret rather than read from a single build-time env
+// var. Cached per publishable key so re-rendering doesn't re-init Stripe.js.
 const stripeInstances = new Map<string, ReturnType<typeof loadStripe>>();
-function getStripeForAccount(stripeAccountId: string) {
-  if (!PUBLISHABLE_KEY) return null;
-  if (!stripeInstances.has(stripeAccountId)) {
-    stripeInstances.set(stripeAccountId, loadStripe(PUBLISHABLE_KEY, { stripeAccount: stripeAccountId }));
+function getStripeForKey(publishableKey: string) {
+  if (!stripeInstances.has(publishableKey)) {
+    stripeInstances.set(publishableKey, loadStripe(publishableKey));
   }
-  return stripeInstances.get(stripeAccountId)!;
+  return stripeInstances.get(publishableKey)!;
 }
 
 // Shared, platform-hosted payment page — one page for every tenant's
@@ -75,12 +72,10 @@ export default function PayOrderPage() {
         <CardContent>
           {alreadyPaid ? (
             <p className="text-sm text-fg/65">Nothing further to pay — thank you.</p>
-          ) : !PUBLISHABLE_KEY ? (
-            <p className="text-sm text-danger">Payments are not configured for this page.</p>
           ) : intentMutation.data ? (
             <CheckoutForm
               clientSecret={intentMutation.data.data.client_secret}
-              stripeAccountId={intentMutation.data.data.stripe_account_id}
+              publishableKey={intentMutation.data.data.stripe_publishable_key}
             />
           ) : (
             <div className="flex flex-col gap-3">
@@ -100,9 +95,9 @@ export default function PayOrderPage() {
   );
 }
 
-function CheckoutForm({ clientSecret, stripeAccountId }: { clientSecret: string; stripeAccountId: string }) {
+function CheckoutForm({ clientSecret, publishableKey }: { clientSecret: string; publishableKey: string }) {
   const options = useMemo(() => ({ clientSecret }), [clientSecret]);
-  const stripePromise = useMemo(() => getStripeForAccount(stripeAccountId), [stripeAccountId]);
+  const stripePromise = useMemo(() => getStripeForKey(publishableKey), [publishableKey]);
   return (
     <Elements stripe={stripePromise} options={options}>
       <PaymentForm />

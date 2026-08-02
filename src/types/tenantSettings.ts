@@ -12,7 +12,9 @@ export interface PickupLocation {
   trading_hours: string[];
 }
 
-export type StripeOnboardingStatus = "not_started" | "in_progress" | "complete";
+// Shared by every "tenant supplies their own credentials" integration
+// (Stripe keys, SMTP) — mirrors CONNECTION_STATUS in tenant.constants.js.
+export type ConnectionStatus = "not_connected" | "connected" | "error";
 
 export interface TenantSettings {
   _id: string;
@@ -32,10 +34,12 @@ export interface TenantSettings {
   favicon_url: string | null;
   brand_colour: string;
   accent_colour: string;
-  stripe_account_id: string | null;
-  stripe_onboarding_status: StripeOnboardingStatus;
-  stripe_charges_enabled: boolean;
-  stripe_payouts_enabled: boolean;
+  // BYOK — the secret key itself is never returned to the client (select:
+  // false on the backend); only what's safe/useful to show in Settings.
+  stripe_publishable_key: string | null;
+  stripe_connection_status: ConnectionStatus;
+  stripe_connected_at: string | null;
+  stripe_last_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,10 +62,39 @@ export type UpdateTenantSettingsPayload = Partial<
   >
 >;
 
-export interface StripeConnectStatus {
+export interface StripeKeysStatus {
   connected: boolean;
-  onboarding_status: StripeOnboardingStatus;
-  charges_enabled: boolean;
-  payouts_enabled: boolean;
-  requirements_due?: string[];
+  connection_status: ConnectionStatus;
+  publishable_key: string | null;
+  webhook_token: string | null;
+  webhook_url: string | null;
+  webhook_configured: boolean;
+  last_error: string | null;
+}
+
+// secret_key omitted entirely = "leave unchanged"; "" clears a saved key.
+export interface UpdateStripeKeysPayload {
+  secret_key?: string;
+  publishable_key?: string;
+}
+
+export interface SmtpStatus {
+  connected: boolean;
+  connection_status: ConnectionStatus;
+  host: string | null;
+  port: number | null;
+  user: string | null;
+  from_name: string | null;
+  from_email: string | null;
+  last_error: string | null;
+}
+
+// pass omitted entirely = "leave unchanged"; "" clears saved credentials.
+export interface UpdateSmtpCredentialsPayload {
+  host?: string;
+  port?: number | null;
+  user?: string;
+  pass?: string;
+  from_name?: string;
+  from_email?: string;
 }

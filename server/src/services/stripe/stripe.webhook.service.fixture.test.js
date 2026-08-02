@@ -4,12 +4,12 @@
 // a real Stripe account by constructing the JSON event/object shapes Stripe
 // actually sends and driving handleEvent/handleChargeRefunded/
 // handleChargeRefundUpdated/reconcileStripeRefund directly, with
-// stripe.client.service#getStripeClient mocked (node:test's built-in mock
+// stripe.keys.service#getStripeClient mocked (node:test's built-in mock
 // support — same technique as refund.reconciliation.service.test.js).
 //
 // The mock must be installed BEFORE this file's own services are first
 // required, since stripe.webhook.service.js and refund.service.js both
-// destructure `{ getStripeClient }` at their own module-load/call time.
+// call stripeKeysService.getStripeClient at their own module-load/call time.
 //
 // Needs a live Mongo connection — run with:
 //   node --test src/services/stripe/stripe.webhook.service.fixture.test.js
@@ -25,7 +25,7 @@ const Refund = require("../../models/Refund");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
 const Location = require("../../models/Location");
 const Inventory = require("../../models/Inventory");
-const stripeClientService = require("./stripe.client.service");
+const stripeKeysService = require("./stripe.keys.service");
 const { REFUND_STATUS } = require("../../constants/refund.constants");
 
 // The real Stripe SDK's refunds.list() returns a hybrid "ApiListPromise" —
@@ -112,15 +112,15 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
   await mongoose.connect(config.mongoUri);
 
   // Installed exactly ONCE, before refund.service.js or stripe.webhook.service.js
-  // are ever required — both destructure `{ getStripeClient }` at their own
-  // module-load time, so a mock re-installed per-subtest (via t.mock.method
-  // inside each subtest's own `t`) would only ever reach whichever module
-  // hadn't already captured an earlier binding. Indirecting through a
-  // mutable `currentFakeStripe` that this ONE mock function reads at CALL
-  // time — not require time — means every subtest can swap behaviour just
-  // by reassigning the variable, regardless of load order.
+  // are ever required — both call stripeKeysService.getStripeClient at their
+  // own module-load/call time, so a mock re-installed per-subtest (via
+  // t.mock.method inside each subtest's own `t`) would only ever reach
+  // whichever module hadn't already captured an earlier binding. Indirecting
+  // through a mutable `currentFakeStripe` that this ONE mock function reads
+  // at CALL time — not require time — means every subtest can swap
+  // behaviour just by reassigning the variable, regardless of load order.
   let currentFakeStripe = buildFakeStripe();
-  t.mock.method(stripeClientService, "getStripeClient", () => currentFakeStripe);
+  t.mock.method(stripeKeysService, "getStripeClient", async () => currentFakeStripe);
 
   // ── Row 14: Stripe API errors mid-multi-allocation ──────────────────────
   await t.test("row 14: mid-multi-allocation Stripe failure marks the refund failed and records which allocation settled", async () => {
@@ -335,14 +335,14 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     const event = { id: `evt_row17_${suffix}`, type: "charge.refunded", data: { object: { payment_intent: payment.stripe_payment_intent_id } } };
 
     try {
-      await handleEvent(event);
+      await handleEvent(event, TEST_TENANT_ID);
       const afterFirst = await Order.findById(order._id);
       assert.equal(afterFirst.items[0].quantity_refunded, 1);
 
       // The exact same event, redelivered — claimEvent's unique index on
       // stripe_event_id must reject it before handleChargeRefunded ever runs
       // again.
-      await handleEvent(event);
+      await handleEvent(event, TEST_TENANT_ID);
       const afterSecond = await Order.findById(order._id);
       assert.equal(afterSecond.items[0].quantity_refunded, 1, "redelivery must be a complete no-op");
 

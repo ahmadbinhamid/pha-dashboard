@@ -1,4 +1,4 @@
-import { Building2, CreditCard, ShoppingBag } from "lucide-react";
+import { Building2, CreditCard, Mail, ShoppingBag } from "lucide-react";
 
 export type SettingsNavItem = {
   label: string;
@@ -17,6 +17,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
     items: [
       { label: "Business Info", href: "/settings/business-info", icon: (p) => <Building2 {...p} /> },
       { label: "Payment Account", href: "/settings/payment-account", icon: (p) => <CreditCard {...p} /> },
+      { label: "Email Settings", href: "/settings/email", icon: (p) => <Mail {...p} /> },
       { label: "eBay Integration", href: "/settings/ebay", icon: (p) => <ShoppingBag {...p} /> },
     ],
   },

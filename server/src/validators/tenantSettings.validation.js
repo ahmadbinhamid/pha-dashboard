@@ -35,4 +35,34 @@ const updateSettings = {
   }),
 };
 
-module.exports = { updateSettings };
+// secret_key/publishable_key are each optional independently (e.g. update
+// just the publishable key without re-entering the secret) — "" clears a
+// previously-saved secret key (see stripe.keys.service.js#updateStripeKeys).
+const updateStripeKeys = {
+  body: Joi.object({
+    secret_key: Joi.string().trim().allow(""),
+    publishable_key: Joi.string().trim().allow(""),
+  }).min(1),
+};
+
+const updateStripeWebhookSecret = {
+  body: Joi.object({
+    webhook_secret: Joi.string().trim().min(1).required(),
+  }),
+};
+
+// Each field is independently optional (e.g. update just the From name
+// without re-entering the password) — pass: "" clears previously-saved
+// credentials entirely (see smtp.keys.service.js#updateSmtpCredentials).
+const updateSmtpCredentials = {
+  body: Joi.object({
+    host: Joi.string().trim().allow("", null),
+    port: Joi.number().integer().min(1).max(65535).allow(null),
+    user: Joi.string().trim().allow("", null),
+    pass: Joi.string().allow(""),
+    from_name: Joi.string().trim().allow("", null),
+    from_email: Joi.string().trim().lowercase().email().allow("", null),
+  }).min(1),
+};
+
+module.exports = { updateSettings, updateStripeKeys, updateStripeWebhookSecret, updateSmtpCredentials };

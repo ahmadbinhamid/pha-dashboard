@@ -609,17 +609,14 @@ async function createRefund(orderId, body, userId, tenantId) {
 // duplicate refund. Every create call sets metadata.refund_id — checking
 // Stripe's own refund list for this payment intent and matching on that
 // BEFORE ever creating one recovers the lost id in exactly that case.
-async function findExistingStripeRefund(stripe, paymentIntentId, refundId, stripeAccount) {
+async function findExistingStripeRefund(stripe, paymentIntentId, refundId) {
   // A single .list({ limit: 100 }) call only returns page 1 — on a payment
   // intent with more than 100 refunds (a busy order over its lifetime),
   // this refund_id could sit on a later page, findExistingStripeRefund
   // would wrongly return null, and settleRefund would create a genuine
   // duplicate at Stripe. The Stripe SDK's async iterator walks every page
   // automatically (auto-pagination) — use that instead of a single .list().
-  for await (const r of stripe.refunds.list(
-    { payment_intent: paymentIntentId, limit: 100 },
-    { stripeAccount },
-  )) {
+  for await (const r of stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 })) {
     if (r.metadata?.refund_id === String(refundId)) return r;
   }
   return null;
@@ -631,9 +628,8 @@ async function settleRefund(refund) {
     .filter((i) => i !== -1);
 
   if (stripeAllocationIndexes.length > 0) {
-    const { getStripeClient } = require("./stripe/stripe.client.service");
-    const Tenant = require("../models/Tenant");
-    const stripe = getStripeClient();
+    const stripeKeysService = require("./stripe/stripe.keys.service");
+    const stripe = await stripeKeysService.getStripeClient(refund.tenant_id);
 
     // Batched, not per-iteration — the lock no longer covers this loop, but
     // there's still no reason to run N separate Payment queries.
@@ -641,8 +637,6 @@ async function settleRefund(refund) {
     const payments = await Payment.find({ _id: { $in: paymentIds } });
     const paymentById = new Map(payments.map((p) => [String(p._id), p]));
     const order = await Order.findById(refund.order).select("order_number");
-    const tenant = await Tenant.findById(refund.tenant_id);
-    const stripeAccount = tenant?.stripe_account_id;
 
     for (const i of stripeAllocationIndexes) {
       const alloc = refund.payment_allocations[i];
@@ -653,12 +647,7 @@ async function settleRefund(refund) {
         // refund_id before creating a new one — see findExistingStripeRefund's
         // own comment on why the idempotency key below isn't enough on its
         // own for a resume that happens more than 24h later.
-        const existing = await findExistingStripeRefund(
-          stripe,
-          payment.stripe_payment_intent_id,
-          refund._id,
-          stripeAccount,
-        );
+        const existing = await findExistingStripeRefund(stripe, payment.stripe_payment_intent_id, refund._id);
         if (existing) {
           refund.payment_allocations[i].stripe_refund_id = existing.id;
           continue;
@@ -675,7 +664,7 @@ async function settleRefund(refund) {
               order_number: order?.order_number,
             },
           },
-          { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}`, stripeAccount },
+          { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}` },
         );
         refund.payment_allocations[i].stripe_refund_id = stripeRefund.id;
       } catch (err) {

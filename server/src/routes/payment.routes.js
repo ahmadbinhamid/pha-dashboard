@@ -15,7 +15,8 @@ router.post("/create-intent", resolveGuestTenant(), validate(v.createIntent), as
 // ── Stripe webhook — no JWT auth (Stripe calls this), signature-verified ────
 // Raw body is already captured globally for every request in app.js
 // (express.json({ verify })), exactly like the eBay webhook — no express.raw()
-// needed on this route specifically.
+// needed on this route specifically. BYOK: one shared URL for every tenant,
+// resolved via the opaque ?wt= query param (see payment.controller.js).
 router.post("/webhook", asyncHandler(ctrl.handleWebhook));
 
 // ── Admin ─────────────────────────────────────────────────────────────────

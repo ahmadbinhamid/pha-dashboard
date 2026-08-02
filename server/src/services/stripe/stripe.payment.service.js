@@ -2,7 +2,7 @@
 
 const Payment = require("../../models/Payment");
 const Tenant = require("../../models/Tenant");
-const { getStripeClient } = require("./stripe.client.service");
+const stripeKeysService = require("./stripe.keys.service");
 const { getTotalPaidForOrder } = require("../payment.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
@@ -21,12 +21,12 @@ async function createPaymentIntentForOrder(order) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
   }
 
-  const stripe = getStripeClient();
   const tenant = await Tenant.findById(order.tenant_id);
-  if (!tenant?.stripe_account_id) {
-    throw Object.assign(new Error("This store has not connected a Stripe account yet"), { status: 409 });
+  if (!tenant?.stripe_publishable_key) {
+    throw Object.assign(new Error("This store has not added its Stripe keys yet"), { status: 409 });
   }
-  const stripeAccount = tenant.stripe_account_id;
+  const stripe = await stripeKeysService.getStripeClient(order.tenant_id);
+  const publishableKey = tenant.stripe_publishable_key;
 
   const totalPaidCents = await getTotalPaidForOrder(order._id);
   const remainingCents = order.total - totalPaidCents;
@@ -42,9 +42,9 @@ async function createPaymentIntentForOrder(order) {
     [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.REQUIRES_ACTION].includes(payment.status)
   ) {
     if (payment.amount === remainingCents) {
-      const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { stripeAccount });
+      const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
       if (!["canceled", "succeeded"].includes(intent.status)) {
-        return { payment, client_secret: intent.client_secret, stripe_account_id: stripeAccount };
+        return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
       }
     } else {
       // The outstanding balance changed since this intent was created (e.g.
@@ -52,7 +52,7 @@ async function createPaymentIntentForOrder(order) {
       // page open) — cancel it rather than let them pay a stale amount, and
       // fall through to mint a fresh intent for the correct remainder.
       try {
-        await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id, { stripeAccount });
+        await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
       } catch (err) {
         if (err.code !== "payment_intent_unexpected_state") throw err;
         logger.warn(
@@ -75,7 +75,7 @@ async function createPaymentIntentForOrder(order) {
     // Scoped to the remaining balance, not just the order — a stale-amount
     // cancel-and-recreate (above) must not collide with the prior attempt's
     // idempotency key, since Stripe rejects reusing a key with different params.
-    { idempotencyKey: `order_${order._id.toString()}_create_intent_${remainingCents}`, stripeAccount },
+    { idempotencyKey: `order_${order._id.toString()}_create_intent_${remainingCents}` },
   );
 
   try {
@@ -101,10 +101,10 @@ async function createPaymentIntentForOrder(order) {
   await order.save();
 
   // client_secret is returned here only — never persisted to Mongo.
-  // stripe_account_id (the tenant's Connect account) isn't secret — the
-  // caller needs it to initialize Stripe.js in the right account context
-  // (loadStripe(pk, { stripeAccount })), or confirming this intent fails.
-  return { payment, client_secret: intent.client_secret, stripe_account_id: stripeAccount };
+  // stripe_publishable_key (this tenant's own, not secret) is what the
+  // caller needs to initialize Stripe.js (loadStripe(publishableKey)) to
+  // confirm this intent — BYOK means no Connect account-context is needed.
+  return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
 }
 
 // Builds a link to the shared, platform-hosted payment page (lives in this

@@ -5,8 +5,7 @@
 
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
-const Tenant = require("../../models/Tenant");
-const { getStripeClient } = require("./stripe.client.service");
+const stripeKeysService = require("./stripe.keys.service");
 const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { logger } = require("../../loaders/logging");
@@ -28,14 +27,15 @@ async function cleanupAbandonedOrders() {
     return summary;
   }
 
-  const stripe = getStripeClient();
   // Cached per run — many abandoned orders typically belong to the same
-  // handful of tenants, no need to re-fetch the Tenant doc for each one.
-  const tenantCache = new Map();
-  async function getTenantCached(tenantId) {
+  // handful of tenants, no need to re-resolve a Stripe client for each one
+  // (stripe.keys.service.js also caches internally, but this avoids the
+  // decrypt + Mongo round trip on every order too).
+  const clientCache = new Map();
+  async function getStripeClientCached(tenantId) {
     const key = String(tenantId);
-    if (!tenantCache.has(key)) tenantCache.set(key, await Tenant.findById(tenantId));
-    return tenantCache.get(key);
+    if (!clientCache.has(key)) clientCache.set(key, await stripeKeysService.getStripeClient(tenantId));
+    return clientCache.get(key);
   }
 
   for (const order of orders) {
@@ -50,11 +50,10 @@ async function cleanupAbandonedOrders() {
       }
 
       if (payment && payment.stripe_payment_intent_id) {
-        const tenant = await getTenantCached(order.tenant_id);
-        const stripeAccount = tenant?.stripe_account_id;
+        const stripe = await getStripeClientCached(order.tenant_id);
         let intentStatus = null;
         try {
-          const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id, { stripeAccount });
+          const cancelled = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
           intentStatus = cancelled.status;
         } catch (err) {
           if (err.code !== "payment_intent_unexpected_state") throw err;
@@ -62,7 +61,7 @@ async function cleanupAbandonedOrders() {
           // state — fetch the real status rather than guessing from the
           // error text, since "already succeeded" and "already canceled"
           // require opposite handling below.
-          const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { stripeAccount });
+          const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
           intentStatus = intent.status;
         }
 

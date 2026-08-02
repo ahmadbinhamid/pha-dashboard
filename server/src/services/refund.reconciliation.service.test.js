@@ -9,14 +9,13 @@
 // moving at Stripe — getReservingRefunds deliberately never age-bounds
 // PROCESSING for exactly this reason.
 //
-// Mocks stripe.client.service#getStripeClient via node:test's built-in
-// mock support, since this needs to exercise a specific Stripe API failure
-// mode without a real Stripe account. The mock must be installed BEFORE
+// Mocks stripe.keys.service#getStripeClient via node:test's built-in mock
+// support, since this needs to exercise a specific Stripe API failure mode
+// without a real Stripe account. The mock must be installed BEFORE
 // refund.reconciliation.service.js (and, transitively,
-// stripe.webhook.service.js) are first required in this process — both
-// destructure `{ getStripeClient }` at their own module-load time, so the
-// mock has to already be in place on stripe.client.service's exports object
-// for that destructuring to pick it up.
+// stripe.webhook.service.js) are first required in this process — both call
+// stripeKeysService.getStripeClient at their own module-load/call time, so
+// the mock has to already be in place for that to pick it up.
 //
 // Needs a live Mongo connection — run with:
 //   node --test src/services/refund.reconciliation.service.test.js
@@ -30,14 +29,14 @@ const Order = require("../models/Order");
 const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
-const stripeClientService = require("./stripe/stripe.client.service");
+const stripeKeysService = require("./stripe/stripe.keys.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 
 test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouched and still reserving", async (t) => {
   await mongoose.connect(config.mongoUri);
 
   const transientError = Object.assign(new Error("Rate limited"), { code: "rate_limit" });
-  t.mock.method(stripeClientService, "getStripeClient", () => ({
+  t.mock.method(stripeKeysService, "getStripeClient", async () => ({
     refunds: {
       retrieve: async () => {
         throw transientError;
@@ -46,9 +45,8 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
   }));
 
   // Required only now — after the mock is installed — so its own (and
-  // stripe.webhook.service.js's) top-level `const { getStripeClient } =
-  // require(...)` destructuring captures the mocked function, not the real
-  // one.
+  // stripe.webhook.service.js's) calls to stripeKeysService.getStripeClient
+  // pick up the mocked function, not the real one.
   const { reconcileStuckRefunds } = require("./refund.reconciliation.service");
 
   const TEST_TENANT_ID = new mongoose.Types.ObjectId();

@@ -5,41 +5,49 @@
 // route (see routes wiring), raw-body signature check, and an atomic
 // unique-index "claim" collection (StripeProcessedEvent) instead of a
 // read-then-write existence check.
+//
+// BYOK — each tenant has their own Stripe account, so there is no shared
+// platform webhook endpoint anymore. The tenant is resolved from an opaque
+// `?wt=` token in the URL (payment.controller.js#handleWebhook, mirroring
+// ebay.controller.js's webhook redesign) BEFORE signature verification, so
+// the right tenant's own webhook secret can be used to verify it. Once
+// resolved, tenantId is the source of truth for every downstream call — no
+// more Connect-only event.account field to cross-check against.
 
 const Payment = require("../../models/Payment");
 const Order = require("../../models/Order");
 const Refund = require("../../models/Refund");
-const Tenant = require("../../models/Tenant");
 const StripeProcessedEvent = require("../../models/StripeProcessedEvent");
-const { getStripeClient } = require("./stripe.client.service");
+const stripeKeysService = require("./stripe.keys.service");
 const { syncOrderStock, DIRECTION } = require("../order-stock-sync.service");
 const { getTotalPaidForOrder } = require("../payment.service");
 const refundService = require("../refund.service");
 const emailService = require("../email/email.service");
+const { getCompanyProfile } = require("../tenantSettings.service");
 const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../../constants/payment.constants");
 const { ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
 const { derivePaymentStatus } = require("../../utils/paymentStatus");
-const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 
-function constructEvent(rawBody, signatureHeader) {
-  const stripe = getStripeClient();
-  return stripe.webhooks.constructEvent(rawBody, signatureHeader, config.stripe.webhookSecret);
+// Stripe.webhooks.constructEvent is a static helper (pure HMAC verification,
+// no API call) — no per-tenant Stripe client/API key needed here, just the
+// tenant's own webhook signing secret (resolved by the caller via the
+// opaque `wt` token in the URL).
+const Stripe = require("stripe");
+
+function constructEvent(rawBody, signatureHeader, webhookSecret) {
+  return Stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
 }
 
 // Atomic claim: throws E11000 if this event id was already processed, which
 // the caller treats as "already handled, no-op" rather than an error.
-async function claimEvent(event) {
+async function claimEvent(event, tenantId) {
   try {
-    // event.account is present for every event delivered for a connected
-    // account (this platform's Connect webhook endpoint) — absent for a
-    // platform-level event. Stored for debugging only, not idempotency
-    // (event.id is already globally unique across every connected account).
     await StripeProcessedEvent.create({
       stripe_event_id: event.id,
       type: event.type,
-      stripe_account_id: event.account || null,
+      tenant_id: tenantId,
     });
     return true;
   } catch (err) {
@@ -48,25 +56,23 @@ async function claimEvent(event) {
   }
 }
 
-async function handleEvent(event) {
-  const isNew = await claimEvent(event);
+async function handleEvent(event, tenantId) {
+  const isNew = await claimEvent(event, tenantId);
   if (!isNew) {
     logger.info(`[stripe.webhook] duplicate event ignored: ${event.id} (${event.type})`);
     return;
   }
 
-  const stripeAccountId = event.account || null;
-
   try {
     switch (event.type) {
       case "payment_intent.succeeded":
-        return await handlePaymentSucceeded(event.data.object, stripeAccountId);
+        return await handlePaymentSucceeded(event.data.object, tenantId);
       case "payment_intent.payment_failed":
         return await handlePaymentFailed(event.data.object);
       case "charge.refunded":
-        return await handleChargeRefunded(event.data.object, stripeAccountId);
+        return await handleChargeRefunded(event.data.object, tenantId);
       case "charge.refund.updated":
-        return await handleChargeRefundUpdated(event.data.object, stripeAccountId);
+        return await handleChargeRefundUpdated(event.data.object);
       default:
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
@@ -79,7 +85,7 @@ async function handleEvent(event) {
   }
 }
 
-async function handlePaymentSucceeded(intent, stripeAccountId) {
+async function handlePaymentSucceeded(intent, tenantId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: intent.id });
   if (!payment) {
     logger.error(`[stripe.webhook] payment_intent.succeeded for unknown intent ${intent.id}`);
@@ -97,15 +103,14 @@ async function handlePaymentSucceeded(intent, stripeAccountId) {
 
   // Defense-in-depth: the local Payment/Order lookup above is what actually
   // resolves which tenant this event belongs to (stripe_payment_intent_id is
-  // unique regardless of connected account) — this just confirms the
-  // resolved tenant's own connected account matches what Stripe says
-  // delivered the event, catching a misconfigured webhook or a future bug
+  // globally unique regardless of whose account it lives in) — this just
+  // confirms that matches the tenant whose webhook URL/secret Stripe
+  // delivered against, catching a misconfigured webhook or a future bug
   // before it can apply effects to the wrong tenant's order.
-  const tenant = await Tenant.findById(order.tenant_id);
-  if (stripeAccountId && tenant?.stripe_account_id && tenant.stripe_account_id !== stripeAccountId) {
+  if (String(order.tenant_id) !== String(tenantId)) {
     logger.error(
-      `[stripe.webhook] tenant mismatch on intent ${intent.id}: event.account=${stripeAccountId}, ` +
-        `resolved tenant's stripe_account_id=${tenant.stripe_account_id} — refusing to apply effects`,
+      `[stripe.webhook] tenant mismatch on intent ${intent.id}: webhook tenant=${tenantId}, ` +
+        `resolved order's tenant=${order.tenant_id} — refusing to apply effects`,
     );
     return;
   }
@@ -142,12 +147,8 @@ async function handlePaymentSucceeded(intent, stripeAccountId) {
   // on PaymentIntent) rather than nesting through `latest_charge` — Stripe
   // rejects "latest_charge.payment_method" as an unsupported expand path.
   // Never rely on the legacy `charges.data[]` shape either way.
-  const stripe = getStripeClient();
-  const fullIntent = await stripe.paymentIntents.retrieve(
-    intent.id,
-    { expand: ["payment_method"] },
-    { stripeAccount: stripeAccountId },
-  );
+  const stripe = await stripeKeysService.getStripeClient(tenantId);
+  const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
   const paymentMethod =
     fullIntent.payment_method && typeof fullIntent.payment_method === "object"
       ? fullIntent.payment_method
@@ -212,17 +213,22 @@ async function handlePaymentSucceeded(intent, stripeAccountId) {
   // anyway. Log and move on instead.
   try {
     const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+    const companyProfile = await getCompanyProfile(order.tenant_id);
     if (isPickup) {
       await emailService.sendOrderReceivedPickup({
         to: order.customer.email,
         name: order.customer.name,
         orderNumber: order.order_number,
+        companyProfile,
+        tenantId: order.tenant_id,
       });
     } else {
       await emailService.sendOrderConfirmation({
         to: order.customer.email,
         name: order.customer.name,
         orderNumber: order.order_number,
+        companyProfile,
+        tenantId: order.tenant_id,
       });
     }
   } catch (err) {
@@ -276,7 +282,7 @@ function mapStripeReasonToOurs(stripeReason) {
 // event fires once per CHARGE, potentially covering several refunds at
 // once. handleChargeRefundUpdated (§4.2) is the leaner, non-listing path
 // for a single refund's own status transitions once it exists.
-async function handleChargeRefunded(charge, stripeAccountId) {
+async function handleChargeRefunded(charge, tenantId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: charge.payment_intent });
   if (!payment) {
     logger.warn(`[stripe.webhook] charge.refunded for unknown intent ${charge.payment_intent}`);
@@ -286,11 +292,10 @@ async function handleChargeRefunded(charge, stripeAccountId) {
   const order = await Order.findById(payment.order);
   if (!order) return;
 
-  const tenant = await Tenant.findById(order.tenant_id);
-  if (stripeAccountId && tenant?.stripe_account_id && tenant.stripe_account_id !== stripeAccountId) {
+  if (String(order.tenant_id) !== String(tenantId)) {
     logger.error(
       `[stripe.webhook] tenant mismatch on charge.refunded for intent ${charge.payment_intent}: ` +
-        `event.account=${stripeAccountId}, resolved tenant's stripe_account_id=${tenant?.stripe_account_id} — refusing to apply effects`,
+        `webhook tenant=${tenantId}, resolved order's tenant=${order.tenant_id} — refusing to apply effects`,
     );
     return;
   }
@@ -302,11 +307,8 @@ async function handleChargeRefunded(charge, stripeAccountId) {
   // though our code is pinned to a version that (in the SDK docs) still
   // shows it. Never rely on optional sub-objects being present in webhook
   // payloads — re-fetch explicitly instead.
-  const stripe = getStripeClient();
-  const { data: stripeRefunds } = await stripe.refunds.list(
-    { payment_intent: charge.payment_intent },
-    { stripeAccount: stripeAccountId },
-  );
+  const stripe = await stripeKeysService.getStripeClient(tenantId);
+  const { data: stripeRefunds } = await stripe.refunds.list({ payment_intent: charge.payment_intent });
 
   for (const sr of stripeRefunds) {
     await reconcileStripeRefund(sr, payment, order);

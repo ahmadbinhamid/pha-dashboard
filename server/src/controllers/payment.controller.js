@@ -4,6 +4,7 @@ const orderService = require("../services/order.service");
 const paymentService = require("../services/payment.service");
 const { createPaymentIntentForOrder } = require("../services/stripe/stripe.payment.service");
 const { constructEvent, handleEvent } = require("../services/stripe/stripe.webhook.service");
+const stripeKeysService = require("../services/stripe/stripe.keys.service");
 const { logger } = require("../loaders/logging");
 const {
   success,
@@ -21,8 +22,8 @@ exports.createIntent = async (req, res) => {
     // read its total, or start a payment on someone else's order.
     const order = await orderService.getOrderForGuest(req.body.order_id, req.body.token, req.tenantId);
 
-    const { payment, client_secret, stripe_account_id } = await createPaymentIntentForOrder(order);
-    return created(res, { payment_id: payment._id, client_secret, stripe_account_id });
+    const { payment, client_secret, stripe_publishable_key } = await createPaymentIntentForOrder(order);
+    return created(res, { payment_id: payment._id, client_secret, stripe_publishable_key });
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);
@@ -53,12 +54,25 @@ exports.getPayment = async (req, res) => {
 // refundPayment/refundPaymentManual removed (refund-redesign-spec.md §9) —
 // use POST /order/:orderId/refunds (refund.controller.js#createRefund) instead.
 
+// BYOK — each tenant's own Stripe account delivers webhooks to this one
+// shared URL with their own opaque `?wt=` token appended (see
+// tenantSettings.controller.js#getStripeStatus for where a tenant gets this
+// URL to paste into their Stripe Dashboard), resolved here before signature
+// verification so the right tenant's own webhook secret gets used — mirrors
+// ebay.controller.js's handleWebhook.
 exports.handleWebhook = async (req, res) => {
+  const { wt } = req.query;
+  if (!wt) return badRequest(res, "Missing wt");
+
+  const resolved = await stripeKeysService.findByWebhookToken(wt);
+  if (!resolved || !resolved.webhookSecret) return notFound(res, "Webhook not configured");
+  const { tenant, webhookSecret } = resolved;
+
   const signature = req.headers["stripe-signature"];
 
   let event;
   try {
-    event = constructEvent(req.rawBody, signature);
+    event = constructEvent(req.rawBody, signature, webhookSecret);
   } catch (err) {
     logger.warn(`[payment.controller] Stripe signature verification failed: ${err.message}`);
     return badRequest(res, "Invalid signature");
@@ -80,7 +94,7 @@ exports.handleWebhook = async (req, res) => {
   // handful of DB writes' worth of wall-clock time (low hundreds of ms) —
   // accepted as-is at current volume rather than adding a claim-expiry sweep.
   try {
-    await handleEvent(event);
+    await handleEvent(event, tenant._id);
     return success(res, { received: true });
   } catch (err) {
     logger.error("[payment.controller] webhook processing error", {

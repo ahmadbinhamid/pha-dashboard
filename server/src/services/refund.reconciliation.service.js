@@ -29,10 +29,9 @@
 const Order = require("../models/Order");
 const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
-const Tenant = require("../models/Tenant");
 const refundService = require("./refund.service");
 const { reconcileStripeRefund, handleChargeRefundUpdated } = require("./stripe/stripe.webhook.service");
-const { getStripeClient } = require("./stripe/stripe.client.service");
+const stripeKeysService = require("./stripe/stripe.keys.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 const { PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { logger } = require("../loaders/logging");
@@ -51,8 +50,6 @@ async function reconcileStuckRefunds() {
     return summary;
   }
 
-  const stripe = getStripeClient();
-
   for (const refund of stuck) {
     try {
       if (refund.status === REFUND_STATUS.PENDING) {
@@ -63,15 +60,14 @@ async function reconcileStuckRefunds() {
 
       // status === PROCESSING
       const order = await Order.findById(refund.order);
-      const tenant = await Tenant.findById(refund.tenant_id);
-      const stripeAccount = tenant?.stripe_account_id;
+      const stripe = await stripeKeysService.getStripeClient(refund.tenant_id);
       let unresolved = false;
 
       for (const alloc of refund.payment_allocations) {
         if (alloc.provider !== PAYMENT_PROVIDER.STRIPE || alloc.settled) continue;
 
         try {
-          const sr = await stripe.refunds.retrieve(alloc.stripe_refund_id, { stripeAccount });
+          const sr = await stripe.refunds.retrieve(alloc.stripe_refund_id);
           if (sr.status === "succeeded") {
             const payment = await Payment.findById(alloc.payment);
             await reconcileStripeRefund(sr, payment, order);

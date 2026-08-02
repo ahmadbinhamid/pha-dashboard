@@ -31,7 +31,7 @@ const config = require("../../config");
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
 const Refund = require("../../models/Refund");
-const stripeClientService = require("../stripe/stripe.client.service");
+const stripeKeysService = require("../stripe/stripe.keys.service");
 const { ORDER_PAYMENT_STATUS } = require("../../constants/order.constants");
 
 test("handlePaymentSucceeded sets payment_status, not just the legacy status field", async (t) => {
@@ -54,7 +54,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
     response.then = (resolve) => resolve({ data: items });
     return response;
   }
-  t.mock.method(stripeClientService, "getStripeClient", () => ({
+  t.mock.method(stripeKeysService, "getStripeClient", async () => ({
     paymentIntents: {
       retrieve: async () => ({ payment_method: null }),
     },
@@ -127,18 +127,21 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
 
     // The real webhook handler, driven through the real dispatcher — not a
     // hand-set fixture and not calling the handler function directly.
-    await handleEvent({
-      id: `evt_paystatus_${suffix}`,
-      type: "payment_intent.succeeded",
-      data: {
-        object: {
-          id: intentId,
-          amount_received: UNIT_PRICE,
-          amount: UNIT_PRICE,
-          currency: "aud",
+    await handleEvent(
+      {
+        id: `evt_paystatus_${suffix}`,
+        type: "payment_intent.succeeded",
+        data: {
+          object: {
+            id: intentId,
+            amount_received: UNIT_PRICE,
+            amount: UNIT_PRICE,
+            currency: "aud",
+          },
         },
       },
-    });
+      TEST_TENANT_ID,
+    );
 
     await t.test("after the webhook: payment_status is PAID, not just the legacy status", async () => {
       const fresh = await Order.findById(order._id);

@@ -17,7 +17,7 @@ export const getGuestOrder = async (orderId: string, token: string) => {
 
 export const createGuestPaymentIntent = async (orderId: string, token: string) => {
   const { data } = await apiClient.post<
-    BeResponse<{ payment_id: string; client_secret: string; stripe_account_id: string }>
+    BeResponse<{ payment_id: string; client_secret: string; stripe_publishable_key: string }>
   >("/payment/create-intent", { order_id: orderId, token });
   return data;
 };

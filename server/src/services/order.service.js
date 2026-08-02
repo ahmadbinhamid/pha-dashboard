@@ -8,7 +8,6 @@ const Customer = require("../models/Customer");
 const Payment = require("../models/Payment");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
-const Tenant = require("../models/Tenant");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
@@ -27,6 +26,7 @@ const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
+const { getCompanyProfile } = require("./tenantSettings.service");
 
 // GST-inclusive AU retail pricing: GST component = price / 11, never added on top.
 const GST_DIVISOR = 11;
@@ -64,21 +64,6 @@ async function nextInvoiceNumber(tenantId) {
 
 function generateGuestAccessToken() {
   return crypto.randomBytes(32).toString("hex");
-}
-
-// Invoice PDF/email branding — replaces the old hardcoded company.constants.js.
-async function getCompanyProfile(tenantId) {
-  const tenant = await Tenant.findById(tenantId);
-  return {
-    company_name: tenant?.company_name || null,
-    abn: tenant?.abn || null,
-    phone: tenant?.phone || null,
-    email: tenant?.email || null,
-    bank_details: tenant?.bank_details || {},
-    pickup_location: tenant?.pickup_location || {},
-    warranty_text: tenant?.warranty_text || null,
-    legal_disclaimer_text: tenant?.legal_disclaimer_text || null,
-  };
 }
 
 // Re-derives price/availability from the DB for every line item — the
@@ -847,6 +832,8 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
       amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
       pdfBase64: pdfBuffer.toString("base64"),
       pdfFilename: `${order.order_number}-invoice.pdf`,
+      companyProfile,
+      tenantId: order.tenant_id,
     });
     return order;
   }
@@ -886,6 +873,8 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
       carrierName: order.carrier_name,
       pdfBase64,
       pdfFilename,
+      companyProfile,
+      tenantId: order.tenant_id,
     });
   } else {
     await emailService.sendOrderReadyForPickup({
@@ -895,6 +884,8 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
       pdfBase64,
       pdfFilename,
       pickupLocation: companyProfile.pickup_location,
+      companyProfile,
+      tenantId: order.tenant_id,
     });
   }
 
