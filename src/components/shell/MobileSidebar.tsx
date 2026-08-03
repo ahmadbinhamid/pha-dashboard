@@ -48,7 +48,6 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
-          <div className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-fg/40">Menu</div>
           <Suspense fallback={null}>
             <NavItemsList onItemClick={onClose} />
           </Suspense>

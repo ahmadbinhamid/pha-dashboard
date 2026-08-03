@@ -43,14 +43,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 pt-3">
-        <div
-          className={cn(
-            "mb-1.5 px-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-fg/35",
-            collapsed && "sr-only",
-          )}
-        >
-          Menu
-        </div>
         <Suspense fallback={null}>
           <NavItemsList collapsed={collapsed} />
         </Suspense>
