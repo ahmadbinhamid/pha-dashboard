@@ -29,13 +29,32 @@ app.set("trust proxy", true);
 app.use(requestId);
 app.use(helmet());
 const allowedOrigins = config.cors.allowedOrigins;
+// Every tenant gets its own payment host (<slug>.PAYMENT_LINK_DOMAIN, e.g.
+// parts-hub-australia.autopartspro.au — see buildPaymentBaseUrl), so a fixed
+// allowedOrigins list can never enumerate them all. Accept any subdomain of
+// the configured payment domain in addition to the explicit list.
+const paymentDomain = config.payment.linkDomain;
 app.use(
   cors({
     origin:
       allowedOrigins.length > 0
         ? (origin, cb) => {
             // Allow requests with no origin (curl, mobile apps, server-to-server)
-            if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+            if (!origin) return cb(null, true);
+            if (allowedOrigins.includes(origin)) return cb(null, true);
+            if (paymentDomain) {
+              try {
+                const { hostname, protocol } = new URL(origin);
+                if (
+                  protocol === "https:" &&
+                  (hostname === paymentDomain || hostname.endsWith(`.${paymentDomain}`))
+                ) {
+                  return cb(null, true);
+                }
+              } catch {
+                // malformed Origin header — fall through to rejection
+              }
+            }
             cb(new Error(`CORS: origin ${origin} not allowed`));
           }
         : true, // dev fallback: allow all
