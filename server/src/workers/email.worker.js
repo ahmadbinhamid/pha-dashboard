@@ -1,10 +1,17 @@
 // src/workers/email.worker.js
 
 require("dotenv").config();
+const { connectMongo } = require("../loaders/mongoose");
+require("../models/index"); // register all schemas before any populate() calls
 const { emailQueue } = require("../queues/email.queue");
 const { render } = require("../services/email/templateLoader");
 const { sendEmail } = require("../services/email/mailer");
 const { logger } = require("../loaders/logging");
+
+connectMongo().catch((err) => {
+  logger.error(`[emailWorker] MongoDB connection failed: ${err.message}`);
+  process.exit(1);
+});
 
 // NOTE: use the *named* processor: 'send'
 emailQueue.process("send", 5, async (job) => {
