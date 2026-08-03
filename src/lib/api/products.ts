@@ -16,6 +16,7 @@ export interface ProductListParams {
   status?: string;
   categories?: string;
   type?: string;
+  stock?: string;
 }
 
 export interface ProductListData {

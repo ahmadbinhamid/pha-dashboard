@@ -12,6 +12,7 @@ export interface ListingListParams {
   product?: string;
   state?: string;
   sync_status?: string;
+  search?: string;
 }
 
 // Only passed through while the tenant's eBay connection is in sandbox mode

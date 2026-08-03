@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import {
@@ -24,7 +25,7 @@ import type { Product } from "@/types/product";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { ProductPickerModal } from "@/components/listings/ProductPickerModal";
 import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMenu";
-import { Plus, Cloud } from "lucide-react";
+import { Plus, Cloud, Search } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export default function ListingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // URL-synced state (survives refresh/back navigation)
+  const search = searchParams.get("search") ?? "";
   const syncStatus = searchParams.get("sync_status") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
@@ -54,6 +56,23 @@ export default function ListingsPage() {
   // Local UI state (doesn't need to be in URL)
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EbayListing | null>(null);
+  const [inputValue, setInputValue] = useState(search);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchParams((prev) => {
+        const current = prev.get("search") ?? "";
+        if (inputValue === current) return prev; // no change — don't reset page
+        const next = new URLSearchParams(prev);
+        if (inputValue) next.set("search", inputValue);
+        else next.delete("search");
+        next.set("page", "1");
+        return next;
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearchParams]);
 
   const setSyncStatus = useCallback(
     (val: string) => {
@@ -92,9 +111,14 @@ export default function ListingsPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["listings", { page, limit, sync_status: syncStatus }],
+    queryKey: ["listings", { page, limit, sync_status: syncStatus, search }],
     queryFn: () =>
-      getListings({ page, limit, ...(syncStatus ? { sync_status: syncStatus } : {}) }),
+      getListings({
+        page,
+        limit,
+        ...(syncStatus ? { sync_status: syncStatus } : {}),
+        ...(search ? { search } : {}),
+      }),
   });
 
   const listings: EbayListing[] = (data?.data?.items ?? []) as EbayListing[];
@@ -151,10 +175,22 @@ export default function ListingsPage() {
       <Card>
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <FilterSelect options={SYNC_STATUS_FILTERS} value={syncStatus} onChange={setSyncStatus} />
-          {isFetching && !isLoading && (
-            <span className="text-xs text-fg/40">Updating…</span>
-          )}
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40 pointer-events-none" />
+            <Input
+              placeholder="Search listings…"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isFetching && !isLoading && (
+              <span className="text-xs text-fg/40">Updating…</span>
+            )}
+            <FilterSelect options={SYNC_STATUS_FILTERS} value={syncStatus} onChange={setSyncStatus} />
+          </div>
         </div>
 
         {/* Table */}

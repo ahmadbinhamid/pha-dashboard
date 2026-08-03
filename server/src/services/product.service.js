@@ -11,7 +11,7 @@ const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
 const { withAttachmentUrls } = require("../utils/attachment");
 const { getTotalStockForProduct } = require("./inventory.service");
-const { STOCK_STATUS } = require("../constants/product.constants");
+const { STOCK_STATUS, STOCK_LOW_THRESHOLD } = require("../constants/product.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
@@ -129,7 +129,11 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
 
   if (stockFilter === STOCK_STATUS.IN_STOCK) {
     basePipeline.push({
-      $match: { $or: [{ stock_control: false }, { stock_count: { $gt: 0 } }] },
+      $match: { $or: [{ stock_control: false }, { stock_count: { $gt: STOCK_LOW_THRESHOLD } }] },
+    });
+  } else if (stockFilter === STOCK_STATUS.LOW_STOCK) {
+    basePipeline.push({
+      $match: { stock_control: true, stock_count: { $gt: 0, $lte: STOCK_LOW_THRESHOLD } },
     });
   } else if (stockFilter === STOCK_STATUS.OUT_OF_STOCK) {
     basePipeline.push({

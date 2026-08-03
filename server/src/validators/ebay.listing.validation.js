@@ -8,6 +8,7 @@ const listListings = {
     product: Joi.string(),
     state: Joi.string().valid(...Object.values(LISTING_STATE)),
     sync_status: Joi.string().valid(...Object.values(LISTING_SYNC_STATUS)),
+    search: Joi.string().allow(""),
   }),
 };
 

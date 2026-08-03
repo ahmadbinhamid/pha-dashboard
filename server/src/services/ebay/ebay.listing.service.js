@@ -1,11 +1,13 @@
 // services/ebay/ebay.listing.service.js
 // CRUD operations for MarketplaceListing documents (eBay discriminator).
 
+const mongoose = require("mongoose");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const Product = require("../../models/Product");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
+const { escapeRegex } = require("../../utils/regex");
 
 // Production eBay item URLs are marketplace-specific; sandbox uses one shared
 // domain regardless of marketplace. Extend this map as new marketplaces are enabled.
@@ -132,29 +134,69 @@ async function getListingsByProduct(productId, tenantId) {
     .sort({ created_at: -1 });
 }
 
-async function listListings({ skip, limit, product, state, sync_status } = {}, tenantId, settings) {
-  const filter = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
-  if (product) filter.product = product;
-  if (state) filter.state = state;
-  if (sync_status) filter.sync_status = sync_status;
+// Aggregation (not .find()) because `search` must match against the
+// populated product's title/sku, which Mongoose .populate() can't filter on
+// — mirrors inventory.service.js's listInventory pattern.
+async function listListings({ skip, limit, product, state, sync_status, search } = {}, tenantId, settings) {
+  const match = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
+  if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
+  if (state) match.state = state;
+  if (sync_status) match.sync_status = sync_status;
 
-  const [items, total] = await Promise.all([
-    MarketplaceListing.find(filter)
-      .populate("product", "title slug sku price")
-      .populate("variant", "display_name sku")
-      .sort({ created_at: -1 })
-      .skip(skip)
-      .limit(limit),
-    MarketplaceListing.countDocuments(filter),
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: "products",
+        localField: "product",
+        foreignField: "_id",
+        as: "product",
+        pipeline: [{ $project: { title: 1, slug: 1, sku: 1, price: 1 } }],
+      },
+    },
+    { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "productvariants",
+        localField: "variant",
+        foreignField: "_id",
+        as: "variant",
+        pipeline: [{ $project: { display_name: 1, sku: 1 } }],
+      },
+    },
+    { $unwind: { path: "$variant", preserveNullAndEmptyArrays: true } },
+  ];
+
+  if (search) {
+    const re = new RegExp(escapeRegex(search.trim()), "i");
+    pipeline.push({
+      $match: {
+        $or: [
+          { "product.title": re },
+          { "product.sku": re },
+          { title_override: re },
+          { store_sku: re },
+          { "item_specifics.mpn": re },
+          { "item_specifics.brand": re },
+        ],
+      },
+    });
+  }
+
+  const countPipeline = [...pipeline, { $count: "total" }];
+  pipeline.push({ $sort: { created_at: -1 } }, { $skip: skip }, { $limit: limit });
+
+  const [items, countResult] = await Promise.all([
+    MarketplaceListing.aggregate(pipeline),
+    MarketplaceListing.aggregate(countPipeline),
   ]);
 
-  const shapedItems = items.map((item) => {
-    const obj = item.toJSON();
-    obj.ebay_item_url = buildEbayItemUrl(item.external_listing_id, settings);
-    return obj;
-  });
+  const shapedItems = items.map((item) => ({
+    ...item,
+    ebay_item_url: buildEbayItemUrl(item.external_listing_id, settings),
+  }));
 
-  return { items: shapedItems, total };
+  return { items: shapedItems, total: countResult[0]?.total || 0 };
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────

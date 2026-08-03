@@ -33,6 +33,13 @@ const STATUS_FILTERS = [
   { label: "Draft", value: "draft" },
 ];
 
+const STOCK_FILTERS = [
+  { label: "All Stock", value: "" },
+  { label: "In Stock", value: "in_stock" },
+  { label: "Low Stock", value: "low_stock" },
+  { label: "Out of Stock", value: "out_of_stock" },
+];
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
   const navigate = useNavigate();
@@ -42,6 +49,7 @@ export default function ProductsPage() {
 
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
+  const stock = searchParams.get("stock") ?? "";
   const categories = searchParams.get("categories") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
@@ -72,6 +80,19 @@ export default function ProductsPage() {
         const next = new URLSearchParams(prev);
         if (val) next.set("status", val);
         else next.delete("status");
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const setStock = useCallback(
+    (val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set("stock", val);
+        else next.delete("stock");
         next.set("page", "1");
         return next;
       });
@@ -116,8 +137,8 @@ export default function ProductsPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", { search, status, categories, page, limit }],
-    queryFn: () => getProducts({ search, status, categories, page, limit }),
+    queryKey: ["products", { search, status, stock, categories, page, limit }],
+    queryFn: () => getProducts({ search, status, stock, categories, page, limit }),
   });
 
   const { data: categoriesRes } = useQuery({
@@ -212,6 +233,7 @@ export default function ProductsPage() {
               <span className="text-xs text-fg/40">Updating…</span>
             )}
             <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
+            <FilterSelect options={STOCK_FILTERS} value={stock} onChange={setStock} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}

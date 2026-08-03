@@ -48,11 +48,11 @@ exports.getListing = async (req, res) => {
 exports.getListings = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
-    const { product, state, sync_status } = req.query;
+    const { product, state, sync_status, search } = req.query;
     const settings = await settingsService.getSettings(req.tenantId);
 
     const { items, total } = await listingService.listListings(
-      { skip, limit, product, state, sync_status },
+      { skip, limit, product, state, sync_status, search },
       req.tenantId,
       settings,
     );

@@ -137,7 +137,7 @@ const listProducts = {
       .valid(...Object.values(PRODUCT_SORT), "")
       .default(""),
     stock: Joi.string()
-      .valid(STOCK_STATUS.IN_STOCK, STOCK_STATUS.OUT_OF_STOCK, "")
+      .valid(STOCK_STATUS.IN_STOCK, STOCK_STATUS.LOW_STOCK, STOCK_STATUS.OUT_OF_STOCK, "")
       .default(""),
     condition: Joi.string()
       .valid(...Object.values(PRODUCT_CONDITION), "")
