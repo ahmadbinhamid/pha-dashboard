@@ -65,8 +65,8 @@ JWT_EXPIRES_IN=2h          # was 1d; shrinks token exposure window. No refresh-t
 STRIPE_DEV_WEBHOOK_SECRET=  # LEAVE UNSET/BLANK in production. Dev-only fallback for testing
                             # webhooks locally with `stripe listen` — must never be set here,
                             # or it becomes a second valid signature production would accept.
-PAYMENT_LINK_DOMAIN=partshubaustralia.com.au  # New — apex domain payment links are built
-                            # under (payment.<this>, or <tenant-slug>.<this> per tenant, see
+PAYMENT_LINK_DOMAIN=autopartspro.au  # apex domain payment links are built under
+                            # (payment.<this>, or <tenant-slug>.<this> per tenant, see
                             # Tenant.payment_domain_mode). Requires the DNS + cert work below
                             # BEFORE this deploy's nginx rebuild, or nginx won't start at all.
 EBAY_API_BASE_URL=          # Now left blank — was pinned to sandbox, which forced EVERY
@@ -77,16 +77,16 @@ ALERTS_TO=                  # Still blank — set to whatever inbox should get p
                             # MongoDB connection failure (the only thing that triggers it).
 ```
 
-**Payment link domain — DNS + cert, do this before step 4:**
-DNS is already done — GoDaddy zone for `autopartspro.au` has `A @`, `A app`, `A payment`, and `A *` all pointed at `34.116.109.117`. What's still needed is TLS: `nginx/nginx.conf` now has server blocks for `app.autopartspro.au` (cert at `/etc/letsencrypt/live/app.autopartspro.au/`) and `payment.autopartspro.au` + wildcard `*.autopartspro.au` (cert at `/etc/letsencrypt/live/wildcard.autopartspro.au/`). Nginx refuses to start if any `ssl_certificate` file it references is missing — since this is the *same* nginx.conf serving the storefront and legacy admin blocks too, a missing cert takes the whole site down, not just the new domain.
+**Payment link domain — DNS + cert. Status: done, both certs issued, deploy already happened.**
+DNS: GoDaddy zone for `autopartspro.au` has `A @`, `A app`, `A payment`, and `A *` all pointed at `34.116.109.117`.
 
-1. Issue a cert for `app.autopartspro.au` (regular HTTP-01 is fine, it's not a wildcard) — e.g. `certbot certonly --nginx -d app.autopartspro.au`.
-2. Issue a wildcard cert via DNS-01 challenge for `payment.`/`*.` (HTTP-01 cannot validate a wildcard) — e.g. `certbot certonly --manual --preferred-challenges dns -d '*.autopartspro.au' -d autopartspro.au --cert-name wildcard.autopartspro.au`, using whatever ACME method your DNS provider supports (`--dns-<provider>` plugin if available, avoids the manual TXT-record dance).
-3. Confirm both land at the exact paths `nginx.conf` expects — adjust the `--cert-name` above or the paths in `nginx.conf` to match, whichever is easier on your setup.
-4. Set up renewal (`certbot renew` cron/systemd timer) for both — the wildcard via DNS-01 still expires every ~90 days same as any other cert.
-5. The bare `autopartspro.au` apex (landing page) has its DNS `A` record but **no nginx server block yet** — out of scope here since it's not part of the dashboard; needs its own block (or separate deploy) before it'll actually serve anything.
+Certs issued 2026-08-03, both expire **2026-11-01**:
+- `app.autopartspro.au` — issued via `certbot certonly --standalone` (had to `docker compose stop nginx` first to free port 80, then `docker compose up -d nginx` after).
+- `wildcard.autopartspro.au` (covers `payment.` + `*.`) — issued via `certbot certonly --manual --preferred-challenges dns`, two `_acme-challenge` TXT records added manually in GoDaddy.
 
-Only then proceed to step 4 and rebuild the `nginx` container — a `docker compose config` / `nginx -t` dry run first is worth it given the shared-blast-radius risk above.
+⚠️ **Neither cert auto-renews as issued** — confirmed via `certbot renew --dry-run` (fails on both: standalone needs port 80 free, which docker nginx permanently occupies; manual needs `--manual-auth-hook`, none provided). The `certbot-dns-godaddy` plugin is already installed on the server (`pip3 show certbot-dns-godaddy` confirms it, `certbot plugins` lists `dns-godaddy`) but not yet wired up with real GoDaddy API credentials or used to reissue either cert. **To do before ~October 2026:** get a GoDaddy Production API key ([developer.godaddy.com/keys](https://developer.godaddy.com/keys)), save to `/etc/letsencrypt/godaddy/credentials.ini`, then reissue both via `certbot certonly --dns-godaddy --dns-godaddy-credentials ... --force-renewal` (same `--cert-name`s as above) — this makes both fully unattended via the existing certbot systemd timer. Until then, redoing the manual DNS-01 dance by hand before expiry is the fallback.
+
+The bare `autopartspro.au` apex (landing page) has its DNS `A` record but **no nginx server block** — out of scope, not part of the dashboard.
 
 **Leave unchanged:** `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (platform mailbox, still used for OTP/password-reset/alerts).
 
