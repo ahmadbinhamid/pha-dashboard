@@ -3,9 +3,22 @@
 const Tenant = require("../models/Tenant");
 const stripeKeysService = require("./stripe/stripe.keys.service");
 const smtpKeysService = require("./email/smtp.keys.service");
+const { buildPaymentBaseUrl } = require("./stripe/stripe.payment.service");
+const { PAYMENT_DOMAIN_MODE } = require("../constants/tenant.constants");
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
+}
+
+// Lets the settings UI show "your links will look like ..." for both modes
+// without hardcoding PAYMENT_LINK_DOMAIN client-side — same builder the
+// actual payment link uses (stripe.payment.service.js#buildPaymentBaseUrl),
+// just called once per mode instead of against the tenant's saved choice.
+function getPaymentLinkPreview(tenant) {
+  return {
+    default: `${buildPaymentBaseUrl({ payment_domain_mode: PAYMENT_DOMAIN_MODE.DEFAULT })}/pay/:orderId`,
+    vendor_slug: `${buildPaymentBaseUrl({ slug: tenant.slug, payment_domain_mode: PAYMENT_DOMAIN_MODE.VENDOR_SLUG })}/pay/:orderId`,
+  };
 }
 
 async function getTenant(tenantId) {
@@ -29,6 +42,7 @@ async function updateTenantProfile(
     favicon_url,
     brand_colour,
     accent_colour,
+    payment_domain_mode,
   },
 ) {
   const tenant = await getTenant(tenantId);
@@ -45,6 +59,7 @@ async function updateTenantProfile(
   if (favicon_url !== undefined) tenant.favicon_url = favicon_url;
   if (brand_colour !== undefined) tenant.brand_colour = brand_colour;
   if (accent_colour !== undefined) tenant.accent_colour = accent_colour;
+  if (payment_domain_mode !== undefined) tenant.payment_domain_mode = payment_domain_mode;
 
   await tenant.save();
   return tenant;
@@ -103,6 +118,7 @@ async function getSmtpStatus(tenantId) {
 module.exports = {
   getTenant,
   getCompanyProfile,
+  getPaymentLinkPreview,
   updateTenantProfile,
   updateStripeKeys,
   getStripeStatus,

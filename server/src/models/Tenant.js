@@ -5,6 +5,7 @@ const { buildSchema } = require("./base.model");
 const {
   TENANT_STATUS,
   CONNECTION_STATUS,
+  PAYMENT_DOMAIN_MODE,
 } = require("../constants/tenant.constants");
 
 const bankDetailsSchema = new Schema(
@@ -48,6 +49,15 @@ const tenantSchema = buildSchema({
   pickup_location: { type: pickupLocationSchema, default: () => ({}) },
   warranty_text: { type: String, default: null },
   legal_disclaimer_text: { type: String, default: null },
+
+  // Which host generatePaymentLink/checkout links go out under — see
+  // PAYMENT_DOMAIN_MODE. VENDOR_SLUG requires `slug` to double as a public
+  // DNS label, which it already is (lowercase, unique, url-safe by convention).
+  payment_domain_mode: {
+    type: String,
+    enum: Object.values(PAYMENT_DOMAIN_MODE),
+    default: PAYMENT_DOMAIN_MODE.DEFAULT,
+  },
 
   // Branding — shown on invoices, storefront, and customer emails. Stored as
   // plain URLs (uploaded once via the shared /attachment endpoint, then

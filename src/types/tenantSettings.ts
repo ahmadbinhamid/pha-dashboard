@@ -16,6 +16,14 @@ export interface PickupLocation {
 // (Stripe keys, SMTP) — mirrors CONNECTION_STATUS in tenant.constants.js.
 export type ConnectionStatus = "not_connected" | "connected" | "error";
 
+// Mirrors PAYMENT_DOMAIN_MODE in tenant.constants.js.
+export type PaymentDomainMode = "default" | "vendor_slug";
+
+export interface PaymentLinkPreview {
+  default: string;
+  vendor_slug: string;
+}
+
 export interface TenantSettings {
   _id: string;
   name: string;
@@ -34,6 +42,10 @@ export interface TenantSettings {
   favicon_url: string | null;
   brand_colour: string;
   accent_colour: string;
+  payment_domain_mode: PaymentDomainMode;
+  // Sample URLs for both modes, built server-side from PAYMENT_LINK_DOMAIN —
+  // not itself saved, just returned alongside settings for the picker's preview.
+  payment_link_preview: PaymentLinkPreview;
   // BYOK — the secret key itself is never returned to the client (select:
   // false on the backend); only what's safe/useful to show in Settings.
   stripe_publishable_key: string | null;
@@ -59,6 +71,7 @@ export type UpdateTenantSettingsPayload = Partial<
     | "favicon_url"
     | "brand_colour"
     | "accent_colour"
+    | "payment_domain_mode"
   >
 >;
 

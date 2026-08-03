@@ -29,6 +29,7 @@ import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import BusinessInfoPage from "@/pages/erp/settings/BusinessInfoPage";
 import PaymentAccountPage from "@/pages/erp/settings/PaymentAccountPage";
+import PaymentSettingsPage from "@/pages/erp/settings/PaymentSettingsPage";
 import EmailSettingsPage from "@/pages/erp/settings/EmailSettingsPage";
 import EbaySettingsPage from "@/pages/erp/settings/EbaySettingsPage";
 import PayOrderPage from "@/pages/PayOrderPage";
@@ -102,6 +103,7 @@ export default function App() {
               <Route index element={<Navigate to="/settings/business-info" replace />} />
               <Route path="business-info" element={<BusinessInfoPage />} />
               <Route path="payment-account" element={<PaymentAccountPage />} />
+              <Route path="payment-settings" element={<PaymentSettingsPage />} />
               <Route path="email" element={<EmailSettingsPage />} />
               <Route path="ebay" element={<EbaySettingsPage />} />
             </Route>

@@ -32,6 +32,7 @@ const updateSettings = {
     favicon_url: Joi.string().trim().uri().allow("", null),
     brand_colour: hexColour.allow("", null),
     accent_colour: hexColour.allow("", null),
+    payment_domain_mode: Joi.string().valid("default", "vendor_slug"),
   }),
 };
 

@@ -70,6 +70,16 @@ const config = {
     storefrontUrl: get("STOREFRONT_URL", "http://localhost:5174"),
   },
 
+  payment: {
+    // Apex domain payment links are built under — "payment.<domain>" for
+    // tenants on PAYMENT_DOMAIN_MODE.DEFAULT, "<tenant-slug>.<domain>" for
+    // VENDOR_SLUG (see stripe.payment.service.js#buildPaymentBaseUrl). Both
+    // hosts need DNS (a wildcard covers VENDOR_SLUG) and TLS pointed at the
+    // same nginx/backend as CLIENT_URL — see nginx/nginx.conf. Left unset in
+    // local dev, where every payment link just falls back to CLIENT_URL.
+    linkDomain: get("PAYMENT_LINK_DOMAIN", null),
+  },
+
   cors: {
     // comma-separated list like: http://localhost:3000,https://staging.example.com
     allowedOrigins: (get("CORS_ALLOWED_ORIGINS", "") || "")

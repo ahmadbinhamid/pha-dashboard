@@ -6,7 +6,8 @@ const { success, notFound, requestfailure, systemfailure } = require("../utils/h
 exports.getSettings = async (req, res) => {
   try {
     const tenant = await tenantSettingsService.getTenant(req.tenantId);
-    return success(res, tenant);
+    const payment_link_preview = tenantSettingsService.getPaymentLinkPreview(tenant);
+    return success(res, { ...tenant.toObject(), payment_link_preview });
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     return systemfailure(res, err);
@@ -16,7 +17,8 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
   try {
     const tenant = await tenantSettingsService.updateTenantProfile(req.tenantId, req.body);
-    return success(res, tenant, "Settings updated");
+    const payment_link_preview = tenantSettingsService.getPaymentLinkPreview(tenant);
+    return success(res, { ...tenant.toObject(), payment_link_preview }, "Settings updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);

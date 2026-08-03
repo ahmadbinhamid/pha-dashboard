@@ -6,6 +6,7 @@ const stripeKeysService = require("./stripe.keys.service");
 const { getTotalPaidForOrder } = require("../payment.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
+const { PAYMENT_DOMAIN_MODE } = require("../../constants/tenant.constants");
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 
@@ -107,6 +108,21 @@ async function createPaymentIntentForOrder(order) {
   return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
 }
 
+// Same dashboard page (/pay/:orderId) either way — this only changes the
+// host in the URL bar/email, per the tenant's payment_domain_mode. VENDOR_SLUG
+// falls back to DEFAULT's shared host if PAYMENT_LINK_DOMAIN isn't set
+// (local dev) or the tenant somehow has no slug yet.
+function buildPaymentBaseUrl(tenant) {
+  const domain = config.payment.linkDomain;
+  if (!domain) return config.emailBrand.clientUrl;
+
+  const host =
+    tenant?.payment_domain_mode === PAYMENT_DOMAIN_MODE.VENDOR_SLUG && tenant.slug
+      ? `${tenant.slug}.${domain}`
+      : `payment.${domain}`;
+  return `https://${host}`;
+}
+
 // Builds a link to the shared, platform-hosted payment page (lives in this
 // dashboard app at /pay/:orderId — NOT any tenant's own storefront, since a
 // payment link is just "pay this specific amount", not a shopping
@@ -119,7 +135,7 @@ async function createPaymentIntentForOrder(order) {
 // webhook handling — the single source of truth for turning a Stripe
 // payment into a paid order, regardless of whether the order came from a
 // tenant's storefront or this admin-generated link.
-function createPaymentLinkForOrder(order) {
+function createPaymentLinkForOrder(order, tenant) {
   if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
   }
@@ -127,8 +143,8 @@ function createPaymentLinkForOrder(order) {
     throw Object.assign(new Error("This order is missing its guest access token"), { status: 500 });
   }
 
-  const url = `${config.emailBrand.clientUrl}/pay/${order._id}?token=${order.guest_access_token}`;
+  const url = `${buildPaymentBaseUrl(tenant)}/pay/${order._id}?token=${order.guest_access_token}`;
   return { url };
 }
 
-module.exports = { createPaymentIntentForOrder, createPaymentLinkForOrder };
+module.exports = { createPaymentIntentForOrder, createPaymentLinkForOrder, buildPaymentBaseUrl };

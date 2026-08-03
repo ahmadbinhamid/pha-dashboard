@@ -102,7 +102,7 @@ exports.generatePaymentLink = async (req, res) => {
     // +guest_access_token: select:false by default — needed to build the link.
     const order = await Order.findOne({ _id: req.params.id, tenant_id: req.tenantId }).select("+guest_access_token");
     if (!order) return notFound(res, "Order not found");
-    const { url } = createPaymentLinkForOrder(order);
+    const { url } = createPaymentLinkForOrder(order, req.tenant);
     return success(res, { url });
   } catch (err) {
     if (err.status) return requestfailure(res, err);

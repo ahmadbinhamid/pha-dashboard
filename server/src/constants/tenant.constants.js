@@ -17,4 +17,14 @@ const CONNECTION_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-module.exports = { TENANT_STATUS, CONNECTION_STATUS };
+// Which host a tenant's payment/order links go out under — either the one
+// shared "payment.<domain>" page every tenant uses, or their own
+// "<slug>.<domain>" subdomain. Both resolve to the exact same dashboard
+// SPA/API (see nginx/nginx.conf) — this only changes what's in the URL bar
+// and email, not which page renders.
+const PAYMENT_DOMAIN_MODE = Object.freeze({
+  DEFAULT: "default",
+  VENDOR_SLUG: "vendor_slug",
+});
+
+module.exports = { TENANT_STATUS, CONNECTION_STATUS, PAYMENT_DOMAIN_MODE };
