@@ -433,6 +433,33 @@ async function adjustStockBySku(sku, delta, tenantId) {
   });
   if (!result) return null;
 
+  // Stamp MarketplaceListing.ebay_synced_quantity synchronously with the
+  // post-adjustment total, right here, instead of relying solely on the
+  // async sync_listing queue job (fanned out by adjustStock() above) to get
+  // around to it. That job can be delayed or exhaust its retries — and
+  // until it lands, this baseline stays at its pre-sale value. Since eBay
+  // has already decremented its own live quantity for this same sale, the
+  // next inventory-reconciliation poll (ebay.inventory-sync.service.js)
+  // would otherwise see live-quantity-vs-stale-baseline as a fresh
+  // "changed directly on eBay" drift and re-apply the same deduction again
+  // — repeating on every poll until the queue job finally catches up. This
+  // was found live as a real order's stock ticking down by 1 every cycle.
+  try {
+    const MarketplaceListing = require("../models/MarketplaceListing");
+    const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
+    await MarketplaceListing.updateOne(
+      {
+        tenant_id: tenantId,
+        product: result.productId,
+        variant: result.variantId || null,
+        platform: MARKETPLACE_PLATFORM.EBAY,
+      },
+      { $set: { ebay_synced_quantity: result.totalStockAfter } },
+    );
+  } catch (err) {
+    logger.warn(`[inventory.service] failed to update ebay_synced_quantity baseline for SKU ${sku}: ${err.message}`);
+  }
+
   return {
     productId: result.productId,
     variantId: result.variantId,

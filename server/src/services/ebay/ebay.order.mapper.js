@@ -70,6 +70,44 @@ function mapLineItem(item) {
   };
 }
 
+// eBay is documented to report lineItems[].total as the line's own
+// price/discount/tax — excluding shipping — but in practice some orders
+// (observed on Motors "freight"/calculated-shipping listings) report a
+// total that already folds the delivery cost in, which would otherwise
+// inflate that item's derived unit price by the shipping amount. eBay's
+// order-level pricingSummary.priceSubtotal is authoritative for what the
+// items themselves cost, so reconcile the per-line totals against it
+// whenever they disagree by more than incidental rounding.
+function reconcileLineItemTotals(lineItems, subtotalCents) {
+  if (!lineItems.length || subtotalCents == null) return;
+
+  const sumCents = lineItems.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
+  const diff = sumCents - subtotalCents;
+
+  // Rounding across N items can legitimately drift by ~1 cent per item —
+  // only reconcile when the mismatch is bigger than that.
+  if (Math.abs(diff) <= lineItems.length) return;
+
+  if (lineItems.length === 1) {
+    const [only] = lineItems;
+    only.unitPriceCents = Math.round(subtotalCents / only.quantity);
+    return;
+  }
+
+  // Multiple items: prorate the authoritative subtotal across items in
+  // proportion to their (mismatched) reported totals, rather than trust
+  // any single one of them.
+  let allocated = 0;
+  lineItems.forEach((li, idx) => {
+    const isLast = idx === lineItems.length - 1;
+    const itemTotal = isLast
+      ? subtotalCents - allocated
+      : Math.round((li.unitPriceCents * li.quantity * subtotalCents) / sumCents);
+    allocated += itemTotal;
+    li.unitPriceCents = Math.round(itemTotal / li.quantity);
+  });
+}
+
 // eBay's orderFulfillmentStatus/orderPaymentStatus -> our ORDER_STATUS.
 // Anything beyond "paid" vs "fulfilled" (refunds, partial refunds, disputes)
 // is explicitly out of scope for this phase — surfaced later if needed.
@@ -86,6 +124,11 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
   const subtotalCents = pricing.priceSubtotal?.value != null
     ? toCents(pricing.priceSubtotal.value)
     : lineItems.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
+
+  if (pricing.priceSubtotal?.value != null) {
+    reconcileLineItemTotals(lineItems, subtotalCents);
+  }
+
   const shippingCents = pricing.deliveryCost?.value != null ? toCents(pricing.deliveryCost.value) : 0;
   const totalCents = pricing.total?.value != null
     ? toCents(pricing.total.value)

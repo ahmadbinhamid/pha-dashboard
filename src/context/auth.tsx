@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { clearToken, getToken, setToken } from "@/lib/api/client";
 import { getProfile } from "@/lib/api/auth";
 import { clearCartStorage } from "@/context/cart";
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(getToken);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(() => !!getToken());
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!getToken()) return;
@@ -38,6 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Network errors, 500s, timeouts etc. should NOT log the user out —
         // the axios interceptor already handles the 401 → redirect case.
         if (err.status === 401) {
+          queryClient.clear();
           clearToken();
           clearCartStorage();
           clearOrderDraft();
@@ -48,19 +51,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setAuth = useCallback((user: AuthUser, token: string) => {
-    setToken(token);
-    setTokenState(token);
-    setUser(user);
-  }, []);
+  const setAuth = useCallback(
+    (user: AuthUser, token: string) => {
+      // The query client is a single app-wide instance shared across every
+      // tenant session — without clearing it here, logging in as a
+      // different tenant right after another one's session re-renders
+      // whatever tenant-scoped queries (orders, products, dashboard stats,
+      // ...) are still cached under the same query keys, until a manual
+      // page refresh rebuilds the client from scratch. Found live.
+      queryClient.clear();
+      setToken(token);
+      setTokenState(token);
+      setUser(user);
+    },
+    [queryClient],
+  );
 
   const logout = useCallback(() => {
+    queryClient.clear();
     clearToken();
     clearCartStorage();
     clearOrderDraft();
     setTokenState(null);
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
