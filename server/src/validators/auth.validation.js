@@ -35,6 +35,20 @@ const register = {
   }),
 };
 
+// Self-service signup — creates a BRAND NEW tenant (unlike `register` above,
+// which joins an existing one via tenant_slug). No tenant_slug here since
+// there isn't one yet; tenant.service.js#registerTenantWithAdmin derives it
+// from company_name.
+const registerTenant = {
+  body: Joi.object({
+    company_name: Joi.string().trim().min(2).max(100).required(),
+    first_name: Joi.string().trim().min(1).max(50).required(),
+    last_name: Joi.string().trim().min(1).max(50).required(),
+    email: Joi.string().trim().lowercase().email().required(),
+    password: Joi.string().min(6).max(128).required(),
+  }),
+};
+
 const verifyOTP = {
   body: Joi.object({
     email: Joi.string().trim().lowercase().email().required(),
@@ -78,6 +92,7 @@ module.exports = {
   login,
   changePassword,
   register,
+  registerTenant,
   verifyOTP,
   verifyAccount,
   forgotPassword,

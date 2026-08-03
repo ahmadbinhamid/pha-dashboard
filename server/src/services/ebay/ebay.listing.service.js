@@ -24,13 +24,15 @@ function buildEbayItemUrl(externalListingId, settings) {
   return `https://www.${domain}/itm/${externalListingId}`;
 }
 
-// Best-effort: adds each fitment row's make/model/model_code/year combo to the
-// shared VehicleModel catalog (covers custom values typed into the fitment
-// row Combobox) without letting a catalog write failure block the listing save.
-async function syncFitmentCatalog(fitment) {
+// Best-effort: adds each fitment row's make/model/model_code/year combo to
+// this tenant's OWN vehicle catalog (covers custom values typed into the
+// fitment row Combobox) without letting a catalog write failure block the
+// listing save. Never writes to the shared/global catalog — see
+// vehicle-model.service.js.
+async function syncFitmentCatalog(fitment, tenantId) {
   if (!Array.isArray(fitment) || fitment.length === 0) return;
   try {
-    await vehicleModelService.upsertVehicleModelsFromRows(fitment);
+    await vehicleModelService.upsertVehicleModelsFromRows(fitment, tenantId);
   } catch (err) {
     logger.warn(`[ebay.listing.service] failed to sync fitment catalog: ${err.message}`);
   }
@@ -106,7 +108,7 @@ async function createListing(payload, tenantId) {
     },
   });
 
-  await syncFitmentCatalog(fitment);
+  await syncFitmentCatalog(fitment, tenantId);
 
   return listing;
 }
@@ -203,7 +205,7 @@ async function updateListing(id, payload, tenantId) {
     delete update.item_specifics;
   }
 
-  if (update.fitment) await syncFitmentCatalog(update.fitment);
+  if (update.fitment) await syncFitmentCatalog(update.fitment, tenantId);
 
   return MarketplaceListing.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: update }, { new: true, strict: false })
     .populate("product", "title slug sku price brand mpn attachments vehicle")

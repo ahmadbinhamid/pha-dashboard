@@ -49,6 +49,17 @@ const paymentSchema = buildSchema({
   card_last4: { type: String, default: null },
   failure_reason: { type: String, default: null },
   paid_at: { type: Date, default: null },
+
+  // Set only after the order/stock side of handlePaymentSucceeded actually
+  // completes (stripe.webhook.service.js) — distinct from `status ===
+  // SUCCEEDED`, which is saved earlier. There's no DB transaction spanning
+  // the Payment and Order writes (this deployment runs standalone MongoDB,
+  // no replica set — Mongoose sessions aren't usable), so a failure between
+  // the two must be independently retryable: a webhook retry that finds
+  // status already SUCCEEDED but this still null resumes the order/stock
+  // update instead of short-circuiting as "already handled" with the order
+  // left stuck at pending_payment forever. Found live.
+  order_effects_applied_at: { type: Date, default: null },
 });
 
 paymentSchema.index({ order: 1 });

@@ -205,7 +205,14 @@ export function LoginCard() {
                   </span>
                 </Button>
 
-                <div className="pt-2 text-center text-xs text-fg/55">
+                <div className="text-center text-xs text-fg/55">
+                  Don&apos;t have an account?{" "}
+                  <Link href="/register" className="text-accent hover:underline">
+                    Sign up
+                  </Link>
+                </div>
+
+                <div className="text-center text-xs text-fg/55">
                   By continuing you agree to the{" "}
                   <Link href="#" className="text-fg/70 hover:underline">
                     Terms

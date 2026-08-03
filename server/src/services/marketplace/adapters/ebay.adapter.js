@@ -295,15 +295,25 @@ async function end(listing) {
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
-async function pushInventory(sku, quantity) {
-  const ids = await resolveSkuToIds(sku);
-  if (!ids) {
-    throw new Error(`[EbayAdapter] pushInventory: could not resolve SKU ${sku} to a product`);
+async function pushInventory(sku, quantity, tenantId) {
+  // tenantId used to be discovered FROM the SKU lookup (find whatever
+  // product resolveSkuToIds returned, then trust its tenant) — but SKUs
+  // are only unique per-tenant, so an unscoped lookup could resolve a
+  // different tenant's product entirely and push a quantity to the wrong
+  // seller's eBay account. Now required, and used to scope the lookup
+  // itself instead of being derived from its (possibly wrong) result.
+  if (!tenantId) {
+    throw new Error(`[EbayAdapter] pushInventory: tenantId is required (SKU ${sku})`);
   }
 
-  const product = await Product.findById(ids.productId).select("_id tenant_id").lean();
+  const ids = await resolveSkuToIds(sku, tenantId);
+  if (!ids) {
+    throw new Error(`[EbayAdapter] pushInventory: could not resolve SKU ${sku} to a product for tenant ${tenantId}`);
+  }
+
+  const product = await Product.findOne({ _id: ids.productId, tenant_id: tenantId }).select("_id tenant_id").lean();
   if (!product) {
-    throw new Error(`[EbayAdapter] pushInventory: product ${ids.productId} not found for SKU ${sku}`);
+    throw new Error(`[EbayAdapter] pushInventory: product ${ids.productId} not found for SKU ${sku} under tenant ${tenantId}`);
   }
 
   const settings = await getEbaySettings(product.tenant_id);

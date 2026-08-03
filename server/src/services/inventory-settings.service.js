@@ -2,8 +2,8 @@
 
 const InventorySettings = require("../models/InventorySettings");
 
-async function getSettings() {
-  return InventorySettings.getOrCreate();
+async function getSettings(tenantId) {
+  return InventorySettings.getOrCreate(tenantId);
 }
 
 async function updateSettings(settings, { low_stock_threshold, email_notifications, notification_email, notification_send_time }) {

@@ -92,6 +92,14 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
     : subtotalCents + shippingCents;
   const taxCents = pricing.tax?.value != null ? toCents(pricing.tax.value) : Math.round(subtotalCents / GST_DIVISOR);
 
+  // Was previously discarded entirely — order.service.js hardcoded "aud" on
+  // every imported eBay order regardless of what currency it actually
+  // transacted in. eBay's own order payload reports it directly; only a
+  // tenant on a non-AU marketplace with a payload genuinely missing it
+  // (shouldn't happen in practice) falls through to order.service.js's
+  // marketplace-derived default.
+  const currency = pricing.total?.currency || pricing.priceSubtotal?.currency || null;
+
   return {
     externalOrderId: rawOrder.orderId,
     externalBuyerUsername: rawOrder.buyer?.username || null,
@@ -102,6 +110,7 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
     shippingCents,
     taxCents,
     totalCents,
+    currency,
     status: mapStatus(rawOrder, { ORDER_STATUS }),
   };
 }

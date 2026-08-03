@@ -45,6 +45,16 @@ async function cleanupAbandonedOrders() {
       if (payment && payment.status === PAYMENT_STATUS.SUCCEEDED) {
         // A webhook landed but this order's status update hasn't (or won't,
         // because it's not actually pending) — never cancel a paid order.
+        // Previously silent (no log line) — a payment stuck SUCCEEDED with
+        // the order's own update never having completed (see
+        // stripe.webhook.service.js#handlePaymentSucceeded's
+        // order_effects_applied_at) surfaced nowhere until someone noticed
+        // the order manually. Logged now so this state is at least visible.
+        if (!payment.order_effects_applied_at) {
+          logger.warn(
+            `[stripe.cleanup] order ${order.order_number}: payment succeeded but order/stock effects were never completed — needs manual check (retry should self-heal via a future webhook redelivery, but Stripe's retry window is finite)`,
+          );
+        }
         summary.skippedPaid += 1;
         continue;
       }

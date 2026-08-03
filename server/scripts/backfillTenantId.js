@@ -29,6 +29,14 @@ const COLLECTIONS = [
   "refunds",
   "categories",
   "marketplacelistings",
+  // Missed in the original migration — Location had no tenant_id field at
+  // all until it was added alongside this entry. Found live via a real
+  // second tenant seeing every location (and, transitively, every
+  // Inventory record referencing one) belonging to the first tenant.
+  "locations",
+  // Same gap — every tenant's uploaded files (product photos, etc.) sat in
+  // one shared collection with no ownership check on delete.
+  "attachments",
 ];
 
 // Order.order_number/invoice_number and Refund.refund_number counters were

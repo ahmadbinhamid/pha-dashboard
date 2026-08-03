@@ -1,4 +1,13 @@
 // services/dashboard.service.js
+//
+// Every function here takes tenantId and scopes its queries by it — this
+// file previously had NO tenant filtering anywhere (Order.find({}),
+// InventoryHistory.find({}), etc.), so any tenant's admin loading their own
+// dashboard saw every OTHER tenant's revenue, orders, customer names/emails,
+// and stock levels too. Found live. Inventory/InventoryHistory have no
+// tenant_id field of their own (see Inventory.js/InventoryHistory.js), so
+// those are scoped via a $lookup on Product + a match on product.tenant_id
+// instead of a direct filter.
 
 const Order = require("../models/Order");
 const Inventory = require("../models/Inventory");
@@ -15,12 +24,12 @@ const PENDING_ORDER_STATUSES = [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTI
 
 // Sum of stock_count * product.price (dollars — Product.price is stored in
 // dollars, unlike Order/Payment which are cents) across every inventory
-// record for a non-deleted product.
-async function getInventoryValue() {
+// record for a non-deleted product belonging to this tenant.
+async function getInventoryValue(tenantId) {
   const [result] = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
     { $unwind: "$product" },
-    { $match: { "product.deleted_at": null } },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
     { $group: { _id: null, totalValue: { $sum: { $multiply: ["$stock_count", "$product.price"] } } } },
   ]);
   return result?.totalValue || 0;
@@ -28,11 +37,11 @@ async function getInventoryValue() {
 
 // Rolls locations up to one row per product+variant first — "low on stock"
 // is a property of the item overall, not of any single shelf.
-async function getStockCounts(lowStockThreshold) {
+async function getStockCounts(tenantId, lowStockThreshold) {
   const [result] = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
     { $unwind: "$product" },
-    { $match: { "product.deleted_at": null } },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
     { $group: { _id: { product: "$product._id", variant: "$variant" }, totalStock: { $sum: "$stock_count" } } },
     {
       $group: {
@@ -49,8 +58,8 @@ async function getStockCounts(lowStockThreshold) {
   return { lowStockCount: result?.lowStockCount || 0, outOfStockCount: result?.outOfStockCount || 0 };
 }
 
-async function getPendingOrdersStats() {
-  const pendingOrders = await Order.find({ status: { $in: PENDING_ORDER_STATUSES } })
+async function getPendingOrdersStats(tenantId) {
+  const pendingOrders = await Order.find({ tenant_id: tenantId, status: { $in: PENDING_ORDER_STATUSES } })
     .select("created_at")
     .lean();
 
@@ -69,8 +78,9 @@ async function getPendingOrdersStats() {
 // Amazon/Walmart/Shopify integration exists, so this never fabricates rows
 // for platforms that aren't actually connected. eBay's health is measured
 // by what fraction of its active listings are currently in sync.
-async function getChannelHealth() {
+async function getChannelHealth(tenantId) {
   const listings = await MarketplaceListing.find({
+    tenant_id: tenantId,
     platform: MARKETPLACE_PLATFORM.EBAY,
     state: LISTING_STATE.ACTIVE,
   })
@@ -109,13 +119,13 @@ async function getChannelHealth() {
   return { channels, operationalCount, totalChannels: channels.length, stabilityPct };
 }
 
-async function getStats() {
-  const settings = await InventorySettings.getOrCreate();
+async function getStats(tenantId) {
+  const settings = await InventorySettings.getOrCreate(tenantId);
   const [totalInventoryValue, stockCounts, pendingOrders, channelHealth] = await Promise.all([
-    getInventoryValue(),
-    getStockCounts(settings.low_stock_threshold),
-    getPendingOrdersStats(),
-    getChannelHealth(),
+    getInventoryValue(tenantId),
+    getStockCounts(tenantId, settings.low_stock_threshold),
+    getPendingOrdersStats(tenantId),
+    getChannelHealth(tenantId),
   ]);
 
   return {
@@ -135,12 +145,13 @@ async function getStats() {
 // One bucket per calendar day for the last `days` days (including today),
 // always returning a fully-populated series (zero-filled) so the chart never
 // has to guess about missing days.
-async function getOrderVolumeTrend(days = 7) {
+async function getOrderVolumeTrend(tenantId, days = 7) {
   const since = new Date();
   since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
 
   const orders = await Order.find({
+    tenant_id: tenantId,
     created_at: { $gte: since },
     status: { $ne: ORDER_STATUS.CANCELLED },
   })
@@ -200,19 +211,32 @@ function mapStockEvent(h) {
   };
 }
 
-async function getRecentActivity(limit = 10) {
+// InventoryHistory has no tenant_id of its own (see the file-level comment),
+// so tenant scoping goes through an aggregation $lookup on Product instead
+// of the plain .find().populate() this used to be — same output shape,
+// `product`/`variant` still come back populated (as embedded documents
+// rather than Mongoose refs, .lean() already made these plain objects
+// either way so mapStockEvent needs no changes).
+async function findRecentStockEvents(tenantId, limit) {
+  return InventoryHistory.aggregate([
+    { $sort: { created_at: -1 } },
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+    { $unwind: "$product" },
+    { $match: { "product.tenant_id": tenantId } },
+    { $limit: limit },
+    { $lookup: { from: "productvariants", localField: "variant", foreignField: "_id", as: "variant" } },
+    { $addFields: { variant: { $arrayElemAt: ["$variant", 0] } } },
+  ]);
+}
+
+async function getRecentActivity(tenantId, limit = 10) {
   const [recentOrders, recentStockChanges] = await Promise.all([
-    Order.find({})
+    Order.find({ tenant_id: tenantId })
       .sort({ created_at: -1 })
       .limit(limit)
       .select("order_number channel status created_at customer")
       .lean(),
-    InventoryHistory.find({})
-      .sort({ created_at: -1 })
-      .limit(limit)
-      .populate("product", "title")
-      .populate("variant", "display_name")
-      .lean(),
+    findRecentStockEvents(tenantId, limit),
   ]);
 
   const events = [...recentOrders.map(mapOrderEvent), ...recentStockChanges.map(mapStockEvent)];
@@ -228,7 +252,7 @@ async function getRecentActivity(limit = 10) {
 // merged, re-sorted, then sliced to the requested page — every page comes
 // out exactly right while only ever fetching two bounded slices, never the
 // whole table. `total` is a separate, cheap countDocuments per source.
-async function listActivity({ page = 1, limit = 20, type = "", from, to, search } = {}) {
+async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, to, search } = {}) {
   const skip = (page - 1) * limit;
   const fetchCount = skip + limit;
 
@@ -240,7 +264,7 @@ async function listActivity({ page = 1, limit = 20, type = "", from, to, search 
   const includeOrders = type !== "stock";
   const includeStock = type !== "order";
 
-  const orderFilter = {};
+  const orderFilter = { tenant_id: tenantId };
   if (hasDateFilter) orderFilter.created_at = dateFilter;
   if (search) {
     orderFilter.$or = [
@@ -250,11 +274,15 @@ async function listActivity({ page = 1, limit = 20, type = "", from, to, search 
     ];
   }
 
+  // $lookup+$match on product.tenant_id BEFORE $sort/$limit — this must be
+  // an early stage, not a post-filter, or the fetchCount slice could fill up
+  // with another tenant's rows before this tenant's own are ever reached.
   const stockBasePipeline = [];
   if (hasDateFilter) stockBasePipeline.push({ $match: { created_at: dateFilter } });
   stockBasePipeline.push(
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
     { $unwind: "$product" },
+    { $match: { "product.tenant_id": tenantId } },
     { $lookup: { from: "productvariants", localField: "variant", foreignField: "_id", as: "variant" } },
     { $addFields: { variant: { $arrayElemAt: ["$variant", 0] } } },
   );
@@ -296,7 +324,7 @@ async function listActivity({ page = 1, limit = 20, type = "", from, to, search 
 // trailing 14 days) — same "always fully populated" contract as
 // getOrderVolumeTrend, so the activity log's trend chart never has to guess
 // about missing days.
-async function getActivityAnalytics({ from, to } = {}) {
+async function getActivityAnalytics(tenantId, { from, to } = {}) {
   const rangeTo = to ? new Date(to) : new Date();
   const rangeFrom = from
     ? new Date(from)
@@ -309,8 +337,14 @@ async function getActivityAnalytics({ from, to } = {}) {
   const dateFilter = { $gte: rangeFrom, $lte: rangeTo };
 
   const [orders, stockChanges] = await Promise.all([
-    Order.find({ created_at: dateFilter }).select("created_at").lean(),
-    InventoryHistory.find({ created_at: dateFilter }).select("created_at").lean(),
+    Order.find({ tenant_id: tenantId, created_at: dateFilter }).select("created_at").lean(),
+    InventoryHistory.aggregate([
+      { $match: { created_at: dateFilter } },
+      { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+      { $unwind: "$product" },
+      { $match: { "product.tenant_id": tenantId } },
+      { $project: { created_at: 1 } },
+    ]),
   ]);
 
   const byDate = new Map();
@@ -346,13 +380,13 @@ async function getActivityAnalytics({ from, to } = {}) {
 // Rolled up to one row per product+variant (summed across locations) so this
 // lines up with getStockCounts()'s definition of "low on stock" — a product
 // split across two half-empty shelves shouldn't read as two separate alerts.
-async function getCriticalStock(limit = 10) {
-  const settings = await InventorySettings.getOrCreate();
+async function getCriticalStock(tenantId, limit = 10) {
+  const settings = await InventorySettings.getOrCreate(tenantId);
 
   const rows = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
     { $unwind: "$product" },
-    { $match: { "product.deleted_at": null } },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
     { $lookup: { from: "productvariants", localField: "variant", foreignField: "_id", as: "variant" } },
     { $addFields: { variant: { $arrayElemAt: ["$variant", 0] } } },
     {

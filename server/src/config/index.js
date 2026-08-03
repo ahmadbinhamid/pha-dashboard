@@ -109,6 +109,12 @@ const config = {
     // encrypted on their Tenant document (see stripe.keys.service.js).
     // Only the default currency stays global/env-configurable.
     currency: get("STRIPE_CURRENCY", "aud"),
+    // Local-dev-only fallback for `stripe listen`, which mints a fresh
+    // whsec_ every session that can never match a tenant's real stored
+    // secret. Tried ONLY after the tenant's own secret fails, and ONLY
+    // outside production — see payment.controller.js#handleWebhook. Paste
+    // whatever `stripe listen` prints into this env var each session.
+    devWebhookSecret: get("STRIPE_DEV_WEBHOOK_SECRET", null),
   },
 };
 

@@ -5,7 +5,7 @@ const { success, notFound, systemfailure } = require("../utils/http/response");
 
 exports.getMakes = async (req, res) => {
   try {
-    const makes = await vehicleModelService.listMakes();
+    const makes = await vehicleModelService.listMakes(req.tenantId);
     return success(res, makes);
   } catch (err) {
     return systemfailure(res, err);
@@ -14,7 +14,7 @@ exports.getMakes = async (req, res) => {
 
 exports.getModels = async (req, res) => {
   try {
-    const models = await vehicleModelService.listModels(req.query.make);
+    const models = await vehicleModelService.listModels(req.query.make, req.tenantId);
     return success(res, models);
   } catch (err) {
     return systemfailure(res, err);
@@ -26,6 +26,7 @@ exports.getModelCodes = async (req, res) => {
     const codes = await vehicleModelService.listModelCodes(
       req.query.make,
       req.query.model,
+      req.tenantId,
     );
     return success(res, codes);
   } catch (err) {
@@ -39,6 +40,7 @@ exports.getYears = async (req, res) => {
       req.query.make,
       req.query.model,
       req.query.model_code,
+      req.tenantId,
     );
     if (!years) return notFound(res, "No matching vehicle entry found");
     return success(res, years);

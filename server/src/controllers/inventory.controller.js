@@ -22,7 +22,7 @@ exports.getInventory = async (req, res) => {
   try {
     const { page, limit } = req.pagination;
 
-    const result = await listInventory({
+    const result = await listInventory(req.tenantId, {
       page,
       limit,
       search: req.query.search || undefined,
@@ -41,7 +41,8 @@ exports.ensureRecord = async (req, res) => {
   try {
     const { product, location, variant } = req.body;
 
-    const record = await ensureRecord({ product, location, variant });
+    const record = await ensureRecord({ product, location, variant }, req.tenantId);
+    if (!record) return notFound(res, "Product not found");
     return success(res, await fetchPopulatedRecord(record._id), "Inventory record ensured");
   } catch (err) {
     return systemfailure(res, err);
@@ -56,7 +57,7 @@ exports.adjustStock = async (req, res) => {
       return badRequest(res, "Adjustment value is required");
     }
 
-    const record = await findRecord(req.params.inventoryId);
+    const record = await findRecord(req.params.inventoryId, req.tenantId);
     if (!record) return notFound(res, "Inventory record not found");
 
     await adjustStock(record, {
@@ -84,7 +85,7 @@ exports.setStock = async (req, res) => {
       return badRequest(res, "stock_count must be a non-negative number");
     }
 
-    const record = await findRecord(req.params.inventoryId);
+    const record = await findRecord(req.params.inventoryId, req.tenantId);
     if (!record) return notFound(res, "Inventory record not found");
 
     await setStock(record, {
@@ -101,7 +102,7 @@ exports.setStock = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
   try {
-    const record = await findRecord(req.params.inventoryId);
+    const record = await findRecord(req.params.inventoryId, req.tenantId);
     if (!record) return notFound(res, "Inventory record not found");
 
     const history = await getHistory(record._id);
@@ -113,7 +114,7 @@ exports.getHistory = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
   try {
-    const settings = await getSettings();
+    const settings = await getSettings(req.tenantId);
     return success(res, settings);
   } catch (err) {
     return systemfailure(res, err);
@@ -122,7 +123,7 @@ exports.getSettings = async (req, res) => {
 
 exports.updateSettings = async (req, res) => {
   try {
-    const settings = await getSettings();
+    const settings = await getSettings(req.tenantId);
     const updated = await updateSettings(settings, req.body);
     return success(res, updated, "Settings updated");
   } catch (err) {

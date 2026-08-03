@@ -688,13 +688,21 @@ async function settleRefund(refund) {
     return refund;
   }
 
+  // status = SUCCEEDED must be saved BEFORE applyRefundEffects runs, not
+  // after: applyRefundEffects's recomputeLedger only counts refunds via
+  // getSucceededRefunds — if this refund isn't SUCCEEDED yet when its own
+  // recompute runs, its own contribution is silently excluded from
+  // order.items[].quantity_refunded. (Tried reordering this once — broke
+  // the concurrency test: exactly the last-admitted refund in a sequence
+  // never got its own recompute rerun, so quantity_refunded came out one
+  // short every time. Reverted.) A sweep to auto-retry a refund stuck
+  // SUCCEEDED-with-effects-never-applied was also tried and reverted — see
+  // refund.reconciliation.service.js's own comment on why (indistinguishable
+  // from old, legitimately fine historical refunds; re-running it against
+  // one auto-voided a real settled refund in testing). Accepted as a
+  // residual gap.
   refund.status = REFUND_STATUS.SUCCEEDED;
   await refund.save();
-  // applyRefundEffects loads and mutates its OWN copy of this document —
-  // use that one, not this now-stale in-memory `refund`, so the API
-  // response (and the idempotency-hit path above) reflect the actually-
-  // settled state (effects_applied_at, ebay_sync_status, etc.) rather than
-  // a pre-effects snapshot.
   const settled = await applyRefundEffects(refund._id);
 
   // The belt-and-braces invariant check now lives inside applyRefundEffects
@@ -1272,7 +1280,7 @@ async function retryRestockForRefund(refundId, tenantId) {
   }
 
   for (const line of failedLines) {
-    const result = await retryEbayPushForSku(line.sku);
+    const result = await retryEbayPushForSku(line.sku, tenantId);
     line.ebay_sync_status = result.ebay_sync_status;
     line.ebay_sync_error = result.ebay_sync_error;
     if (!line.restock_applied_at) line.restock_applied_at = new Date();

@@ -73,7 +73,15 @@ const tenantSchema = buildSchema({
   // (/api/v1/payment/webhook?wt=<this>), registered by the tenant in their
   // own Stripe Dashboard. webhook_secret is the signing secret Stripe gives
   // them for that endpoint, encrypted the same way as the API secret key.
-  stripe_webhook_token: { type: String, default: null, unique: true, sparse: true },
+  // NOT `sparse: true` — `default: null` means this field is always PRESENT
+  // (with value null) on a tenant that hasn't connected Stripe, and sparse
+  // only excludes a field that's entirely UNSET. With sparse, two tenants
+  // both sitting at the default null collided on this unique index the
+  // moment a second tenant was ever created — see the partialFilterExpression
+  // index below instead, same fix as Order.external_order_id/Product.sku.
+  // Found live: this was never hit before because this system only ever had
+  // one real tenant until self-service signup existed.
+  stripe_webhook_token: { type: String, default: null },
   stripe_webhook_secret_ciphertext: { type: String, default: null, select: false },
   stripe_webhook_secret_iv: { type: String, default: null, select: false },
   stripe_webhook_secret_tag: { type: String, default: null, select: false },
@@ -111,5 +119,10 @@ const tenantSchema = buildSchema({
   smtp_connected_at: { type: Date, default: null },
   smtp_last_error: { type: String, default: null },
 });
+
+tenantSchema.index(
+  { stripe_webhook_token: 1 },
+  { unique: true, partialFilterExpression: { stripe_webhook_token: { $type: "string" } } },
+);
 
 module.exports = model("Tenant", tenantSchema);

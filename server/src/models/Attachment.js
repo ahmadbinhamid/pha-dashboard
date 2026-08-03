@@ -6,6 +6,14 @@ const { buildAttachmentUrl } = require("../utils/attachment");
 
 const attachmentSchema = buildSchema(
   {
+    // Was missing entirely — every tenant's uploaded files (product photos,
+    // etc.) sat in one shared, unscoped collection: the list endpoint
+    // returned every tenant's attachments, and delete had no ownership
+    // check at all, so any authenticated tenant could delete any other
+    // tenant's files just by guessing/enumerating an id. Found live.
+    // Backfilled onto every pre-existing Attachment by
+    // scripts/backfillTenantId.js.
+    tenant_id: { type: require("mongoose").Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
     uid: { type: String, unique: true, required: true },
     file_name: { type: String, default: null },
     original_name: { type: String, default: null },

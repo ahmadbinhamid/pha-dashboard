@@ -39,6 +39,7 @@ const {
 const { toPublicUser, fullName } = require("../utils/user");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 const Tenant = require("../models/Tenant");
+const tenantService = require("../services/tenant.service");
 const config = require("../config");
 
 exports.register = async (req, res) => {
@@ -69,6 +70,38 @@ exports.register = async (req, res) => {
       "Registration successful. Your account requires admin verification before you can log in.",
     );
   } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+// Self-service signup — creates a brand-new tenant plus its first (admin)
+// user, unlike register() above which joins an existing tenant. The new
+// user is active immediately (no admin exists yet on a brand-new tenant to
+// approve them) and logged in right away, same response shape as login().
+exports.registerTenant = async (req, res) => {
+  try {
+    const { company_name, first_name, last_name, email, password } = req.body || {};
+
+    const { tenant, user } = await tenantService.registerTenantWithAdmin({
+      company_name,
+      first_name,
+      last_name,
+      email,
+      password,
+    });
+
+    const token = signJwt({
+      sub: user._id.toString(),
+      role: user.role,
+      tenant_id: tenant._id.toString(),
+      email: user.email,
+      name: fullName(user),
+    });
+
+    return success(res, toPublicUser(user), "Account created", token);
+  } catch (err) {
+    if (err.code === 11000) return requestConflict(res, "That email or company name is already in use");
+    if (err.status) return badRequest(res, err.message);
     return systemfailure(res, err);
   }
 };

@@ -11,13 +11,22 @@ const { loginLimiter } = require("../middlewares/rateLimit");
 const V = require("../validators/auth.validation");
 const ctrl = require("../controllers/auth.controller");
 
-// register
+// register (join an EXISTING tenant as staff)
 router.post(
   "/register",
   loginLimiter,
   upload.none(),
   validate(V.register),
   asyncHandler(ctrl.register)
+);
+
+// self-service signup — creates a BRAND NEW tenant + its first (admin) user
+router.post(
+  "/register-tenant",
+  loginLimiter,
+  upload.none(),
+  validate(V.registerTenant),
+  asyncHandler(ctrl.registerTenant)
 );
 
 // login

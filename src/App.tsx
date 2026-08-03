@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth";
 
 // Auth pages
 import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
 
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
@@ -60,6 +61,15 @@ export default function App() {
             element={
               <GuestRoute>
                 <LoginPage />
+              </GuestRoute>
+            }
+          />
+
+          <Route
+            path="/register"
+            element={
+              <GuestRoute>
+                <RegisterPage />
               </GuestRoute>
             }
           />

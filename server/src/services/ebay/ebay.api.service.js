@@ -10,7 +10,7 @@
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
-const { EBAY_SCOPES } = require("../../constants/ebay.constants");
+const { EBAY_SCOPES, currencyForMarketplace } = require("../../constants/ebay.constants");
 
 // eBay's error envelope for a rejected Inventory/Offer API call is
 // `{ errors: [{ errorId, message, longMessage, parameters }, ...] }`. Callers
@@ -439,6 +439,12 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const returnPolicyId = listing.return_policy_id || settings.return_policy_id;
   const merchantLocationKey = listing.merchant_location_key || settings.merchant_location_key;
 
+  // Was hardcoded "AUD" regardless of this tenant's configured marketplace —
+  // EbaySettings.marketplace_id has no enum restricting it to AU, so a
+  // tenant on EBAY_US/EBAY_GB/etc. would publish offers in the wrong
+  // currency, which eBay is likely to reject for that marketplace. Found live.
+  const currency = currencyForMarketplace(settings.marketplace_id);
+
   // require_immediate_payment cannot be set per-offer in the eBay Inventory API —
   // it is governed by the payment policy (paymentPolicyId). To enforce it, enable
   // "Require immediate payment" on the eBay payment policy itself via Seller Hub.
@@ -452,7 +458,7 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
     listingDescription: description || title,
     pricingSummary: {
-      price: { value: String(price || 0), currency: "AUD" },
+      price: { value: String(price || 0), currency },
     },
     listingPolicies: {
       ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
@@ -462,7 +468,7 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
         bestOfferTerms: {
           bestOfferEnabled: true,
           ...(listing.min_best_offer != null ? {
-            autoDeclinePrice: { value: String(listing.min_best_offer), currency: "AUD" },
+            autoDeclinePrice: { value: String(listing.min_best_offer), currency },
           } : {}),
         },
       } : {}),
@@ -697,9 +703,41 @@ async function getOrders(settings, { limit = 50, offset = 0 } = {}) {
   return res.json();
 }
 
+// getOrders only fetches one page (default limit=50) — a tenant with more
+// than 50 open (NOT_STARTED/IN_PROGRESS) orders (extended outage, high
+// volume) silently only had the first page processed per poll, and the
+// overflow was never guaranteed to surface on a later poll if the backlog
+// stayed above 50. This walks every page using eBay's own `total`, capped at
+// MAX_PAGES as a defensive bound against an unexpected/misbehaving response
+// looping forever (same concern as getAllInventoryItems's pagination below).
+const MAX_ORDER_PAGES = 100; // 100 * 200 = 20,000 open orders — generous ceiling
+async function getAllOpenOrders(settings, { pageSize = 200 } = {}) {
+  const orders = [];
+  let offset = 0;
+
+  for (let page = 0; page < MAX_ORDER_PAGES; page++) {
+    const data = await getOrders(settings, { limit: pageSize, offset });
+    const batch = data.orders || [];
+    orders.push(...batch);
+
+    const total = typeof data.total === "number" ? data.total : orders.length;
+    offset += pageSize;
+    if (orders.length >= total || batch.length < pageSize) break;
+  }
+
+  return orders;
+}
+
 // Bulk-fetches every inventory item on the account (paginated) so the
 // inventory-sync poller can diff eBay's live quantities against ours in a
 // handful of calls instead of one GET per SKU.
+// MAX_INVENTORY_PAGES bounds what was previously a `while (true)` loop whose
+// only exit condition was a batch smaller than pageSize — if eBay ever
+// returned a full page regardless of the requested offset (an API bug, or
+// an account with a genuinely unexpected number of items), this looped
+// forever, growing `items` unboundedly and blocking that tenant's inventory
+// job indefinitely. Now fails loudly instead.
+const MAX_INVENTORY_PAGES = 500; // 500 * 100 = 50,000 items — generous ceiling
 async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
   const token = await getAccessToken(settings);
   if (!token) throw new Error("[eBay] getAllInventoryItems: could not obtain access token");
@@ -707,7 +745,7 @@ async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
   const items = [];
   let offset = 0;
 
-  while (true) {
+  for (let page = 0; page < MAX_INVENTORY_PAGES; page++) {
     const res = await fetch(
       `${inventoryBaseFor(settings.sandbox)}/inventory_item?limit=${pageSize}&offset=${offset}`,
       { headers: ebayHeaders(token, settings.marketplace_id) },
@@ -722,11 +760,13 @@ async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
     const batch = data.inventoryItems || [];
     items.push(...batch);
 
-    if (batch.length < pageSize) break;
+    if (batch.length < pageSize) return items;
     offset += pageSize;
   }
 
-  return items;
+  throw new Error(
+    `[eBay] getAllInventoryItems: exceeded ${MAX_INVENTORY_PAGES} pages (${MAX_INVENTORY_PAGES * pageSize} items) — aborting, offset pagination may not be terminating`,
+  );
 }
 
 // ── Taxonomy ──────────────────────────────────────────────────────────────────
@@ -792,6 +832,7 @@ module.exports = {
   tokenEndpointFor,
   clearTokenCache,
   getOrders,
+  getAllOpenOrders,
   getAllInventoryItems,
   ebayHeaders,
   apiBaseUrlFor,

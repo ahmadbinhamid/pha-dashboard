@@ -23,7 +23,7 @@ exports.upload = async (req, res) => {
 
     const userId = req.user?._id || null;
     const docs = await Promise.all(
-      files.map((file) => createAttachment(file, userId)),
+      files.map((file) => createAttachment(file, userId, req.tenantId)),
     );
 
     return created(res, docs, "Files uploaded successfully");
@@ -36,7 +36,7 @@ exports.list = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
 
-    const { items, total } = await listAttachments({ skip, limit });
+    const { items, total } = await listAttachments(req.tenantId, { skip, limit });
 
     return success(res, {
       items,
@@ -52,7 +52,7 @@ exports.list = async (req, res) => {
 
 exports.remove = async (req, res) => {
   try {
-    const attachment = await findAttachment(req.params.id);
+    const attachment = await findAttachment(req.params.id, req.tenantId);
     if (!attachment) return notFound(res, "Attachment not found");
 
     await remove(attachment);

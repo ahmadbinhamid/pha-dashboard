@@ -135,7 +135,32 @@ exports.handleWebhook = async (req, res) => {
       signatureHeader,
       settings.verification_token,
     );
-    if (!valid) return unauthorized(res, "Invalid signature");
+    if (!valid) {
+      // Diagnostic, not a fix: verifySignature checks HMAC-SHA256 against
+      // the shared verification_token, but eBay's Notification API is
+      // documented (unverified against real traffic — see PR/audit notes)
+      // to sign POST deliveries with an asymmetric scheme (public key
+      // fetched by keyId), not a shared secret. If that's correct, every
+      // genuine eBay delivery 401s here, permanently, and the real-time
+      // path silently never runs. Rather than guess at re-implementing an
+      // unverified crypto scheme (risking a DIFFERENT wrong implementation
+      // with false confidence), this logs what the header actually looks
+      // like so the very next real delivery gives hard evidence instead —
+      // check for a base64-decoded JSON payload containing a keyId/kid
+      // field, which would confirm the asymmetric-signature hypothesis.
+      let decodedPreview = null;
+      try {
+        decodedPreview = Buffer.from(signatureHeader || "", "base64").toString("utf8").slice(0, 500);
+      } catch {
+        // signatureHeader wasn't valid base64 — decodedPreview stays null
+      }
+      logger.warn("[ebay.controller] Webhook signature verification failed — see decodedPreview for scheme diagnosis", {
+        hasSignatureHeader: !!signatureHeader,
+        signatureHeaderLength: signatureHeader?.length || 0,
+        decodedPreview,
+      });
+      return unauthorized(res, "Invalid signature");
+    }
 
     const tenant = await Tenant.findById(settings.tenant_id);
     if (!tenant) return notFound(res, "Tenant not found");

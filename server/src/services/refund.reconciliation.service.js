@@ -36,6 +36,21 @@ const { REFUND_STATUS } = require("../constants/refund.constants");
 const { PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { logger } = require("../loaders/logging");
 
+// NOTE: a status: succeeded + effects_applied_at: null sweep was tried here
+// and reverted. In principle that combination means "money moved but the
+// restock/eBay side effects threw before completing" (status intentionally
+// advances to SUCCEEDED before applyRefundEffects runs — recomputeLedger's
+// accounting depends on it, see settleRefund's comment — so this can't be
+// caught by re-checking status the way pending/processing are). In
+// practice, tested against real historical data, this combination is
+// indistinguishable from a perfectly fine OLD refund that simply predates
+// effects_applied_at being consistently set (empty `lines`, nothing to
+// restock — the field was always cosmetic for those). Re-running
+// applyRefundEffects on one repeated the ledger-invariant check against
+// stale historical state and auto-voided an otherwise-settled real refund.
+// Accepted as a residual gap instead: rarer and narrower than that risk —
+// see stripe.webhook.service.js#reconcileStripeRefund and
+// refund.service.js#settleRefund's own comments on the exact scenario.
 async function reconcileStuckRefunds() {
   const cutoff = new Date(Date.now() - refundService.RESERVATION_STALE_AFTER_MS);
   const stuck = await Refund.find({

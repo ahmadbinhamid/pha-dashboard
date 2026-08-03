@@ -48,9 +48,9 @@ ebayQueue.process("poll_inventory", 1, async () => {
 // retried push also updates the inventory-sync baseline, same as an
 // inline-successful push would.
 ebayQueue.process("push_quantity", 2, async (job) => {
-  const { sku, quantity } = job.data;
+  const { sku, quantity, tenantId } = job.data;
   logger.info(`[ebayQueue] push_quantity sku=${sku} quantity=${quantity}`);
-  await ebayAdapter.pushInventory(sku, quantity);
+  await ebayAdapter.pushInventory(sku, quantity, tenantId);
 });
 
 // Bull's Queue never emits a "ready" event (only the underlying redis client

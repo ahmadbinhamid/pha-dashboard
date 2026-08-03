@@ -21,6 +21,7 @@ const {
 } = require("../constants/order.constants");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
+const { currencyForMarketplace } = require("../constants/ebay.constants");
 const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { logger } = require("../loaders/logging");
@@ -558,13 +559,13 @@ async function createOrder(
 async function resolveEbayLineItem(lineItem, tenantId) {
   if (!lineItem.sku) return null;
 
-  // NOTE: eBay integration is currently single-tenant (one set of EBAY_*
-  // credentials in .env, see config/index.js) — resolveSkuToIds isn't yet
-  // tenant-scoped itself. Threading tenantId through here anyway so this
-  // function's own writes/lookups stay correct for whichever tenant the
-  // eBay poll is running for; making eBay itself multi-tenant (per-tenant
-  // credentials) is a known, separate follow-up, not covered by this pass.
-  const ids = await resolveSkuToIds(lineItem.sku);
+  // resolveSkuToIds is tenant-scoped (SKUs are only unique per-tenant), so
+  // this can only ever resolve to a product this tenant actually owns. The
+  // Product/ProductVariant re-fetch below with an explicit tenant_id filter
+  // is now redundant defense-in-depth rather than the only thing preventing
+  // a cross-tenant mismatch — kept anyway since it's cheap and guards
+  // against resolveSkuToIds ever regressing independently of this call site.
+  const ids = await resolveSkuToIds(lineItem.sku, tenantId);
   if (!ids) {
     logger.warn(`[order.service] eBay order line SKU not found locally: ${lineItem.sku}`);
     return null;
@@ -592,7 +593,7 @@ async function resolveEbayLineItem(lineItem, tenantId) {
 // creating duplicates. Returns null (not an error) when the order was
 // already imported, or when none of its line items match a known product —
 // callers should treat null as "nothing further to do", not a failure.
-async function createOrderFromEbayOrder(rawEbayOrder, tenant) {
+async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
   const mapped = mapEbayOrder(rawEbayOrder, { ORDER_STATUS });
   if (!mapped.externalOrderId) {
     logger.warn("[order.service] eBay order payload missing orderId — skipping import");
@@ -631,7 +632,11 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant) {
     shipping_cost: mapped.shippingCents,
     tax_amount: mapped.taxCents,
     total: mapped.totalCents,
-    currency: "aud",
+    // Was hardcoded "aud" regardless of what currency the eBay order
+    // actually transacted in — prefer eBay's own reported currency (see
+    // ebay.order.mapper.js), falling back to this tenant's configured
+    // marketplace currency only if that's genuinely absent. Found live.
+    currency: (mapped.currency || currencyForMarketplace(settings?.marketplace_id)).toLowerCase(),
     status: mapped.status,
     // eBay orders arrive already paid — eBay Managed Payments settles
     // before the order is ever pushed to us, so there's no "pending" state

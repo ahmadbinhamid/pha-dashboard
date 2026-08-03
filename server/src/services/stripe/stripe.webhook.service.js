@@ -40,6 +40,25 @@ function constructEvent(rawBody, signatureHeader, webhookSecret) {
   return Stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
 }
 
+// Verifies against each candidate secret in order, returning on the first
+// match. Real use case: local `stripe listen` testing against a BYOK tenant
+// — the tenant's real secret is always tried first (and is all a production
+// deployment ever has, since the caller only adds a second candidate outside
+// production), so this changes nothing about how a real webhook delivery is
+// verified. Throws the FIRST candidate's error if every one fails, since
+// that's the one that actually matters (the tenant's real secret).
+function constructEventWithFallback(rawBody, signatureHeader, candidateSecrets) {
+  let firstError;
+  for (const secret of candidateSecrets.filter(Boolean)) {
+    try {
+      return constructEvent(rawBody, signatureHeader, secret);
+    } catch (err) {
+      firstError = firstError || err;
+    }
+  }
+  throw firstError || new Error("No webhook secret configured");
+}
+
 // Atomic claim: throws E11000 if this event id was already processed, which
 // the caller treats as "already handled, no-op" rather than an error.
 async function claimEvent(event, tenantId) {
@@ -91,7 +110,13 @@ async function handlePaymentSucceeded(intent, tenantId) {
     logger.error(`[stripe.webhook] payment_intent.succeeded for unknown intent ${intent.id}`);
     return;
   }
-  if (payment.status === PAYMENT_STATUS.SUCCEEDED) return; // already handled
+  // Fully handled only when BOTH the payment record and the order/stock
+  // side effects are done — checking status alone meant a retry after the
+  // order/stock step failed (payment already saved as SUCCEEDED, but
+  // order.save() below never completed) hit this guard and returned
+  // immediately, leaving the order stuck at pending_payment forever despite
+  // Stripe having actually captured the money. Found live.
+  if (payment.status === PAYMENT_STATUS.SUCCEEDED && payment.order_effects_applied_at) return;
 
   // +guest_access_token: needed to build the customer-facing "view order"
   // link in the confirmation email below — excluded by default (select: false).
@@ -115,51 +140,57 @@ async function handlePaymentSucceeded(intent, tenantId) {
     return;
   }
 
-  // Trust nothing from the intent except what Stripe says was actually
-  // captured — verify it matches what we billed for before marking paid.
-  // Compared against this Payment doc's own `amount` (what we told Stripe to
-  // charge when the intent was created), NOT order.total — an intent for a
-  // manual sale's remaining balance is legitimately less than the total.
-  const expectedAmount = payment.amount;
-  const amountReceived = intent.amount_received ?? intent.amount;
-  const amountMismatch = amountReceived !== expectedAmount;
-  const currencyMismatch = intent.currency !== order.currency;
-  if (amountMismatch || currencyMismatch) {
-    // Funds were captured (this event only fires on success) — FAILED would
-    // wrongly imply no money moved, so flag for manual review instead.
-    payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
-    payment.failure_reason = [
-      amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
-      currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
-    ]
-      .filter(Boolean)
-      .join("; ");
+  // Skipped entirely on a resume (payment.status already SUCCEEDED from a
+  // prior attempt, only order_effects_applied_at was missing) — re-running
+  // the mismatch check or re-fetching the intent would be harmless but
+  // pointless; only the order/stock side below still needs finishing.
+  if (payment.status !== PAYMENT_STATUS.SUCCEEDED) {
+    // Trust nothing from the intent except what Stripe says was actually
+    // captured — verify it matches what we billed for before marking paid.
+    // Compared against this Payment doc's own `amount` (what we told Stripe
+    // to charge when the intent was created), NOT order.total — an intent
+    // for a manual sale's remaining balance is legitimately less than the total.
+    const expectedAmount = payment.amount;
+    const amountReceived = intent.amount_received ?? intent.amount;
+    const amountMismatch = amountReceived !== expectedAmount;
+    const currencyMismatch = intent.currency !== order.currency;
+    if (amountMismatch || currencyMismatch) {
+      // Funds were captured (this event only fires on success) — FAILED would
+      // wrongly imply no money moved, so flag for manual review instead.
+      payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
+      payment.failure_reason = [
+        amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
+        currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
+      ]
+        .filter(Boolean)
+        .join("; ");
+      await payment.save();
+      logger.error(
+        `[stripe.webhook] MISMATCH order ${order.order_number}: ${payment.failure_reason} — needs manual review`,
+      );
+      return; // do not mark paid, do not touch stock
+    }
+
+    // The webhook payload only carries payment_method as a bare ID, not the
+    // expanded object — so re-retrieve the intent with expand to read card
+    // details. Expand `payment_method` directly (a top-level expandable field
+    // on PaymentIntent) rather than nesting through `latest_charge` — Stripe
+    // rejects "latest_charge.payment_method" as an unsupported expand path.
+    // Never rely on the legacy `charges.data[]` shape either way.
+    const stripe = await stripeKeysService.getStripeClient(tenantId);
+    const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
+    const paymentMethod =
+      fullIntent.payment_method && typeof fullIntent.payment_method === "object"
+        ? fullIntent.payment_method
+        : null;
+
+    payment.status = PAYMENT_STATUS.SUCCEEDED;
+    payment.amount = amountReceived;
+    payment.paid_at = new Date();
+    payment.card_brand = paymentMethod?.card?.brand || null;
+    payment.card_last4 = paymentMethod?.card?.last4 || null;
     await payment.save();
-    logger.error(
-      `[stripe.webhook] MISMATCH order ${order.order_number}: ${payment.failure_reason} — needs manual review`,
-    );
-    return; // do not mark paid, do not touch stock
   }
-
-  // The webhook payload only carries payment_method as a bare ID, not the
-  // expanded object — so re-retrieve the intent with expand to read card
-  // details. Expand `payment_method` directly (a top-level expandable field
-  // on PaymentIntent) rather than nesting through `latest_charge` — Stripe
-  // rejects "latest_charge.payment_method" as an unsupported expand path.
-  // Never rely on the legacy `charges.data[]` shape either way.
-  const stripe = await stripeKeysService.getStripeClient(tenantId);
-  const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
-  const paymentMethod =
-    fullIntent.payment_method && typeof fullIntent.payment_method === "object"
-      ? fullIntent.payment_method
-      : null;
-
-  payment.status = PAYMENT_STATUS.SUCCEEDED;
-  payment.amount = amountReceived;
-  payment.paid_at = new Date();
-  payment.card_brand = paymentMethod?.card?.brand || null;
-  payment.card_last4 = paymentMethod?.card?.last4 || null;
-  await payment.save();
 
   // Recomputed across every succeeded payment on the order, not hardcoded to
   // PAID — this same webhook fires for a manual sale's payment-link
@@ -197,6 +228,15 @@ async function handlePaymentSucceeded(intent, tenantId) {
   }
 
   await order.save();
+
+  // Marks this payment's order/stock effects as durably complete. No
+  // transaction spans this and the order.save() above (see the field's
+  // schema comment) — a crash in the narrow window between them would
+  // leave this unset and a retry would redo the stock deduction. Accepted:
+  // far narrower and rarer than the bug this replaces (any transient error
+  // anywhere in this handler permanently stranding the order as unpaid).
+  payment.order_effects_applied_at = new Date();
+  await payment.save();
 
   logger.info(`[stripe.webhook] order ${order.order_number} marked ${order.status} (intent ${intent.id})`);
 
@@ -332,6 +372,18 @@ async function reconcileStripeRefund(sr, payment, order) {
     }
     const allSettled = existing.payment_allocations.every((a) => a.settled);
     if (allSettled && existing.status === REFUND_STATUS.PROCESSING) {
+      // status = SUCCEEDED must be saved BEFORE applyRefundEffects runs:
+      // its recomputeLedger only counts refunds via getSucceededRefunds, so
+      // if this refund isn't SUCCEEDED yet when its own recompute runs, its
+      // own contribution is silently excluded from
+      // order.items[].quantity_refunded. (Tried reordering this once —
+      // broke refund.service.concurrency.test.js. Reverted — see
+      // settleRefund's matching comment in refund.service.js.) A sweep to
+      // auto-retry a refund stuck SUCCEEDED-with-effects-never-applied was
+      // also tried and reverted — see refund.reconciliation.service.js's
+      // own comment on why (indistinguishable from old, legitimately fine
+      // historical refunds; re-running it against one auto-voided a real
+      // settled refund in testing). Accepted as a residual gap.
       existing.status = REFUND_STATUS.SUCCEEDED;
       await existing.save();
       await refundService.applyRefundEffects(existing._id);
@@ -453,6 +505,7 @@ async function handleChargeRefundUpdated(sr) {
 
 module.exports = {
   constructEvent,
+  constructEventWithFallback,
   handleEvent,
   // Exported for refund.reconciliation.service.js (corrections round) — the
   // stuck-refund sweep reconciles a Stripe-allocation refund whose webhook

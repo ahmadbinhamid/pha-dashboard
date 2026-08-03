@@ -71,6 +71,7 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
           ? (saleType ?? ADJUSTMENT_TYPE.STRIPE_SALE)
           : (refundType ?? ADJUSTMENT_TYPE.STRIPE_REFUND),
       userId: null,
+      tenantId: order.tenant_id,
     });
 
     if (!result) {
@@ -89,10 +90,10 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
     }
 
     if (!partial) {
-      await pushEbayQuantity(entry, result.totalStockAfter);
+      await pushEbayQuantity(entry, result.totalStockAfter, order.tenant_id);
     } else {
       const pushTarget = { sku, ebay_sync_status: null, ebay_sync_error: null };
-      await pushEbayQuantity(pushTarget, result.totalStockAfter);
+      await pushEbayQuantity(pushTarget, result.totalStockAfter, order.tenant_id);
       lineResults.push({
         order_item_id: orderItemId,
         ebay_sync_status: pushTarget.ebay_sync_status,
@@ -112,11 +113,13 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
 // inline push) means this only ever costs a fast Redis write, not a live
 // HTTP round trip. Trades off knowing synced/failed immediately — the order
 // now saves with "pending" and the job resolves it asynchronously.
-async function pushEbayQuantity(item, quantity) {
+async function pushEbayQuantity(item, quantity, tenantId) {
   item.ebay_sync_status = "pending";
   item.ebay_sync_error = null;
   try {
-    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity });
+    // tenantId travels with the job so the worker's SKU resolution is scoped
+    // to the right tenant, not the job data — see ebay.adapter.js#pushInventory.
+    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity, tenantId });
   } catch (qErr) {
     logger.warn(`[order-stock-sync] could not enqueue eBay push for SKU ${item.sku}`, {
       error: qErr.message,
@@ -132,15 +135,15 @@ async function pushEbayQuantity(item, quantity) {
 // whether the eBay notification made it) — re-running syncOrderStock would
 // double-deduct/double-restock the physical count. This only re-reads the
 // SKU's current total (already-correct) stock and re-attempts the eBay push.
-async function retryEbayPushForSku(sku) {
+async function retryEbayPushForSku(sku, tenantId) {
   const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
-  const ids = await resolveSkuToIds(sku);
+  const ids = await resolveSkuToIds(sku, tenantId);
   if (!ids) {
     return { ebay_sync_status: "not_applicable", ebay_sync_error: null };
   }
   const totalStockAfter = await getTotalStockForProductVariant(ids.productId, ids.variantId);
   const pushTarget = { sku, ebay_sync_status: null, ebay_sync_error: null };
-  await pushEbayQuantity(pushTarget, totalStockAfter);
+  await pushEbayQuantity(pushTarget, totalStockAfter, tenantId);
   return { ebay_sync_status: pushTarget.ebay_sync_status, ebay_sync_error: pushTarget.ebay_sync_error };
 }
 

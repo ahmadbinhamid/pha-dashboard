@@ -7,17 +7,18 @@ const Attachment = require("../models/Attachment");
 const { getAttachmentType } = require("../utils/attachment");
 const config = require("../config");
 
-async function listAttachments({ skip, limit }) {
+async function listAttachments(tenantId, { skip, limit }) {
   const [items, total] = await Promise.all([
-    Attachment.find({}).sort({ created_at: -1 }).skip(skip).limit(limit),
-    Attachment.countDocuments({}),
+    Attachment.find({ tenant_id: tenantId }).sort({ created_at: -1 }).skip(skip).limit(limit),
+    Attachment.countDocuments({ tenant_id: tenantId }),
   ]);
   return { items, total };
 }
 
-async function createAttachment(file, userId) {
+async function createAttachment(file, userId, tenantId) {
   const uid = crypto.randomUUID();
   return Attachment.create({
+    tenant_id: tenantId,
     uid,
     file_name: file.filename,
     original_name: file.originalname,
@@ -28,8 +29,8 @@ async function createAttachment(file, userId) {
   });
 }
 
-async function findAttachment(id) {
-  return Attachment.findById(id);
+async function findAttachment(id, tenantId) {
+  return Attachment.findOne({ _id: id, tenant_id: tenantId });
 }
 
 function removeAttachmentFile(fileName) {

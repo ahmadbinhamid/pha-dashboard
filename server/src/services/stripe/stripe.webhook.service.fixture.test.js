@@ -246,7 +246,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     await Order.updateOne({ _id: baseOrder._id }, { $set: { "items.0.product": productId, "items.0.sku": sku } });
     const order = await Order.findById(baseOrder._id);
 
-    const location = await Location.create({ name: `Row16 Location ${suffix}` });
+    const location = await Location.create({ tenant_id: TEST_TENANT_ID, name: `Row16 Location ${suffix}` });
     const STARTING_STOCK = 5;
     const inventory = await Inventory.create({ product: productId, variant: null, location: location._id, stock_count: STARTING_STOCK });
 

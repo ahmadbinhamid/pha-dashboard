@@ -44,13 +44,14 @@ const {
   systemfailure,
 } = require("../utils/http/response");
 
-// Best-effort: adds this make/model/model_code/year combo to the shared
-// VehicleModel catalog (covers custom values typed into the vehicle Combobox)
-// without letting a catalog write failure block the product save.
-async function syncVehicleModelCatalog(vehicle) {
+// Best-effort: adds this make/model/model_code/year combo to this tenant's
+// OWN vehicle catalog (covers custom values typed into the vehicle
+// Combobox) without letting a catalog write failure block the product save.
+// Never writes to the shared/global catalog — see vehicle-model.service.js.
+async function syncVehicleModelCatalog(vehicle, tenantId) {
   if (!vehicle) return;
   try {
-    await vehicleModelService.upsertVehicleModel(vehicle);
+    await vehicleModelService.upsertVehicleModel(vehicle, tenantId);
   } catch (err) {
     logger.warn(`[product.controller] failed to sync vehicle model catalog: ${err.message}`);
   }
@@ -159,7 +160,7 @@ exports.createProduct = async (req, res) => {
       digital_file: digital_file || null,
     }, generateSlug(title), req.tenantId);
 
-    await syncVehicleModelCatalog(parsedVehicle);
+    await syncVehicleModelCatalog(parsedVehicle, req.tenantId);
 
     const parsedStockEntries = stock_entries
       ? JSON.parse(stock_entries)
@@ -274,7 +275,7 @@ exports.updateProduct = async (req, res) => {
       await saveProduct(product);
     }
 
-    if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle);
+    if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle, req.tenantId);
 
     if (choicesChanged && product.has_variants && product.choices.length > 0) {
       const newVariants = await generateVariantsForProduct(product);

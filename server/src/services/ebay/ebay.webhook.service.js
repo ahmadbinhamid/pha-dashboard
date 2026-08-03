@@ -41,16 +41,22 @@ function verifySignature(rawBody, signatureHeader, verificationToken) {
   }
 }
 
-// Returns true if this is a new event that should be processed,
-// false if it was already processed (duplicate key = race won by other path).
-async function claimEvent(orderId, action) {
+// Returns true if this is a new (orderId, sku, action) claim that should be
+// processed, false if it was already processed (duplicate key = race won by
+// the poller, or a retried/duplicate delivery of the same notification).
+// Keyed per-SKU, not per-order: eBay sends one notification per line item on
+// a multi-item order, and the old per-order key meant the second SKU's
+// notification silently lost this race against the first — see
+// EbayProcessedOrder.js's schema comment.
+async function claimEvent(orderId, sku, action, quantity) {
   try {
     await EbayProcessedOrder.create({
       platform: MARKETPLACE_PLATFORM.EBAY,
       orderId,
+      sku,
+      quantity,
       action,
       source: "webhook",
-      lineItems: [],
     });
     return true;
   } catch (err) {
@@ -87,18 +93,13 @@ async function processNotification(payload, tenant) {
       return { processed: false };
     }
 
-    const claimed = await claimEvent(orderId, "deduction");
+    const claimed = await claimEvent(orderId, sku, "deduction", qty);
     if (!claimed) {
-      logger.info(`[ebay.webhook] Order ${orderId} deduction already recorded — skipping`);
+      logger.info(`[ebay.webhook] Order ${orderId} deduction for SKU ${sku} already recorded — skipping`);
       return { processed: false, reason: "already_processed" };
     }
 
-    await adjustStockBySku(sku, -qty);
-
-    await EbayProcessedOrder.updateOne(
-      { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "deduction" },
-      { $set: { lineItems: [{ sku, quantity: qty }] } },
-    );
+    await adjustStockBySku(sku, -qty, tenant._id);
 
     logger.info(`[ebay.webhook] tenant ${tenant._id}: deducted ${qty} × ${sku} for order ${orderId}`);
     return { processed: true, topic, sku, qty: -qty };
@@ -118,13 +119,13 @@ async function processNotification(payload, tenant) {
         return { processed: false };
       }
 
-      const claimed = await claimEvent(orderId, "restock");
+      const claimed = await claimEvent(orderId, sku, "restock", qty);
       if (!claimed) {
-        logger.info(`[ebay.webhook] Order ${orderId} restock already recorded — skipping`);
+        logger.info(`[ebay.webhook] Order ${orderId} restock for SKU ${sku} already recorded — skipping`);
         return { processed: false, reason: "already_processed" };
       }
 
-      await adjustStockBySku(sku, qty);
+      await adjustStockBySku(sku, qty, tenant._id);
 
       // Isolated from the stock adjustment above: eBay never retries this
       // webhook (we already respond 200 before processNotification runs —

@@ -16,12 +16,14 @@
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");
 const { getConfiguredTenants } = require("./ebay.tenant");
+const { markConnectionError } = require("./ebay.settings.service");
 const { resolveSku } = require("../marketplace/listing.resolver");
 const { adjustStockForSku } = require("../inventory.service");
 const { deleteListing } = require("./ebay.listing.service");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const { ADJUSTMENT_TYPE } = require("../../constants/inventory.constants");
+const { EBAY_CONNECTION_STATUS } = require("../../constants/ebay.constants");
 
 // Consecutive misses required before we treat a listing as genuinely deleted
 // on eBay (rather than a transient blip in that one poll) — see the schema
@@ -65,9 +67,20 @@ async function reconcileEbayInventory() {
       summary.baselined += tenantSummary.baselined;
       summary.deletedFromEbay += tenantSummary.deletedFromEbay;
       summary.errors += tenantSummary.errors;
+
+      // Self-heal — mirrors ebay.orders.service.js's poll loop: a successful
+      // reconciliation is proof the connection works, even if a previous
+      // cycle left connection_status stuck at ERROR/TOKEN_EXPIRED/REVOKED.
+      if (settings.connection_status && settings.connection_status !== EBAY_CONNECTION_STATUS.CONNECTED) {
+        await markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
+      }
     } catch (err) {
       summary.errors++;
+      // Previously only logged — connection_status never reflected a
+      // revoked/expired token, so a broken integration failed silently and
+      // indefinitely instead of surfacing to the tenant. Found live.
       logger.error(`[ebay.inventory-sync] tenant ${tenant._id} reconciliation failed: ${err.message}`);
+      await markConnectionError(tenant._id, { message: err.message });
     }
   }
 
@@ -147,6 +160,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
         reason: `eBay quantity changed directly on eBay (was ${listing.ebay_synced_quantity}, now ${ebayQty})`,
         type: ADJUSTMENT_TYPE.EBAY_MANUAL_ADJUSTMENT,
         userId: null,
+        tenantId: tenant._id,
       });
 
       listing.ebay_synced_quantity = ebayQty;

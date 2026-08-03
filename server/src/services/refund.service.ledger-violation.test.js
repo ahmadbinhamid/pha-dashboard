@@ -55,7 +55,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
   const sku = `ph-${productId.toHexString()}`; // fallback SKU format — resolves to {productId} with no real Product doc needed
   const suffix = crypto.randomUUID();
 
-  const location = await Location.create({ name: `Test Location ${suffix}` });
+  const location = await Location.create({ tenant_id: TEST_TENANT_ID, name: `Test Location ${suffix}` });
   const STARTING_STOCK = 10;
   const inventory = await Inventory.create({
     product: productId,

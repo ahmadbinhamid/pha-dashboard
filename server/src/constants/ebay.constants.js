@@ -36,4 +36,30 @@ const EBAY_CONNECTION_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-module.exports = { EBAY_SCOPES, EBAY_ERROR_CODE, EBAY_CONNECTION_STATUS };
+// Every eBay marketplace this app's UI lets a tenant pick (EbaySettings.
+// marketplace_id has no enum restricting it to AU) mapped to that
+// marketplace's transaction currency. Listing publish (buildOfferFromResolved)
+// and eBay order import (createOrderFromEbayOrder) previously hardcoded
+// "AUD"/"aud" regardless of this setting — a tenant configured for a non-AU
+// marketplace would get mislabeled order currency and, worse, listings
+// published with a currency eBay likely rejects for that marketplace. Found
+// live. Order import prefers the currency eBay's own order payload reports
+// (see ebay.order.mapper.js) and only falls back to this map when that's
+// absent; listing publish has no per-offer currency from eBay to prefer, so
+// this map is the only source there.
+const EBAY_MARKETPLACE_CURRENCY = Object.freeze({
+  EBAY_AU: "AUD",
+  EBAY_US: "USD",
+  EBAY_GB: "GBP",
+  EBAY_DE: "EUR",
+  EBAY_FR: "EUR",
+  EBAY_IT: "EUR",
+  EBAY_ES: "EUR",
+  EBAY_CA: "CAD",
+});
+
+function currencyForMarketplace(marketplaceId) {
+  return EBAY_MARKETPLACE_CURRENCY[marketplaceId] || "AUD";
+}
+
+module.exports = { EBAY_SCOPES, EBAY_ERROR_CODE, EBAY_CONNECTION_STATUS, EBAY_MARKETPLACE_CURRENCY, currencyForMarketplace };

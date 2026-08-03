@@ -12,7 +12,13 @@ const { escapeRegex } = require("../utils/regex");
 
 // ── List / aggregation ────────────────────────────────────────────────────────
 
-async function listInventory({ page = 1, limit = 20, search, location, product, variant } = {}) {
+// tenantId is required — Inventory has no tenant_id field of its own (see
+// Inventory.js), so scoping goes through this $match on product.tenant_id
+// right after the product $lookup. Previously entirely unscoped: any
+// authenticated admin, from any tenant, saw every OTHER tenant's inventory
+// on this list. Found live, the moment a second real tenant existed.
+async function listInventory(tenantId, { page = 1, limit = 20, search, location, product, variant } = {}) {
+  if (!tenantId) throw new Error("[inventory.service] listInventory: tenantId is required");
   const skip = (page - 1) * limit;
 
   const preFilters = [];
@@ -36,7 +42,7 @@ async function listInventory({ page = 1, limit = 20, search, location, product, 
       },
     },
     { $unwind: { path: "$product", preserveNullAndEmptyArrays: false } },
-    { $match: { "product.deleted_at": null } },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
     {
       $lookup: {
         from: "productvariants",
@@ -150,11 +156,33 @@ async function fetchPopulatedRecord(id) {
     .populate("location", "name address");
 }
 
-async function findRecord(id) {
-  return Inventory.findById(id);
+// tenantId required — Inventory has no tenant_id of its own, so ownership
+// is verified via the record's product. Previously a bare findById with no
+// check at all: any authenticated admin, from any tenant, could adjust/set
+// stock or read history on ANY OTHER tenant's inventory record just by
+// knowing (or enumerating) a valid ObjectId — a write vulnerability, not
+// just a read leak. Found live.
+async function findRecord(id, tenantId) {
+  const record = await Inventory.findById(id);
+  if (!record) return null;
+  const owned = await Product.exists({ _id: record.product, tenant_id: tenantId });
+  if (!owned) return null;
+  return record;
 }
 
-async function ensureRecord({ product, location, variant }) {
+// tenantId required — verifies both `product` AND `location` actually
+// belong to this tenant before creating/upserting an Inventory record
+// linking them. Previously unchecked: any tenant could pass another
+// tenant's product or location id here and create a phantom stock record
+// linked to it. Found live.
+async function ensureRecord({ product, location, variant }, tenantId) {
+  const Location = require("../models/Location");
+  const [ownsProduct, ownsLocation] = await Promise.all([
+    Product.exists({ _id: product, tenant_id: tenantId }),
+    Location.exists({ _id: location, tenant_id: tenantId }),
+  ]);
+  if (!ownsProduct || !ownsLocation) return null;
+
   return Inventory.findOneAndUpdate(
     { product, location, variant: variant || null },
     {
@@ -170,12 +198,46 @@ async function ensureRecord({ product, location, variant }) {
   );
 }
 
+// Compare-and-swap retry instead of a plain read-then-.save(): two
+// concurrent adjustments on the same record (e.g. a real-time eBay webhook
+// deduction racing the inventory-reconciliation poll, or a Stripe sale
+// racing an eBay order-poll deduction) previously both read the same
+// stock_count, computed independently, and the second .save() silently
+// clobbered the first — no error, no warning, lost stock movement. This
+// re-reads and retries on conflict instead of trusting an in-memory value
+// that may already be stale by the time it writes.
 async function adjustStock(record, { adjustment, reason, type, userId }) {
-  const stock_before = record.stock_count;
-  const stock_after = Math.max(0, stock_before + adjustment);
+  let current = record;
+  let stock_before, stock_after, updated;
 
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    stock_before = current.stock_count;
+    stock_after = Math.max(0, stock_before + adjustment);
+
+    updated = await Inventory.findOneAndUpdate(
+      { _id: current._id, stock_count: stock_before },
+      { $set: { stock_count: stock_after } },
+      { new: true },
+    );
+    if (updated) break;
+
+    current = await Inventory.findById(record._id);
+    if (!current) {
+      throw new Error(`[inventory.service] adjustStock: record ${record._id} no longer exists`);
+    }
+  }
+
+  if (!updated) {
+    throw new Error(
+      `[inventory.service] adjustStock: record ${record._id} still conflicting after ${MAX_ATTEMPTS} attempts — high contention`,
+    );
+  }
+
+  // Keep the caller's in-memory document consistent with what was actually
+  // persisted (callers like adjustStockForSku read record.stock_count
+  // afterward via the returned stock_after, but some also hold onto `record`).
   record.stock_count = stock_after;
-  await record.save();
 
   await InventoryHistory.create({
     inventory: record._id,
@@ -199,12 +261,24 @@ async function adjustStock(record, { adjustment, reason, type, userId }) {
   return { record, stock_before, stock_after };
 }
 
+// This is an absolute set (not a delta), so unlike adjustStock() there's
+// nothing to retry on conflict — but the pre-write value still needs to be
+// read atomically with the write itself, or a concurrent adjustment landing
+// between a plain read and this save would silently vanish AND get logged
+// with a wrong stock_before in the audit trail.
 async function setStock(record, { stock_count, reason, userId }) {
   const newCount = Math.round(Number(stock_count));
-  const stock_before = record.stock_count;
 
+  const previous = await Inventory.findOneAndUpdate(
+    { _id: record._id },
+    { $set: { stock_count: newCount } },
+    { new: false },
+  );
+  if (!previous) {
+    throw new Error(`[inventory.service] setStock: record ${record._id} no longer exists`);
+  }
+  const stock_before = previous.stock_count;
   record.stock_count = newCount;
-  await record.save();
 
   await InventoryHistory.create({
     inventory: record._id,
@@ -251,18 +325,29 @@ async function getTotalStockForProduct(productId) {
 
 const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
 
-async function resolveSkuToIds(sku) {
+// tenantId is required — SKUs are only unique PER TENANT (see Product.js's
+// {tenant_id, sku} unique index), never globally. An unscoped lookup here
+// previously meant two tenants sharing the same generic SKU string (common
+// for auto-part codes) could corrupt each other's stock: found live, see
+// git history for this comment. The fallback `ph-<productId>` form is exempt
+// since it already carries an unambiguous product id, but the id it embeds
+// still isn't verified as belonging to tenantId here — callers that need
+// that guarantee (e.g. order import) do their own tenant check on the
+// resolved ids, same as ever.
+async function resolveSkuToIds(sku, tenantId) {
+  if (!tenantId) throw new Error("[inventory.service] resolveSkuToIds: tenantId is required");
+
   const match = sku.match(FALLBACK_SKU_RE);
   if (match) {
     return { productId: match[1], variantId: match[2] || null };
   }
 
-  const variant = await ProductVariant.findOne({ sku }).lean();
+  const variant = await ProductVariant.findOne({ sku, tenant_id: tenantId }).lean();
   if (variant) {
     return { productId: variant.product.toString(), variantId: variant._id.toString() };
   }
 
-  const product = await Product.findOne({ sku }).lean();
+  const product = await Product.findOne({ sku, tenant_id: tenantId }).lean();
   if (product) {
     return { productId: product._id.toString(), variantId: null };
   }
@@ -280,8 +365,8 @@ async function resolveSkuToIds(sku) {
 //   - returns `totalStockAfter` — the SKU's new total across all locations,
 //     which callers pushing quantity to a marketplace need as the absolute
 //     value to send (eBay's inventory API takes an absolute quantity, not a delta)
-async function adjustStockForSku(sku, delta, { reason, type, userId = null } = {}) {
-  const ids = await resolveSkuToIds(sku);
+async function adjustStockForSku(sku, delta, { reason, type, userId = null, tenantId } = {}) {
+  const ids = await resolveSkuToIds(sku, tenantId);
   if (!ids) {
     logger.warn(`[inventory.service] SKU not found: ${sku}`);
     return null;
@@ -335,9 +420,8 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null } = {
   return { productId, variantId, adjustments, shortfall, totalStockAfter };
 }
 
-// Thin, backward-compatible wrapper preserving the original eBay behavior
-// and return shape exactly, so existing eBay call sites need no changes.
-async function adjustStockBySku(sku, delta) {
+// Thin wrapper preserving the original eBay behavior and return shape.
+async function adjustStockBySku(sku, delta, tenantId) {
   const result = await adjustStockForSku(sku, delta, {
     reason:
       delta < 0
@@ -345,6 +429,7 @@ async function adjustStockBySku(sku, delta) {
         : `eBay cancellation/return (SKU: ${sku})`,
     type: ADJUSTMENT_TYPE.EBAY_SALE,
     userId: null,
+    tenantId,
   });
   if (!result) return null;
 

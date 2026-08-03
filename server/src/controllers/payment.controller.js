@@ -3,8 +3,9 @@
 const orderService = require("../services/order.service");
 const paymentService = require("../services/payment.service");
 const { createPaymentIntentForOrder } = require("../services/stripe/stripe.payment.service");
-const { constructEvent, handleEvent } = require("../services/stripe/stripe.webhook.service");
+const { constructEventWithFallback, handleEvent } = require("../services/stripe/stripe.webhook.service");
 const stripeKeysService = require("../services/stripe/stripe.keys.service");
+const config = require("../config");
 const { logger } = require("../loaders/logging");
 const {
   success,
@@ -70,9 +71,16 @@ exports.handleWebhook = async (req, res) => {
 
   const signature = req.headers["stripe-signature"];
 
+  // The tenant's real secret is always tried first and is the only candidate
+  // in production — STRIPE_DEV_WEBHOOK_SECRET is a second attempt purely for
+  // local `stripe listen` testing, which mints its own signing secret that
+  // can never match a tenant's real one. See stripe.webhook.service.js.
+  const candidateSecrets =
+    config.env === "production" ? [webhookSecret] : [webhookSecret, config.stripe.devWebhookSecret];
+
   let event;
   try {
-    event = constructEvent(req.rawBody, signature, webhookSecret);
+    event = constructEventWithFallback(req.rawBody, signature, candidateSecrets);
   } catch (err) {
     logger.warn(`[payment.controller] Stripe signature verification failed: ${err.message}`);
     return badRequest(res, "Invalid signature");
