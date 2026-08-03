@@ -116,9 +116,12 @@ function buildPaymentBaseUrl(tenant) {
   const domain = config.payment.linkDomain;
   if (!domain) return config.emailBrand.clientUrl;
 
+  // tenant.slug keeps its hyphens everywhere else (DB, tenant_slug login,
+  // etc) — stripped only here, since a subdomain like
+  // parts-hub-australia.autopartspro.au reads worse than partshubaustralia.
   const host =
     tenant?.payment_domain_mode === PAYMENT_DOMAIN_MODE.VENDOR_SLUG && tenant.slug
-      ? `${tenant.slug}.${domain}`
+      ? `${tenant.slug.replace(/-/g, "")}.${domain}`
       : `payment.${domain}`;
   return `https://${host}`;
 }
