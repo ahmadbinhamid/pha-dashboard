@@ -222,8 +222,12 @@ exports.oauthCallback = async (req, res) => {
     const { tenantId, sandbox } = oauthService.resolveState(state);
     const refreshToken = await oauthService.exchangeCodeForRefreshToken(code, sandbox);
 
-    await settingsService.upsertSettings(tenantId, { refresh_token: refreshToken, sandbox });
+    let settings = await settingsService.upsertSettings(tenantId, { refresh_token: refreshToken, sandbox });
     ebayApiService.clearTokenCache(tenantId);
+
+    if (!settings.merchant_location_key) {
+      settings = await autoFillMerchantLocationKey(tenantId, settings);
+    }
 
     logger.info("[ebay.controller] Tenant connected via OAuth", { tenantId });
     return redirect({ ebay_connect: "success" });
@@ -232,6 +236,29 @@ exports.oauthCallback = async (req, res) => {
     return redirect({ ebay_connect: "error", reason: "exchange_failed" });
   }
 };
+
+// Best-effort — called right after a successful OAuth connect. If the seller
+// already has a merchant location set up on eBay (e.g. from their seller
+// hub), fill it in automatically so they don't have to copy the key by hand.
+// Never throws: a failure here shouldn't turn a successful connect into an
+// error redirect, since the key can still be entered manually in Settings.
+async function autoFillMerchantLocationKey(tenantId, settings) {
+  try {
+    const token = await ebayApiService.getAccessToken(settings);
+    if (!token) return settings;
+
+    const locations = await ebayApiService.getInventoryLocations(token, settings);
+    const key = locations[0]?.merchantLocationKey;
+    if (!key) return settings;
+
+    const updated = await settingsService.upsertSettings(tenantId, { merchant_location_key: key });
+    logger.info("[ebay.controller] Auto-filled merchant_location_key from eBay", { tenantId, key });
+    return updated;
+  } catch (err) {
+    logger.warn("[ebay.controller] Could not auto-fill merchant_location_key", { tenantId, error: err.message });
+    return settings;
+  }
+}
 
 exports.getCategorySuggestions = async (req, res) => {
   try {

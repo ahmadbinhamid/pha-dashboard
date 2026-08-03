@@ -611,6 +611,22 @@ async function deleteProduct(settings, sku, offerId = null) {
 
 // ── Merchant Location ─────────────────────────────────────────────────────────
 
+// Lists this tenant's existing merchant locations on eBay — used right after
+// OAuth connect to auto-fill merchant_location_key from a location the seller
+// already set up (e.g. via eBay's own seller hub), instead of requiring them
+// to type the key in manually.
+async function getInventoryLocations(token, settings) {
+  const res = await fetch(
+    `${inventoryBaseFor(settings.sandbox)}/location?limit=100`,
+    { headers: ebayHeaders(token, settings.marketplace_id) },
+  );
+
+  if (!res.ok) await throwEbayApiError("getInventoryLocations", res);
+
+  const body = await res.json();
+  return body.locations || [];
+}
+
 async function ensureLocation(token, settings) {
   const key = settings.merchant_location_key;
   if (!key) throw new Error("This tenant has no merchant_location_key set — configure it in eBay settings first");
@@ -846,6 +862,7 @@ module.exports = {
   publishOffer,
   updateInventoryQuantity,
   deleteProduct,
+  getInventoryLocations,
   ensureLocation,
   getDefaultCategoryTreeId,
   getItemAspectsForCategory,
