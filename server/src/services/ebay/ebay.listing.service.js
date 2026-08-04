@@ -119,8 +119,16 @@ async function createListing(payload, tenantId) {
 
 async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
-    .populate("product", "title slug sku price brand mpn attachments vehicle")
-    .populate("variant", "display_name sku price attachments")
+    .populate({
+      path: "product",
+      select: "title slug sku price brand mpn attachments vehicle",
+      populate: { path: "attachments" },
+    })
+    .populate({
+      path: "variant",
+      select: "display_name sku price attachments",
+      populate: { path: "attachments" },
+    })
     .populate("photo_overrides");
 }
 

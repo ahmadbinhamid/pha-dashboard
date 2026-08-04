@@ -43,6 +43,11 @@ export interface MarketplaceListingProduct {
   // "product" populate field list) — the listing's Technical Specifications
   // always reads this live, never a copy stored on the listing itself.
   vehicle?: import("@/types/product").ProductVehicle | null;
+  // Present when the backend populates it — used only as a display fallback
+  // when the listing has no photo_overrides of its own (mirrors the
+  // product/variant fallback used server-side when actually pushing to eBay,
+  // see listing.resolver.js#resolvePhotos). Never written back on save.
+  attachments?: import("@/types/product").Attachment[];
 }
 
 export interface MarketplaceListing {
@@ -50,7 +55,16 @@ export interface MarketplaceListing {
   id: string;
   platform: MarketplacePlatform;
   product: string | MarketplaceListingProduct;
-  variant: string | null | { _id: string; display_name: string; sku: string | null };
+  variant:
+    | string
+    | null
+    | {
+        _id: string;
+        display_name: string;
+        sku: string | null;
+        // Same display-fallback purpose as MarketplaceListingProduct.attachments.
+        attachments?: import("@/types/product").Attachment[];
+      };
   title_override: string | null;
   description_override: string | null;
   price_override: number | null;

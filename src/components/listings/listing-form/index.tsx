@@ -82,6 +82,18 @@ export function ListingForm({
   const titleLen = (form.title_override || "").length;
   const photoImages = form.photo_overrides || [];
 
+  // Display-only fallback for the description preview when this listing has
+  // no photo_overrides of its own — mirrors the variant -> product fallback
+  // the backend already applies when actually pushing to eBay (see
+  // listing.resolver.js#resolvePhotos). Never written into form state/saved.
+  const listingVariant = listing && typeof listing.variant === "object" ? listing.variant : null;
+  const listingProductForFallback =
+    listing && listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+  const fallbackAttachments =
+    (listingVariant?.attachments && listingVariant.attachments.length > 0
+      ? listingVariant.attachments
+      : listingProductForFallback?.attachments) || [];
+
   const { data: policiesData, isLoading: policiesLoading } = useQuery({
     queryKey: ["ebay-business-policies"],
     queryFn: getBusinessPolicies,
@@ -232,7 +244,7 @@ export function ListingForm({
               rows={6}
             />
           </FormField>
-          <EbayDescriptionSection form={form} vehicle={productVehicle} />
+          <EbayDescriptionSection form={form} vehicle={productVehicle} fallbackAttachments={fallbackAttachments} />
         </div>
       </Section>
 

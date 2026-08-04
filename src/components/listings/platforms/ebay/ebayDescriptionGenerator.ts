@@ -34,7 +34,10 @@ export function generateListingHtml(
   // the real photo/logo fine, so it's the ONLY caller that should pass
   // `true` here — the payload actually sent to eBay (lib/api/listings.ts)
   // must always leave this false.
-  { embedImages = false }: { embedImages?: boolean } = {},
+  // fallbackImageUrl: product/variant photo to use when the listing has no
+  // photo_overrides of its own — mirrors the fallback the backend already
+  // applies when actually pushing to eBay (listing.resolver.js#resolvePhotos).
+  { embedImages = false, fallbackImageUrl }: { embedImages?: boolean; fallbackImageUrl?: string } = {},
 ): string {
   const business = esc(businessName?.trim() || "Your Store");
   const headerLogo = embedImages && logoUrl?.startsWith("https://")
@@ -88,7 +91,7 @@ export function generateListingHtml(
   // ebay.api.service.js#resolveImageUrls, a separate Inventory API path that
   // eBay re-hosts on i.ebayimg.com) — this placeholder only affects this
   // description block.
-  const rawImage = form.photo_overrides?.[0]?.url || "";
+  const rawImage = form.photo_overrides?.[0]?.url || fallbackImageUrl || "";
   const firstImage = embedImages && rawImage.startsWith("https://") ? rawImage : "";
   const imageCell = firstImage
     ? `<img src="${firstImage}" alt="${title}" style="width:100%;height:auto;display:block;">`
