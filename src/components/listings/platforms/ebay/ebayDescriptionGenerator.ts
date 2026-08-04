@@ -40,13 +40,18 @@ export function generateListingHtml(
   { embedImages = false, fallbackImageUrl }: { embedImages?: boolean; fallbackImageUrl?: string } = {},
 ): string {
   const business = esc(businessName?.trim() || "Your Store");
-  const businessNameText = `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
+  const businessNameSpan = `<span style="display:inline-block;vertical-align:middle;font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</span>`;
+  // Kept flat (no nested <table>) — eBay's live listing-description sanitizer
+  // has been observed dropping content inside a <table> nested another
+  // level deep inside the outer layout table, even though it renders fine
+  // in our own preview iframe. inline-block siblings are far more likely to
+  // survive whatever HTML sanitizer eBay runs on the saved description.
   const headerLogo = embedImages && logoUrl?.startsWith("https://")
-    ? `<table cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="vertical-align:middle;padding-right:16px;"><img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:200px;display:block;"></td>
-        <td style="vertical-align:middle;">${businessNameText}</td>
-      </tr></table>`
-    : businessNameText;
+    ? `<div style="white-space:nowrap;">
+        <img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:200px;vertical-align:middle;display:inline-block;margin-right:16px;">
+        ${businessNameSpan}
+      </div>`
+    : `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
 
   const title = esc(form.title_override.trim() || `${businessName?.trim() || "Store"} Product`);
   const make = esc(vehicle?.make?.trim() || "—");
