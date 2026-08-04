@@ -40,9 +40,13 @@ export function generateListingHtml(
   { embedImages = false, fallbackImageUrl }: { embedImages?: boolean; fallbackImageUrl?: string } = {},
 ): string {
   const business = esc(businessName?.trim() || "Your Store");
+  const businessNameText = `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
   const headerLogo = embedImages && logoUrl?.startsWith("https://")
-    ? `<img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:280px;display:block;">`
-    : `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
+    ? `<table cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="vertical-align:middle;padding-right:16px;"><img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:200px;display:block;"></td>
+        <td style="vertical-align:middle;">${businessNameText}</td>
+      </tr></table>`
+    : businessNameText;
 
   const title = esc(form.title_override.trim() || `${businessName?.trim() || "Store"} Product`);
   const make = esc(vehicle?.make?.trim() || "—");
