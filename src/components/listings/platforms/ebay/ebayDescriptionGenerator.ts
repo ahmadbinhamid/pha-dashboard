@@ -21,19 +21,25 @@ function esc(s: string): string {
 export function generateListingHtml(
   form: EbayListingFormState,
   vehicle: ProductVehicle | null | undefined,
-  // This tenant's own branding (TenantSettings.company_name) — every tenant
-  // shares this one generator, so nothing here may hardcode a specific
-  // tenant's name. No logo_url param — see headerLogo below for why.
+  // This tenant's own branding (TenantSettings.company_name/logo_url) — every
+  // tenant shares this one generator, so nothing here may hardcode a specific
+  // tenant's name/logo.
   businessName?: string | null,
+  logoUrl?: string | null,
+  // eBay renders the saved description in a sandboxed context that blocks
+  // images hosted on any third-party domain (confirmed on a live listing) —
+  // a hotlinked <img src="https://<our-domain>/..."> always shows a broken
+  // icon there, regardless of the URL being reachable. Our OWN in-app
+  // preview (EbayDescriptionSection.tsx) has no such restriction and renders
+  // the real photo/logo fine, so it's the ONLY caller that should pass
+  // `true` here — the payload actually sent to eBay (lib/api/listings.ts)
+  // must always leave this false.
+  { embedImages = false }: { embedImages?: boolean } = {},
 ): string {
   const business = esc(businessName?.trim() || "Your Store");
-  // eBay renders the description HTML in a sandboxed context that blocks
-  // images hosted on third-party domains (confirmed live — eBay's own
-  // Inventory API photo gallery works fine since eBay re-hosts those on
-  // i.ebayimg.com; a hotlinked <img src="https://<our-domain>/..."> here
-  // always renders as a broken icon regardless of the URL being reachable).
-  // Text-only per-tenant fallback instead — never a hotlinked <img>.
-  const headerLogo = `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
+  const headerLogo = embedImages && logoUrl?.startsWith("https://")
+    ? `<img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:280px;display:block;">`
+    : `<div style="font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</div>`;
 
   const title = esc(form.title_override.trim() || `${businessName?.trim() || "Store"} Product`);
   const make = esc(vehicle?.make?.trim() || "—");
@@ -75,14 +81,18 @@ export function generateListingHtml(
         <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
       </tr>`;
 
-  // Never hotlink here — eBay renders the description in a sandboxed context
-  // that blocks images from any third-party domain (confirmed on a live
-  // listing), so `<img src="https://<our-domain>/...">` always shows a
-  // broken icon regardless of the URL being reachable. The real product
-  // photo already displays correctly via eBay's own native gallery (see
+  // See the embedImages doc-comment above — the actual eBay submission
+  // (embedImages: false) never gets here with a real image; only our own
+  // preview does. The real product photo also displays correctly on eBay
+  // itself regardless, via its own native gallery (see
   // ebay.api.service.js#resolveImageUrls, a separate Inventory API path that
-  // eBay re-hosts on i.ebayimg.com) — this placeholder is description-only.
-  const imageCell = `<div style="width:100%;padding-top:75%;background:#1a1a1a;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;font-size:11px;color:#8a8070;letter-spacing:2px;">NO IMAGE</span></div>`;
+  // eBay re-hosts on i.ebayimg.com) — this placeholder only affects this
+  // description block.
+  const rawImage = form.photo_overrides?.[0]?.url || "";
+  const firstImage = embedImages && rawImage.startsWith("https://") ? rawImage : "";
+  const imageCell = firstImage
+    ? `<img src="${firstImage}" alt="${title}" style="width:100%;height:auto;display:block;">`
+    : `<div style="width:100%;padding-top:75%;background:#1a1a1a;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;font-size:11px;color:#8a8070;letter-spacing:2px;">NO IMAGE</span></div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">

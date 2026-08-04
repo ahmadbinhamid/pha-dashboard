@@ -18,25 +18,32 @@ export function EbayDescriptionSection({ form, vehicle }: Props) {
   });
   const tenant = tenantSettingsData?.data;
 
-  const html = useMemo(() => generateListingHtml(form, vehicle, tenant?.company_name), [
-    form.title_override,
-    vehicle,
-    form.item_specifics.mpn,
-    form.store_sku,
-    form.condition,
-    form.condition_notes,
-    tenant?.company_name,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(form.fitment),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(form.item_specifics.superseded_part_number),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(form.item_specifics.aspects),
-    form.item_specifics.authenticity,
-    form.item_specifics.warranty,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    form.photo_overrides?.[0]?.url,
-  ]);
+  // embedImages: true — this preview renders same-origin in our own
+  // dashboard, so the real photo/logo load fine here (unlike the actual
+  // eBay submission, see generateListingHtml's doc-comment).
+  const html = useMemo(
+    () => generateListingHtml(form, vehicle, tenant?.company_name, tenant?.logo_url, { embedImages: true }),
+    [
+      form.title_override,
+      vehicle,
+      form.item_specifics.mpn,
+      form.store_sku,
+      form.condition,
+      form.condition_notes,
+      tenant?.company_name,
+      tenant?.logo_url,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      JSON.stringify(form.fitment),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      JSON.stringify(form.item_specifics.superseded_part_number),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      JSON.stringify(form.item_specifics.aspects),
+      form.item_specifics.authenticity,
+      form.item_specifics.warranty,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      form.photo_overrides?.[0]?.url,
+    ],
+  );
 
   return (
     <div className="space-y-3">
