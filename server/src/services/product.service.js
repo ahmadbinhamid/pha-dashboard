@@ -81,8 +81,14 @@ async function generateVariantsForProduct(product) {
   return newVariants;
 }
 
-async function ensureInventoryForProduct(productId, variantId = null) {
-  const locations = await Location.find({ is_active: true });
+// tenantId is required — without it this queried every tenant's active
+// locations, creating an Inventory row for THIS product at every OTHER
+// tenant's warehouse/showroom too. Found live during a multi-tenancy audit
+// (see backfillTenantId.js's own "found live" history for Location — same
+// class of bug, this call site was the one still missing the scope).
+async function ensureInventoryForProduct(productId, variantId = null, tenantId) {
+  if (!tenantId) throw new Error("[product.service] ensureInventoryForProduct: tenantId is required");
+  const locations = await Location.find({ is_active: true, tenant_id: tenantId });
   if (!locations.length) return;
 
   for (const loc of locations) {

@@ -274,6 +274,20 @@ const orderSchema = buildSchema({
   carrier_name: { type: String, default: null },
 });
 
+// Every order created after orderItemSchema switched to `{ _id: true }`
+// (see that schema's own comment) already has real, persisted item ids from
+// the moment it's inserted — there is no "unmigrated" state to wait out.
+// Without this hook item_ids_migrated_at only ever got set by the one-time
+// §6.2 backfill script, so any order created afterward would permanently
+// fail the refund.service.js#issueRefund guard with "needs migration" even
+// though its items were never actually missing ids.
+orderSchema.pre("save", function (next) {
+  if (this.isNew && !this.item_ids_migrated_at) {
+    this.item_ids_migrated_at = new Date();
+  }
+  next();
+});
+
 orderSchema.index({ "customer.email": 1 });
 orderSchema.index({ customer_id: 1 });
 orderSchema.index({ status: 1 });

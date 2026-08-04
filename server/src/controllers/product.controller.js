@@ -170,10 +170,10 @@ exports.createProduct = async (req, res) => {
       const variants = await generateVariantsForProduct(product);
       if (product.stock_control) {
         for (const v of variants)
-          await ensureInventoryForProduct(product._id, v._id);
+          await ensureInventoryForProduct(product._id, v._id, req.tenantId);
       }
     } else if (product.stock_control) {
-      await ensureInventoryForProduct(product._id, null);
+      await ensureInventoryForProduct(product._id, null, req.tenantId);
       if (parsedStockEntries.length > 0) {
         await applyStockEntries(product._id, parsedStockEntries);
       }
@@ -281,12 +281,12 @@ exports.updateProduct = async (req, res) => {
       const newVariants = await generateVariantsForProduct(product);
       if (product.stock_control) {
         for (const v of newVariants)
-          await ensureInventoryForProduct(product._id, v._id);
+          await ensureInventoryForProduct(product._id, v._id, req.tenantId);
       }
     }
 
     if (product.stock_control && !product.has_variants) {
-      await ensureInventoryForProduct(product._id, null);
+      await ensureInventoryForProduct(product._id, null, req.tenantId);
     }
 
     return success(res, await getPopulatedProduct(product._id, req.tenantId), "Product updated");
