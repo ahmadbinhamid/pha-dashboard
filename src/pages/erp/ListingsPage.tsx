@@ -18,7 +18,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { getListings, pushListing, deleteListing } from "@/lib/api/listings";
+import { getListing, getListings, updateListing, pushListing, deleteListing } from "@/lib/api/listings";
+import { listingToForm, getListingFallbackImageUrl } from "@/lib/marketplace/listingToForm";
 import { useToast } from "@/context";
 import type { EbayListing } from "@/types/marketplace";
 import type { Product } from "@/types/product";
@@ -134,7 +135,20 @@ export default function ListingsPage() {
     !!deleteTarget?.external_offer_id || !!deleteTarget?.external_listing_id;
 
   const pushMutation = useMutation({
-    mutationFn: (id: string) => pushListing(id),
+    // Resave first so description_override is regenerated from current
+    // product/listing data (e.g. the real photo) before eBay receives it —
+    // pushing straight from here previously resent whatever HTML happened to
+    // already be stored, which was stale for anything synced before a
+    // description-generator change.
+    mutationFn: async (id: string) => {
+      const { data: listing } = await getListing(id);
+      const vehicle =
+        listing.product !== null && typeof listing.product === "object"
+          ? listing.product.vehicle ?? null
+          : null;
+      await updateListing(id, listingToForm(listing), vehicle, getListingFallbackImageUrl(listing));
+      await pushListing(id);
+    },
     onSuccess: () => {
       toast({ title: "Queued for eBay sync", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["listings"] });

@@ -6,84 +6,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
 import { getListing, updateListing, pushListing } from "@/lib/api/listings";
+import { listingToForm, getListingFallbackImageUrl } from "@/lib/marketplace/listingToForm";
 import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { EbayListingErrors } from "@/lib/validation/ebayListing";
-
-function normaliseSpn(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    const arr = (raw as string[]).filter((s) => s !== "");
-    return arr.length > 0 ? arr : [""];
-  }
-  if (typeof raw === "string" && raw.trim()) return [raw.trim()];
-  return [""];
-}
-
-function listingToForm(listing: EbayListing): EbayListingFormState {
-  const productId =
-    typeof listing.product === "object" ? listing.product._id : listing.product;
-  const variantId =
-    listing.variant && typeof listing.variant === "object"
-      ? listing.variant._id
-      : (listing.variant as string | null) ?? "";
-
-  const p = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
-
-  const rawFitment = (listing as unknown as Record<string, unknown>).fitment;
-  const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
-
-  const pExt = p as unknown as Record<string, unknown>;
-
-  return {
-    product_id: productId,
-    variant_id: variantId,
-    title_override: listing.title_override || p?.title || "",
-    description_override: listing.description_override || "",
-    price_override: listing.price_override != null
-      ? String(listing.price_override)
-      : p?.price != null ? String(p.price) : "",
-    photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
-    ebay_category_id: listing.ebay_category_id || "",
-    store_category_id: listing.store_category_id || "",
-    store_sku: listing.store_sku || p?.sku || "",
-    condition: listing.condition || "NEW",
-    condition_notes: listing.condition_notes || "",
-    item_specifics: {
-      brand: listing.item_specifics?.brand || "",
-      mpn: listing.item_specifics?.mpn || (typeof pExt?.mpn === "string" ? pExt.mpn : "") || "",
-      superseded_part_number: normaliseSpn(
-        (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
-      ),
-      aspects: ((listing.item_specifics as unknown as Record<string, unknown>)?.aspects as Record<string, string>) ?? {},
-      authenticity: listing.item_specifics?.authenticity || "",
-      warranty: listing.item_specifics?.warranty || "",
-    },
-    fitment: fitmentRows.map((r) => ({
-      make: String(r.make ?? ""),
-      model: String(r.model ?? ""),
-      model_code: String(r.model_code ?? ""),
-      year_from: r.year_from != null ? String(r.year_from) : "",
-      year_to: r.year_to != null ? String(r.year_to) : "",
-    })),
-    format: listing.format || "FIXED_PRICE",
-    quantity_available:
-      listing.quantity_available != null ? String(listing.quantity_available) : "",
-    listing_duration: listing.listing_duration || "GTC",
-    accept_best_offer: listing.accept_best_offer || false,
-    min_best_offer: listing.min_best_offer != null ? String(listing.min_best_offer) : "",
-    fulfillment_policy_id: listing.fulfillment_policy_id || "",
-    payment_policy_id: listing.payment_policy_id || "",
-    return_policy_id: listing.return_policy_id || "",
-    require_immediate_payment: listing.require_immediate_payment ?? true,
-    item_location_zip: listing.item_location_zip || "",
-    package: {
-      length: listing.package?.length != null ? String(listing.package.length) : "",
-      width: listing.package?.width != null ? String(listing.package.width) : "",
-      height: listing.package?.height != null ? String(listing.package.height) : "",
-      weight: listing.package?.weight != null ? String(listing.package.weight) : "",
-    },
-  };
-}
 
 export default function ListingEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -105,6 +31,7 @@ export default function ListingEditPage() {
   const listingProduct =
     listing && listing.product !== null && typeof listing.product === "object" ? listing.product : null;
   const productVehicle = listingProduct?.vehicle ?? null;
+  const fallbackImageUrl = listing ? getListingFallbackImageUrl(listing) : undefined;
 
   useEffect(() => {
     if (listing) setForm(listingToForm(listing));
@@ -115,7 +42,7 @@ export default function ListingEditPage() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => updateListing(id!, form, productVehicle),
+    mutationFn: () => updateListing(id!, form, productVehicle, fallbackImageUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listing", id] });
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -126,7 +53,7 @@ export default function ListingEditPage() {
 
   const pushMutation = useMutation({
     mutationFn: async () => {
-      await updateListing(id!, form, productVehicle);
+      await updateListing(id!, form, productVehicle, fallbackImageUrl);
       await pushListing(id!);
     },
     onSuccess: () => {

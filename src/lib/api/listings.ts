@@ -14,13 +14,25 @@ export interface ListingListParams {
   search?: string;
 }
 
-async function formStateToPayload(form: EbayListingFormState, vehicle: ProductVehicle | null | undefined) {
+async function formStateToPayload(
+  form: EbayListingFormState,
+  vehicle: ProductVehicle | null | undefined,
+  // Product/variant photo to embed when this listing has no photo_overrides
+  // of its own — mirrors the fallback the backend already applies for the
+  // real eBay photo gallery (listing.resolver.js#resolvePhotos). Without
+  // this, a listing with no override snapshot would save/push with no image
+  // in its description even though the product itself has real photos.
+  fallbackImageUrl?: string | null,
+) {
   const { data: tenant } = await getTenantSettings();
   return {
     product: form.product_id,
     variant: form.variant_id || null,
     title_override: form.title_override || null,
-    description_override: generateListingHtml(form, vehicle, tenant.company_name, tenant.logo_url, { embedImages: true }),
+    description_override: generateListingHtml(form, vehicle, tenant.company_name, tenant.logo_url, {
+      embedImages: true,
+      fallbackImageUrl: fallbackImageUrl || undefined,
+    }),
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
@@ -63,8 +75,12 @@ async function formStateToPayload(form: EbayListingFormState, vehicle: ProductVe
   };
 }
 
-export const createListing = async (form: EbayListingFormState, vehicle?: ProductVehicle | null) => {
-  const payload = await formStateToPayload(form, vehicle);
+export const createListing = async (
+  form: EbayListingFormState,
+  vehicle?: ProductVehicle | null,
+  fallbackImageUrl?: string | null,
+) => {
+  const payload = await formStateToPayload(form, vehicle, fallbackImageUrl);
   const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", payload);
   return data;
 };
@@ -86,8 +102,9 @@ export const updateListing = async (
   id: string,
   form: Partial<EbayListingFormState>,
   vehicle?: ProductVehicle | null,
+  fallbackImageUrl?: string | null,
 ) => {
-  const payload = await formStateToPayload(form as EbayListingFormState, vehicle);
+  const payload = await formStateToPayload(form as EbayListingFormState, vehicle, fallbackImageUrl);
   const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, payload);
   return data;
 };
