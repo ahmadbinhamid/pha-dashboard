@@ -5,6 +5,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { ColorSwatchInput } from "@/components/ui/ColorSwatchInput";
+import { StringListField } from "@/components/ui/StringListField";
 import { LogoUploadField } from "@/components/tenant-settings/LogoUploadField";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings, UpdateTenantSettingsPayload } from "@/types/tenantSettings";
@@ -60,7 +61,13 @@ export function CompanyProfileForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate(form);
+    mutation.mutate({
+      ...form,
+      pickup_location: form.pickup_location && {
+        ...form.pickup_location,
+        trading_hours: (form.pickup_location.trading_hours ?? []).map((s) => s.trim()).filter(Boolean),
+      },
+    });
   };
 
   return (
@@ -146,6 +153,14 @@ export function CompanyProfileForm({
         <CardHeader title="Invoice & Bank Details" description="Shown on invoices and receipts." />
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Pickup location name" hint="Shown as the heading on pickup-ready emails.">
+              <Input
+                value={form.pickup_location?.name ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, name: e.target.value } }))
+                }
+              />
+            </FormField>
             <FormField label="Pickup address">
               <Input
                 value={form.pickup_location?.address ?? ""}
@@ -154,15 +169,27 @@ export function CompanyProfileForm({
                 }
               />
             </FormField>
-            <FormField label="Pickup country">
-              <Input
-                value={form.pickup_location?.country ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, country: e.target.value } }))
-                }
-              />
-            </FormField>
           </div>
+
+          <FormField label="Pickup country">
+            <Input
+              value={form.pickup_location?.country ?? ""}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, country: e.target.value } }))
+              }
+            />
+          </FormField>
+
+          <FormField label="Trading hours" hint="Shown to customers on 'ready for pickup' emails, one line per row.">
+            <StringListField
+              values={form.pickup_location?.trading_hours ?? []}
+              onChange={(next) =>
+                setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, trading_hours: next } }))
+              }
+              placeholder="e.g. Mon–Fri: 9am – 5pm"
+              addLabel="Add trading hours line"
+            />
+          </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Bank name">
