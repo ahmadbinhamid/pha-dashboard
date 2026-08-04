@@ -26,14 +26,14 @@ export function generateListingHtml(
   // tenant's name/logo.
   businessName?: string | null,
   logoUrl?: string | null,
-  // eBay renders the saved description in a sandboxed context that blocks
-  // images hosted on any third-party domain (confirmed on a live listing) —
-  // a hotlinked <img src="https://<our-domain>/..."> always shows a broken
-  // icon there, regardless of the URL being reachable. Our OWN in-app
-  // preview (EbayDescriptionSection.tsx) has no such restriction and renders
-  // the real photo/logo fine, so it's the ONLY caller that should pass
-  // `true` here — the payload actually sent to eBay (lib/api/listings.ts)
-  // must always leave this false.
+  // embedImages is intentionally true for BOTH the in-app preview
+  // (EbayDescriptionSection.tsx) and the real payload sent to eBay
+  // (lib/api/listings.ts#formStateToPayload) — product/tenant photos are
+  // hosted on our own domain over HTTPS and get embedded directly. Note:
+  // eBay's description sandbox has previously been observed rejecting
+  // hotlinked third-party images on some listings (renders as a broken
+  // icon there); this was a deliberate reversion of that restriction
+  // (2026-08-04) so real photos show wherever eBay allows them.
   // fallbackImageUrl: product/variant photo to use when the listing has no
   // photo_overrides of its own — mirrors the fallback the backend already
   // applies when actually pushing to eBay (listing.resolver.js#resolvePhotos).

@@ -20,7 +20,7 @@ async function formStateToPayload(form: EbayListingFormState, vehicle: ProductVe
     product: form.product_id,
     variant: form.variant_id || null,
     title_override: form.title_override || null,
-    description_override: generateListingHtml(form, vehicle, tenant.company_name),
+    description_override: generateListingHtml(form, vehicle, tenant.company_name, tenant.logo_url, { embedImages: true }),
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
