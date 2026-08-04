@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { ProductVehicle } from "@/types/product";
 import { generateListingHtml } from "./ebayDescriptionGenerator";
-import { getEbaySettings } from "@/lib/api/ebay";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { Eye } from "lucide-react";
 
@@ -13,29 +12,20 @@ interface Props {
 }
 
 export function EbayDescriptionSection({ form, vehicle }: Props) {
-  const { data: ebaySettingsData } = useQuery({
-    queryKey: ["ebay-settings"],
-    queryFn: getEbaySettings,
-  });
-  const ebaySettings = ebaySettingsData?.data;
-  const sandboxFallbackImageUrl = ebaySettings?.sandbox ? ebaySettings.fallback_image_url : null;
-
   const { data: tenantSettingsData } = useQuery({
     queryKey: ["tenant-settings"],
     queryFn: getTenantSettings,
   });
   const tenant = tenantSettingsData?.data;
 
-  const html = useMemo(() => generateListingHtml(form, vehicle, sandboxFallbackImageUrl, tenant?.company_name, tenant?.logo_url), [
+  const html = useMemo(() => generateListingHtml(form, vehicle, tenant?.company_name), [
     form.title_override,
     vehicle,
     form.item_specifics.mpn,
     form.store_sku,
     form.condition,
     form.condition_notes,
-    sandboxFallbackImageUrl,
     tenant?.company_name,
-    tenant?.logo_url,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     JSON.stringify(form.fitment),
     // eslint-disable-next-line react-hooks/exhaustive-deps
