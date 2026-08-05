@@ -40,13 +40,18 @@ function httpError(message, status) {
 
 // Counter._id is namespaced per tenant (see tenantCounterKey) so two
 // tenants' sequences never share or collide — see Counter.js's own comment.
-async function nextOrderNumber(tenantId, tenantCode) {
+// Fixed "ORD-" prefix, same pattern as invoice_number below — deliberately
+// NOT tenant.code (that stays SKU-only, see generateNextSku in
+// product.service.js). Order numbers used to borrow tenant.code too, which
+// meant an order number and a SKU could look identical (e.g. "PHA-00278"
+// either way) — confusing on invoices/support tickets where both appear.
+async function nextOrderNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
     { _id: tenantCounterKey(tenantId, "order_number") },
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
-  return `${tenantCode}-${String(counter.seq).padStart(5, "0")}`;
+  return `ORD-${String(counter.seq).padStart(5, "0")}`;
 }
 
 // Own sequence, own counter — kept separate from order_number so an
@@ -236,7 +241,7 @@ async function createManualOrder(
 
   const order = await Order.create({
     tenant_id: tenant._id,
-    order_number: await nextOrderNumber(tenant._id, tenant.code),
+    order_number: await nextOrderNumber(tenant._id),
     invoice_number: await nextInvoiceNumber(tenant._id),
     items: resolvedItems,
     customer: {
@@ -529,7 +534,7 @@ async function createOrder(
 
   const order = await Order.create({
     tenant_id: tenant._id,
-    order_number: await nextOrderNumber(tenant._id, tenant.code),
+    order_number: await nextOrderNumber(tenant._id),
     invoice_number: await nextInvoiceNumber(tenant._id),
     items: resolvedItems,
     customer,
@@ -620,7 +625,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
 
   const order = await Order.create({
     tenant_id: tenant._id,
-    order_number: await nextOrderNumber(tenant._id, tenant.code),
+    order_number: await nextOrderNumber(tenant._id),
     invoice_number: await nextInvoiceNumber(tenant._id),
     items: resolvedItems,
     customer: mapped.customer,
