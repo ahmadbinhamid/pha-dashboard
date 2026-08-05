@@ -6,7 +6,7 @@ import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { RefundHistoryList } from "@/components/refunds/RefundHistoryList";
 import { getPayment } from "@/lib/api/payments";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import { getPaymentSourceLabel, getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 
 interface PaymentDetailDrawerProps {
@@ -44,7 +44,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <div>
             <div className="text-sm font-semibold">Payment Details</div>
-            <div className="mt-0.5 text-xs text-fg/50">{order?.order_number ?? "—"}</div>
+            <div className="mt-0.5 text-xs text-fg/50">{order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}</div>
           </div>
           <button type="button" onClick={onClose} className="text-fg/40 hover:text-fg">
             <X className="h-4 w-4" />

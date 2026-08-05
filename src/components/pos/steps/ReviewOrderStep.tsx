@@ -11,7 +11,7 @@ import { useCart } from "@/context/cart";
 import { useToast } from "@/context";
 import { createManualOrder } from "@/lib/api/orders";
 import type { CreateManualOrderItemPayload } from "@/lib/api/orders";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatInvoiceNumber } from "@/utils/format";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { ORDER_PAYMENT_CHOICE_LABEL } from "@/config/paymentMethods";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
@@ -90,7 +90,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
     onSuccess: (res) => {
       toast({
         title: "Order created",
-        description: `Invoice ${res.data.invoice_number} generated.`,
+        description: `Invoice ${formatInvoiceNumber(res.data.invoice_number_prefix, res.data.invoice_number)} generated.`,
         tone: "success",
       });
       clearCart();

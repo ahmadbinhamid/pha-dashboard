@@ -43,6 +43,12 @@ export interface TenantSettings {
   brand_colour: string;
   accent_colour: string;
   payment_domain_mode: PaymentDomainMode;
+  // Only affects orders/invoices created AFTER this is changed — each order
+  // snapshots the prefix that was active at creation time onto its own
+  // order_number_prefix/invoice_number_prefix (see types/orders.ts), so
+  // changing this never relabels an existing order.
+  order_number_prefix: string;
+  invoice_number_prefix: string;
   // Sample URLs for both modes, built server-side from PAYMENT_LINK_DOMAIN —
   // not itself saved, just returned alongside settings for the picker's preview.
   payment_link_preview: PaymentLinkPreview;
@@ -72,6 +78,8 @@ export type UpdateTenantSettingsPayload = Partial<
     | "brand_colour"
     | "accent_colour"
     | "payment_domain_mode"
+    | "order_number_prefix"
+    | "invoice_number_prefix"
   >
 >;
 

@@ -19,6 +19,7 @@ export type OrderPaymentChoice = PaymentMethod | "payment_link";
 export interface PaymentOrderSummary {
   _id: string;
   order_number: string;
+  order_number_prefix: string;
   customer: { name: string; email: string | null; phone: string | null };
   total: number; // cents
   status: string;

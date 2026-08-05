@@ -18,7 +18,7 @@ import { EditableOrderAmount } from "@/components/orders/EditableOrderAmount";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
 import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost } from "@/lib/api/orders";
 import { useToast } from "@/context";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderAddress } from "@/types/orders";
 
@@ -132,12 +132,12 @@ export default function OrderDetailPage() {
       {/* On-screen admin view — the actual invoice (matching what's emailed
           to the customer) is rendered separately below, for print only. */}
       <div className="space-y-5 print:hidden">
-        <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: order.order_number }]} />
+        <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: formatOrderNumber(order.order_number_prefix, order.order_number) }]} />
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-semibold tracking-tight">{order.order_number}</h1>
+              <h1 className="text-xl font-semibold tracking-tight">{formatOrderNumber(order.order_number_prefix, order.order_number)}</h1>
               <OrderStatusBadge status={order.status} />
               <OrderDeliveryMethodBadge method={order.delivery_method} />
               <OrderChannelBadge channel={order.channel} />

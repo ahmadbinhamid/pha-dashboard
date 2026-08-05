@@ -30,6 +30,7 @@ const { ORDER_PAYMENT_STATUS, ORDER_STATUS } = require("../constants/order.const
 const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { formatCentsAsDollars } = require("../utils/currency");
+const { formatOrderNumber } = require("../utils/orderNumberFormat");
 const emailService = require("./email/email.service");
 const { logger } = require("../loaders/logging");
 
@@ -640,7 +641,7 @@ async function settleRefund(refund) {
     const paymentIds = stripeAllocationIndexes.map((i) => refund.payment_allocations[i].payment);
     const payments = await Payment.find({ _id: { $in: paymentIds } });
     const paymentById = new Map(payments.map((p) => [String(p._id), p]));
-    const order = await Order.findById(refund.order).select("order_number");
+    const order = await Order.findById(refund.order).select("order_number order_number_prefix");
 
     for (const i of stripeAllocationIndexes) {
       const alloc = refund.payment_allocations[i];
@@ -665,7 +666,7 @@ async function settleRefund(refund) {
             metadata: {
               refund_id: String(refund._id),
               refund_number: refund.refund_number,
-              order_number: order?.order_number,
+              order_number: order?.order_number ? formatOrderNumber(order.order_number_prefix, order.order_number) : undefined,
             },
           },
           { idempotencyKey: `refund_${refund._id.toString()}_${alloc.payment.toString()}` },
@@ -1100,7 +1101,7 @@ async function applyRefundEffects(refundId) {
       await emailService.sendRefundCreditNote?.({
         to: order.customer.email,
         name: order.customer.name,
-        orderNumber: order.order_number,
+        orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
         refundNumber: refund.refund_number,
         amount: refund.total_amount,
       });

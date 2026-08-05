@@ -33,6 +33,11 @@ const updateSettings = {
     brand_colour: hexColour.allow("", null),
     accent_colour: hexColour.allow("", null),
     payment_domain_mode: Joi.string().valid("default", "vendor_slug"),
+    // Letters/digits only — the "-" before the number is always added at
+    // format time (see orderNumberFormat.js), never part of the stored
+    // prefix itself. Only ever affects orders created after this save.
+    order_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
+    invoice_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
   }),
 };
 

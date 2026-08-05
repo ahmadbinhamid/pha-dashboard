@@ -93,8 +93,16 @@ export interface OrderPaymentSummary {
 
 export interface Order {
   _id: string;
+  // Bare zero-padded sequence ("00001") — no prefix baked in. Format with
+  // formatOrderNumber(order.order_number_prefix, order.order_number) from
+  // @/utils/format, never a hardcoded "ORD-".
   order_number: string;
+  // Snapshotted from TenantSettings.order_number_prefix at creation time —
+  // stays whatever it was then even if the tenant's setting changes later,
+  // so old orders never get relabeled.
+  order_number_prefix: string;
   invoice_number: string;
+  invoice_number_prefix: string;
   items: OrderItem[];
   customer: OrderCustomer;
   // Linked Customer record, when this order belongs to a known customer —

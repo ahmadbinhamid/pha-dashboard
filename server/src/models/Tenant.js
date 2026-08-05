@@ -31,14 +31,27 @@ const pickupLocationSchema = new Schema(
 const tenantSchema = buildSchema({
   name: { type: String, required: true, trim: true },
   slug: { type: String, required: true, trim: true, lowercase: true, unique: true },
-  // Short prefix for order/invoice numbers (e.g. "PHA" -> "PHA-00001").
-  // Previously hardcoded in order.service.js; now per-tenant.
+  // SKU prefix only (e.g. "PHA" -> "PHA-000278") — see
+  // product.service.js#generateNextSku. NOT used for order/invoice numbers;
+  // those have their own dedicated prefixes below (order_number_prefix/
+  // invoice_number_prefix), split out on purpose so a SKU and an order
+  // number can never look identical.
   code: { type: String, required: true, trim: true, uppercase: true, unique: true },
   status: {
     type: String,
     enum: Object.values(TENANT_STATUS),
     default: TENANT_STATUS.ACTIVE,
   },
+
+  // Order/invoice number prefixes (e.g. "ORD" -> "ORD-00001"). This is the
+  // CURRENT setting only — it's read once, at order-creation time, and
+  // snapshotted onto that order's own order_number_prefix/
+  // invoice_number_prefix (see Order.js). Changing this only affects orders
+  // created from this point on; it is NEVER used to reformat an existing
+  // order, which would otherwise retroactively relabel every past order the
+  // moment this setting changes.
+  order_number_prefix: { type: String, default: "ORD", trim: true, uppercase: true, maxlength: 10 },
+  invoice_number_prefix: { type: String, default: "INV", trim: true, uppercase: true, maxlength: 10 },
 
   // Company profile — replaces the old hardcoded constants/company.constants.js
   company_name: { type: String, default: null },

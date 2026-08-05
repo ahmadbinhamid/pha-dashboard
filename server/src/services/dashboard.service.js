@@ -14,9 +14,11 @@ const Inventory = require("../models/Inventory");
 const InventoryHistory = require("../models/InventoryHistory");
 const MarketplaceListing = require("../models/MarketplaceListing");
 const InventorySettings = require("../models/InventorySettings");
+const Tenant = require("../models/Tenant");
 const { ORDER_STATUS } = require("../constants/order.constants");
 const { LISTING_STATE, MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 const { buildWordSearchOr } = require("../utils/regex");
+const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 
 // Orders still awaiting settlement — what the dashboard means by "pending".
 const PENDING_ORDER_STATUSES = [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID];
@@ -188,7 +190,7 @@ function mapOrderEvent(o) {
     id: `order_${o._id}`,
     type: "order",
     title: `New order — ${o.customer.name}`,
-    description: `${o.order_number} via ${o.channel}`,
+    description: `${formatOrderNumber(o.order_number_prefix, o.order_number)} via ${o.channel}`,
     timestamp: o.created_at,
     tags: [o.channel, o.status],
   };
@@ -235,7 +237,7 @@ async function getRecentActivity(tenantId, limit = 10) {
     Order.find({ tenant_id: tenantId })
       .sort({ created_at: -1 })
       .limit(limit)
-      .select("order_number channel status created_at customer")
+      .select("order_number order_number_prefix channel status created_at customer")
       .lean(),
     findRecentStockEvents(tenantId, limit),
   ]);
@@ -267,11 +269,14 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
 
   const orderFilter = { tenant_id: tenantId };
   if (hasDateFilter) orderFilter.created_at = dateFilter;
+  let strippedSearch = search;
   if (search) {
+    const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
+    strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
     // Previously interpolated the raw search string straight into $regex
     // with no escaping — a user-controlled regex-injection/ReDoS surface
     // (e.g. `(a+)+$`-style patterns). buildWordSearchOr always escapes.
-    orderFilter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], search);
+    orderFilter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], strippedSearch);
   }
 
   // $lookup+$match on product.tenant_id BEFORE $sort/$limit — this must be
@@ -297,7 +302,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
       ? Order.find(orderFilter)
           .sort({ created_at: -1 })
           .limit(fetchCount)
-          .select("order_number channel status created_at customer")
+          .select("order_number order_number_prefix channel status created_at customer")
           .lean()
       : [],
     includeOrders ? Order.countDocuments(orderFilter) : 0,

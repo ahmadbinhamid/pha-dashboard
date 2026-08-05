@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/context";
 import { generatePaymentLink } from "@/lib/api/orders";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import type { Order } from "@/types/orders";
 
 interface OrderConfirmationStepProps {
@@ -51,7 +51,7 @@ export function OrderConfirmationStep({ order, onStartNewOrder }: OrderConfirmat
             <CheckCircle2 className="h-7 w-7 text-[hsl(var(--ok))]" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-fg">Order {order.order_number} created</h2>
+            <h2 className="text-xl font-semibold text-fg">Order {formatOrderNumber(order.order_number_prefix, order.order_number)} created</h2>
             <p className="mt-1 text-sm text-fg/55">{formatCurrencyFromCents(order.total)} total for {order.customer.name}</p>
           </div>
         </CardContent>

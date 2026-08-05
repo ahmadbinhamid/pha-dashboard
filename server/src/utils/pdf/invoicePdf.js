@@ -13,6 +13,7 @@
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
+const { formatOrderNumber, formatInvoiceNumber } = require("../orderNumberFormat");
 
 const PAGE_MARGIN = 54;
 const FRAME_PADDING = 20; // gap between the card border and its content
@@ -175,7 +176,7 @@ function drawHeader(doc, order, companyProfile) {
     .font(FONT_BOLD)
     .fontSize(10)
     .fillColor(COLORS.accent)
-    .text(order.invoice_number, rightX, doc.y + 4, { width: rightWidth, align: "right" });
+    .text(formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number), rightX, doc.y + 4, { width: rightWidth, align: "right" });
 
   let my = doc.y + 12;
   my = drawMetaRow(doc, rightX, my, rightWidth, "INVOICE DATE:", formatDate(order.created_at).toUpperCase());
@@ -276,7 +277,7 @@ function drawBillShipTransactionBlock(doc, order) {
     .font(FONT_BOLD)
     .fontSize(10)
     .fillColor(COLORS.text)
-    .text(order.order_number, col3X, doc.y + 2, { width: colWidth });
+    .text(formatOrderNumber(order.order_number_prefix, order.order_number), col3X, doc.y + 2, { width: colWidth });
   const bottom3 = Math.max(doc.y, boxTop + boxHeight);
 
   doc.fillColor(COLORS.text);

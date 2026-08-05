@@ -26,6 +26,8 @@ function toFormState(settings: TenantSettings): UpdateTenantSettingsPayload {
     favicon_url: settings.favicon_url,
     brand_colour: settings.brand_colour ?? "#000000",
     accent_colour: settings.accent_colour ?? "#FFFFFF",
+    order_number_prefix: settings.order_number_prefix ?? "ORD",
+    invoice_number_prefix: settings.invoice_number_prefix ?? "INV",
   };
 }
 
@@ -152,6 +154,29 @@ export function CompanyProfileForm({
       <Card>
         <CardHeader title="Invoice & Bank Details" description="Shown on invoices and receipts." />
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              label="Order number prefix"
+              hint={`e.g. "ORD" → ORD-00001. Only affects orders created from now on — existing orders keep the prefix they were created with.`}
+            >
+              <Input
+                value={form.order_number_prefix ?? ""}
+                maxLength={10}
+                onChange={(e) => setForm((f) => ({ ...f, order_number_prefix: e.target.value.toUpperCase() }))}
+              />
+            </FormField>
+            <FormField
+              label="Invoice number prefix"
+              hint={`e.g. "INV" → INV-00001. Only affects invoices created from now on.`}
+            >
+              <Input
+                value={form.invoice_number_prefix ?? ""}
+                maxLength={10}
+                onChange={(e) => setForm((f) => ({ ...f, invoice_number_prefix: e.target.value.toUpperCase() }))}
+              />
+            </FormField>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Pickup location name" hint="Shown as the heading on pickup-ready emails.">
               <Input

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 
 // BYOK — this page is shared across every tenant's admin-generated "payment
 // link" orders, and each tenant now has their own Stripe account/publishable
@@ -66,7 +66,7 @@ export default function PayOrderPage() {
     <StatusShell>
       <Card>
         <CardHeader
-          title={`Order ${order.order_number}`}
+          title={`Order ${formatOrderNumber(order.order_number_prefix, order.order_number)}`}
           description={alreadyPaid ? "This order has already been paid." : `Amount due: ${formatCurrencyFromCents(amountDue, order.currency)}`}
         />
         <CardContent>

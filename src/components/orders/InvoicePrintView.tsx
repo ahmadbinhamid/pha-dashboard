@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Landmark } from "lucide-react";
 import { TenantLogo } from "@/components/branding/TenantLogo";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
-import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
+import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst, formatOrderNumber, formatInvoiceNumber } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
@@ -118,7 +118,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         <div className="text-right" style={{ minWidth: 240 }}>
           <h1 className="text-3xl font-black uppercase tracking-tight">Tax Invoice</h1>
           <p className="mt-1 text-sm font-bold" style={{ color: ACCENT }}>
-            {order.invoice_number}
+            {formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number)}
           </p>
           <div className="mt-3 space-y-1">
             <HeaderMetaRow label="Invoice Date:" value={orderDate} />
@@ -166,7 +166,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <div className="mt-2.5 text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
             Order Number
           </div>
-          <div className="text-sm font-bold">{order.order_number}</div>
+          <div className="text-sm font-bold">{formatOrderNumber(order.order_number_prefix, order.order_number)}</div>
         </div>
       </div>
 

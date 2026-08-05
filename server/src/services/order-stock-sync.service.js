@@ -9,6 +9,7 @@ const { adjustStockForSku } = require("./inventory.service");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
+const { formatOrderNumber } = require("../utils/orderNumberFormat");
 
 const DIRECTION = { DEDUCT: "deduct", RESTOCK: "restock" };
 
@@ -61,8 +62,8 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
     const refundSuffix = refundId ? `, refund ${refundId}` : "";
     const reason =
       direction === DIRECTION.DEDUCT
-        ? `${reasonPrefix ?? "Stripe sale"} (order ${order.order_number}${refundSuffix})`
-        : `${reasonPrefix ?? "Stripe refund/cancellation restock"} (order ${order.order_number}${refundSuffix})`;
+        ? `${reasonPrefix ?? "Stripe sale"} (order ${formatOrderNumber(order.order_number_prefix, order.order_number)}${refundSuffix})`
+        : `${reasonPrefix ?? "Stripe refund/cancellation restock"} (order ${formatOrderNumber(order.order_number_prefix, order.order_number)}${refundSuffix})`;
 
     const result = await adjustStockForSku(sku, delta, {
       reason,

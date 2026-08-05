@@ -8,9 +8,11 @@ const Customer = require("../models/Customer");
 const Payment = require("../models/Payment");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
+const Tenant = require("../models/Tenant");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { buildWordSearchOr } = require("../utils/regex");
 const { formatCentsAsDollars } = require("../utils/currency");
+const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
@@ -40,18 +42,20 @@ function httpError(message, status) {
 
 // Counter._id is namespaced per tenant (see tenantCounterKey) so two
 // tenants' sequences never share or collide — see Counter.js's own comment.
-// Fixed "ORD-" prefix, same pattern as invoice_number below — deliberately
-// NOT tenant.code (that stays SKU-only, see generateNextSku in
-// product.service.js). Order numbers used to borrow tenant.code too, which
-// meant an order number and a SKU could look identical (e.g. "PHA-00278"
-// either way) — confusing on invoices/support tickets where both appear.
+// Stores just the zero-padded number, no "ORD-" baked in — the prefix is
+// applied at render time only (dashboard does it in the frontend; the PDF
+// invoice and transactional emails go through utils/orderNumberFormat.js
+// since the frontend never touches those). Previously borrowed tenant.code
+// as the prefix, which meant an order number and a SKU could look identical
+// (e.g. "PHA-00278" either way) — confusing on invoices/support tickets
+// where both appear; dropping any prefix from storage sidesteps that too.
 async function nextOrderNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
     { _id: tenantCounterKey(tenantId, "order_number") },
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
-  return `ORD-${String(counter.seq).padStart(5, "0")}`;
+  return String(counter.seq).padStart(5, "0");
 }
 
 // Own sequence, own counter — kept separate from order_number so an
@@ -63,7 +67,7 @@ async function nextInvoiceNumber(tenantId) {
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
-  return `INV-${String(counter.seq).padStart(5, "0")}`;
+  return String(counter.seq).padStart(5, "0");
 }
 
 function generateGuestAccessToken() {
@@ -242,7 +246,9 @@ async function createManualOrder(
   const order = await Order.create({
     tenant_id: tenant._id,
     order_number: await nextOrderNumber(tenant._id),
+    order_number_prefix: tenant.order_number_prefix,
     invoice_number: await nextInvoiceNumber(tenant._id),
+    invoice_number_prefix: tenant.invoice_number_prefix,
     items: resolvedItems,
     customer: {
       name: customer.name,
@@ -535,7 +541,9 @@ async function createOrder(
   const order = await Order.create({
     tenant_id: tenant._id,
     order_number: await nextOrderNumber(tenant._id),
+    order_number_prefix: tenant.order_number_prefix,
     invoice_number: await nextInvoiceNumber(tenant._id),
+    invoice_number_prefix: tenant.invoice_number_prefix,
     items: resolvedItems,
     customer,
     delivery_method,
@@ -626,7 +634,9 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
   const order = await Order.create({
     tenant_id: tenant._id,
     order_number: await nextOrderNumber(tenant._id),
+    order_number_prefix: tenant.order_number_prefix,
     invoice_number: await nextInvoiceNumber(tenant._id),
+    invoice_number_prefix: tenant.invoice_number_prefix,
     items: resolvedItems,
     customer: mapped.customer,
     shipping_address: mapped.shippingAddress,
@@ -763,7 +773,9 @@ async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, sea
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
   if (search) {
-    filter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], search);
+    const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
+    const strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
+    filter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], strippedSearch);
   }
 
   const [items, total] = await Promise.all([
@@ -835,10 +847,10 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     await emailService.sendManualOrderReceipt({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: order.order_number,
+      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
       amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
       pdfBase64: pdfBuffer.toString("base64"),
-      pdfFilename: `${order.order_number}-invoice.pdf`,
+      pdfFilename: `${formatOrderNumber(order.order_number_prefix, order.order_number)}-invoice.pdf`,
       companyProfile,
       tenantId: order.tenant_id,
     });
@@ -869,13 +881,13 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
 
   const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
   const pdfBase64 = pdfBuffer.toString("base64");
-  const pdfFilename = `${order.order_number}-invoice.pdf`;
+  const pdfFilename = `${formatOrderNumber(order.order_number_prefix, order.order_number)}-invoice.pdf`;
 
   if (isDelivery) {
     await emailService.sendOrderShipped({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: order.order_number,
+      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
       trackingNumber: order.tracking_number,
       carrierName: order.carrier_name,
       pdfBase64,
@@ -887,7 +899,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     await emailService.sendOrderReadyForPickup({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: order.order_number,
+      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
       pdfBase64,
       pdfFilename,
       pickupLocation: companyProfile.pickup_location,
@@ -916,7 +928,7 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
   ]);
   const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
 
-  return { pdfBuffer, orderNumber: order.order_number };
+  return { pdfBuffer, orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number) };
 }
 
 module.exports = {

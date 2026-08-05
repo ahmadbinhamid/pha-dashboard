@@ -34,3 +34,20 @@ export function getLineGst(lineTotalCents: number) {
 export function getExclusiveUnitPrice(unitPriceCents: number) {
   return unitPriceCents - getLineGst(unitPriceCents);
 }
+
+// Order.order_number/invoice_number are stored as just the zero-padded
+// sequence ("00001") — no prefix baked in. The prefix comes from the
+// order's OWN order_number_prefix/invoice_number_prefix (snapshotted at
+// creation time from TenantSettings — see types/orders.ts), never a
+// hardcoded literal and never a live lookup of the tenant's CURRENT
+// setting, which would retroactively relabel every past order the moment
+// that setting changes. Backend-rendered outputs the frontend never
+// touches (the PDF invoice, transactional emails) use the equivalent
+// server/src/utils/orderNumberFormat.js instead.
+export function formatOrderNumber(prefix: string, raw: string) {
+  return `${prefix}-${raw}`;
+}
+
+export function formatInvoiceNumber(prefix: string, raw: string) {
+  return `${prefix}-${raw}`;
+}

@@ -11,7 +11,7 @@ import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { PaymentRowActionsMenu } from "@/components/payments/PaymentRowActionsMenu";
 import { getPayments } from "@/lib/api/payments";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import type { Payment, PaymentStatus } from "@/types/payment";
 import { CreditCard } from "lucide-react";
 
@@ -119,7 +119,7 @@ export default function PaymentsPage() {
                       onClick={() => setSelected(payment)}
                     >
                       <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
-                        {order?.order_number ?? "—"}
+                        {order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}
                       </TableCell>
                       <TableCell className="max-w-52">
                         <div className="truncate text-fg">{order?.customer.name ?? "—"}</div>

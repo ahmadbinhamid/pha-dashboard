@@ -9,10 +9,11 @@
 //      call made when this script was written; deleted orders' stock
 //      deductions are NOT reversed.
 //   2. Renumbers the remaining (now exclusively eBay) orders' order_number
-//      as "ORD-00001", "ORD-00002", ... and invoice_number as "INV-00001",
-//      "INV-00002", ... in created_at order (oldest first), then advances
-//      each tenant's order_number/invoice_number Counter to match, so the
-//      next real order created continues the sequence instead of colliding.
+//      and invoice_number as "00001", "00002", ... (no prefix stored — see
+//      order.service.js#nextOrderNumber) in created_at order (oldest
+//      first), then advances each tenant's order_number/invoice_number
+//      Counter to match, so the next real order created continues the
+//      sequence instead of colliding.
 //
 // THIS DELETES REAL DATA AND IS NOT REVERSIBLE. BACK UP THE DATABASE FIRST,
 // especially before running --write against production.
@@ -46,7 +47,7 @@ async function run() {
     const survivingCount = await db.collection("orders").countDocuments({ tenant_id: tenantId, channel: "ebay" });
 
     console.log(`  Deleting: ${nonEbayIds.length} non-eBay order(s), ${paymentCount} payment(s), ${refundCount} refund(s)`);
-    console.log(`  Surviving: ${survivingCount} eBay order(s) — will be renumbered ORD-00001.. / INV-00001..`);
+    console.log(`  Surviving: ${survivingCount} eBay order(s) — will be renumbered 00001..`);
 
     if (WRITE) {
       if (nonEbayIds.length > 0) {
@@ -67,8 +68,11 @@ async function run() {
     let seq = 0;
     for (const order of surviving) {
       seq++;
-      const order_number = `ORD-${String(seq).padStart(5, "0")}`;
-      const invoice_number = `INV-${String(seq).padStart(5, "0")}`;
+      // Zero-padded number only, no "ORD-"/"INV-" baked in — prefix is
+      // applied at display time (frontend, or utils/orderNumberFormat.js
+      // for the PDF/emails) — see order.service.js#nextOrderNumber.
+      const order_number = String(seq).padStart(5, "0");
+      const invoice_number = String(seq).padStart(5, "0");
       if (order.order_number !== order_number || order.invoice_number !== invoice_number) {
         if (WRITE) {
           await db.collection("orders").updateOne({ _id: order._id }, { $set: { order_number, invoice_number } });
@@ -88,7 +92,7 @@ async function run() {
         { $set: { seq } },
         { upsert: true },
       );
-      console.log(`  Counters advanced to ${seq} — next new order continues from ORD-${String(seq + 1).padStart(5, "0")}`);
+      console.log(`  Counters advanced to ${seq} — next new order continues from ${String(seq + 1).padStart(5, "0")}`);
     }
   }
 

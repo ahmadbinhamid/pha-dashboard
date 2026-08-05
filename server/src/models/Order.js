@@ -120,13 +120,21 @@ const orderSchema = buildSchema({
   // order_number/invoice_number/external_order_id's unique indexes below are
   // compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
-  order_number: { type: String, required: true }, // e.g. "PHA-00001"
+  // Bare zero-padded sequence only ("00001") — never a prefix baked in. The
+  // prefix an order displays with is order_number_prefix below, snapshotted
+  // once at creation time from Tenant.order_number_prefix, deliberately NOT
+  // looked up live from the tenant's CURRENT setting — that would silently
+  // relabel every past order the moment an admin changes the setting.
+  order_number: { type: String, required: true },
+  order_number_prefix: { type: String, required: true, default: "ORD" },
   // Separate sequence from order_number, minted at the same time — orders
   // and invoices are 1:1 today, but this keeps the financial/tax-invoice
   // document number independent of the operational order reference, since
   // they diverge the moment partial shipments, credit notes, or consolidated
-  // billing exist. See scripts/migrateInvoiceNumbers.js for backfill.
-  invoice_number: { type: String, required: true }, // e.g. "INV-00001"
+  // billing exist. See scripts/migrateInvoiceNumbers.js for backfill. Same
+  // bare-number/snapshotted-prefix split as order_number above.
+  invoice_number: { type: String, required: true },
+  invoice_number_prefix: { type: String, required: true, default: "INV" },
   items: { type: [orderItemSchema], required: true },
 
   // Required for storefront/eBay orders (enforced by their own request

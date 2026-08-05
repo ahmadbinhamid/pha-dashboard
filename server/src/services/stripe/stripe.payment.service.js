@@ -9,6 +9,7 @@ const { ORDER_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_DOMAIN_MODE } = require("../../constants/tenant.constants");
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
+const { formatOrderNumber } = require("../../utils/orderNumberFormat");
 
 // Creates (or reuses) a PaymentIntent for an order, for whatever balance is
 // still outstanding — not necessarily the full order.total, since a manual
@@ -71,7 +72,7 @@ async function createPaymentIntentForOrder(order) {
     {
       amount: remainingCents,
       currency,
-      metadata: { order_id: order._id.toString(), order_number: order.order_number },
+      metadata: { order_id: order._id.toString(), order_number: formatOrderNumber(order.order_number_prefix, order.order_number) },
     },
     // Scoped to the remaining balance, not just the order — a stale-amount
     // cancel-and-recreate (above) must not collide with the prior attempt's

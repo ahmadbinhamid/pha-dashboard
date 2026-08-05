@@ -14,7 +14,7 @@ import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import type { Order, OrderStatus, OrderChannel } from "@/types/orders";
 import { Search, ShoppingCart } from "lucide-react";
 
@@ -193,7 +193,7 @@ export default function OrdersPage() {
                       onClick={() => navigate(`/orders/${order._id}`)}
                     >
                       <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
-                        {order.order_number}
+                        {formatOrderNumber(order.order_number_prefix, order.order_number)}
                       </TableCell>
                       {isVisible("customer") && (
                         <TableCell className="max-w-52">

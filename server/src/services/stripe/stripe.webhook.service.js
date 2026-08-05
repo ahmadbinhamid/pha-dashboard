@@ -28,6 +28,7 @@ const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../../constants/payment.co
 const { ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { REFUND_REASON, REFUND_STATUS } = require("../../constants/refund.constants");
 const { derivePaymentStatus } = require("../../utils/paymentStatus");
+const { formatOrderNumber } = require("../../utils/orderNumberFormat");
 const { logger } = require("../../loaders/logging");
 
 // Stripe.webhooks.constructEvent is a static helper (pure HMAC verification,
@@ -258,7 +259,7 @@ async function handlePaymentSucceeded(intent, tenantId) {
       await emailService.sendOrderReceivedPickup({
         to: order.customer.email,
         name: order.customer.name,
-        orderNumber: order.order_number,
+        orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
         companyProfile,
         tenantId: order.tenant_id,
       });
@@ -266,7 +267,7 @@ async function handlePaymentSucceeded(intent, tenantId) {
       await emailService.sendOrderConfirmation({
         to: order.customer.email,
         name: order.customer.name,
-        orderNumber: order.order_number,
+        orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
         companyProfile,
         tenantId: order.tenant_id,
       });

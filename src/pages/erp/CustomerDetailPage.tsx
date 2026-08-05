@@ -13,7 +13,7 @@ import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadg
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { CustomerDeleteModal } from "@/components/customers/CustomerDeleteModal";
 import { getCustomer } from "@/lib/api/customers";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 
 function CustomerDetailSkeleton() {
   return (
@@ -128,7 +128,7 @@ export default function CustomerDetailPage() {
                         onClick={() => navigate(`/orders/${order._id}`)}
                       >
                         <TableCell className="sticky left-0 z-1 max-w-32 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
-                          {order.order_number}
+                          {formatOrderNumber(order.order_number_prefix, order.order_number)}
                         </TableCell>
                         <TableCell>
                           <OrderChannelBadge channel={order.channel} />
@@ -168,7 +168,7 @@ export default function CustomerDetailPage() {
                     onClick={() => navigate(`/orders/${order._id}`)}
                   >
                     <div>
-                      <div className="font-medium text-fg">{order.order_number}</div>
+                      <div className="font-medium text-fg">{formatOrderNumber(order.order_number_prefix, order.order_number)}</div>
                       <div className="text-xs text-fg/50">
                         {new Date(order.created_at).toLocaleDateString()}
                       </div>

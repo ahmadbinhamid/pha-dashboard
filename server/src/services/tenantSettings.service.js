@@ -43,6 +43,8 @@ async function updateTenantProfile(
     brand_colour,
     accent_colour,
     payment_domain_mode,
+    order_number_prefix,
+    invoice_number_prefix,
   },
 ) {
   const tenant = await getTenant(tenantId);
@@ -60,6 +62,11 @@ async function updateTenantProfile(
   if (brand_colour !== undefined) tenant.brand_colour = brand_colour;
   if (accent_colour !== undefined) tenant.accent_colour = accent_colour;
   if (payment_domain_mode !== undefined) tenant.payment_domain_mode = payment_domain_mode;
+  // Only ever affects orders created AFTER this save — see Order.js's
+  // order_number_prefix/invoice_number_prefix comment. Never reformats an
+  // existing order.
+  if (order_number_prefix !== undefined) tenant.order_number_prefix = order_number_prefix || "ORD";
+  if (invoice_number_prefix !== undefined) tenant.invoice_number_prefix = invoice_number_prefix || "INV";
 
   await tenant.save();
   return tenant;
