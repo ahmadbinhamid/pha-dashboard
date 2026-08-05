@@ -28,6 +28,7 @@ const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { currencyForMarketplace } = require("../constants/ebay.constants");
 const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
+const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service");
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
@@ -742,6 +743,49 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
   return order;
 }
 
+// Admin-triggered status change from the order detail page's status dropdown.
+// Refunded/partially_refunded orders are excluded server-side too (not just
+// by the validator's enum) — those states are only ever reached through the
+// dedicated refund flow (refund.service.js), which is the one place that
+// already knows how to keep `status`/`payment_status`/`fulfillment_status` in
+// sync for a refund. Letting this endpoint touch them would reopen the exact
+// mismatch bugs that split those fields apart in the first place (see
+// Order.js's `status` field comment).
+async function updateOrderStatus(orderId, { status }, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
+  if (!order) throw httpError("Order not found", 404);
+
+  if (order.status === ORDER_STATUS.REFUNDED || order.status === ORDER_STATUS.PARTIALLY_REFUNDED) {
+    throw httpError("This order has been refunded — status changes only via the refund flow.", 409);
+  }
+
+  if (status === ORDER_STATUS.CANCELLED) {
+    if (order.fulfillment_status === ORDER_FULFILLMENT_STATUS.FULFILLED) {
+      throw httpError("This order has already been fulfilled — cancel via a refund instead.", 409);
+    }
+    const totalPaidCents = await getTotalPaidForOrder(order._id);
+    if (totalPaidCents > 0) {
+      throw httpError("This order has payments recorded — process a refund instead of cancelling directly.", 409);
+    }
+    // Manual orders always deducted stock in full at creation regardless of
+    // payment status (see createManualOrder) — cancelling gives it all back.
+    await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
+    order.status = ORDER_STATUS.CANCELLED;
+    order.fulfillment_status = ORDER_FULFILLMENT_STATUS.CANCELLED;
+  } else if (status === ORDER_STATUS.FULFILLED) {
+    order.status = ORDER_STATUS.FULFILLED;
+    order.fulfillment_status = ORDER_FULFILLMENT_STATUS.FULFILLED;
+  } else {
+    // pending_payment / partially_paid / paid — identical members of both
+    // ORDER_STATUS and ORDER_PAYMENT_STATUS, so both get the same value.
+    order.status = status;
+    order.payment_status = status;
+  }
+
+  await order.save();
+  return order;
+}
+
 function safeTokenMatch(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const bufA = Buffer.from(a);
@@ -768,10 +812,11 @@ async function getOrderForGuest(orderId, token, tenantId) {
 
 // ── Admin ────────────────────────────────────────────────────────────────
 
-async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, search } = {}, tenantId) {
+async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, delivery_method, search } = {}, tenantId) {
   const filter = { tenant_id: tenantId };
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
+  if (delivery_method) filter.delivery_method = delivery_method;
   if (search) {
     const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
     const strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
@@ -911,6 +956,43 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   return order;
 }
 
+// Admin action triggered by the "Send Payment Link" button on the manual
+// order creation confirmation screen — emails the customer the same URL
+// createPaymentLinkForOrder (stripe.payment.service.js) already builds for
+// staff to copy/open manually, so they don't have to relay it themselves.
+// Owns the order lookup itself (not just the email) so the controller never
+// touches Mongoose directly — same DB-access-stays-in-the-service-layer rule
+// every other admin order endpoint in this file follows.
+async function sendPaymentLinkEmail(orderId, tenant) {
+  // +guest_access_token: select:false by default — needed to build the link.
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenant._id }).select("+guest_access_token");
+  if (!order) throw httpError("Order not found", 404);
+
+  if (!order.customer.email) {
+    throw httpError("This customer has no email on file — add one before sending a payment link.", 400);
+  }
+
+  const { url } = createPaymentLinkForOrder(order, tenant);
+
+  const [totalPaidCents, companyProfile] = await Promise.all([
+    getTotalPaidForOrder(order._id),
+    getCompanyProfile(order.tenant_id),
+  ]);
+  const amountDueCents = order.total - totalPaidCents;
+
+  await emailService.sendPaymentLink({
+    to: order.customer.email,
+    name: order.customer.name,
+    orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
+    amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
+    paymentUrl: url,
+    companyProfile,
+    tenantId: order.tenant_id,
+  });
+
+  return { url };
+}
+
 // Admin action triggered by the "Download PDF" button on the order detail
 // page — the same pdfkit-rendered tax invoice emailed via sendOrderNotification,
 // just handed straight to the browser instead of attached to an email. Kept as
@@ -939,9 +1021,11 @@ module.exports = {
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,
+  updateOrderStatus,
   listOrders,
   getOrderDetailForAdmin,
   sendOrderNotification,
+  sendPaymentLinkEmail,
   getInvoicePdfForOrder,
   addOrderNote,
   updateOrderItemPrice,

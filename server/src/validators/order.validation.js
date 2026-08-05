@@ -62,6 +62,9 @@ const listOrders = {
     channel: Joi.string()
       .valid(...Object.values(ORDER_CHANNEL))
       .allow(""),
+    delivery_method: Joi.string()
+      .valid(...Object.values(ORDER_DELIVERY_METHOD))
+      .allow(""),
   }),
 };
 
@@ -130,6 +133,28 @@ const sendOrderEmail = {
 
 const generatePaymentLink = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+};
+
+const sendPaymentLinkEmail = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+};
+
+// Restricted to the 5 statuses safely reachable by a manual admin action —
+// refunded/partially_refunded are deliberately excluded, those only change
+// via the dedicated refund flow (see order.service.js#updateOrderStatus).
+const updateOrderStatus = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    status: Joi.string()
+      .valid(
+        ORDER_STATUS.PENDING_PAYMENT,
+        ORDER_STATUS.PARTIALLY_PAID,
+        ORDER_STATUS.PAID,
+        ORDER_STATUS.FULFILLED,
+        ORDER_STATUS.CANCELLED,
+      )
+      .required(),
+  }),
 };
 
 // Records a follow-up cash/online-transfer payment against an order's
@@ -216,6 +241,8 @@ module.exports = {
   sendOrderEmail,
   createManualOrder,
   generatePaymentLink,
+  sendPaymentLinkEmail,
+  updateOrderStatus,
   recordPayment,
   addOrderNote,
   updateOrderCustomerDetails,

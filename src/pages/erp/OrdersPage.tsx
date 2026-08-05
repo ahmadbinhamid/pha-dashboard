@@ -15,7 +15,7 @@ import { getOrders } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
-import type { Order, OrderStatus, OrderChannel } from "@/types/orders";
+import type { Order, OrderStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart } from "lucide-react";
 
 const STATUS_FILTERS: { label: string; value: OrderStatus | "" }[] = [
@@ -33,6 +33,12 @@ const CHANNEL_FILTERS: { label: string; value: OrderChannel | "" }[] = [
   { label: "All Channels", value: "" },
   { label: "Storefront", value: "storefront" },
   { label: "eBay", value: "ebay" },
+];
+
+const MODE_FILTERS: { label: string; value: OrderDeliveryMethod | "" }[] = [
+  { label: "All Modes", value: "" },
+  { label: "Delivery", value: "delivery" },
+  { label: "Pickup", value: "pickup" },
 ];
 
 // Order ID (sticky) and Actions are structural, not part of this list — every
@@ -54,6 +60,7 @@ export default function OrdersPage() {
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
   const channel = searchParams.get("channel") ?? "";
+  const deliveryMethod = searchParams.get("delivery_method") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
@@ -101,6 +108,19 @@ export default function OrdersPage() {
     [setSearchParams],
   );
 
+  const setDeliveryMethod = useCallback(
+    (val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set("delivery_method", val);
+        else next.delete("delivery_method");
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
@@ -125,8 +145,8 @@ export default function OrdersPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", { search, status, channel, page, limit }],
-    queryFn: () => getOrders({ search, status, channel, page, limit }),
+    queryKey: ["orders", { search, status, channel, deliveryMethod, page, limit }],
+    queryFn: () => getOrders({ search, status, channel, delivery_method: deliveryMethod, page, limit }),
   });
 
   const orders: Order[] = data?.data?.items ?? [];
@@ -156,6 +176,7 @@ export default function OrdersPage() {
             </div>
             <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} className="h-9" />
             <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} className="h-9" />
+            <FilterSelect options={MODE_FILTERS} value={deliveryMethod} onChange={setDeliveryMethod} className="h-9" />
             {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
           </div>
 

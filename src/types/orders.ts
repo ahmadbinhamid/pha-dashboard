@@ -11,6 +11,11 @@ export type OrderStatus =
   | "refunded"
   | "partially_refunded";
 
+// Restricted to the 5 statuses safely reachable from the order detail page's
+// status dropdown — refunded/partially_refunded only ever change via the
+// dedicated refund flow (see order.service.js#updateOrderStatus).
+export type EditableOrderStatus = Exclude<OrderStatus, "refunded" | "partially_refunded">;
+
 export type OrderChannel = "storefront" | "ebay" | "manual";
 
 export type OrderDeliveryMethod = "delivery" | "pickup";

@@ -11,13 +11,19 @@ const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
->(({ className, ...props }, ref) => (
+>(({ className, asChild, ...props }, ref) => (
   <DropdownMenuPrimitive.Trigger
     ref={ref}
+    asChild={asChild}
+    // The default icon-button sizing (fixed 28px square, muted text) is only
+    // right for the bare "···" trigger below — with asChild, the caller
+    // supplies its own fully-styled element (e.g. a labelled Button), and
+    // Radix's Slot merges these classes onto it regardless, so applying them
+    // unconditionally clipped/greyed out any asChild trigger that wasn't
+    // also a 28px icon square. Only the bare (non-asChild) trigger gets them.
     className={cn(
-      "flex h-7 w-7 items-center justify-center rounded-xs text-fg/40 outline-none transition",
-      "hover:bg-bg-2 hover:text-fg",
-      "data-[state=open]:bg-bg-2 data-[state=open]:text-fg",
+      !asChild &&
+        "flex h-7 w-7 items-center justify-center rounded-xs text-fg/40 outline-none transition hover:bg-bg-2 hover:text-fg data-[state=open]:bg-bg-2 data-[state=open]:text-fg",
       className,
     )}
     {...props}

@@ -40,6 +40,20 @@ router.post(
   validate(v.generatePaymentLink),
   asyncHandler(ctrl.generatePaymentLink),
 );
+router.post(
+  "/:id/payment-link/send",
+  auth(),
+  admin,
+  validate(v.sendPaymentLinkEmail),
+  asyncHandler(ctrl.sendPaymentLinkEmail),
+);
+router.patch(
+  "/:id/status",
+  auth(),
+  admin,
+  validate(v.updateOrderStatus),
+  asyncHandler(ctrl.updateOrderStatus),
+);
 router.post("/:id/payments", auth(), admin, validate(v.recordPayment), asyncHandler(ctrl.recordPayment));
 router.put(
   "/:id/customer-details",

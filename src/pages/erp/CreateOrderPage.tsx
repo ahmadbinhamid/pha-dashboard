@@ -214,7 +214,7 @@ export default function CreateOrderPage() {
       )}
 
       {step === 4 && createdOrder && (
-        <OrderConfirmationStep order={createdOrder} onStartNewOrder={startNewOrder} />
+        <OrderConfirmationStep order={createdOrder} paymentMethod={paymentChoice} onStartNewOrder={startNewOrder} />
       )}
 
       {/* A direct visit with an empty cart has nothing to build an order
