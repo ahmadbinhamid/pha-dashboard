@@ -16,6 +16,7 @@ const MarketplaceListing = require("../models/MarketplaceListing");
 const InventorySettings = require("../models/InventorySettings");
 const { ORDER_STATUS } = require("../constants/order.constants");
 const { LISTING_STATE, MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
+const { buildWordSearchOr } = require("../utils/regex");
 
 // Orders still awaiting settlement — what the dashboard means by "pending".
 const PENDING_ORDER_STATUSES = [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID];
@@ -267,11 +268,10 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   const orderFilter = { tenant_id: tenantId };
   if (hasDateFilter) orderFilter.created_at = dateFilter;
   if (search) {
-    orderFilter.$or = [
-      { order_number: { $regex: search, $options: "i" } },
-      { "customer.name": { $regex: search, $options: "i" } },
-      { "customer.email": { $regex: search, $options: "i" } },
-    ];
+    // Previously interpolated the raw search string straight into $regex
+    // with no escaping — a user-controlled regex-injection/ReDoS surface
+    // (e.g. `(a+)+$`-style patterns). buildWordSearchOr always escapes.
+    orderFilter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], search);
   }
 
   // $lookup+$match on product.tenant_id BEFORE $sort/$limit — this must be
@@ -288,7 +288,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   );
   if (search) {
     stockBasePipeline.push({
-      $match: { $or: [{ "product.title": { $regex: search, $options: "i" } }, { reason: { $regex: search, $options: "i" } }] },
+      $match: { $or: buildWordSearchOr(["product.title", "reason"], search) },
     });
   }
 

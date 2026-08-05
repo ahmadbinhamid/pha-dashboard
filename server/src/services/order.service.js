@@ -9,6 +9,7 @@ const Payment = require("../models/Payment");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
+const { buildWordSearchOr } = require("../utils/regex");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
@@ -760,8 +761,7 @@ async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, sea
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
   if (search) {
-    const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filter.$or = [{ order_number: re }, { "customer.name": re }, { "customer.email": re }];
+    filter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], search);
   }
 
   const [items, total] = await Promise.all([

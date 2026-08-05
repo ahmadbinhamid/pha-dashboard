@@ -7,7 +7,7 @@ const Product = require("../../models/Product");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
-const { escapeRegex } = require("../../utils/regex");
+const { buildWordSearchOr } = require("../../utils/regex");
 
 // Production eBay item URLs are marketplace-specific; sandbox uses one shared
 // domain regardless of marketplace. Extend this map as new marketplaces are enabled.
@@ -176,17 +176,12 @@ async function listListings({ skip, limit, product, state, sync_status, search }
   ];
 
   if (search) {
-    const re = new RegExp(escapeRegex(search.trim()), "i");
     pipeline.push({
       $match: {
-        $or: [
-          { "product.title": re },
-          { "product.sku": re },
-          { title_override: re },
-          { store_sku: re },
-          { "item_specifics.mpn": re },
-          { "item_specifics.brand": re },
-        ],
+        $or: buildWordSearchOr(
+          ["product.title", "product.sku", "title_override", "store_sku", "item_specifics.mpn", "item_specifics.brand"],
+          search,
+        ),
       },
     });
   }

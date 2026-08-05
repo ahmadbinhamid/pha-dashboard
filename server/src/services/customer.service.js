@@ -3,10 +3,7 @@
 const Customer = require("../models/Customer");
 const Order = require("../models/Order");
 const { ORDER_STATUS } = require("../constants/order.constants");
-
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const { buildWordSearchOr } = require("../utils/regex");
 
 // Orders aren't a relation stored on Customer itself — pulled on demand so a
 // customer's order count/outstanding-invoice count always reflects the
@@ -39,8 +36,7 @@ async function getOrderStatsByCustomer(customerIds) {
 async function listCustomers({ skip = 0, limit = 20, search = "" } = {}, tenantId) {
   const filter = { tenant_id: tenantId };
   if (search) {
-    const re = new RegExp(escapeRegex(search), "i");
-    filter.$or = [{ name: re }, { email: re }, { phone: re }];
+    filter.$or = buildWordSearchOr(["name", "email", "phone"], search);
   }
 
   const [items, total] = await Promise.all([

@@ -1,7 +1,7 @@
 // utils/productFilter.js
 
 const mongoose = require("mongoose");
-const { escapeRegex } = require("./regex");
+const { escapeRegex, buildWordSearchOr } = require("./regex");
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 
 // Builds the Mongo match filter shared by product listing and category-count
@@ -15,16 +15,8 @@ function buildProductFilter(query = {}, { authenticated = false, tenantId = null
   if (tenantId) filter.tenant_id = tenantId;
 
   if (query.search) {
-    const re = new RegExp(escapeRegex(query.search.trim()), "i");
     and.push({
-      $or: [
-        { title: re },
-        { sku: re },
-        { brand: re },
-        { tags: re },
-        { mpn: re },
-        { description: re },
-      ],
+      $or: buildWordSearchOr(["title", "sku", "brand", "tags", "mpn", "description"], query.search),
     });
   }
 
