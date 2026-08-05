@@ -10,6 +10,7 @@ const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { buildWordSearchOr } = require("../utils/regex");
+const { formatCentsAsDollars } = require("../utils/currency");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
@@ -35,10 +36,6 @@ const GST_DIVISOR = 11;
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
-}
-
-function formatCentsAsDollars(cents) {
-  return `A$${(cents / 100).toFixed(2)}`;
 }
 
 // Counter._id is namespaced per tenant (see tenantCounterKey) so two

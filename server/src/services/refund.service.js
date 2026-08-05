@@ -29,6 +29,7 @@ const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../constants/payment.const
 const { ORDER_PAYMENT_STATUS, ORDER_STATUS } = require("../constants/order.constants");
 const { derivePaymentStatus } = require("../utils/paymentStatus");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
+const { formatCentsAsDollars } = require("../utils/currency");
 const emailService = require("./email/email.service");
 const { logger } = require("../loaders/logging");
 
@@ -521,7 +522,10 @@ async function createRefund(orderId, body, userId, tenantId) {
     }
     // §3.1.5 — absolute cap, checked LAST, after all other math. No exceptions.
     if (computed.total_amount > maxRefundable) {
-      throw httpError(`total_amount (${computed.total_amount}) exceeds what's left refundable (${maxRefundable})`, 400);
+      throw httpError(
+        `total_amount (${formatCentsAsDollars(computed.total_amount)}) exceeds what's left refundable (${formatCentsAsDollars(maxRefundable)})`,
+        400,
+      );
     }
 
     // §3.1.6 — allocations. Just Payment reads, no network calls — safe to
@@ -943,7 +947,10 @@ async function resolveAllocations({ order, totalAmount, requestedAllocations }) 
   if (requestedAllocations && requestedAllocations.length) {
     const sum = requestedAllocations.reduce((s, a) => s + a.amount, 0);
     if (sum !== totalAmount) {
-      throw httpError(`payment_allocations must sum to total_amount (${totalAmount}), got ${sum}`, 400);
+      throw httpError(
+        `payment_allocations must sum to total_amount (${formatCentsAsDollars(totalAmount)}), got ${formatCentsAsDollars(sum)}`,
+        400,
+      );
     }
     return requestedAllocations.map((a) => {
       const p = byId.get(String(a.payment_id));
@@ -969,7 +976,7 @@ async function resolveAllocations({ order, totalAmount, requestedAllocations }) 
   }
   if (remaining > 0) {
     throw httpError(
-      `Not enough refundable payment capacity to cover ${totalAmount} (short by ${remaining}) — check whether an older payment's Stripe refund window has closed`,
+      `Not enough refundable payment capacity to cover ${formatCentsAsDollars(totalAmount)} (short by ${formatCentsAsDollars(remaining)}) — check whether an older payment's Stripe refund window has closed`,
       400,
     );
   }
@@ -979,7 +986,10 @@ async function resolveAllocations({ order, totalAmount, requestedAllocations }) 
 function assertAllocationValid(payment, amount) {
   const refundable = payment.amount - payment.amount_refunded;
   if (amount > refundable) {
-    throw httpError(`Allocation of ${amount} exceeds payment ${payment._id}'s refundable amount (${refundable})`, 400);
+    throw httpError(
+      `Allocation of ${formatCentsAsDollars(amount)} exceeds payment ${payment._id}'s refundable amount (${formatCentsAsDollars(refundable)})`,
+      400,
+    );
   }
   if (payment.provider === PAYMENT_PROVIDER.STRIPE && !isWithinStripeRefundWindow(payment.paid_at)) {
     throw httpError(`Payment ${payment._id}'s Stripe refund window has closed — settle this allocation manually`, 400);
