@@ -20,6 +20,7 @@ services:
     depends_on:
       - mongo
       - redis
+      - typesense
     restart: unless-stopped
     networks:
       - default
@@ -67,6 +68,21 @@ services:
       - redis
     restart: unless-stopped
 
+  worker-search:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: node src/workers/search.worker.js
+    env_file: ./server/.env.production
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    depends_on:
+      - mongo
+      - redis
+      - typesense
+    restart: unless-stopped
+
   mongo:
     image: mongo:7
     volumes:
@@ -77,10 +93,20 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
 
+  typesense:
+    image: typesense/typesense:27.1
+    environment:
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-xyz}
+      - TYPESENSE_DATA_DIR=/data
+    volumes:
+      - typesense_data:/data
+    restart: unless-stopped
+
 volumes:
   mongo_data:
   uploads:
   logs:
+  typesense_data:
 
 networks:
   pha-net:

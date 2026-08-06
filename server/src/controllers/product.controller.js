@@ -5,6 +5,8 @@ const {
   generateVariantsForProduct,
   ensureInventoryForProduct,
   getProducts,
+  getProductsByIds,
+  getProductSuggestions,
   findProductById,
   addProductNote,
   getProductBySlug,
@@ -20,7 +22,9 @@ const {
   saveVariant,
   applyStockEntries,
 } = require("../services/product.service");
+const searchService = require("../services/search/product.search.service");
 const vehicleModelService = require("../services/vehicle-model.service");
+const { enqueueSearchJob } = require("../queues/search.queue");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
 const { buildProductFilter } = require("../utils/productFilter");
@@ -57,14 +61,92 @@ async function syncVehicleModelCatalog(vehicle, tenantId) {
   }
 }
 
+// Fire-and-forget, same as syncVehicleModelCatalog above — a slow/unreachable
+// search queue must never block a product save. The worker re-fetches the
+// product itself (see search.worker.js), so only the id needs to travel here.
+async function syncSearchIndex(productId) {
+  try {
+    await enqueueSearchJob("index_product", { productId: productId.toString() });
+  } catch (err) {
+    logger.warn(`[product.controller] failed to enqueue search index job: ${err.message}`);
+  }
+}
+
+async function removeFromSearchIndex(productId) {
+  try {
+    await enqueueSearchJob("delete_product", { productId: productId.toString() });
+  } catch (err) {
+    logger.warn(`[product.controller] failed to enqueue search delete job: ${err.message}`);
+  }
+}
+
+// In-memory equivalent of a Mongo `{field: 1|-1, ...}` sort spec, for
+// re-ordering the already-hydrated/stock-filtered search results (Typesense
+// itself only ranks by relevance).
+function sortByFields(items, sortSpec) {
+  const entries = Object.entries(sortSpec);
+  return [...items].sort((a, b) => {
+    for (const [field, dir] of entries) {
+      if (a[field] < b[field]) return -1 * dir;
+      if (a[field] > b[field]) return 1 * dir;
+    }
+    return 0;
+  });
+}
+
+// Bounds how many Typesense hits are hydrated/paginated in JS below — the
+// stock filter (not indexed in Typesense) has to be applied after hydration,
+// so this caps how much of the catalog a single search page reads. Fine for
+// a per-tenant auto-parts catalog; would need a real Typesense-side stock
+// field if a tenant's catalog grows far beyond this.
+const SEARCH_CANDIDATE_LIMIT = 250;
+
 exports.getProducts = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
+    const stockFilter = req.query.stock || undefined;
+
+    if (req.query.search) {
+      const categories = req.query.categories
+        ? (Array.isArray(req.query.categories) ? req.query.categories : req.query.categories.split(","))
+            .map((c) => c.trim())
+            .filter(Boolean)
+        : [];
+
+      const { ids } = await searchService.searchProducts({
+        q: req.query.search,
+        tenantId: req.tenantId,
+        publishedOnly: !req.user,
+        categories,
+        condition: req.query.condition || undefined,
+        authenticity: req.query.authenticity || undefined,
+        priceMin: req.query.price_min,
+        priceMax: req.query.price_max,
+        make: req.query.make || undefined,
+        model: req.query.model || undefined,
+        page: 1,
+        perPage: SEARCH_CANDIDATE_LIMIT,
+      });
+
+      const { items } = await getProductsByIds(ids, { stockFilter });
+
+      // Typesense's relevance order is the default ("best match") — only
+      // override it with an explicit sort spec if the caller asked for one.
+      const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
+      const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
+
+      const total = ordered.length;
+      return success(res, {
+        items: ordered.slice(skip, skip + limit),
+        total,
+        page,
+        pageSize: limit,
+        totalPages: Math.ceil(total / limit),
+      });
+    }
 
     const filter = buildProductFilter(req.query, { authenticated: !!req.user, tenantId: req.tenantId });
-
     const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
-    const stockFilter = req.query.stock || undefined;
 
     const { items, total } = await getProducts(filter, { skip, limit, sort, stockFilter });
 
@@ -75,6 +157,20 @@ exports.getProducts = async (req, res) => {
       pageSize: limit,
       totalPages: Math.ceil(total / limit),
     });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.suggestProducts = async (req, res) => {
+  try {
+    const { ids, total } = await searchService.suggestProducts({
+      tenantId: req.tenantId,
+      q: req.query.q,
+      limit: req.query.limit,
+    });
+    const items = await getProductSuggestions(ids);
+    return success(res, { items, total });
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -161,6 +257,7 @@ exports.createProduct = async (req, res) => {
     }, generateSlug(title), req.tenantId);
 
     await syncVehicleModelCatalog(parsedVehicle, req.tenantId);
+    await syncSearchIndex(product._id);
 
     const parsedStockEntries = stock_entries
       ? JSON.parse(stock_entries)
@@ -276,6 +373,7 @@ exports.updateProduct = async (req, res) => {
     }
 
     if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle, req.tenantId);
+    await syncSearchIndex(product._id);
 
     if (choicesChanged && product.has_variants && product.choices.length > 0) {
       const newVariants = await generateVariantsForProduct(product);
@@ -308,6 +406,7 @@ exports.deleteProduct = async (req, res) => {
     }
 
     await softDeleteProduct(product);
+    await removeFromSearchIndex(product._id);
     return success(res, null, "Product deleted");
   } catch (err) {
     return systemfailure(res, err);
@@ -349,6 +448,8 @@ exports.duplicateProduct = async (req, res) => {
     if (clone.has_variants && clone.choices.length > 0) {
       await generateVariantsForProduct(clone);
     }
+
+    await syncSearchIndex(clone._id);
 
     return created(res, await getPopulatedProduct(clone._id, req.tenantId), "Product duplicated");
   } catch (err) {

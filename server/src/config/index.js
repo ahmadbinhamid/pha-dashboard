@@ -126,6 +126,17 @@ const config = {
     // whatever `stripe listen` prints into this env var each session.
     devWebhookSecret: get("STRIPE_DEV_WEBHOOK_SECRET", null),
   },
+
+  typesense: {
+    // Self-hosted (docker-compose service `typesense`) — one shared cluster,
+    // every tenant's products live in the same `products` collection scoped
+    // by a `tenant_id` field (same shared-DB pattern as Mongo).
+    host: get("TYPESENSE_HOST", "localhost"),
+    port: getNum("TYPESENSE_PORT", 8108),
+    protocol: get("TYPESENSE_PROTOCOL", "http"),
+    apiKey: get("TYPESENSE_API_KEY", "xyz"),
+    connectionTimeoutSeconds: getNum("TYPESENSE_TIMEOUT_SECONDS", 5),
+  },
 };
 
 module.exports = config;

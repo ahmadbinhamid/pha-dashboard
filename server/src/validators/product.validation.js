@@ -160,6 +160,13 @@ const addProductNote = {
   }),
 };
 
+const suggestProducts = {
+  query: Joi.object({
+    q: Joi.string().trim().min(1).required(),
+    limit: Joi.number().integer().min(1).max(20).default(6),
+  }),
+};
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -167,5 +174,6 @@ module.exports = {
   byIdParam,
   byVariantParam,
   listProducts,
+  suggestProducts,
   addProductNote,
 };

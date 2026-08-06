@@ -1,5 +1,6 @@
 // services/product.service.js
 
+const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 const Inventory = require("../models/Inventory");
@@ -111,10 +112,11 @@ async function ensureInventoryForProduct(productId, variantId = null, tenantId) 
 // Stock is joined in from the separate Inventory collection (aggregation
 // can't use Mongoose .populate()), so the whole list query is an aggregation
 // pipeline rather than Product.find() — this also lets `stockFilter` match
-// against the just-computed stock_count in the same query.
-async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, stockFilter } = {}) {
-  const basePipeline = [
-    { $match: filter },
+// against the just-computed stock_count in the same query. Shared by
+// getProducts (Mongo-filtered listing) and getProductsByIds (Typesense-ranked
+// search results) so both stay in sync on what "in stock" etc. means.
+function buildStockStages(stockFilter) {
+  const stages = [
     {
       $lookup: {
         from: "inventories",
@@ -134,18 +136,61 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   ];
 
   if (stockFilter === STOCK_STATUS.IN_STOCK) {
-    basePipeline.push({
+    stages.push({
       $match: { $or: [{ stock_control: false }, { stock_count: { $gt: STOCK_LOW_THRESHOLD } }] },
     });
   } else if (stockFilter === STOCK_STATUS.LOW_STOCK) {
-    basePipeline.push({
+    stages.push({
       $match: { stock_control: true, stock_count: { $gt: 0, $lte: STOCK_LOW_THRESHOLD } },
     });
   } else if (stockFilter === STOCK_STATUS.OUT_OF_STOCK) {
-    basePipeline.push({
+    stages.push({
       $match: { stock_control: true, stock_count: { $lte: 0 } },
     });
   }
+
+  return stages;
+}
+
+// Same reasoning — shared attachment/category hydration for both listing
+// paths.
+const HYDRATION_STAGES = [
+  {
+    $lookup: {
+      from: "attachments",
+      localField: "attachments",
+      foreignField: "_id",
+      as: "attachments",
+      // `url` is a Mongoose virtual, not a stored field — projecting it
+      // here is a no-op; it's backfilled below via withAttachmentUrls().
+      pipeline: [
+        { $project: { original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
+      ],
+    },
+  },
+  {
+    $lookup: {
+      from: "categories",
+      localField: "categories",
+      foreignField: "_id",
+      as: "categories",
+      pipeline: [{ $project: { name: 1, slug: 1 } }],
+    },
+  },
+];
+
+function withComputedFields(p) {
+  return {
+    ...p,
+    // $lookup fetches raw attachment docs, bypassing the Attachment model's
+    // `url` virtual entirely — backfill it explicitly.
+    attachments: withAttachmentUrls(p.attachments),
+    stock_status: getStockStatus(p.stock_count, p.stock_control),
+  };
+}
+
+async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, stockFilter } = {}) {
+  const basePipeline = [{ $match: filter }, ...buildStockStages(stockFilter)];
 
   const countPipeline = [...basePipeline, { $count: "total" }];
   const pipeline = [
@@ -153,28 +198,7 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
     { $sort: sort },
     { $skip: skip },
     { $limit: limit },
-    {
-      $lookup: {
-        from: "attachments",
-        localField: "attachments",
-        foreignField: "_id",
-        as: "attachments",
-        // `url` is a Mongoose virtual, not a stored field — projecting it
-        // here is a no-op; it's backfilled below via withAttachmentUrls().
-        pipeline: [
-          { $project: { original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
-        ],
-      },
-    },
-    {
-      $lookup: {
-        from: "categories",
-        localField: "categories",
-        foreignField: "_id",
-        as: "categories",
-        pipeline: [{ $project: { name: 1, slug: 1 } }],
-      },
-    },
+    ...HYDRATION_STAGES,
   ];
 
   const [items, countResult] = await Promise.all([
@@ -183,14 +207,34 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   ]);
 
   return {
-    items: items.map((p) => ({
-      ...p,
-      // $lookup fetches raw attachment docs, bypassing the Attachment
-      // model's `url` virtual entirely — backfill it explicitly.
-      attachments: withAttachmentUrls(p.attachments),
-      stock_status: getStockStatus(p.stock_count, p.stock_control),
-    })),
+    items: items.map(withComputedFields),
     total: countResult[0]?.total || 0,
+  };
+}
+
+// Search-driven listing: `ids` is a relevance-ordered candidate set already
+// produced by Typesense (see product.search.service.js#searchProducts) and
+// already scoped to tenant/published/structured filters — this only adds the
+// stock join/filter (not indexed in Typesense) and re-sorts to match
+// Typesense's relevance order, since $in does not preserve array order.
+async function getProductsByIds(ids, { stockFilter } = {}) {
+  if (!ids.length) return { items: [] };
+
+  const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+  const pipeline = [
+    { $match: { _id: { $in: objectIds } } },
+    ...buildStockStages(stockFilter),
+    ...HYDRATION_STAGES,
+  ];
+
+  const items = await Product.aggregate(pipeline);
+  const byId = new Map(items.map((p) => [p._id.toString(), p]));
+
+  return {
+    items: ids
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .map(withComputedFields),
   };
 }
 
@@ -324,12 +368,34 @@ async function applyStockEntries(productId, stockEntries) {
   }
 }
 
+// Lightweight hydration for the autocomplete dropdown — `ids` is the
+// relevance-ordered set Typesense returned (see
+// product.search.service.js#suggestProducts); only the fields a suggestion
+// row actually renders are selected/populated.
+async function getProductSuggestions(ids) {
+  if (!ids.length) return [];
+
+  const products = await Product.find({ _id: { $in: ids } })
+    .select("title slug sku mpn price attachments")
+    .populate("attachments", "original_name mime_type type uid file_name")
+    .lean();
+
+  const byId = new Map(products.map((p) => [p._id.toString(), p]));
+
+  return ids
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((p) => ({ ...p, attachments: withAttachmentUrls(p.attachments) }));
+}
+
 module.exports = {
   cartesian,
   generateNextSku,
   generateVariantsForProduct,
   ensureInventoryForProduct,
   getProducts,
+  getProductsByIds,
+  getProductSuggestions,
   findProductById,
   addProductNote,
   getProductBySlug,

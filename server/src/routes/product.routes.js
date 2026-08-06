@@ -24,6 +24,13 @@ router.get(
   asyncHandler(ctrl.getProducts),
 );
 router.get(
+  "/search/suggest",
+  auth(false),
+  resolveGuestTenant(),
+  validate(v.suggestProducts),
+  asyncHandler(ctrl.suggestProducts),
+);
+router.get(
   "/:slug",
   auth(false),
   resolveGuestTenant(),
