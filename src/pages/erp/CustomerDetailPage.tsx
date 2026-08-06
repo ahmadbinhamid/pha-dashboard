@@ -134,7 +134,7 @@ export default function CustomerDetailPage() {
                           <OrderChannelBadge channel={order.channel} />
                         </TableCell>
                         <TableCell>
-                          <OrderStatusBadge status={order.status} />
+                          <OrderStatusBadge status={order.fulfillment_status} />
                         </TableCell>
                         <TableCell className="text-right text-fg">{formatCurrencyFromCents(order.total)}</TableCell>
                         <TableCell className="text-right text-fg/60">
@@ -175,7 +175,7 @@ export default function CustomerDetailPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-danger">{formatCurrencyFromCents(order.total)}</div>
-                      <OrderStatusBadge status={order.status} />
+                      <OrderStatusBadge status={order.fulfillment_status} />
                     </div>
                   </div>
                 ))}

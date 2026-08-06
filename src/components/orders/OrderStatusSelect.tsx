@@ -4,32 +4,26 @@ import { ORDER_STATUS_LABEL } from "@/components/orders/OrderStatusBadge";
 import { useToast } from "@/context";
 import { updateOrderStatus } from "@/lib/api/orders";
 import { cn } from "@/utils/cn";
-import type { OrderStatus, EditableOrderStatus } from "@/types/orders";
+import type { OrderFulfillmentStatus } from "@/types/orders";
 
-const EDITABLE_STATUSES: EditableOrderStatus[] = ["pending_payment", "partially_paid", "paid", "fulfilled", "cancelled"];
+const STATUSES: OrderFulfillmentStatus[] = ["pending", "processing", "on_hold", "completed", "cancelled"];
 
-// Refunded/partially_refunded are only ever reached through the dedicated
-// refund flow — this dropdown is locked (read-only) for those, matching the
-// same restriction the backend enforces (order.service.js#updateOrderStatus).
-const LOCKED_STATUSES = new Set<OrderStatus>(["refunded", "partially_refunded"]);
-
-const DOT_COLOR: Record<OrderStatus, string> = {
-  pending_payment: "bg-tag-warn-fg",
-  partially_paid: "bg-tag-warn-fg",
-  paid: "bg-tag-success-fg",
-  fulfilled: "bg-fg/50",
-  cancelled: "bg-fg/30",
-  refunded: "bg-tag-danger-fg",
-  partially_refunded: "bg-tag-warn-fg",
+const DOT_COLOR: Record<OrderFulfillmentStatus, string> = {
+  pending: "bg-tag-warn-fg",
+  processing: "bg-fg/50",
+  on_hold: "bg-tag-warn-fg",
+  completed: "bg-tag-success-fg",
+  cancelled: "bg-tag-danger-fg",
 };
 
-export function OrderStatusSelect({ order }: { order: { _id: string; status: OrderStatus } }) {
+// Pure order lifecycle — payment status is a separate, read-only concept
+// (see OrderPaymentStatusBadge) and is never touched by this control.
+export function OrderStatusSelect({ order }: { order: { _id: string; fulfillment_status: OrderFulfillmentStatus } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const locked = LOCKED_STATUSES.has(order.status);
 
   const mutation = useMutation({
-    mutationFn: (status: EditableOrderStatus) => updateOrderStatus(order._id, status),
+    mutationFn: (status: OrderFulfillmentStatus) => updateOrderStatus(order._id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", order._id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -44,16 +38,16 @@ export function OrderStatusSelect({ order }: { order: { _id: string; status: Ord
     <div className="flex items-center gap-2">
       <span className="text-sm text-fg/50">Status</span>
       <Select
-        value={order.status}
-        onValueChange={(value) => mutation.mutate(value as EditableOrderStatus)}
-        disabled={locked || mutation.isPending}
+        value={order.fulfillment_status}
+        onValueChange={(value) => mutation.mutate(value as OrderFulfillmentStatus)}
+        disabled={mutation.isPending}
       >
         <SelectTrigger className="h-9 w-auto min-w-36 gap-2 text-sm">
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[order.status])} />
-          <SelectValue>{ORDER_STATUS_LABEL[order.status]}</SelectValue>
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[order.fulfillment_status])} />
+          <SelectValue>{ORDER_STATUS_LABEL[order.fulfillment_status]}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {EDITABLE_STATUSES.map((status) => (
+          {STATUSES.map((status) => (
             <SelectItem key={status} value={status}>
               <span className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[status])} />

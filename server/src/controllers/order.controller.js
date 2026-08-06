@@ -43,6 +43,8 @@ exports.listOrders = async (req, res) => {
         status: req.query.status,
         channel: req.query.channel,
         delivery_method: req.query.delivery_method,
+        fulfillment_status: req.query.fulfillment_status,
+        payment_status: req.query.payment_status,
         search: req.query.search,
       },
       req.tenantId,

@@ -60,7 +60,7 @@ export default function PayOrderPage() {
   }
 
   const amountDue = order.total - (order.payment?.amount ?? 0);
-  const alreadyPaid = order.status === "paid" || order.status === "fulfilled" || amountDue <= 0;
+  const alreadyPaid = order.payment_status === "paid" || order.fulfillment_status === "completed" || amountDue <= 0;
 
   return (
     <StatusShell>

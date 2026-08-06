@@ -10,19 +10,19 @@ import { BalanceDueBanner } from "@/components/orders/BalanceDueBanner";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import { formatCurrencyFromCents } from "@/utils/format";
-import type { OrderChannel, OrderStatus, OrderPaymentSummary } from "@/types/orders";
+import type { OrderChannel, OrderPaymentStatus, OrderPaymentSummary } from "@/types/orders";
 import type { Refund } from "@/types/refund";
 
 export function OrderPaymentSummaryCard({
   orderId,
-  orderStatus,
+  paymentStatus,
   payments,
   refunds,
   total,
   channel,
 }: {
   orderId: string;
-  orderStatus: OrderStatus;
+  paymentStatus: OrderPaymentStatus;
   payments: OrderPaymentSummary[];
   refunds: Refund[];
   total: number;
@@ -32,7 +32,7 @@ export function OrderPaymentSummaryCard({
   const [refundOpen, setRefundOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const isManual = channel === "manual";
-  const hasOutstandingBalance = orderStatus === "pending_payment" || orderStatus === "partially_paid";
+  const hasOutstandingBalance = paymentStatus === "pending_payment" || paymentStatus === "partially_paid";
   // Collecting more only ever applies to manual/in-store sales — storefront
   // and eBay orders are always settled in full by Stripe/the marketplace
   // before they reach this card.
@@ -47,7 +47,7 @@ export function OrderPaymentSummaryCard({
   }
 
   const totalPaid = getTotalPaid(payments);
-  const balanceDue = getBalanceDue(total, payments, orderStatus);
+  const balanceDue = getBalanceDue(total, payments, paymentStatus);
 
   return (
     <div className="space-y-4">
@@ -58,7 +58,7 @@ export function OrderPaymentSummaryCard({
 
       {/* Gated on hasOutstandingBalance (not just balanceDue > 0) so a refund
           never gets mistaken for money still owed — refunding a paid order
-          moves orderStatus to refunded/partially_refunded, which leaves the
+          moves paymentStatus to refunded/partially_refunded, which leaves the
           same arithmetic remainder as an uncollected balance but means the
           opposite thing. */}
       {isManual && hasOutstandingBalance && balanceDue > 0 && <BalanceDueBanner amount={balanceDue} />}

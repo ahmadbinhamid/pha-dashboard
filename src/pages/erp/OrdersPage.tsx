@@ -9,24 +9,35 @@ import { ManageColumns } from "@/components/ui/ManageColumns";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
-import type { Order, OrderStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
+import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart } from "lucide-react";
 
-const STATUS_FILTERS: { label: string; value: OrderStatus | "" }[] = [
+// Order lifecycle — independent of payment status (see PAYMENT_STATUS_FILTERS
+// below and OrderStatusSelect for the same 5-state split on the detail page).
+const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = [
   { label: "All Status", value: "" },
-  { label: "Pending Payment", value: "pending_payment" },
+  { label: "Pending", value: "pending" },
+  { label: "Processing", value: "processing" },
+  { label: "On Hold", value: "on_hold" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+];
+
+// Always derived from actual payments/refunds — never admin-editable.
+const PAYMENT_STATUS_FILTERS: { label: string; value: OrderPaymentStatus | "" }[] = [
+  { label: "All Payment", value: "" },
+  { label: "Unpaid", value: "pending_payment" },
   { label: "Partially Paid", value: "partially_paid" },
   { label: "Paid", value: "paid" },
-  { label: "Fulfilled", value: "fulfilled" },
-  { label: "Cancelled", value: "cancelled" },
-  { label: "Refunded", value: "refunded" },
   { label: "Partially Refunded", value: "partially_refunded" },
+  { label: "Refunded", value: "refunded" },
 ];
 
 const CHANNEL_FILTERS: { label: string; value: OrderChannel | "" }[] = [
@@ -49,6 +60,7 @@ const ORDER_COLUMNS: ColumnDef[] = [
   { key: "items", label: "Items" },
   { key: "total", label: "Total" },
   { key: "status", label: "Status" },
+  { key: "payment", label: "Payment" },
   { key: "date", label: "Date" },
 ];
 
@@ -58,7 +70,8 @@ export default function OrdersPage() {
   const { visibility, toggleColumn, isVisible } = useColumnVisibility("orders", ORDER_COLUMNS);
 
   const search = searchParams.get("search") ?? "";
-  const status = searchParams.get("status") ?? "";
+  const fulfillmentStatus = searchParams.get("fulfillment_status") ?? "";
+  const paymentStatus = searchParams.get("payment_status") ?? "";
   const channel = searchParams.get("channel") ?? "";
   const deliveryMethod = searchParams.get("delivery_method") ?? "";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
@@ -82,12 +95,25 @@ export default function OrdersPage() {
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
 
-  const setStatus = useCallback(
+  const setFulfillmentStatus = useCallback(
     (val: string) => {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        if (val) next.set("status", val);
-        else next.delete("status");
+        if (val) next.set("fulfillment_status", val);
+        else next.delete("fulfillment_status");
+        next.set("page", "1");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const setPaymentStatus = useCallback(
+    (val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set("payment_status", val);
+        else next.delete("payment_status");
         next.set("page", "1");
         return next;
       });
@@ -145,8 +171,17 @@ export default function OrdersPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", { search, status, channel, deliveryMethod, page, limit }],
-    queryFn: () => getOrders({ search, status, channel, delivery_method: deliveryMethod, page, limit }),
+    queryKey: ["orders", { search, fulfillmentStatus, paymentStatus, channel, deliveryMethod, page, limit }],
+    queryFn: () =>
+      getOrders({
+        search,
+        fulfillment_status: fulfillmentStatus,
+        payment_status: paymentStatus,
+        channel,
+        delivery_method: deliveryMethod,
+        page,
+        limit,
+      }),
   });
 
   const orders: Order[] = data?.data?.items ?? [];
@@ -175,7 +210,8 @@ export default function OrdersPage() {
               />
             </div>
             <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} className="h-9" />
-            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} className="h-9" />
+            <FilterSelect options={STATUS_FILTERS} value={fulfillmentStatus} onChange={setFulfillmentStatus} className="h-9" />
+            <FilterSelect options={PAYMENT_STATUS_FILTERS} value={paymentStatus} onChange={setPaymentStatus} className="h-9" />
             <FilterSelect options={MODE_FILTERS} value={deliveryMethod} onChange={setDeliveryMethod} className="h-9" />
             {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
           </div>
@@ -200,6 +236,7 @@ export default function OrdersPage() {
                   {isVisible("items") && <TableHead className="text-right">Items</TableHead>}
                   {isVisible("total") && <TableHead className="text-right">Total</TableHead>}
                   {isVisible("status") && <TableHead>Status</TableHead>}
+                  {isVisible("payment") && <TableHead>Payment</TableHead>}
                   {isVisible("date") && <TableHead className="text-right">Date</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -233,7 +270,12 @@ export default function OrdersPage() {
                       )}
                       {isVisible("status") && (
                         <TableCell>
-                          <OrderStatusBadge status={order.status} />
+                          <OrderStatusBadge status={order.fulfillment_status} />
+                        </TableCell>
+                      )}
+                      {isVisible("payment") && (
+                        <TableCell>
+                          <OrderPaymentStatusBadge status={order.payment_status} />
                         </TableCell>
                       )}
                       {isVisible("date") && (

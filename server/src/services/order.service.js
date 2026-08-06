@@ -26,7 +26,7 @@ const {
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { currencyForMarketplace } = require("../constants/ebay.constants");
-const { derivePaymentStatus } = require("../utils/paymentStatus");
+const { derivePaymentStatus, deriveLegacyOrderStatus } = require("../utils/paymentStatus");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
 const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service");
 const { logger } = require("../loaders/logging");
@@ -664,7 +664,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     // pairing is required everywhere `status` gets a payment-derived value.
     payment_status: ORDER_PAYMENT_STATUS.PAID,
     fulfillment_status:
-      mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.FULFILLED : ORDER_FULFILLMENT_STATUS.UNFULFILLED,
+      mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.COMPLETED : ORDER_FULFILLMENT_STATUS.PENDING,
     channel: ORDER_CHANNEL.EBAY,
     external_order_id: mapped.externalOrderId,
     external_buyer_username: mapped.externalBuyerUsername,
@@ -744,43 +744,27 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
 }
 
 // Admin-triggered status change from the order detail page's status dropdown.
-// Refunded/partially_refunded orders are excluded server-side too (not just
-// by the validator's enum) — those states are only ever reached through the
-// dedicated refund flow (refund.service.js), which is the one place that
-// already knows how to keep `status`/`payment_status`/`fulfillment_status` in
-// sync for a refund. Letting this endpoint touch them would reopen the exact
-// mismatch bugs that split those fields apart in the first place (see
-// Order.js's `status` field comment).
+// Unconditional, exactly like flowpos's orderStatusChange — no payment-state
+// gating of any kind. Writes ONLY fulfillment_status; payment_status is
+// always derived from actual payments (derivePaymentStatus/
+// recordOrderPayment/refund.service.js), never settable by hand, so order
+// status and payment status stay fully independent no matter what state
+// either is in. Legacy `status` is kept in sync as a pure derivation (see
+// utils/paymentStatus.js#deriveLegacyOrderStatus) for the handful of readers
+// not yet migrated off it — dashboard aggregation, invoice PDF, eBay/Stripe
+// internals.
 async function updateOrderStatus(orderId, { status }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) throw httpError("Order not found", 404);
 
-  if (order.status === ORDER_STATUS.REFUNDED || order.status === ORDER_STATUS.PARTIALLY_REFUNDED) {
-    throw httpError("This order has been refunded — status changes only via the refund flow.", 409);
+  // Restock only fires on the transition INTO cancelled (not a guard against
+  // the change itself — just avoids double-restocking if already cancelled).
+  if (status === ORDER_FULFILLMENT_STATUS.CANCELLED && order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.CANCELLED) {
+    await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
   }
 
-  if (status === ORDER_STATUS.CANCELLED) {
-    if (order.fulfillment_status === ORDER_FULFILLMENT_STATUS.FULFILLED) {
-      throw httpError("This order has already been fulfilled — cancel via a refund instead.", 409);
-    }
-    const totalPaidCents = await getTotalPaidForOrder(order._id);
-    if (totalPaidCents > 0) {
-      throw httpError("This order has payments recorded — process a refund instead of cancelling directly.", 409);
-    }
-    // Manual orders always deducted stock in full at creation regardless of
-    // payment status (see createManualOrder) — cancelling gives it all back.
-    await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
-    order.status = ORDER_STATUS.CANCELLED;
-    order.fulfillment_status = ORDER_FULFILLMENT_STATUS.CANCELLED;
-  } else if (status === ORDER_STATUS.FULFILLED) {
-    order.status = ORDER_STATUS.FULFILLED;
-    order.fulfillment_status = ORDER_FULFILLMENT_STATUS.FULFILLED;
-  } else {
-    // pending_payment / partially_paid / paid — identical members of both
-    // ORDER_STATUS and ORDER_PAYMENT_STATUS, so both get the same value.
-    order.status = status;
-    order.payment_status = status;
-  }
+  order.fulfillment_status = status;
+  order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
 
   await order.save();
   return order;
@@ -812,11 +796,16 @@ async function getOrderForGuest(orderId, token, tenantId) {
 
 // ── Admin ────────────────────────────────────────────────────────────────
 
-async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, delivery_method, search } = {}, tenantId) {
+async function listOrders(
+  { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, search } = {},
+  tenantId,
+) {
   const filter = { tenant_id: tenantId };
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
   if (delivery_method) filter.delivery_method = delivery_method;
+  if (fulfillment_status) filter.fulfillment_status = fulfillment_status;
+  if (payment_status) filter.payment_status = payment_status;
   if (search) {
     const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
     const strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
@@ -911,13 +900,13 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     if (trimmedTracking && trimmedCarrier) {
       order.tracking_number = trimmedTracking;
       order.carrier_name = trimmedCarrier;
-      order.status = ORDER_STATUS.FULFILLED;
-      // Keeps the new split field (§1.2) in sync with the one place in this
-      // codebase that actually marks an order fulfilled — refund.service.js's
+      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.COMPLETED;
+      // Legacy `status` derived, not set directly — see
+      // utils/paymentStatus.js#deriveLegacyOrderStatus. refund.service.js's
       // recomputeLedger reads fulfillment_status to decide whether a refund
       // may legitimately overwrite the legacy `status` field; without this,
-      // it would never see "fulfilled" and would incorrectly revert it.
-      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.FULFILLED;
+      // it would never see "completed" and would incorrectly revert it.
+      order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
       await order.save();
     } else if (!order.tracking_number || !order.carrier_name) {
       throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);

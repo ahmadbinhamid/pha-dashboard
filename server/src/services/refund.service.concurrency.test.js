@@ -60,7 +60,7 @@ async function createDisposableOrder() {
     currency: "aud",
     channel: "manual",
     payment_status: "paid",
-    fulfillment_status: "unfulfilled",
+    fulfillment_status: "pending",
     guest_access_token: crypto.randomBytes(16).toString("hex"),
   });
 

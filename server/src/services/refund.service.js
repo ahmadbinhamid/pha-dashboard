@@ -27,7 +27,7 @@ const { getTotalPaidForOrder, getTotalRefundedForOrder } = require("./payment.se
 const { REFUND_STATUS, REFUND_REASON } = require("../constants/refund.constants");
 const { PAYMENT_STATUS, PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { ORDER_PAYMENT_STATUS, ORDER_STATUS } = require("../constants/order.constants");
-const { derivePaymentStatus } = require("../utils/paymentStatus");
+const { derivePaymentStatus, deriveLegacyOrderStatus } = require("../utils/paymentStatus");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { formatCentsAsDollars } = require("../utils/currency");
 const { formatOrderNumber } = require("../utils/orderNumberFormat");
@@ -1181,31 +1181,12 @@ async function recomputeLedger(order) {
 
   // Legacy `status` (§1.2/§9) — kept in sync here as a DERIVED value, not
   // independently set, until every consumer (order list/badges/dashboard/
-  // invoice PDF — ~20 files across BE+FE) migrates to payment_status/
-  // fulfillment_status directly. Without this, `status` would silently go
-  // stale after any refund: nothing else in this rewrite touches the legacy
-  // field, so every existing reader of `order.status` would keep showing
-  // pre-refund state forever. Preserves the exact intent of the original
-  // Phase 0 bug fix — a fulfilled order's status doesn't get wrongly
-  // reverted just because a refund's ledger recompute ran — while still
-  // surfacing a genuine refund state when one legitimately applies. This is
-  // the one piece of §9 NOT fully done (see the final report): the other 19
-  // files still read `status` directly rather than the split fields, and a
-  // blind rename across order creation, eBay/Stripe webhooks, dashboard
-  // aggregation, and 9 frontend views — none of which I can visually verify
-  // — is a materially different risk than this single, contained,
-  // always-consistent derivation.
-  if (
-    order.fulfillment_status === "fulfilled" &&
-    order.payment_status !== ORDER_PAYMENT_STATUS.REFUNDED &&
-    order.payment_status !== ORDER_PAYMENT_STATUS.PARTIALLY_REFUNDED
-  ) {
-    order.status = ORDER_STATUS.FULFILLED;
-  } else if (order.fulfillment_status === "cancelled") {
-    order.status = ORDER_STATUS.CANCELLED;
-  } else {
-    order.status = order.payment_status;
-  }
+  // invoice PDF) migrates to payment_status/fulfillment_status directly.
+  // Without this, `status` would silently go stale after any refund. See
+  // utils/paymentStatus.js#deriveLegacyOrderStatus (shared with
+  // order.service.js#updateOrderStatus, the admin status-dropdown path) for
+  // the rule itself.
+  order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
 
   await order.save();
 }

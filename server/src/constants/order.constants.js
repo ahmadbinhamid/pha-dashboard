@@ -47,9 +47,15 @@ const ORDER_PAYMENT_STATUS = Object.freeze({
   REFUNDED: "refunded",
 });
 
+// Admin-editable order lifecycle — deliberately independent of
+// ORDER_PAYMENT_STATUS (a Completed order isn't necessarily fully paid, and
+// a Paid order isn't necessarily fulfilled yet). Matches flowpos's 5-state
+// order status exactly.
 const ORDER_FULFILLMENT_STATUS = Object.freeze({
-  UNFULFILLED: "unfulfilled",
-  FULFILLED: "fulfilled",
+  PENDING: "pending",
+  PROCESSING: "processing",
+  ON_HOLD: "on_hold",
+  COMPLETED: "completed",
   CANCELLED: "cancelled",
 });
 

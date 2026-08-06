@@ -3,8 +3,8 @@ import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Printer, Mail, Pencil, PackageX, Download, ChevronDown, Banknote, CreditCard, Package } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
+import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
@@ -133,7 +133,7 @@ export default function OrderDetailPage() {
   // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
   // in full, then refunded" (due $0) from "never paid in full, then refunded
   // on top of that" (due reflects the real remaining shortfall).
-  const totalDue = getBalanceDue(order.total, order.payments, order.status);
+  const totalDue = getBalanceDue(order.total, order.payments, order.payment_status);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
@@ -191,13 +191,7 @@ export default function OrderDetailPage() {
             {formatCurrencyFromCents(order.total)}
           </StatCard>
           <StatCard icon={CreditCard} label="Payment">
-            {totalDue <= 0 && totalPaid > 0 ? (
-              <Badge variant="ok">Paid</Badge>
-            ) : totalPaid > 0 ? (
-              <Badge variant="warn">Partially Paid</Badge>
-            ) : (
-              <Badge variant="muted">Unpaid</Badge>
-            )}
+            <OrderPaymentStatusBadge status={order.payment_status} />
           </StatCard>
           <StatCard icon={Package} label="Items">
             {itemCount} item{itemCount !== 1 ? "s" : ""}
@@ -347,7 +341,7 @@ export default function OrderDetailPage() {
               <CardContent>
                 <OrderPaymentSummaryCard
                   orderId={order._id}
-                  orderStatus={order.status}
+                  paymentStatus={order.payment_status}
                   payments={order.payments}
                   refunds={order.refunds}
                   total={order.total}

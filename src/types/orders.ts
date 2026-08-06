@@ -1,9 +1,13 @@
 import type { PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
 
+// Legacy, derived-only rollup of fulfillment_status + payment_status (see
+// server/src/models/Order.js's `status` field comment) — still returned by
+// the API and still legitimately read wherever the exact combined semantics
+// (e.g. "refunded" overriding everything else) are what's needed, but never
+// written to directly from the frontend anymore. Prefer OrderFulfillmentStatus
+// / OrderPaymentStatus below for anything editable or badge-rendered.
 export type OrderStatus =
   | "pending_payment"
-  // Some, but not all, of the order total has been collected — see
-  // OrderPaymentSummaryCard for the "collect remaining balance" actions.
   | "partially_paid"
   | "paid"
   | "fulfilled"
@@ -11,10 +15,13 @@ export type OrderStatus =
   | "refunded"
   | "partially_refunded";
 
-// Restricted to the 5 statuses safely reachable from the order detail page's
-// status dropdown — refunded/partially_refunded only ever change via the
-// dedicated refund flow (see order.service.js#updateOrderStatus).
-export type EditableOrderStatus = Exclude<OrderStatus, "refunded" | "partially_refunded">;
+// Admin-editable order lifecycle — fully independent of payment status
+// (matches flowpos's split). Written via updateOrderStatus/OrderStatusSelect.
+export type OrderFulfillmentStatus = "pending" | "processing" | "on_hold" | "completed" | "cancelled";
+
+// Always derived server-side from actual payments/refunds — never settable
+// by hand. See OrderPaymentStatusBadge for how this renders.
+export type OrderPaymentStatus = "pending_payment" | "partially_paid" | "paid" | "partially_refunded" | "refunded";
 
 export type OrderChannel = "storefront" | "ebay" | "manual";
 
@@ -131,6 +138,8 @@ export interface Order {
   total: number; // cents
   currency: string;
   status: OrderStatus;
+  fulfillment_status: OrderFulfillmentStatus;
+  payment_status: OrderPaymentStatus;
   channel: OrderChannel;
   external_order_id: string | null;
   external_buyer_username: string | null;

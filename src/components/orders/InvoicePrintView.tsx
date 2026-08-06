@@ -61,7 +61,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   // on top of that" (due reflects the real remaining shortfall). The
   // Balance Outstanding banner further below relies on this already being
   // correct rather than separately suppressing itself for a refunded status.
-  const amountDue = getBalanceDue(order.total, order.payments, order.status);
+  const amountDue = getBalanceDue(order.total, order.payments, order.payment_status);
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
     month: "short",

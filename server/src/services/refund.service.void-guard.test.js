@@ -75,7 +75,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
     currency: "aud",
     channel: "manual",
     payment_status: "partially_refunded",
-    fulfillment_status: "unfulfilled",
+    fulfillment_status: "pending",
     guest_access_token: crypto.randomBytes(16).toString("hex"),
   });
 

@@ -28,7 +28,7 @@ export function OrderConfirmationStep({ order, paymentMethod, onStartNewOrder }:
   // order.service.js#createManualOrder — no other signal on the order itself
   // records which method was picked when nothing was collected).
   const canSendPaymentLink =
-    order.channel === "manual" && order.status === "pending_payment" && paymentMethod === "payment_link";
+    order.channel === "manual" && order.payment_status === "pending_payment" && paymentMethod === "payment_link";
   const hasCustomerEmail = !!order.customer.email;
 
   const sendLinkMutation = useMutation({

@@ -192,14 +192,17 @@ const orderSchema = buildSchema({
   total: { type: Number, required: true },
   currency: { type: String, required: true, default: "aud" },
 
-  // Deprecated (refund-redesign-spec.md §1.2/§9) — mixes payment state and
-  // fulfilment state in one enum, which is exactly why
-  // finalizeSucceededRefund used to overwrite FULFILLED with REFUNDED.
-  // Stays authoritative until the §6.2 backfill populates payment_status/
-  // fulfillment_status below for every existing order and the services that
-  // read `status` are migrated to read those instead (§9) — do not read or
-  // write payment_status/fulfillment_status yet, they're additive-only at
-  // this point and every order will have them at their defaults.
+  // Legacy (refund-redesign-spec.md §1.2/§9) — mixes payment state and
+  // fulfilment state in one enum, which is exactly why finalizeSucceededRefund
+  // used to overwrite FULFILLED with REFUNDED. `payment_status` and
+  // `fulfillment_status` below are now the real, independently-editable/
+  // derived fields (admin UI writes fulfillment_status; payment_status is
+  // always derived from actual payments — see utils/paymentStatus.js). This
+  // field is kept as a DERIVED rollup of the two (see
+  // utils/paymentStatus.js#deriveLegacyOrderStatus) purely for the ~15
+  // remaining readers (dashboard aggregation, invoice PDF, eBay/Stripe
+  // internals) that haven't been migrated off it — never write it directly
+  // outside that derivation.
   status: {
     type: String,
     enum: Object.values(ORDER_STATUS),
@@ -213,7 +216,7 @@ const orderSchema = buildSchema({
   fulfillment_status: {
     type: String,
     enum: Object.values(ORDER_FULFILLMENT_STATUS),
-    default: ORDER_FULFILLMENT_STATUS.UNFULFILLED,
+    default: ORDER_FULFILLMENT_STATUS.PENDING,
   },
 
   // Set by the §6.2 backfill script once every item on this order has a

@@ -75,7 +75,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
     currency: "aud",
     channel: "manual",
     payment_status: "paid",
-    fulfillment_status: "unfulfilled",
+    fulfillment_status: "pending",
     guest_access_token: crypto.randomBytes(16).toString("hex"),
   });
   order.item_ids_migrated_at = new Date();

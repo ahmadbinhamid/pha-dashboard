@@ -1,6 +1,12 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
-import type { Order, OrderAddress, OrderDeliveryMethod, OrderDetail, EditableOrderStatus } from "@/types/orders";
+import type {
+  Order,
+  OrderAddress,
+  OrderDeliveryMethod,
+  OrderDetail,
+  OrderFulfillmentStatus,
+} from "@/types/orders";
 import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
 export interface OrderListParams {
@@ -10,6 +16,8 @@ export interface OrderListParams {
   status?: string;
   channel?: string;
   delivery_method?: string;
+  fulfillment_status?: string;
+  payment_status?: string;
 }
 
 export const getOrders = async (params: OrderListParams = {}) => {
@@ -84,7 +92,7 @@ export const sendPaymentLinkEmail = async (orderId: string) => {
   return data;
 };
 
-export const updateOrderStatus = async (orderId: string, status: EditableOrderStatus) => {
+export const updateOrderStatus = async (orderId: string, status: OrderFulfillmentStatus) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/status`, { status });
   return data;
 };
