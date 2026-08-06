@@ -14,12 +14,8 @@ function isOTPExpired(otpExpiry) {
   return new Date() > otpExpiry;
 }
 
-function isValidOTPFormat(otp) {
-  return /^\d{6}$/.test(otp);
-}
-
 function hashOTP(otp) {
   return createHash("sha256").update(String(otp)).digest("hex");
 }
 
-module.exports = { generateOTP, generateOTPExpiry, isOTPExpired, isValidOTPFormat, hashOTP };
+module.exports = { generateOTP, generateOTPExpiry, isOTPExpired, hashOTP };

@@ -65,7 +65,6 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB (supports video)
 });
 
-const uploadSingle = upload.single("file");
 const uploadMultiple = upload.array("files", 20);
 
-module.exports = { upload, uploadSingle, uploadMultiple };
+module.exports = { upload, uploadMultiple };

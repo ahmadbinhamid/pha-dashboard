@@ -123,14 +123,6 @@ exports.login = async (req, res) => {
       );
     }
 
-    // OTP DISABLED — issue JWT directly on login
-    // const otp = generateOTP();
-    // user.otp = hashOTP(otp);
-    // user.otp_expiry = generateOTPExpiry();
-    // await user.save();
-    // await sendOTP({ to: user.email, name: fullName(user), otp });
-    // return success(res, { email: user.email }, "OTP sent to your email. Please verify to complete login.");
-
     const token = signJwt({
       sub: user._id.toString(),
       role: user.role,

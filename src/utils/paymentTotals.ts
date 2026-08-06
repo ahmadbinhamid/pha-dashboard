@@ -1,4 +1,4 @@
-import type { OrderPaymentSummary, OrderStatus } from "@/types/orders";
+import type { OrderPaymentSummary, OrderPaymentStatus } from "@/types/orders";
 
 // Sums every succeeded payment on an order, net of its own refunds — mirrors
 // the backend's payment.service.js#getTotalPaidForOrder. An order can have
@@ -38,16 +38,16 @@ export function getTotalRefunded(payments: OrderPaymentSummary[]): number {
 //     payment ever covered the whole order): the customer still genuinely
 //     owes the gap, and net paid is now even lower than before, so due is
 //     the real remainder (orderTotal - net paid), not 0.
-//   - status === "refunded" (a payment refunded in full — see
+//   - paymentStatus === "refunded" (a payment refunded in full — see
 //     refund.service.js, this is also how a cancelled sale gets restocked)
 //     is treated as "this order is void" regardless of whether the order
 //     total was ever fully collected — nothing further should ever be
 //     chased on a fully-refunded order.
-export function getBalanceDue(orderTotal: number, payments: OrderPaymentSummary[], status?: OrderStatus): number {
+export function getBalanceDue(orderTotal: number, payments: OrderPaymentSummary[], paymentStatus?: OrderPaymentStatus): number {
   const netPaid = getTotalPaid(payments);
   const grossPaid = netPaid + getTotalRefunded(payments);
   const wasEverPaidInFull = grossPaid >= orderTotal;
-  const isFullyRefunded = status === "refunded";
+  const isFullyRefunded = paymentStatus === "refunded";
   if (wasEverPaidInFull || isFullyRefunded) return 0;
   return Math.max(0, orderTotal - netPaid);
 }

@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Printer, Mail, Pencil, PackageX, Download } from "lucide-react";
+import { Printer, Mail, Pencil, PackageX, Download, ChevronDown, Banknote, CreditCard, Package } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { StatCard } from "@/components/ui/StatCard";
+import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
-import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/ActionsMenu";
+import { OrderStatusSelect } from "@/components/orders/OrderStatusSelect";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderDeliveryMethodBadge } from "@/components/orders/OrderDeliveryMethodBadge";
 import { OrderItemsTable } from "@/components/orders/OrderItemsTable";
@@ -125,7 +133,7 @@ export default function OrderDetailPage() {
   // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
   // in full, then refunded" (due $0) from "never paid in full, then refunded
   // on top of that" (due reflects the real remaining shortfall).
-  const totalDue = getBalanceDue(order.total, order.payments, order.status);
+  const totalDue = getBalanceDue(order.total, order.payments, order.payment_status);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
@@ -134,11 +142,10 @@ export default function OrderDetailPage() {
       <div className="space-y-5 print:hidden">
         <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: formatOrderNumber(order.order_number_prefix, order.order_number) }]} />
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-xl font-semibold tracking-tight">{formatOrderNumber(order.order_number_prefix, order.order_number)}</h1>
-              <OrderStatusBadge status={order.status} />
               <OrderDeliveryMethodBadge method={order.delivery_method} />
               <OrderChannelBadge channel={order.channel} />
             </div>
@@ -149,26 +156,46 @@ export default function OrderDetailPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2 self-start">
-            <Button variant="secondary" size="md" className="gap-2" onClick={() => window.print()}>
-              <Printer className="h-4 w-4" />
-              Print Invoice
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              className="gap-2"
-              disabled={downloadPdfMutation.isPending}
-              onClick={() => downloadPdfMutation.mutate()}
-            >
-              <Download className="h-4 w-4" />
-              {downloadPdfMutation.isPending ? "Preparing…" : "Download PDF"}
-            </Button>
-            <Button variant="primary" size="md" className="gap-2" onClick={() => setEmailModalOpen(true)}>
-              <Mail className="h-4 w-4" />
-              Send Email
-            </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            <OrderStatusSelect order={order} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="md" className="gap-2">
+                  Actions
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => window.print()}>
+                  <Printer className="h-3.5 w-3.5 text-fg/50" />
+                  Print Invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={downloadPdfMutation.isPending}
+                  onSelect={() => downloadPdfMutation.mutate()}
+                >
+                  <Download className="h-3.5 w-3.5 text-fg/50" />
+                  {downloadPdfMutation.isPending ? "Preparing…" : "Download PDF"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setEmailModalOpen(true)}>
+                  <Mail className="h-3.5 w-3.5 text-fg/50" />
+                  Send Email
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard icon={Banknote} label="Order Total">
+            {formatCurrencyFromCents(order.total)}
+          </StatCard>
+          <StatCard icon={CreditCard} label="Payment">
+            <OrderPaymentStatusBadge status={order.payment_status} />
+          </StatCard>
+          <StatCard icon={Package} label="Items">
+            {itemCount} item{itemCount !== 1 ? "s" : ""}
+          </StatCard>
         </div>
 
         {order.has_stock_issue && (
@@ -314,7 +341,7 @@ export default function OrderDetailPage() {
               <CardContent>
                 <OrderPaymentSummaryCard
                   orderId={order._id}
-                  orderStatus={order.status}
+                  paymentStatus={order.payment_status}
                   payments={order.payments}
                   refunds={order.refunds}
                   total={order.total}

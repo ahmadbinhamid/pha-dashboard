@@ -26,8 +26,9 @@ const {
 const { PAYMENT_PROVIDER, PAYMENT_STATUS, ORDER_PAYMENT_CHOICE } = require("../constants/payment.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { currencyForMarketplace } = require("../constants/ebay.constants");
-const { derivePaymentStatus } = require("../utils/paymentStatus");
+const { derivePaymentStatus, deriveLegacyOrderStatus } = require("../utils/paymentStatus");
 const { mapEbayOrder } = require("./ebay/ebay.order.mapper");
+const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service");
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
@@ -663,7 +664,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     // pairing is required everywhere `status` gets a payment-derived value.
     payment_status: ORDER_PAYMENT_STATUS.PAID,
     fulfillment_status:
-      mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.FULFILLED : ORDER_FULFILLMENT_STATUS.UNFULFILLED,
+      mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.COMPLETED : ORDER_FULFILLMENT_STATUS.PENDING,
     channel: ORDER_CHANNEL.EBAY,
     external_order_id: mapped.externalOrderId,
     external_buyer_username: mapped.externalBuyerUsername,
@@ -742,6 +743,33 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
   return order;
 }
 
+// Admin-triggered status change from the order detail page's status dropdown.
+// Unconditional, exactly like flowpos's orderStatusChange — no payment-state
+// gating of any kind. Writes ONLY fulfillment_status; payment_status is
+// always derived from actual payments (derivePaymentStatus/
+// recordOrderPayment/refund.service.js), never settable by hand, so order
+// status and payment status stay fully independent no matter what state
+// either is in. Legacy `status` is kept in sync as a pure derivation (see
+// utils/paymentStatus.js#deriveLegacyOrderStatus) for the handful of readers
+// not yet migrated off it — dashboard aggregation, invoice PDF, eBay/Stripe
+// internals.
+async function updateOrderStatus(orderId, { status }, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
+  if (!order) throw httpError("Order not found", 404);
+
+  // Restock only fires on the transition INTO cancelled (not a guard against
+  // the change itself — just avoids double-restocking if already cancelled).
+  if (status === ORDER_FULFILLMENT_STATUS.CANCELLED && order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.CANCELLED) {
+    await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
+  }
+
+  order.fulfillment_status = status;
+  order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
+
+  await order.save();
+  return order;
+}
+
 function safeTokenMatch(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const bufA = Buffer.from(a);
@@ -768,10 +796,16 @@ async function getOrderForGuest(orderId, token, tenantId) {
 
 // ── Admin ────────────────────────────────────────────────────────────────
 
-async function listOrders({ page = 1, limit = 20, skip = 0, status, channel, search } = {}, tenantId) {
+async function listOrders(
+  { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, search } = {},
+  tenantId,
+) {
   const filter = { tenant_id: tenantId };
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
+  if (delivery_method) filter.delivery_method = delivery_method;
+  if (fulfillment_status) filter.fulfillment_status = fulfillment_status;
+  if (payment_status) filter.payment_status = payment_status;
   if (search) {
     const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
     const strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
@@ -866,13 +900,13 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     if (trimmedTracking && trimmedCarrier) {
       order.tracking_number = trimmedTracking;
       order.carrier_name = trimmedCarrier;
-      order.status = ORDER_STATUS.FULFILLED;
-      // Keeps the new split field (§1.2) in sync with the one place in this
-      // codebase that actually marks an order fulfilled — refund.service.js's
+      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.COMPLETED;
+      // Legacy `status` derived, not set directly — see
+      // utils/paymentStatus.js#deriveLegacyOrderStatus. refund.service.js's
       // recomputeLedger reads fulfillment_status to decide whether a refund
       // may legitimately overwrite the legacy `status` field; without this,
-      // it would never see "fulfilled" and would incorrectly revert it.
-      order.fulfillment_status = ORDER_FULFILLMENT_STATUS.FULFILLED;
+      // it would never see "completed" and would incorrectly revert it.
+      order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
       await order.save();
     } else if (!order.tracking_number || !order.carrier_name) {
       throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);
@@ -911,6 +945,43 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   return order;
 }
 
+// Admin action triggered by the "Send Payment Link" button on the manual
+// order creation confirmation screen — emails the customer the same URL
+// createPaymentLinkForOrder (stripe.payment.service.js) already builds for
+// staff to copy/open manually, so they don't have to relay it themselves.
+// Owns the order lookup itself (not just the email) so the controller never
+// touches Mongoose directly — same DB-access-stays-in-the-service-layer rule
+// every other admin order endpoint in this file follows.
+async function sendPaymentLinkEmail(orderId, tenant) {
+  // +guest_access_token: select:false by default — needed to build the link.
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenant._id }).select("+guest_access_token");
+  if (!order) throw httpError("Order not found", 404);
+
+  if (!order.customer.email) {
+    throw httpError("This customer has no email on file — add one before sending a payment link.", 400);
+  }
+
+  const { url } = createPaymentLinkForOrder(order, tenant);
+
+  const [totalPaidCents, companyProfile] = await Promise.all([
+    getTotalPaidForOrder(order._id),
+    getCompanyProfile(order.tenant_id),
+  ]);
+  const amountDueCents = order.total - totalPaidCents;
+
+  await emailService.sendPaymentLink({
+    to: order.customer.email,
+    name: order.customer.name,
+    orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
+    amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
+    paymentUrl: url,
+    companyProfile,
+    tenantId: order.tenant_id,
+  });
+
+  return { url };
+}
+
 // Admin action triggered by the "Download PDF" button on the order detail
 // page — the same pdfkit-rendered tax invoice emailed via sendOrderNotification,
 // just handed straight to the browser instead of attached to an email. Kept as
@@ -939,9 +1010,11 @@ module.exports = {
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,
+  updateOrderStatus,
   listOrders,
   getOrderDetailForAdmin,
   sendOrderNotification,
+  sendPaymentLinkEmail,
   getInvoicePdfForOrder,
   addOrderNote,
   updateOrderItemPrice,

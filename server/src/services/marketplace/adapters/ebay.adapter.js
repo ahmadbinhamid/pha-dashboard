@@ -99,6 +99,16 @@ function isPriceLockedBySaleError(err) {
   return err instanceof EbayApiError && err.hasErrorId(EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE);
 }
 
+// A stored external_offer_id eBay no longer recognizes — deleted/expired on
+// eBay's side, or a stale/bad ID. See EBAY_ERROR_CODE's comment for why two
+// codes both mean this.
+function isOfferMissingError(err) {
+  return (
+    err instanceof EbayApiError &&
+    (err.hasErrorId(EBAY_ERROR_CODE.OFFER_NOT_FOUND_INPUT) || err.hasErrorId(EBAY_ERROR_CODE.OFFER_NOT_FOUND_RESOURCE))
+  );
+}
+
 // updateOffer, tolerant of eBay rejecting the price/quantity revision because
 // the offer is part of an active sale (error 25019) — that's not something
 // retrying or erroring out helps with, it resolves itself once the sale ends
@@ -112,6 +122,26 @@ async function updateOfferTolerant(token, settings, offerId, offerBody, sku) {
     if (!isPriceLockedBySaleError(err)) throw err;
     logger.warn(`[EbayAdapter] ${sku}: price update skipped — offer ${offerId} is part of an active eBay sale`);
     return { priceLocked: true };
+  }
+}
+
+// Creates a fresh offer, recovering from eBay reporting one already exists
+// for this SKU (25002 — extracts the offerId eBay reports back and switches
+// to updateOffer instead). Shared by publish()'s "no offerId yet" branch and
+// both publish()/update()'s "stored offerId is dead" recovery below, so
+// there's exactly one place that knows how to stand up an offer from
+// scratch.
+async function createOrRecoverOffer(token, settings, offerBody, sku) {
+  try {
+    const offerId = await createOffer(token, settings, offerBody);
+    return { offerId, priceLocked: false };
+  } catch (createErr) {
+    const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
+    if (!existingMatch) throw createErr;
+    const offerId = existingMatch[1];
+    logger.warn(`[EbayAdapter] offer already exists (${offerId}), switching to updateOffer`);
+    const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, sku);
+    return { offerId, priceLocked };
   }
 }
 
@@ -156,30 +186,27 @@ async function publish(resolved, settings, hooks = {}) {
   // warehouse address if missing)
   await ensureLocation(token, settings);
 
-  // Step 4 — create offer (recover from 25002 if it already exists)
+  // Step 4 — create/update offer (recover from 25002 if it already exists,
+  // or from the stored offerId being dead on eBay's side — see
+  // isOfferMissingError)
   logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
   let priceLocked = false;
 
   if (offerId) {
-    ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
-    if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
-  } else {
     try {
-      offerId = await createOffer(token, settings, offerBody);
-      logger.info(`[EbayAdapter] offer created: ${offerId}`);
-    } catch (createErr) {
-      const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
-      if (existingMatch) {
-        offerId = existingMatch[1];
-        logger.warn(`[EbayAdapter] offer already exists (${offerId}), switching to updateOffer`);
-        ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
-        if (!priceLocked) logger.info(`[EbayAdapter] offer updated (recovered from 25002): ${offerId}`);
-      } else {
-        throw createErr;
-      }
+      ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
+      if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
+    } catch (err) {
+      if (!isOfferMissingError(err)) throw err;
+      logger.warn(`[EbayAdapter] ${resolved.sku}: stored offer ${offerId} no longer exists on eBay — recreating`);
+      ({ offerId, priceLocked } = await createOrRecoverOffer(token, settings, offerBody, resolved.sku));
+      logger.info(`[EbayAdapter] offer recreated: ${offerId}`);
     }
+  } else {
+    ({ offerId, priceLocked } = await createOrRecoverOffer(token, settings, offerBody, resolved.sku));
+    logger.info(`[EbayAdapter] offer created: ${offerId}`);
   }
 
   // Persist the offer ID immediately, before the publish call — otherwise a
@@ -230,33 +257,32 @@ async function update(resolved, settings, hooks = {}) {
     };
   }
 
-  // Step 2 — update offer
+  // Step 2 — update offer (recover from the stored offerId being dead on
+  // eBay's side — see isOfferMissingError — the same as the "lost the
+  // offerId entirely" path just below)
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
 
   if (offerId) {
-    const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku);
-    if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
-    return {
-      external_listing_id: listing.external_listing_id || null,
-      external_offer_id: offerId,
-      ...(priceLocked ? { priceLocked: true } : {}),
-    };
-  }
-
-  // Listing is "active" but we lost the offerId — re-create and re-publish
-  let priceLocked = false;
-  try {
-    offerId = await createOffer(token, settings, offerBody);
-  } catch (createErr) {
-    const existingMatch = createErr.message.match(/"name":"offerId","value":"(\d+)"/);
-    if (existingMatch) {
-      offerId = existingMatch[1];
-      ({ priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku));
-    } else {
-      throw createErr;
+    try {
+      const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku);
+      if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
+      return {
+        external_listing_id: listing.external_listing_id || null,
+        external_offer_id: offerId,
+        ...(priceLocked ? { priceLocked: true } : {}),
+      };
+    } catch (err) {
+      if (!isOfferMissingError(err)) throw err;
+      logger.warn(`[EbayAdapter] ${resolved.sku}: stored offer ${offerId} no longer exists on eBay — recreating`);
+      offerId = null;
     }
   }
+
+  // Listing is "active" but we lost the offerId (or the stored one was dead
+  // on eBay's side, above) — re-create and re-publish
+  const { offerId: newOfferId, priceLocked } = await createOrRecoverOffer(token, settings, offerBody, resolved.sku);
+  offerId = newOfferId;
   // Persist immediately — see the comment in publish() for why this can't
   // wait until after publishOffer() succeeds.
   await hooks.onOfferCreated?.(offerId);

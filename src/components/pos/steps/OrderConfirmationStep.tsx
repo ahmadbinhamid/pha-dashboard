@@ -1,37 +1,44 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Copy, ExternalLink, Link as LinkIcon } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Send } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/context";
-import { generatePaymentLink } from "@/lib/api/orders";
+import { sendPaymentLinkEmail } from "@/lib/api/orders";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import type { Order } from "@/types/orders";
+import type { OrderPaymentChoice } from "@/types/payment";
 
 interface OrderConfirmationStepProps {
   order: Order;
+  paymentMethod: OrderPaymentChoice | "";
   onStartNewOrder: () => void;
 }
 
-export function OrderConfirmationStep({ order, onStartNewOrder }: OrderConfirmationStepProps) {
+export function OrderConfirmationStep({ order, paymentMethod, onStartNewOrder }: OrderConfirmationStepProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
 
-  // Only a pending-payment manual order can still need a link generated —
-  // once paid (in full or via a succeeded Stripe session), there's nothing left to collect.
-  const canGenerateLink = order.channel === "manual" && order.status === "pending_payment";
+  // Only shown when staff explicitly chose "Payment Link (Stripe)" at
+  // checkout for a still-unpaid manual order — ties the button to the actual
+  // method chosen, not just any unpaid manual order (see
+  // order.service.js#createManualOrder — no other signal on the order itself
+  // records which method was picked when nothing was collected).
+  const canSendPaymentLink =
+    order.channel === "manual" && order.payment_status === "pending_payment" && paymentMethod === "payment_link";
+  const hasCustomerEmail = !!order.customer.email;
 
-  const generateLinkMutation = useMutation({
-    mutationFn: () => generatePaymentLink(order._id),
+  const sendLinkMutation = useMutation({
+    mutationFn: () => sendPaymentLinkEmail(order._id),
     onSuccess: (res) => {
       setPaymentLink(res.data.url);
-      toast({ title: "Payment link generated", tone: "success" });
+      toast({ title: `Payment link emailed to ${order.customer.email}`, tone: "success" });
     },
     onError: (err: Error) => {
-      toast({ title: "Couldn't generate payment link", description: err.message, tone: "danger" });
+      toast({ title: "Couldn't send payment link", description: err.message, tone: "danger" });
     },
   });
 
@@ -57,9 +64,9 @@ export function OrderConfirmationStep({ order, onStartNewOrder }: OrderConfirmat
         </CardContent>
       </Card>
 
-      {canGenerateLink && (
+      {canSendPaymentLink && (
         <Card>
-          <CardHeader title="Payment Link" description="Generate a Stripe-hosted link for the customer to pay online" />
+          <CardHeader title="Payment Link" description="Email the customer a Stripe-hosted link to pay online" />
           <CardContent className="space-y-3">
             {paymentLink ? (
               <div className="flex items-center gap-2">
@@ -74,17 +81,22 @@ export function OrderConfirmationStep({ order, onStartNewOrder }: OrderConfirmat
                 </Button>
               </div>
             ) : (
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                className="w-full gap-2"
-                disabled={generateLinkMutation.isPending}
-                onClick={() => generateLinkMutation.mutate()}
-              >
-                <LinkIcon className="h-4 w-4" />
-                {generateLinkMutation.isPending ? "Generating…" : "Generate Payment Link"}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  className="w-full gap-2"
+                  disabled={sendLinkMutation.isPending || !hasCustomerEmail}
+                  onClick={() => sendLinkMutation.mutate()}
+                >
+                  <Send className="h-4 w-4" />
+                  {sendLinkMutation.isPending ? "Sending…" : "Send Payment Link"}
+                </Button>
+                {!hasCustomerEmail && (
+                  <p className="text-xs text-danger">Add a customer email to send a payment link.</p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

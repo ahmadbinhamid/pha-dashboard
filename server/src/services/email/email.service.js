@@ -239,6 +239,30 @@ async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBas
   });
 }
 
+/**
+ * Send a customer a link to pay an order online (manual/in-store sale where
+ * staff chose "Payment Link (Stripe)" as the settlement method) — triggered
+ * by the "Send Payment Link" action on the order creation confirmation
+ * screen. No invoice PDF attached; the customer sees the invoice once they
+ * pay, same as any other guest checkout.
+ */
+async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    fromName: tenantFromName(companyProfile),
+    tenantId,
+    to,
+    subject: `Complete Your Payment — Order ${orderNumber}`,
+    template: "paymentLink",
+    variables: {
+      name,
+      order_number: orderNumber,
+      amount_due: amountDue || null,
+      payment_url: paymentUrl,
+      ...tenantBrandVars(companyProfile),
+    },
+  });
+}
+
 module.exports = {
   sendOTP,
   accountVerified,
@@ -250,4 +274,5 @@ module.exports = {
   sendOrderConfirmation,
   sendOrderReceivedPickup,
   sendManualOrderReceipt,
+  sendPaymentLink,
 };

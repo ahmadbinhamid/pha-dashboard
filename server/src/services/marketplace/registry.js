@@ -16,8 +16,4 @@ function getAdapter(platform) {
   return adapter;
 }
 
-function listRegistered() {
-  return Array.from(adapters.keys());
-}
-
-module.exports = { register, getAdapter, listRegistered };
+module.exports = { register, getAdapter };

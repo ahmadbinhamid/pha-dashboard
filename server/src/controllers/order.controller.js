@@ -42,6 +42,9 @@ exports.listOrders = async (req, res) => {
         skip,
         status: req.query.status,
         channel: req.query.channel,
+        delivery_method: req.query.delivery_method,
+        fulfillment_status: req.query.fulfillment_status,
+        payment_status: req.query.payment_status,
         search: req.query.search,
       },
       req.tenantId,
@@ -105,6 +108,28 @@ exports.generatePaymentLink = async (req, res) => {
     const { url } = createPaymentLinkForOrder(order, req.tenant);
     return success(res, { url });
   } catch (err) {
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
+exports.sendPaymentLinkEmail = async (req, res) => {
+  try {
+    const { url } = await orderService.sendPaymentLinkEmail(req.params.id, req.tenant);
+    return success(res, { url });
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderStatus(req.params.id, { status: req.body.status }, req.tenantId);
+    return success(res, order, "Order status updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);
     return systemfailure(res, err);
   }

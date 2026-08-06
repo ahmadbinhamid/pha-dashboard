@@ -274,10 +274,6 @@ async function createProductRecordWithSlug(data, baseSlug, tenantId) {
 
 // ── Variant CRUD ──────────────────────────────────────────────────────────────
 
-async function findVariantsByProductId(productId, tenantId) {
-  return ProductVariant.find({ product: productId, tenant_id: tenantId });
-}
-
 async function getVariantsByProduct(productId, tenantId) {
   return ProductVariant.find({ product: productId, tenant_id: tenantId })
     .populate("attachments")
@@ -339,7 +335,6 @@ module.exports = {
   getProductBySlug,
   getPopulatedProduct,
   createProductRecordWithSlug,
-  findVariantsByProductId,
   getVariantsByProduct,
   findVariant,
   getPopulatedVariant,

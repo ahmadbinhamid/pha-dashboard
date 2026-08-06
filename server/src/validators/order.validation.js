@@ -1,7 +1,13 @@
 // validators/order.validation.js
 
 const Joi = require("joi");
-const { ORDER_STATUS, ORDER_CHANNEL, ORDER_DELIVERY_METHOD } = require("../constants/order.constants");
+const {
+  ORDER_STATUS,
+  ORDER_CHANNEL,
+  ORDER_DELIVERY_METHOD,
+  ORDER_FULFILLMENT_STATUS,
+  ORDER_PAYMENT_STATUS,
+} = require("../constants/order.constants");
 const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 
 const addressSchema = Joi.object({
@@ -61,6 +67,15 @@ const listOrders = {
       .allow(""),
     channel: Joi.string()
       .valid(...Object.values(ORDER_CHANNEL))
+      .allow(""),
+    delivery_method: Joi.string()
+      .valid(...Object.values(ORDER_DELIVERY_METHOD))
+      .allow(""),
+    fulfillment_status: Joi.string()
+      .valid(...Object.values(ORDER_FULFILLMENT_STATUS))
+      .allow(""),
+    payment_status: Joi.string()
+      .valid(...Object.values(ORDER_PAYMENT_STATUS))
       .allow(""),
   }),
 };
@@ -130,6 +145,21 @@ const sendOrderEmail = {
 
 const generatePaymentLink = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+};
+
+const sendPaymentLinkEmail = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+};
+
+// Pure fulfillment lifecycle — payment_status is never settable here, it's
+// always derived from actual payments (see order.service.js#updateOrderStatus).
+const updateOrderStatus = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    status: Joi.string()
+      .valid(...Object.values(ORDER_FULFILLMENT_STATUS))
+      .required(),
+  }),
 };
 
 // Records a follow-up cash/online-transfer payment against an order's
@@ -216,6 +246,8 @@ module.exports = {
   sendOrderEmail,
   createManualOrder,
   generatePaymentLink,
+  sendPaymentLinkEmail,
+  updateOrderStatus,
   recordPayment,
   addOrderNote,
   updateOrderCustomerDetails,

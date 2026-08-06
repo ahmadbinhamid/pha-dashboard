@@ -23,6 +23,15 @@ const EBAY_ERROR_CODE = Object.freeze({
   // the listing itself is untouched and still live, just not price-refreshed
   // until the sale ends or is configured to allow price updates.
   PRICE_LOCKED_BY_ACTIVE_SALE: 25019,
+  // "updateOffer" rejects a stored external_offer_id eBay no longer
+  // recognizes (deleted/expired on eBay's side, or a stale/bad ID) — surfaces
+  // as either a generic input-validation error (message varies: "Offer not
+  // found" / "Availability not found" / "AdditionalInformation not found")
+  // or, more specifically, a 404 "resource/entity not found". Both mean the
+  // same thing for our purposes: this offerId is dead, recreate it — see
+  // isOfferMissingError in ebay.adapter.js.
+  OFFER_NOT_FOUND_INPUT: 25604,
+  OFFER_NOT_FOUND_RESOURCE: 25710,
 });
 
 // A tenant's eBay connection health — surfaced in Settings so a revoked

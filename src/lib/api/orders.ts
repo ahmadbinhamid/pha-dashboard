@@ -1,6 +1,12 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
-import type { Order, OrderAddress, OrderDeliveryMethod, OrderDetail } from "@/types/orders";
+import type {
+  Order,
+  OrderAddress,
+  OrderDeliveryMethod,
+  OrderDetail,
+  OrderFulfillmentStatus,
+} from "@/types/orders";
 import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
 export interface OrderListParams {
@@ -9,6 +15,9 @@ export interface OrderListParams {
   search?: string;
   status?: string;
   channel?: string;
+  delivery_method?: string;
+  fulfillment_status?: string;
+  payment_status?: string;
 }
 
 export const getOrders = async (params: OrderListParams = {}) => {
@@ -72,6 +81,19 @@ export const createManualOrder = async (payload: CreateManualOrderPayload) => {
 
 export const generatePaymentLink = async (orderId: string) => {
   const { data } = await apiClient.post<BeResponse<{ url: string }>>(`/order/${orderId}/payment-link`);
+  return data;
+};
+
+// Generates the same payment link as generatePaymentLink above, and also
+// emails it straight to the customer — used by the "Send Payment Link"
+// action on the order creation confirmation screen.
+export const sendPaymentLinkEmail = async (orderId: string) => {
+  const { data } = await apiClient.post<BeResponse<{ url: string }>>(`/order/${orderId}/payment-link/send`);
+  return data;
+};
+
+export const updateOrderStatus = async (orderId: string, status: OrderFulfillmentStatus) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/status`, { status });
   return data;
 };
 
