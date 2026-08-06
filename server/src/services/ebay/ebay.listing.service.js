@@ -132,16 +132,6 @@ async function getListingById(id, tenantId) {
     .populate("photo_overrides");
 }
 
-async function getListingsByProduct(productId, tenantId) {
-  return MarketplaceListing.find({
-    product: productId,
-    tenant_id: tenantId,
-    platform: MARKETPLACE_PLATFORM.EBAY,
-  })
-    .populate("variant", "display_name sku")
-    .sort({ created_at: -1 });
-}
-
 // Aggregation (not .find()) because `search` must match against the
 // populated product's title/sku, which Mongoose .populate() can't filter on
 // — mirrors inventory.service.js's listInventory pattern.
@@ -271,7 +261,6 @@ async function deleteListing(id, tenantId) {
 module.exports = {
   createListing,
   getListingById,
-  getListingsByProduct,
   listListings,
   updateListing,
   deleteListing,

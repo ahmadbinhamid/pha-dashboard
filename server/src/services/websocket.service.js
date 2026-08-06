@@ -60,20 +60,4 @@ function initialize(httpServer) {
   return io;
 }
 
-// Emit to a specific user's room
-function emitToUser(userId, event, data) {
-  if (!io) return;
-  io.to(`user:${userId}`).emit(event, data);
-}
-
-// Broadcast to all connected clients
-function broadcast(event, data) {
-  if (!io) return;
-  io.emit(event, data);
-}
-
-function getIO() {
-  return io;
-}
-
-module.exports = { initialize, emitToUser, broadcast, getIO };
+module.exports = { initialize };

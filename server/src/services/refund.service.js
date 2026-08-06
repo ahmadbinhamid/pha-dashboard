@@ -1316,8 +1316,6 @@ module.exports = {
   applyRefundEffects,
   voidRefund,
   retryRestockForRefund,
-  // Exported for stripe.webhook.service.js (§4/§6) and tests.
-  isWithinStripeRefundWindow,
   recomputeLedger,
   nextRefundNumber,
   // Exported for refund.reconciliation.service.js (corrections round).
