@@ -4,6 +4,7 @@ const {
   findUserByEmailWithPassword,
   findAllUsersByEmailWithPassword,
   findAllUsersByEmail,
+  findUserAmongIdsForTenant,
   findUserByEmailWithOtp,
   findUserByIdWithPassword,
   findUserByResetToken,
@@ -41,7 +42,6 @@ const {
 const { toPublicUser, fullName } = require("../utils/user");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 const Tenant = require("../models/Tenant");
-const User = require("../models/User");
 const tenantService = require("../services/tenant.service");
 const config = require("../config");
 
@@ -160,7 +160,7 @@ exports.login = async (req, res) => {
       return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
     }
 
-    const tenants = await Tenant.find({ _id: { $in: active.map((u) => u.tenant_id) } }).select("name slug");
+    const tenants = await tenantService.findTenantsByIds(active.map((u) => u.tenant_id));
     const tenantById = new Map(tenants.map((t) => [t._id.toString(), t]));
 
     // Short-lived — carries no access, just proof that THIS email+password
@@ -209,7 +209,7 @@ exports.selectOrganization = async (req, res) => {
       return unauthorized(res, "Invalid selection token.");
     }
 
-    const user = await User.findOne({ _id: { $in: decoded.user_ids }, tenant_id });
+    const user = await findUserAmongIdsForTenant(decoded.user_ids, tenant_id);
     if (!user) return unauthorized(res, "That organization is not available for this account.");
 
     if (user.status !== USER_STATUS.ACTIVE) {

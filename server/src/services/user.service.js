@@ -74,6 +74,14 @@ async function findUserByEmailWithOtp(email) {
   return User.findOne({ email }).select("+otp +otp_expiry");
 }
 
+// Used by auth.controller.js#selectOrganization — `userIds` is the
+// already-password-verified candidate set from login()'s pending_token, so
+// this only needs to confirm the chosen tenantId matches one of them, never
+// re-checks a password.
+async function findUserAmongIdsForTenant(userIds, tenantId) {
+  return User.findOne({ _id: { $in: userIds }, tenant_id: tenantId });
+}
+
 async function findUserByResetToken(hashedToken) {
   return User.findOne({ password_reset_token: hashedToken }).select(
     "+password_reset_token",
@@ -98,6 +106,7 @@ module.exports = {
   findUserByEmailWithPassword,
   findAllUsersByEmailWithPassword,
   findAllUsersByEmail,
+  findUserAmongIdsForTenant,
   findUserByEmailWithOtp,
   findUserByResetToken,
   findUserByIdWithPassword,

@@ -15,6 +15,12 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
+// Used by auth.controller.js#login to label each organization a
+// multi-tenant account can choose between.
+async function findTenantsByIds(ids) {
+  return Tenant.find({ _id: { $in: ids } }).select("name slug");
+}
+
 // Order/invoice numbers are prefixed with this (e.g. "PHA-00001") — kept
 // short and letters-only. Falls back to a fixed prefix for a company name
 // with no usable letters (e.g. entirely numeric/symbolic) rather than
@@ -87,4 +93,4 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
   }
 }
 
-module.exports = { registerTenantWithAdmin };
+module.exports = { registerTenantWithAdmin, findTenantsByIds };
