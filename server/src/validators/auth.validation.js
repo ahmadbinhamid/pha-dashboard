@@ -10,6 +10,15 @@ const login = {
   }),
 };
 
+// Completes login for a multi-organization account — see
+// auth.controller.js#login/#selectOrganization.
+const selectOrganization = {
+  body: Joi.object({
+    pending_token: Joi.string().required(),
+    tenant_id: Joi.string().hex().length(24).required(),
+  }),
+};
+
 const changePassword = {
   body: Joi.object({
     current_password: Joi.string().min(6).max(128).required(),
@@ -90,6 +99,7 @@ const resetPassword = {
 
 module.exports = {
   login,
+  selectOrganization,
   changePassword,
   register,
   registerTenant,

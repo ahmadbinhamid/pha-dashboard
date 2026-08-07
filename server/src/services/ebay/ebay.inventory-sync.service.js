@@ -33,7 +33,7 @@ const MISSING_POLLS_THRESHOLD = 2;
 // Listing was found absent from eBay's inventory list this poll. Tracks a
 // streak rather than acting on a single miss, so one flaky eBay API response
 // can't wrongly delete a listing that's still actually live.
-async function handleMissingFromEbay(listing, sku) {
+async function handleMissingFromEbay(listing, sku, tenantId) {
   const streak = (listing.ebay_missing_polls || 0) + 1;
 
   if (streak < MISSING_POLLS_THRESHOLD) {
@@ -46,7 +46,7 @@ async function handleMissingFromEbay(listing, sku) {
     `[ebay.inventory-sync] SKU ${sku} missing from eBay for ${streak} consecutive polls — ` +
       `treating as deleted on eBay and removing listing ${listing._id} locally`,
   );
-  await deleteListing(listing._id);
+  await deleteListing(listing._id, tenantId);
   return { deleted: true };
 }
 
@@ -153,7 +153,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
 
     if (ebayQty == null) {
       try {
-        const result = await handleMissingFromEbay(listing, sku);
+        const result = await handleMissingFromEbay(listing, sku, tenant._id);
         if (result.deleted) summary.deletedFromEbay++;
       } catch (err) {
         summary.errors++;

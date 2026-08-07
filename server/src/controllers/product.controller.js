@@ -415,7 +415,7 @@ exports.deleteProduct = async (req, res) => {
 
 exports.duplicateProduct = async (req, res) => {
   try {
-    const original = await findProductById(req.params.id);
+    const original = await findProductById(req.params.id, req.tenantId);
     if (!original) return notFound(res, "Product not found");
 
     const clone = await createProductRecordWithSlug({

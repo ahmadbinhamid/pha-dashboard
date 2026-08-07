@@ -2,6 +2,7 @@
 
 const Category = require("../models/Category");
 const Product = require("../models/Product");
+const Attachment = require("../models/Attachment");
 const {
   generateSlug,
   createWithUniqueSlug,
@@ -68,7 +69,24 @@ async function getCategoryById(id, tenantId) {
   return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
 
+// `parent`/`thumbnail` are ids the client supplies directly — without this,
+// a tenant could link its own category to another tenant's category (as
+// parent) or attachment (as thumbnail) just by knowing/guessing the id. Not
+// a read/write of the other tenant's protected fields, but a referential-
+// integrity/minor-exposure gap; verify both actually belong to this tenant
+// before ever setting them.
+async function verifyReferenceOwnership({ parent, thumbnail }, tenantId) {
+  const checks = [];
+  if (parent) checks.push(Category.exists({ _id: parent, tenant_id: tenantId }).then((ok) => ({ field: "parent", ok })));
+  if (thumbnail) checks.push(Attachment.exists({ _id: thumbnail, tenant_id: tenantId }).then((ok) => ({ field: "thumbnail", ok })));
+  const results = await Promise.all(checks);
+  const invalid = results.find((r) => !r.ok);
+  if (invalid) throw Object.assign(new Error(`Invalid ${invalid.field}`), { status: 400 });
+}
+
 async function createCategory({ name, description, thumbnail, parent, sort_order }, tenantId) {
+  await verifyReferenceOwnership({ parent, thumbnail }, tenantId);
+
   const baseSlug = generateSlug(name);
   // Race-safe: retries on a genuine slug conflict instead of trusting a
   // single check-then-insert (see utils/slug.js for why).
@@ -91,6 +109,8 @@ async function createCategory({ name, description, thumbnail, parent, sort_order
 async function updateCategory(id, { name, description, thumbnail, parent, sort_order, slug: slugOverride }, tenantId) {
   const category = await Category.findOne({ _id: id, tenant_id: tenantId });
   if (!category) return null;
+
+  await verifyReferenceOwnership({ parent, thumbnail }, tenantId);
 
   let pendingSlugBase = null;
   if (name && name !== category.name) {

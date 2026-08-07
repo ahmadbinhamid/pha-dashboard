@@ -2,13 +2,15 @@ const {
   findUserByEmail,
   createUser,
   findUserByEmailWithPassword,
+  findAllUsersByEmailWithPassword,
+  findAllUsersByEmail,
   findUserByEmailWithOtp,
   findUserByIdWithPassword,
   findUserByResetToken,
   saveUser,
 } = require("../services/user.service");
 const { comparePassword } = require("../utils/auth/crypto");
-const { signJwt } = require("../utils/auth/jwt");
+const { signJwt, verifyJwt } = require("../utils/auth/jwt");
 const {
   generateOTP,
   generateOTPExpiry,
@@ -39,6 +41,7 @@ const {
 const { toPublicUser, fullName } = require("../utils/user");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 const Tenant = require("../models/Tenant");
+const User = require("../models/User");
 const tenantService = require("../services/tenant.service");
 const config = require("../config");
 
@@ -106,15 +109,108 @@ exports.registerTenant = async (req, res) => {
   }
 };
 
+function issueLoginToken(user) {
+  return signJwt({
+    sub: user._id.toString(),
+    role: user.role,
+    tenant_id: user.tenant_id?.toString() || null,
+    email: user.email,
+    name: fullName(user),
+  });
+}
+
+// email is unique per-tenant, not globally (User.js's compound index
+// deliberately allows the same person to hold a separate account under more
+// than one tenant — e.g. staff at more than one of our clients). Previously
+// this looked up a single `User.findOne({email})`, which — if the same email
+// existed under two tenants — resolved to whichever one Mongo happened to
+// return first, risking authenticating someone into the WRONG tenant's
+// dashboard. Found in a tenant-isolation audit (Aug 2026), not live-reported.
+//
+// Fix: verify the password against EVERY account sharing this email. Exactly
+// one match (the overwhelming common case) logs in exactly as before, no
+// behavior change. More than one match means this identity genuinely holds
+// multiple organization memberships — industry-standard handling
+// (Slack/Notion/Linear-style) is to authenticate the PERSON here, then let
+// them pick which organization to enter via exports.selectOrganization,
+// rather than guessing one for them.
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
-    const user = await findUserByEmailWithPassword(email);
-    if (!user) return unauthorized(res, "Invalid email or password");
+    const candidates = await findAllUsersByEmailWithPassword(email);
+    if (!candidates.length) return unauthorized(res, "Invalid email or password");
 
-    const ok = await comparePassword(password, user.password);
-    if (!ok) return unauthorized(res, "Invalid email or password");
+    const checks = await Promise.all(
+      candidates.map(async (user) => ({ user, ok: await comparePassword(password, user.password) })),
+    );
+    const matched = checks.filter((c) => c.ok).map((c) => c.user);
+    if (!matched.length) return unauthorized(res, "Invalid email or password");
+
+    const active = matched.filter((user) => user.status === USER_STATUS.ACTIVE);
+    if (!active.length) {
+      return unauthorized(
+        res,
+        "Account not verified. Please contact your administrator.",
+      );
+    }
+
+    if (active.length === 1) {
+      const user = active[0];
+      return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
+    }
+
+    const tenants = await Tenant.find({ _id: { $in: active.map((u) => u.tenant_id) } }).select("name slug");
+    const tenantById = new Map(tenants.map((t) => [t._id.toString(), t]));
+
+    // Short-lived — carries no access, just proof that THIS email+password
+    // pair already cleared credential checks for exactly this set of
+    // accounts. selectOrganization only trusts a tenant_id choice that
+    // appears in user_ids below, so it can't be used to pick an account
+    // whose password was never actually verified above.
+    const pendingToken = signJwt(
+      { purpose: "org_selection", email, user_ids: active.map((u) => u._id.toString()) },
+      { expiresIn: "10m" },
+    );
+
+    return success(
+      res,
+      {
+        requires_org_selection: true,
+        pending_token: pendingToken,
+        organizations: active.map((u) => ({
+          tenant_id: u.tenant_id.toString(),
+          tenant_name: tenantById.get(u.tenant_id.toString())?.name ?? null,
+          tenant_slug: tenantById.get(u.tenant_id.toString())?.slug ?? null,
+        })),
+      },
+      "Multiple organizations found for this account — select one to continue.",
+    );
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+// Completes login for a multi-organization account — see exports.login.
+// Trusts tenant_id only if it belongs to the pending_token's user_ids set,
+// which was itself only populated for accounts whose password already
+// verified during login(); this endpoint never re-checks a password.
+exports.selectOrganization = async (req, res) => {
+  try {
+    const { pending_token, tenant_id } = req.body || {};
+
+    let decoded;
+    try {
+      decoded = verifyJwt(pending_token);
+    } catch {
+      return unauthorized(res, "Selection expired — please log in again.");
+    }
+    if (decoded.purpose !== "org_selection") {
+      return unauthorized(res, "Invalid selection token.");
+    }
+
+    const user = await User.findOne({ _id: { $in: decoded.user_ids }, tenant_id });
+    if (!user) return unauthorized(res, "That organization is not available for this account.");
 
     if (user.status !== USER_STATUS.ACTIVE) {
       return unauthorized(
@@ -123,15 +219,7 @@ exports.login = async (req, res) => {
       );
     }
 
-    const token = signJwt({
-      sub: user._id.toString(),
-      role: user.role,
-      tenant_id: user.tenant_id?.toString() || null,
-      email: user.email,
-      name: fullName(user),
-    });
-
-    return success(res, toPublicUser(user), "Login successful", token);
+    return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -214,43 +302,39 @@ exports.verifyAccount = async (req, res) => {
   }
 };
 
+// Same email-not-globally-unique reasoning as login() — sends a SEPARATE
+// reset link per matching account instead of guessing which one tenant the
+// person meant, since (unlike login) there's no password yet to narrow
+// candidates down to one. Whoever owns the inbox ends up with one email per
+// organization membership and resets whichever they meant.
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body || {};
+    const genericMessage = "If an account with that email exists, a password reset link has been sent.";
 
-    const user = await findUserByEmail(email);
-    if (!user) {
-      return success(
-        res,
-        null,
-        "If an account with that email exists, a password reset link has been sent.",
-      );
+    const users = await findAllUsersByEmail(email);
+    const active = users.filter((user) => user.status === USER_STATUS.ACTIVE);
+    if (!active.length) {
+      return success(res, null, genericMessage);
     }
 
-    if (user.status !== USER_STATUS.ACTIVE) {
-      return badRequest(
-        res,
-        "Account not verified. Please contact your administrator.",
-      );
-    }
+    await Promise.all(
+      active.map(async (user) => {
+        const resetToken = generateResetToken();
+        user.password_reset_token = hashResetToken(resetToken);
+        user.password_reset_expiry = generateResetTokenExpiry();
+        await saveUser(user);
 
-    const resetToken = generateResetToken();
-    user.password_reset_token = hashResetToken(resetToken);
-    user.password_reset_expiry = generateResetTokenExpiry();
-    await saveUser(user);
-
-    await sendPasswordReset({
-      to: user.email,
-      name: fullName(user),
-      resetUrl: createResetUrl(resetToken),
-      expiryMinutes: config.passwordReset.expiryMinutes,
-    });
-
-    return success(
-      res,
-      null,
-      "If an account with that email exists, a password reset link has been sent.",
+        await sendPasswordReset({
+          to: user.email,
+          name: fullName(user),
+          resetUrl: createResetUrl(resetToken),
+          expiryMinutes: config.passwordReset.expiryMinutes,
+        });
+      }),
     );
+
+    return success(res, null, genericMessage);
   } catch (err) {
     return systemfailure(res, err);
   }

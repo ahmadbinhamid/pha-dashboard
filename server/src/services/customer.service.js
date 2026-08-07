@@ -62,7 +62,7 @@ async function getCustomerById(id, tenantId) {
   if (!customer) return null;
 
   const [orders, statsMap] = await Promise.all([
-    Order.find({ customer_id: customer._id })
+    Order.find({ customer_id: customer._id, tenant_id: tenantId })
       .sort({ created_at: -1 })
       .populate("payment", "status amount amount_refunded card_brand card_last4 paid_at"),
     getOrderStatsByCustomer([customer._id]),

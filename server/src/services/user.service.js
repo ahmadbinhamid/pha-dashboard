@@ -51,6 +51,25 @@ async function findUserByEmailWithPassword(email) {
   return User.findOne({ email }).select("+password");
 }
 
+// email is unique per-tenant, not globally (see User.js's compound index) —
+// the same person can legitimately hold a separate account under more than
+// one tenant (staff at more than one client business). Returns EVERY
+// matching account rather than picking one arbitrarily, so the caller can
+// verify credentials against each and disambiguate properly instead of
+// risking authenticating into the wrong tenant. See
+// auth.controller.js#login's multi-organization handling.
+async function findAllUsersByEmailWithPassword(email) {
+  return User.find({ email }).select("+password");
+}
+
+// Same reasoning as findAllUsersByEmailWithPassword — used by forgotPassword,
+// which (unlike login) doesn't need to disambiguate up front: it just sends
+// a separate reset link per matching account, letting the person reset
+// whichever org's password they meant.
+async function findAllUsersByEmail(email) {
+  return User.find({ email });
+}
+
 async function findUserByEmailWithOtp(email) {
   return User.findOne({ email }).select("+otp +otp_expiry");
 }
@@ -77,6 +96,8 @@ module.exports = {
   findUserByEmail,
   createUser,
   findUserByEmailWithPassword,
+  findAllUsersByEmailWithPassword,
+  findAllUsersByEmail,
   findUserByEmailWithOtp,
   findUserByResetToken,
   findUserByIdWithPassword,

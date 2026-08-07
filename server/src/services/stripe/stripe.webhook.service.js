@@ -92,7 +92,7 @@ async function handleEvent(event, tenantId) {
       case "charge.refunded":
         return await handleChargeRefunded(event.data.object, tenantId);
       case "charge.refund.updated":
-        return await handleChargeRefundUpdated(event.data.object);
+        return await handleChargeRefundUpdated(event.data.object, tenantId);
       default:
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
@@ -454,12 +454,23 @@ async function reconcileStripeRefund(sr, payment, order) {
 // endpoint's configuration in the Dashboard (Developers → Webhooks → this
 // endpoint → "+ Select events" → charge.refund.updated) — not something
 // this codebase can turn on by itself.
-async function handleChargeRefundUpdated(sr) {
+async function handleChargeRefundUpdated(sr, tenantId) {
   if (sr.status !== "failed" && sr.status !== "canceled") return; // only a reversal is actionable here
 
   const refund = await Refund.findOne({ "payment_allocations.stripe_refund_id": sr.id });
   if (!refund) {
     logger.warn(`[stripe.webhook] charge.refund.updated for unknown stripe refund ${sr.id}`);
+    return;
+  }
+
+  // Same defense-in-depth check as handlePaymentSucceeded/handleChargeRefunded
+  // — refuse to act on a refund that doesn't belong to the tenant whose
+  // webhook endpoint/secret Stripe just delivered against.
+  if (String(refund.tenant_id) !== String(tenantId)) {
+    logger.error(
+      `[stripe.webhook] tenant mismatch on charge.refund.updated for stripe refund ${sr.id}: ` +
+        `webhook tenant=${tenantId}, resolved refund's tenant=${refund.tenant_id} — refusing to apply effects`,
+    );
     return;
   }
 

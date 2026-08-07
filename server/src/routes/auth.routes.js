@@ -38,6 +38,16 @@ router.post(
   asyncHandler(ctrl.login)
 );
 
+// completes login when /login reports requires_org_selection (an email
+// shared by more than one tenant's staff account)
+router.post(
+  "/select-organization",
+  loginLimiter,
+  upload.none(),
+  validate(V.selectOrganization),
+  asyncHandler(ctrl.selectOrganization)
+);
+
 // verify OTP for login
 router.post(
   "/verify-otp",
