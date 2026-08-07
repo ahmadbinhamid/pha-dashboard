@@ -81,10 +81,25 @@ baseSchema.index(
 
 // Safety net against duplicate eBay offers/listings ending up attached to two
 // different MarketplaceListing docs (e.g. a retried sync recreating an offer
-// whose ID was never persisted) — sparse so docs with no external ID yet
-// don't collide on null.
-baseSchema.index({ external_listing_id: 1 }, { unique: true, sparse: true });
-baseSchema.index({ external_offer_id: 1 }, { unique: true, sparse: true });
+// whose ID was never persisted) — found live as the root cause of a runaway
+// stock-drift incident (Aug 2026): two DRAFT listings for the same product
+// both independently recovered onto the same real eBay offer via the
+// "offer already exists" retry path, and nothing in the DB stopped it.
+//
+// `sparse: true` does NOT correctly exclude these fields' null state —
+// sparse only skips documents where the field is entirely ABSENT, but every
+// DRAFT listing has this field explicitly set to `null` (present, not
+// absent), so a plain sparse+unique index still collides every draft
+// against every other draft. Use partialFilterExpression instead, which can
+// actually test the VALUE (not just presence) and correctly excludes null.
+baseSchema.index(
+  { external_listing_id: 1 },
+  { unique: true, partialFilterExpression: { external_listing_id: { $type: "string" } } },
+);
+baseSchema.index(
+  { external_offer_id: 1 },
+  { unique: true, partialFilterExpression: { external_offer_id: { $type: "string" } } },
+);
 
 const MarketplaceListing = model("MarketplaceListing", baseSchema);
 
