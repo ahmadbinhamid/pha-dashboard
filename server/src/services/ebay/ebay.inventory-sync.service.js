@@ -176,12 +176,32 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
       }
 
       if (listing.ebay_synced_quantity === ebayQty) {
+        // Confirmed back in sync — eBay's own read side caught up (or
+        // nothing changed). Clear any pending drift so a stale one-off
+        // reading can't get combined with a later, unrelated drift.
+        if (listing.ebay_pending_reconcile_qty != null) listing.ebay_pending_reconcile_qty = null;
         // Nothing to reconcile, but still persist a missing-streak reset if
         // one happened above — otherwise it's silently lost on this path.
-        if (listing.isModified("ebay_missing_polls")) await listing.save();
+        if (listing.isModified()) await listing.save();
         continue;
       }
 
+      if (listing.ebay_pending_reconcile_qty !== ebayQty) {
+        // First poll to see this exact drift — eBay's GetInventoryItem API
+        // can still be catching up to an order we just processed (see the
+        // schema comment on ebay_pending_reconcile_qty). Don't touch stock
+        // yet; just remember what we saw and check again next poll.
+        listing.ebay_pending_reconcile_qty = ebayQty;
+        await listing.save();
+        logger.info(
+          `[ebay.inventory-sync] SKU ${sku}: drift ${listing.ebay_synced_quantity} -> ${ebayQty} seen once, ` +
+            `deferring to next poll before reconciling`,
+        );
+        continue;
+      }
+
+      // Same drift confirmed on a second consecutive poll — genuine change
+      // (or eBay's lag outlasted a full poll interval), safe to apply now.
       const delta = ebayQty - listing.ebay_synced_quantity;
       await adjustStockForSku(sku, delta, {
         reason: `eBay quantity changed directly on eBay (was ${listing.ebay_synced_quantity}, now ${ebayQty})`,
@@ -191,6 +211,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
       });
 
       listing.ebay_synced_quantity = ebayQty;
+      listing.ebay_pending_reconcile_qty = null;
       await listing.save();
       summary.reconciled++;
       logger.info(

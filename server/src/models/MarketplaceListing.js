@@ -161,6 +161,18 @@ const ebaySchema = new Schema({
   // streak (not a single miss) is required before we auto-delete locally, so
   // one transient eBay API hiccup can't wrongly delete a live listing.
   ebay_missing_polls: { type: Number, default: 0 },
+  // A quantity drift seen by the inventory-sync poller that hasn't yet been
+  // confirmed on a second consecutive poll — see ebay_missing_polls above
+  // for the same debounce idea applied to a different signal. eBay's own
+  // GetInventoryItem API can lag behind an order it JUST processed (found
+  // live: a sale dropped local stock 1->0, eBay's API still read 1 for
+  // several minutes after), which used to look identical to a seller
+  // manually raising the quantity in Seller Hub and get "corrected" back —
+  // silently undoing a real sale. Requiring the same drift to still be
+  // there on the NEXT poll (~15 min later, long enough for eBay's read side
+  // to catch up) before applying it filters that false positive out while
+  // still catching genuine manual edits, just one cycle later.
+  ebay_pending_reconcile_qty: { type: Number, default: null },
   listing_duration: { type: String, default: "GTC" },
   accept_best_offer: { type: Boolean, default: false },
   min_best_offer: { type: Number, default: null },
