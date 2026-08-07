@@ -93,7 +93,7 @@ async function reconcileEbayInventory() {
 }
 
 async function reconcileEbayInventoryForTenant(tenant, settings) {
-  const listings = await MarketplaceListing.find({
+  const rawListings = await MarketplaceListing.find({
     tenant_id: tenant._id,
     platform: MARKETPLACE_PLATFORM.EBAY,
     state: LISTING_STATE.ACTIVE,
@@ -102,6 +102,33 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
   })
     .populate("product")
     .populate("variant");
+
+  // Defensive dedup — this collection SHOULD be guaranteed unique per
+  // external_offer_id by a DB index (see MarketplaceListing.js), but if that
+  // index is ever missing/not yet built (found live: it wasn't), two local
+  // records can silently share one real eBay offer. Reconciling both against
+  // the same underlying stock each poll — each tracking its own independent
+  // "last known quantity" for what's really one number — creates a
+  // self-sustaining +1-per-cycle drift with no human or eBay-side action
+  // involved. Keeping only the oldest record per offer here makes this
+  // job safe even while duplicates still exist in the data; it does not fix
+  // the duplicates themselves (see scripts note / ops runbook for cleanup +
+  // rebuilding the missing unique indexes).
+  const byOfferId = new Map();
+  for (const listing of rawListings) {
+    const existing = byOfferId.get(listing.external_offer_id);
+    if (!existing || listing.created_at < existing.created_at) {
+      byOfferId.set(listing.external_offer_id, listing);
+    }
+  }
+  if (byOfferId.size < rawListings.length) {
+    logger.warn(
+      `[ebay.inventory-sync] tenant ${tenant._id}: found ${rawListings.length - byOfferId.size} ` +
+        `duplicate active listing(s) sharing an external_offer_id with another listing — reconciling ` +
+        `only the oldest of each. This is a data integrity issue, not expected steady-state; see ops runbook.`,
+    );
+  }
+  const listings = [...byOfferId.values()];
 
   const summary = { checked: 0, reconciled: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
 
