@@ -6,6 +6,10 @@ const listListings = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     product: Joi.string(),
+    // Comma-separated product ids for the Products page's batch Channel-column
+    // lookup — see ebay.listing.service.js#listListings for why this bypasses
+    // pagination.
+    product_in: Joi.string(),
     state: Joi.string().valid(...Object.values(LISTING_STATE)),
     sync_status: Joi.string().valid(...Object.values(LISTING_SYNC_STATUS)),
     search: Joi.string().allow(""),

@@ -171,9 +171,21 @@ async function getListingById(id, tenantId) {
 // Aggregation (not .find()) because `search` must match against the
 // populated product's title/sku, which Mongoose .populate() can't filter on
 // — mirrors inventory.service.js's listInventory pattern.
-async function listListings({ skip, limit, product, state, sync_status, search } = {}, tenantId, settings) {
+async function listListings({ skip, limit, product, product_in, state, sync_status, search } = {}, tenantId, settings) {
   const match = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
   if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
+  // Batch lookup for "which of these specific products have an eBay listing"
+  // (e.g. the Products list page rendering a Channels column for its current
+  // page of products) — deliberately bypasses skip/limit below, since the
+  // caller already bounded the input to a known-small set of product ids
+  // (one page's worth), not "give me some page of the whole listings table".
+  // Passing that same small set through the normal paginated path silently
+  // truncated to the newest 100 listings tenant-wide, which is why some
+  // products that were genuinely synced still showed no Channel badge —
+  // their listing just wasn't among the 100 most recently created.
+  if (product_in?.length) {
+    match.product = { $in: product_in.map((id) => mongoose.Types.ObjectId.createFromHexString(id)) };
+  }
   if (state) match.state = state;
   if (sync_status) match.sync_status = sync_status;
 
@@ -213,7 +225,11 @@ async function listListings({ skip, limit, product, state, sync_status, search }
   }
 
   const countPipeline = [...pipeline, { $count: "total" }];
-  pipeline.push({ $sort: { created_at: -1 } }, { $skip: skip }, { $limit: limit });
+  pipeline.push({ $sort: { created_at: -1 } });
+  // product_in already bounds the result set to a known-small number of
+  // products (see above) — no pagination needed, and applying it would
+  // reintroduce the exact truncation this parameter exists to avoid.
+  if (!product_in?.length) pipeline.push({ $skip: skip }, { $limit: limit });
 
   const [items, countResult] = await Promise.all([
     MarketplaceListing.aggregate(pipeline),

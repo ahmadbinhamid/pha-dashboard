@@ -151,9 +151,15 @@ export default function ProductsPage() {
     label: c.name,
   }));
 
+  const pageProductIds = (data?.data?.items ?? []).map((p) => p._id);
+
+  // Scoped to just this page's product ids (not a flat `limit`-capped fetch)
+  // so a tenant with >100 total eBay listings doesn't have older listings
+  // silently excluded — see ebay.listing.service.js#listListings.
   const { data: listingsData } = useQuery({
-    queryKey: ["listings-all-ids"],
-    queryFn: () => getListings({ limit: 100 }),
+    queryKey: ["listings-for-products", pageProductIds],
+    queryFn: () => getListings({ product_in: pageProductIds.join(",") }),
+    enabled: pageProductIds.length > 0,
     staleTime: 30_000,
   });
 

@@ -9,6 +9,7 @@ export interface ListingListParams {
   page?: number;
   limit?: number;
   product?: string;
+  product_in?: string;
   state?: string;
   sync_status?: string;
   search?: string;

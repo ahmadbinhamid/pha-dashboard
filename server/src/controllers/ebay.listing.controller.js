@@ -48,11 +48,19 @@ exports.getListing = async (req, res) => {
 exports.getListings = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
-    const { product, state, sync_status, search } = req.query;
+    const { product, product_in, state, sync_status, search } = req.query;
     const settings = await settingsService.getSettings(req.tenantId);
 
     const { items, total } = await listingService.listListings(
-      { skip, limit, product, state, sync_status, search },
+      {
+        skip,
+        limit,
+        product,
+        product_in: product_in ? product_in.split(",").filter(Boolean) : undefined,
+        state,
+        sync_status,
+        search,
+      },
       req.tenantId,
       settings,
     );
