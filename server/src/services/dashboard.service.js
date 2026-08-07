@@ -209,6 +209,10 @@ function mapStockEvent(h) {
     ]
       .filter(Boolean)
       .join(" "),
+    // Structured (not folded into description) so the frontend can render
+    // it on its own line — variant SKU takes precedence since it's the one
+    // that actually maps to eBay's inventory item.
+    sku: h.variant?.sku || h.product?.sku || null,
     timestamp: h.created_at,
     tags: [h.type],
   };
@@ -293,7 +297,10 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   );
   if (search) {
     stockBasePipeline.push({
-      $match: { $or: buildWordSearchOr(["product.title", "reason"], search) },
+      // product.sku/variant.sku included so a specific SKU (visible in
+      // logs/eBay Seller Hub, but not always the product's title) can be
+      // searched directly, instead of having to guess a title fragment.
+      $match: { $or: buildWordSearchOr(["product.title", "product.sku", "variant.sku", "reason"], search) },
     });
   }
 

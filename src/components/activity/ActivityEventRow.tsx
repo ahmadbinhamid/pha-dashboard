@@ -34,6 +34,7 @@ export function ActivityEventRow({ event, showDate }: { event: ActivityEvent; sh
           </span>
         </div>
         <p className="mt-0.5 truncate text-xs text-fg/55">{event.description}</p>
+        {event.sku && <p className="mt-0.5 truncate text-xs text-fg/40">(SKU: {event.sku})</p>}
         {event.tags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {event.tags.map((tag) => (

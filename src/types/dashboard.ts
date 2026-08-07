@@ -40,6 +40,9 @@ export interface ActivityEvent {
   type: ActivityEventType;
   title: string;
   description: string;
+  // Only ever set on "stock" events — the product/variant SKU the
+  // adjustment applies to, rendered on its own line under the description.
+  sku?: string | null;
   timestamp: string;
   tags: string[];
 }
