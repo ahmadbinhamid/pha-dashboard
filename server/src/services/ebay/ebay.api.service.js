@@ -414,7 +414,13 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 
   return {
     sku,
-    availability: { shipToLocationAvailability: { quantity } },
+    // null quantity means "this merchant doesn't track stock for this
+    // product" (Product.stock_control === false — see
+    // ebay.adapter.js#resolveQuantity). Omitting the whole availability
+    // block rather than sending a fabricated number keeps eBay's own
+    // quantity as whatever the seller set directly there, instead of this
+    // app overwriting it with a guess it has no real basis for.
+    ...(quantity != null ? { availability: { shipToLocationAvailability: { quantity } } } : {}),
     condition,
     ...(packageWeightAndSize ? { packageWeightAndSize } : {}),
     product: {
@@ -454,7 +460,9 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     sku,
     marketplaceId: settings.marketplace_id,
     format: listing.format || "FIXED_PRICE",
-    availableQuantity: quantity,
+    // See buildInventoryItemFromResolved's comment — null means "don't
+    // touch eBay's quantity for this untracked-stock product."
+    ...(quantity != null ? { availableQuantity: quantity } : {}),
     ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
     listingDescription: description || title,
     pricingSummary: {
@@ -520,57 +528,6 @@ async function publishOffer(token, settings, offerId) {
 
   const data = await res.json();
   return data.listingId;
-}
-
-// ── Inventory quantity update ─────────────────────────────────────────────────
-
-// offerId is optional (a listing may not have a live offer yet) — when given,
-// the SAME bulk call also revises the offer's availableQuantity, which is
-// the number eBay shows buyers. Previously only shipToLocationAvailability
-// (the inventory item's internal quantity) got updated by this path; the
-// offer's own availableQuantity only ever moved via a full listing
-// republish (sync_listing/update()), so a routine stock-only push could
-// leave the buyer-facing number stale between full republishes. eBay's bulk
-// endpoint supports both in one request — no need for the expensive full
-// offer rebuild just to fix that.
-async function updateInventoryQuantity(settings, sku, quantity, offerId = null) {
-  if (!credentialsConfigured(settings)) {
-    logger.warn("[eBay] updateInventoryQuantity skipped — credentials not configured");
-    return { skipped: true };
-  }
-
-  const token = await getAccessToken(settings);
-  if (!token) return { error: "Could not obtain access token" };
-
-  try {
-    const body = {
-      requests: [
-        {
-          sku,
-          shipToLocationAvailability: { quantity },
-          ...(offerId ? { offers: [{ offerId, availableQuantity: quantity }] } : {}),
-        },
-      ],
-    };
-
-    const res = await fetch(`${inventoryBaseFor(settings.sandbox)}/bulk_update_price_quantity`, {
-      method: "POST",
-      headers: ebayHeaders(token, settings.marketplace_id),
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      logger.error(`[eBay] updateInventoryQuantity ${sku} failed: ${res.status} ${text}`);
-      return { error: `${res.status}: ${text}` };
-    }
-
-    const data = await res.json();
-    return { ok: true, data };
-  } catch (err) {
-    logger.error(`[eBay] updateInventoryQuantity error: ${err.message}`);
-    return { error: err.message };
-  }
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -886,7 +843,6 @@ module.exports = {
   createOffer,
   updateOffer,
   publishOffer,
-  updateInventoryQuantity,
   deleteProduct,
   getInventoryLocations,
   ensureLocation,

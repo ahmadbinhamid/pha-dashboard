@@ -50,6 +50,19 @@ const inventoryHistorySchema = buildSchema(
         message: "stock_after must be a whole number",
       },
     },
+    // How much of `adjustment` could NOT actually be applied because it
+    // would have taken stock_count negative — stock_after is always clamped
+    // at 0, but `adjustment` itself is still the true requested value (an
+    // oversell), never silently rewritten to match what fit. 0 for every
+    // ordinary (non-oversell) row. See inventory.service.js#adjustStock.
+    clamped_shortfall: {
+      type: Number,
+      default: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "clamped_shortfall must be a whole number",
+      },
+    },
     reason: { type: String, default: null },
     type: {
       type: String,

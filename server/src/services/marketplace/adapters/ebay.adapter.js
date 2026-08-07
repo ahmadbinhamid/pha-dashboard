@@ -10,10 +10,17 @@
 //
 // Interface:
 //   key                                            -> "ebay"
-//   publish(resolved, settings, hooks?)            -> { external_listing_id, external_offer_id }
-//   update(resolved, settings, hooks?)             -> { external_listing_id, external_offer_id }
+//   publish(resolved, settings, hooks?, seq?)      -> { external_listing_id, external_offer_id, quantity }
+//   update(resolved, settings, hooks?, seq?)       -> { external_listing_id, external_offer_id, quantity }
 //   end(listing)                                   -> void
-//   pushInventory(sku, quantity)                   -> void
+//
+// There is no separate lightweight "just push a quantity" entry point
+// anymore (the old pushInventory/push_quantity job) — every quantity push,
+// whatever triggered it, goes through publish/update via the sync_listing
+// job, so there's exactly one writer path and one fencing check (`seq` vs
+// MarketplaceListing.last_pushed_seq) instead of two independently-fenced
+// (or worse, one unfenced) ones. See inventory.service.js#fanOutMarketplaceInventory
+// and marketplace/sync.service.js#syncListing.
 //
 // hooks.onOfferCreated(offerId) is invoked as soon as an offer ID is known,
 // before the (separate, failure-prone) publish call — lets the caller persist
@@ -31,14 +38,13 @@ const {
   createOffer,
   updateOffer,
   publishOffer,
-  updateInventoryQuantity,
   deleteProduct,
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
 const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
 const { getSettings: getEbaySettings } = require("../../ebay/ebay.settings.service");
 const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
-const { getTotalStockForProductVariant, resolveSkuToIds } = require("../../inventory.service");
+const { getTotalStockForProductVariant } = require("../../inventory.service");
 const { resolveSku } = require("../listing.resolver");
 const Product = require("../../../models/Product");
 const ProductVariant = require("../../../models/ProductVariant");
@@ -51,10 +57,19 @@ const key = "ebay";
 // can tell "eBay changed since we last touched it" apart from "we're the ones
 // who just changed it" — without this, our own push would look identical to
 // a manual edit on eBay's side and get redundantly (and confusingly) diffed.
-// Called ONLY after updateInventoryQuantity has confirmed the write
-// succeeded — see pushInventory above — never preemptively.
+// Called ONLY after the eBay write has confirmed success — see publish()/
+// update() below — never preemptively.
+//
+// updateMany, not updateOne — reconcileEbayInventoryForTenant's own comment
+// documents that duplicate listings CAN share one {tenant_id, product,
+// variant, platform} combo if the unique index protecting that is ever
+// missing (found live once already). With updateOne, only whichever
+// duplicate the query happens to match first gets its baseline stamped and
+// the other silently drifts forever, undetected. updateMany keeps every
+// duplicate's baseline consistent even in that degraded state — belt and
+// suspenders on top of the index actually being correct.
 async function updateSyncBaseline(productId, variantId, quantity, tenantId, seq = null) {
-  await MarketplaceListing.updateOne(
+  await MarketplaceListing.updateMany(
     { tenant_id: tenantId, product: productId, variant: variantId || null, platform: key },
     {
       $set: {
@@ -65,7 +80,7 @@ async function updateSyncBaseline(productId, variantId, quantity, tenantId, seq 
       },
     },
     // These are all eBay-discriminator-only fields (declared on ebaySchema,
-    // not MarketplaceListing's base schema) — a base-model updateOne casts
+    // not MarketplaceListing's base schema) — a base-model update casts
     // against the base schema only and silently drops anything it doesn't
     // recognize under Mongoose's default strict mode. See the matching
     // comment on inventory.service.js's own ebay_synced_quantity stamp.
@@ -160,17 +175,24 @@ async function createOrRecoverOffer(token, settings, offerBody, sku) {
   }
 }
 
+// null means "don't send eBay a quantity at all" — a merchant with
+// stock_control=false has explicitly said they don't track this product's
+// stock, so any number this app sends is a fabrication. The previous
+// behavior (Math.max(total, 1), i.e. "always claim at least 1 available")
+// wrote a number to eBay with no real basis. Leaving eBay's own quantity
+// alone — set by the seller directly, or left at whatever it already was —
+// is the honest option. Callers must skip the quantity portion of the sync
+// entirely when this returns null (see buildInventoryItemFromResolved /
+// buildOfferFromResolved in ebay.api.service.js) and must not call
+// updateSyncBaseline, since there is no expected-eBay-quantity to track for
+// an untracked-stock product.
 async function resolveQuantity(resolved) {
   const { product, variant } = resolved;
-  const total = await getTotalStockForProductVariant(
-    product._id,
-    variant ? variant._id : null,
-  );
-  // stock_control=false → merchant doesn't track inventory → always available
-  return product.stock_control ? total : Math.max(total, 1);
+  if (!product.stock_control) return null;
+  return getTotalStockForProductVariant(product._id, variant ? variant._id : null);
 }
 
-async function publish(resolved, settings, hooks = {}) {
+async function publish(resolved, settings, hooks = {}, seq = null) {
   if (!credentialsConfigured(settings)) {
     throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
@@ -181,17 +203,23 @@ async function publish(resolved, settings, hooks = {}) {
   const { listing } = resolved;
   const quantity = await resolveQuantity(resolved);
 
-  if (quantity === 0) {
-    logger.warn(`[EbayAdapter] ${resolved.sku}: stock is 0 — skipping publish`);
-    return { skipped: true, reason: "out_of_stock" };
-  }
+  // Push 0 normally — an item genuinely out of stock still gets its true
+  // quantity written to eBay. Refusing to write here (the old behavior)
+  // meant eBay kept selling stock we don't have; the listing stays alive at
+  // 0 via eBay's own out-of-stock handling, not by us hiding the number.
+  // marketplace/sync.service.js sets sync_status OUT_OF_STOCK for
+  // visibility, but only after this write succeeds — see its own comment.
 
   // Step 1 — inventory item
   const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
-  logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity})`);
-  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id);
+  logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
+  // null quantity (stock_control=false) has nothing to track a baseline
+  // for — see resolveQuantity's comment.
+  if (quantity != null) {
+    await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id, seq);
+  }
 
   if (!listing.ebay_category_id) {
     throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
@@ -237,11 +265,12 @@ async function publish(resolved, settings, hooks = {}) {
   return {
     external_listing_id: listingId,
     external_offer_id: offerId,
+    quantity,
     ...(priceLocked ? { priceLocked: true } : {}),
   };
 }
 
-async function update(resolved, settings, hooks = {}) {
+async function update(resolved, settings, hooks = {}, seq = null) {
   if (!credentialsConfigured(settings)) {
     throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
@@ -252,23 +281,23 @@ async function update(resolved, settings, hooks = {}) {
   const { listing } = resolved;
   const quantity = await resolveQuantity(resolved);
 
-  if (quantity === 0) {
-    logger.warn(`[EbayAdapter] ${resolved.sku}: stock is 0 — skipping update`);
-    return { skipped: true, reason: "out_of_stock" };
-  }
+  // Push 0 normally — see the matching comment in publish() above.
 
   // Step 1 — sync inventory item
   const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
-  logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku}`);
-  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id);
+  logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
+  if (quantity != null) {
+    await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id, seq);
+  }
 
   if (!listing.ebay_category_id) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);
     return {
       external_listing_id: listing.external_listing_id || null,
       external_offer_id: listing.external_offer_id || null,
+      quantity,
     };
   }
 
@@ -285,6 +314,7 @@ async function update(resolved, settings, hooks = {}) {
       return {
         external_listing_id: listing.external_listing_id || null,
         external_offer_id: offerId,
+        quantity,
         ...(priceLocked ? { priceLocked: true } : {}),
       };
     } catch (err) {
@@ -305,6 +335,7 @@ async function update(resolved, settings, hooks = {}) {
   return {
     external_listing_id: listingId,
     external_offer_id: offerId,
+    quantity,
     ...(priceLocked ? { priceLocked: true } : {}),
   };
 }
@@ -336,55 +367,4 @@ async function end(listing) {
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
-// seq is the fencing token claimed at enqueue time (see
-// order-stock-sync.service.js#claimPushSeq) — null/undefined for callers
-// that don't participate in fencing (e.g. a direct manual retry with no
-// listing on record yet), in which case the push always applies, same as
-// before fencing existed.
-async function pushInventory(sku, quantity, tenantId, seq = null) {
-  // tenantId used to be discovered FROM the SKU lookup (find whatever
-  // product resolveSkuToIds returned, then trust its tenant) — but SKUs
-  // are only unique per-tenant, so an unscoped lookup could resolve a
-  // different tenant's product entirely and push a quantity to the wrong
-  // seller's eBay account. Now required, and used to scope the lookup
-  // itself instead of being derived from its (possibly wrong) result.
-  if (!tenantId) {
-    throw new Error(`[EbayAdapter] pushInventory: tenantId is required (SKU ${sku})`);
-  }
-
-  const ids = await resolveSkuToIds(sku, tenantId);
-  if (!ids) {
-    throw new Error(`[EbayAdapter] pushInventory: could not resolve SKU ${sku} to a product for tenant ${tenantId}`);
-  }
-
-  const product = await Product.findOne({ _id: ids.productId, tenant_id: tenantId }).select("_id tenant_id").lean();
-  if (!product) {
-    throw new Error(`[EbayAdapter] pushInventory: product ${ids.productId} not found for SKU ${sku} under tenant ${tenantId}`);
-  }
-
-  const listing = await MarketplaceListing.findOne({
-    tenant_id: tenantId,
-    product: ids.productId,
-    variant: ids.variantId || null,
-    platform: key,
-  }).select("_id external_offer_id last_pushed_seq");
-
-  if (listing && seq != null && seq < listing.last_pushed_seq) {
-    // A newer push already landed for this listing (this job was delayed —
-    // a retry, or just slow to be picked up — and got overtaken). Applying
-    // it now would overwrite a correct, more recent quantity with a stale
-    // one. Drop it; do not throw (it's not a failure, just moot).
-    logger.info(
-      `[EbayAdapter] pushInventory: dropping stale push for SKU ${sku} (seq ${seq} < last_pushed ${listing.last_pushed_seq})`,
-    );
-    return;
-  }
-
-  const settings = await getEbaySettings(product.tenant_id);
-  const result = await updateInventoryQuantity(settings, sku, quantity, listing?.external_offer_id || null);
-  if (result.error) throw new Error(result.error);
-
-  await updateSyncBaseline(ids.productId, ids.variantId, quantity, tenantId, seq);
-}
-
-module.exports = { key, publish, update, end, pushInventory };
+module.exports = { key, publish, update, end };

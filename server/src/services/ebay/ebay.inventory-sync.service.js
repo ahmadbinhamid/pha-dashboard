@@ -1,17 +1,23 @@
 // services/ebay/ebay.inventory-sync.service.js
 //
-// Reconciles eBay-side inventory quantity edits (e.g. a seller manually
-// changing "Available quantity" in eBay Seller Hub) back into local stock,
-// and removes listings locally once they've been deleted directly on eBay.
-// Runs on a schedule from the eBay worker — see src/workers/ebay.worker.js.
+// Flags eBay-side inventory quantity drift (e.g. a seller manually changing
+// "Available quantity" in eBay Seller Hub) for human review, and removes
+// listings locally once they've been deleted directly on eBay. Runs on a
+// schedule from the eBay worker — see src/workers/ebay.worker.js.
 //
 // Direction: eBay -> App. The opposite direction (App -> eBay) is handled by
-// order-stock-sync.service.js and ebay.adapter.js's publish/update/pushInventory,
-// which also keep MarketplaceListing.ebay_synced_quantity current so this job
-// only reacts to changes that did NOT originate from our own pushes — it
+// order-stock-sync.service.js / inventory.service.js#fanOutMarketplaceInventory
+// and ebay.adapter.js's publish/update, which also keep
+// MarketplaceListing.ebay_synced_quantity current — but that field is OUR
+// EXPECTED eBay quantity, not a guaranteed-accurate read of it (see the
+// field's own schema comment on MarketplaceListing.js for why). This job
 // diffs eBay's live quantity against that baseline, not against local stock
-// directly, and applies just the difference (never a blind overwrite) so a
-// storefront sale that happened in between polls isn't clobbered.
+// directly, so a storefront sale that happened in between polls isn't
+// mistaken for drift — but a confirmed mismatch is never auto-applied to
+// stock; it's written to PendingReconciliation for a human to accept or
+// reject (see pendingReconciliation.service.js), because the baseline
+// itself can be wrong (an oversell silently erases real drift — see
+// inventory.service.js#adjustStockBySku), not just eBay's read side lagging.
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");

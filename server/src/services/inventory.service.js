@@ -114,14 +114,31 @@ async function listInventory(tenantId, { page = 1, limit = 20, search, location,
 }
 
 // Fan-out: enqueue a sync_listing job for every active MarketplaceListing tied
-// to this product/variant. tenantId scopes the lookup — MarketplaceListing
-// isn't otherwise filtered here, and product/variant ids are only unique
-// per-tenant, so an unscoped query could in principle match a listing
-// belonging to a different tenant that happens to reuse the same ids
-// (can't actually happen today since ids are real ObjectIds, not
-// human-chosen strings, but every other MarketplaceListing query in this
-// codebase is tenant-scoped on principle — see feedback_service_layer).
+// to this product/variant — the ONE place in the app that pushes a stock
+// change to a marketplace. tenantId is mandatory (not "scope it if you
+// happened to pass one") — every other MarketplaceListing query in this
+// codebase is tenant-scoped unconditionally (see feedback_service_layer),
+// and silently falling back to an unscoped query on a missing tenantId is
+// exactly the kind of gap that's bitten this app before.
+//
+// Claims a fencing token (MarketplaceListing.push_seq) atomically for each
+// listing before enqueueing, and carries it in the job data — sync_listing's
+// worker drops any job whose seq is older than what's already landed (see
+// MarketplaceListing.js's push_seq/last_pushed_seq schema comment). This is
+// the ONLY place that claims that token, so every caller that changes stock
+// (manual corrections, Stripe sales via order-stock-sync.service.js,
+// eBay-originated sales) goes through one consistently-fenced writer path —
+// no second, unfenced way to push a quantity to a marketplace.
+//
+// Returns one result per listing found, so callers that need to know
+// whether a push was actually queued (e.g. order-stock-sync.service.js
+// setting a line item's ebay_sync_status) don't have to re-query.
 async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
+  if (!tenantId) {
+    throw new Error("[inventory.service] fanOutMarketplaceInventory: tenantId is required");
+  }
+
+  const results = [];
   try {
     // Lazy-require to avoid circular dep at module load time
     const MarketplaceListing = require("../models/MarketplaceListing");
@@ -130,25 +147,37 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
     const listings = await MarketplaceListing.find({
       product: productId,
       variant: variantId || null,
-      ...(tenantId ? { tenant_id: tenantId } : {}),
+      tenant_id: tenantId,
       state: LISTING_STATE.ACTIVE,
     }).select("_id platform").lean();
 
     for (const listing of listings) {
       try {
+        // push_seq is an eBay-discriminator-only field — strict: false
+        // needed for the same reason as ebay.adapter.js#updateSyncBaseline.
+        const updated = await MarketplaceListing.findOneAndUpdate(
+          { _id: listing._id, tenant_id: tenantId },
+          { $inc: { push_seq: 1 } },
+          { new: true, strict: false },
+        ).select("push_seq");
+        const seq = updated ? updated.push_seq : null;
+
         // All live platforms currently use the eBay queue; add platform routing here
         // when additional queues (Amazon, Shopify) are introduced.
-        await enqueueEbayJob("sync_listing", { listingId: listing._id.toString() });
-        logger.info(`[inventory.service] fan-out queued sync_listing for ${listing._id} (${listing.platform})`);
+        await enqueueEbayJob("sync_listing", { listingId: listing._id.toString(), seq });
+        logger.info(`[inventory.service] fan-out queued sync_listing for ${listing._id} (${listing.platform}, seq ${seq})`);
+        results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: true, seq });
       } catch (qErr) {
         logger.warn(`[inventory.service] fan-out queue unavailable for listing ${listing._id}`, {
           error: qErr.message,
         });
+        results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: false, error: qErr.message });
       }
     }
   } catch (err) {
     logger.warn("[inventory.service] fanOutMarketplaceInventory error", { error: err.message });
   }
+  return results;
 }
 
 // ── Record CRUD ───────────────────────────────────────────────────────────────
@@ -243,6 +272,14 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
   // afterward via the returned stock_after, but some also hold onto `record`).
   record.stock_count = stock_after;
 
+  // `adjustment` here is always the TRUE requested delta, never silently
+  // rewritten to whatever actually fit — stock_after is clamped at 0
+  // above, but the history row must still say what was actually asked for.
+  // clamped_shortfall carries the uncovered amount separately, so a row
+  // never reads as "adjustment: -1, stock_before: 0, stock_after: 0" (looks
+  // like nothing happened) when what really happened was an oversell.
+  const clamped_shortfall = stock_before + adjustment < 0 ? Math.abs(stock_before + adjustment) : 0;
+
   await InventoryHistory.create({
     inventory: record._id,
     product: record.product,
@@ -251,6 +288,7 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
     adjustment,
     stock_before,
     stock_after,
+    clamped_shortfall,
     reason: reason || null,
     type: type || "other",
     user: userId || null,
@@ -265,11 +303,11 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
   // a delta that came FROM eBay in the first place (see
   // pendingReconciliation.service.js#acceptReconciliation); re-announcing
   // eBay's own number back to eBay is a no-op at best.
-  if (!skipMarketplaceFanOut) {
-    await fanOutMarketplaceInventory(record.product, record.variant, tenantId);
-  }
+  const marketplaceResults = skipMarketplaceFanOut
+    ? []
+    : await fanOutMarketplaceInventory(record.product, record.variant, tenantId);
 
-  return { record, stock_before, stock_after };
+  return { record, stock_before, stock_after, marketplaceResults };
 }
 
 // This is an absolute set (not a delta), so unlike adjustStock() there's
@@ -397,13 +435,23 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null, tena
   const adjustments = [];
   let shortfall = 0;
 
+  // Last non-empty fan-out result seen across every adjustStock() call this
+  // invocation makes — every one of those calls targets the same
+  // product/variant, so they all fan out to the same set of listings; the
+  // last one is as representative as any. Callers (e.g.
+  // order-stock-sync.service.js) use this instead of making their own
+  // separate push, so there's exactly one enqueue per real stock change.
+  let marketplaceResults = [];
+
   if (delta < 0) {
     let remaining = Math.abs(delta);
+    let lastRecord = null;
     for (const record of records) {
+      lastRecord = record;
       if (remaining <= 0) break;
       const deduct = Math.min(remaining, record.stock_count);
       if (deduct === 0) continue;
-      const { stock_before, stock_after } = await adjustStock(record, {
+      const { stock_before, stock_after, marketplaceResults: mr } = await adjustStock(record, {
         adjustment: -deduct,
         reason,
         type,
@@ -413,13 +461,32 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null, tena
       });
       remaining -= deduct;
       adjustments.push({ recordId: record._id, adjustment: -deduct, stock_before, stock_after });
+      if (mr.length) marketplaceResults = mr;
     }
     shortfall = remaining;
     if (shortfall > 0) {
       logger.warn(`[inventory.service] oversold SKU ${sku} by ${shortfall}`);
+      // Every record is out of stock but `remaining` units were still
+      // requested — attribute the shortfall to the last record checked so
+      // the audit trail has a row that actually says an oversell happened
+      // (adjustment: -remaining, clamped_shortfall: remaining), instead of
+      // the attempt vanishing with no InventoryHistory entry at all. Forced
+      // skipMarketplaceFanOut: true regardless of the caller's own flag —
+      // this row represents zero real stock movement (0 -> 0), so it has
+      // nothing new to push; any real quantity change from this same call
+      // already triggered its own fan-out from the loop above.
+      const { stock_before, stock_after } = await adjustStock(lastRecord, {
+        adjustment: -remaining,
+        reason,
+        type,
+        userId,
+        tenantId,
+        skipMarketplaceFanOut: true,
+      });
+      adjustments.push({ recordId: lastRecord._id, adjustment: -remaining, stock_before, stock_after });
     }
   } else {
-    const { stock_before, stock_after } = await adjustStock(records[0], {
+    const { stock_before, stock_after, marketplaceResults: mr } = await adjustStock(records[0], {
       adjustment: delta,
       reason,
       type,
@@ -428,11 +495,12 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null, tena
       skipMarketplaceFanOut,
     });
     adjustments.push({ recordId: records[0]._id, adjustment: delta, stock_before, stock_after });
+    marketplaceResults = mr;
   }
 
   const totalStockAfter = await getTotalStockForProductVariant(productId, variantId);
 
-  return { productId, variantId, adjustments, shortfall, totalStockAfter };
+  return { productId, variantId, adjustments, shortfall, totalStockAfter, marketplaceResults };
 }
 
 // Thin wrapper preserving the original eBay behavior and return shape.
@@ -454,21 +522,28 @@ async function adjustStockBySku(sku, delta, tenantId) {
   // around to it. This function is ONLY ever called for an eBay-originated
   // event (a real sale/cancellation eBay itself already told us about — see
   // ebay.orders.service.js / ebay.webhook.service.js, the only two
-  // callers), so this total genuinely IS what eBay's quantity now is; it's
-  // not a guess. Deliberately kept (an earlier draft of this fix considered
-  // deleting it entirely) — removing it would mean this baseline goes stale
-  // after every ordinary eBay sale until some unrelated future push
-  // happens, which would make the NEXT reconciliation poll flag every
-  // single normal sale as a "possible manual edit" needing human review —
-  // pure noise, and a worse failure mode than the one being fixed. The
-  // actual incident this baseline stamping caused (Aug 2026: a poll ran
-  // before eBay's OWN read-side had caught up to a sale it had just
-  // processed, saw baseline-vs-stale-eBay-read as a fresh drift, and
-  // re-applied it) is fixed at the read side instead — see
-  // ebay.inventory-sync.service.js's two-consecutive-poll confirmation
-  // before anything is even flagged, plus the fact that a confirmed drift
-  // now only ever creates a PendingReconciliation row for a human to
-  // review, never an automatic stock mutation.
+  // callers), so this total is usually an accurate reflection of what
+  // eBay's quantity now is — but it's still OUR BEST GUESS at eBay's state,
+  // not a confirmed read of it (see the field's own schema comment on
+  // MarketplaceListing.js). It's provably wrong on an oversell: eBay shows
+  // 1, our local record had already drifted to 0 (stale for whatever
+  // reason), a sale lands anyway — local stock clamps at 0 (see
+  // clamped_shortfall on InventoryHistory), this stamp writes 0 as the new
+  // baseline, and the real pre-existing 1-vs-0 drift is silently erased
+  // instead of ever surfacing for review. Deliberately kept anyway (an
+  // earlier draft of this fix considered deleting it entirely) — removing
+  // it would mean this baseline goes stale after every ordinary eBay sale
+  // until some unrelated future push happens, which would make the NEXT
+  // reconciliation poll flag every single normal sale as a "possible manual
+  // edit" needing human review — pure noise, and a worse failure mode than
+  // the rare oversell case above. The actual incident this baseline
+  // stamping caused (Aug 2026: a poll ran before eBay's OWN read-side had
+  // caught up to a sale it had just processed, saw baseline-vs-stale-eBay-
+  // read as a fresh drift, and re-applied it) is fixed at the read side
+  // instead — see ebay.inventory-sync.service.js's two-consecutive-poll
+  // confirmation before anything is even flagged, plus the fact that a
+  // confirmed drift now only ever creates a PendingReconciliation row for a
+  // human to review, never an automatic stock mutation.
   try {
     const MarketplaceListing = require("../models/MarketplaceListing");
     const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");

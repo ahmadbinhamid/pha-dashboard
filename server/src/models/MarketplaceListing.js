@@ -148,8 +148,16 @@ const ebaySchema = new Schema({
   },
   // null => derive from live inventory at publish time
   quantity_available: { type: Number, default: null },
-  // Last quantity we know eBay actually has for this SKU — set whenever we
-  // push a quantity (publish/update/pushInventory) or reconcile from a poll.
+  // OUR EXPECTED eBay quantity — not "eBay's quantity as of our last
+  // confirmed push", despite that being this field's original intent. Two
+  // different kinds of writes land here: (1) a confirmed push we made
+  // ourselves (publish/update/sync_listing), which genuinely IS a confirmed
+  // eBay value; and (2) inventory.service.js#adjustStockBySku's stamp after
+  // an eBay-originated sale, which is our own best guess at what eBay's
+  // count must now be, not something eBay told us. That guess is usually
+  // right but is provably wrong on an oversell — see adjustStockBySku's own
+  // comment for the exact scenario. Treat this field as "what we currently
+  // believe eBay shows", not as a verified fact, when reasoning about it.
   // null until the first push/reconcile establishes a baseline. Comparing
   // eBay's live quantity against this value (not against local stock
   // directly) is what lets the inventory-sync poller tell "eBay changed
@@ -178,14 +186,16 @@ const ebaySchema = new Schema({
   // still catching genuine manual edits, just one cycle later.
   ebay_pending_reconcile_qty: { type: Number, default: null },
   // Fencing token for outbound quantity pushes — incremented atomically
-  // every time a push is enqueued (see order-stock-sync.service.js /
-  // ebay.adapter.js#pushInventory). If two pushes for the same listing are
-  // ever in flight at once (a retry racing a newer push), the worker
-  // compares the job's seq against last_pushed_seq and drops anything
-  // older than what's already landed — without this, an out-of-order retry
-  // could silently overwrite a newer, correct quantity with a stale one.
-  // Standard fencing-token pattern for idempotent, order-sensitive async
-  // writers (Kleppmann, "Designing Data-Intensive Applications" ch. 9).
+  // every time a sync_listing job is enqueued (see
+  // inventory.service.js#fanOutMarketplaceInventory, the one place that
+  // claims it). If two sync_listing jobs for the same listing are ever
+  // enqueued close together (a retry racing a newer push), the worker
+  // (marketplace/sync.service.js#syncListing) compares the job's seq
+  // against last_pushed_seq and drops anything older than what's already
+  // landed — without this, an out-of-order retry could overwrite a newer,
+  // correct quantity with a stale one. Standard fencing-token pattern for
+  // idempotent, order-sensitive async writers (Kleppmann, "Designing
+  // Data-Intensive Applications" ch. 9).
   push_seq: { type: Number, default: 0 },
   last_pushed_seq: { type: Number, default: 0 },
   listing_duration: { type: String, default: "GTC" },

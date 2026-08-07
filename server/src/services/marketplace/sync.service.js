@@ -25,7 +25,12 @@ async function loadPlatformSettings(platform, tenantId) {
   }
 }
 
-async function syncListing(listingId) {
+// seq is the fencing token claimed at enqueue time (see
+// inventory.service.js#fanOutMarketplaceInventory) — null/undefined for
+// callers that don't participate in fencing (e.g. an explicit manual
+// "resync this listing" action with no stock change behind it), in which
+// case the sync always applies, same as before fencing existed.
+async function syncListing(listingId, seq = null) {
   const listing = await MarketplaceListing.findById(listingId)
     .populate({ path: "product", populate: { path: "attachments" } })
     .populate("photo_overrides");
@@ -33,6 +38,19 @@ async function syncListing(listingId) {
   if (!listing) {
     logger.error(`[marketplace.sync] Listing not found: ${listingId}`);
     return { error: "Listing not found" };
+  }
+
+  // A newer sync_listing job already landed for this listing (this one was
+  // delayed and got overtaken) — applying it now would push a stale
+  // quantity over a correct, more recent one. Drop it before doing any
+  // work; not a failure, just moot. This is the ONE fence check for every
+  // quantity push, now that there's only one writer path — see
+  // ebay.adapter.js's module header comment.
+  if (seq != null && seq < listing.last_pushed_seq) {
+    logger.info(
+      `[marketplace.sync] dropping stale sync_listing job for ${listingId} (seq ${seq} < last_pushed ${listing.last_pushed_seq})`,
+    );
+    return { skipped: true, reason: "stale_seq" };
   }
 
   const adapter = getAdapter(listing.platform);
@@ -55,16 +73,17 @@ async function syncListing(listingId) {
       onOfferCreated: (offerId) => listing.updateOne({ external_offer_id: offerId }),
     };
     const ids = isUpdate
-      ? await adapter.update(resolved, settings, hooks)
-      : await adapter.publish(resolved, settings, hooks);
+      ? await adapter.update(resolved, settings, hooks, seq)
+      : await adapter.publish(resolved, settings, hooks, seq);
 
-    if (ids.skipped && ids.reason === "out_of_stock") {
-      await listing.updateOne({
-        sync_status: LISTING_SYNC_STATUS.OUT_OF_STOCK,
-        sync_error: null,
-      });
-      return { skipped: true, reason: "out_of_stock" };
-    }
+    // Determined AFTER the write succeeded, from what was actually pushed —
+    // the adapter no longer refuses to push a 0 quantity (that used to mean
+    // a manual "correct stock to 0" never reached eBay at all, and eBay
+    // kept selling stock we don't have). ids.quantity is null for an
+    // untracked-stock product (stock_control=false — see
+    // ebay.adapter.js#resolveQuantity), in which case there's no
+    // meaningful "out of stock" concept either.
+    const outOfStock = ids.quantity === 0;
 
     // priceLocked (see ebay.adapter.js#updateOfferTolerant): everything else
     // about the sync succeeded, eBay just rejected the price/quantity
@@ -74,13 +93,19 @@ async function syncListing(listingId) {
     await listing.updateOne({
       external_listing_id: ids.external_listing_id || listing.external_listing_id,
       external_offer_id: ids.external_offer_id || listing.external_offer_id,
-      sync_status: ids.priceLocked ? LISTING_SYNC_STATUS.PRICE_LOCKED : LISTING_SYNC_STATUS.SYNCED,
+      sync_status: outOfStock
+        ? LISTING_SYNC_STATUS.OUT_OF_STOCK
+        : ids.priceLocked
+          ? LISTING_SYNC_STATUS.PRICE_LOCKED
+          : LISTING_SYNC_STATUS.SYNCED,
       state: LISTING_STATE.ACTIVE,
       synced_at: new Date(),
       sync_error: null,
     });
 
-    if (ids.priceLocked) {
+    if (outOfStock) {
+      logger.info(`[marketplace.sync] listing ${listingId} synced at quantity 0 — marked OUT_OF_STOCK`);
+    } else if (ids.priceLocked) {
       logger.warn(`[marketplace.sync] listing ${listingId} synced, but price update was skipped (active eBay sale)`);
     } else {
       logger.info(`[marketplace.sync] listing ${listingId} synced successfully`);

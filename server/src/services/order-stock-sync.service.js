@@ -4,44 +4,35 @@
 // payment succeeds (deduct) or a full refund/cancellation restocks (credit).
 // Shared by stripe.webhook.service.js and stripe.refund.service.js so the
 // dual-write (local DB + eBay push) logic lives in exactly one place.
+//
+// Does NOT enqueue its own push to eBay — adjustStockForSku already fans out
+// via inventory.service.js#fanOutMarketplaceInventory (the one place that
+// claims a push_seq fencing token and enqueues sync_listing), and returns
+// that result as `marketplaceResults`. This file just reads it to set each
+// order line's ebay_sync_status/ebay_sync_error, instead of making a second,
+// separately-fenced (or worse, unfenced) push for the same event.
 
-const { adjustStockForSku, resolveSkuToIds } = require("./inventory.service");
-const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { adjustStockForSku, resolveSkuToIds, fanOutMarketplaceInventory } = require("./inventory.service");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { formatOrderNumber } = require("../utils/orderNumberFormat");
-const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
 const DIRECTION = { DEDUCT: "deduct", RESTOCK: "restock" };
 
-// Atomically claims the next fencing token for this SKU's eBay listing.
-// Returns null (no fencing applied) when there's no matching listing yet —
-// the worker treats a missing seq as "always apply", same as before this
-// change, so a push for a SKU without a MarketplaceListing record still
-// behaves exactly as it did.
-async function claimPushSeq(sku, tenantId) {
-  try {
-    const ids = await resolveSkuToIds(sku, tenantId);
-    if (!ids) return null;
-    const MarketplaceListing = require("../models/MarketplaceListing");
-    const listing = await MarketplaceListing.findOneAndUpdate(
-      {
-        tenant_id: tenantId,
-        product: ids.productId,
-        variant: ids.variantId || null,
-        platform: MARKETPLACE_PLATFORM.EBAY,
-      },
-      { $inc: { push_seq: 1 } },
-      // push_seq is an eBay-discriminator-only field — see the matching
-      // comment on ebay.adapter.js#updateSyncBaseline for why a base-model
-      // update needs strict: false or this silently never increments.
-      { new: true, strict: false },
-    ).select("push_seq");
-    return listing ? listing.push_seq : null;
-  } catch (err) {
-    logger.warn(`[order-stock-sync] claimPushSeq failed for SKU ${sku}: ${err.message}`);
-    return null;
+// Derives an order line's ebay_sync_status/ebay_sync_error from a
+// fanOutMarketplaceInventory result — "pending" if at least one listing was
+// queued, "not_applicable" if this product has no marketplace listings at
+// all, "failed" (with the underlying error) if a listing exists but
+// couldn't be queued.
+function statusFromMarketplaceResults(marketplaceResults) {
+  if (!marketplaceResults || marketplaceResults.length === 0) {
+    return { ebay_sync_status: "not_applicable", ebay_sync_error: null };
   }
+  const failed = marketplaceResults.find((r) => !r.queued);
+  if (failed) {
+    return { ebay_sync_status: "failed", ebay_sync_error: failed.error || "Failed to queue eBay sync" };
+  }
+  return { ebay_sync_status: "pending", ebay_sync_error: null };
 }
 
 // Mutates each order.items[i] with ebay_sync_status/ebay_sync_error IN THE
@@ -121,15 +112,16 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
       notes.push(`Oversold "${partial ? entry.name || sku : entry.name}" (SKU ${sku}) by ${result.shortfall}`);
     }
 
+    const { ebay_sync_status, ebay_sync_error } = statusFromMarketplaceResults(result.marketplaceResults);
+
     if (!partial) {
-      await pushEbayQuantity(entry, result.totalStockAfter, order.tenant_id);
+      entry.ebay_sync_status = ebay_sync_status;
+      entry.ebay_sync_error = ebay_sync_error;
     } else {
-      const pushTarget = { sku, ebay_sync_status: null, ebay_sync_error: null };
-      await pushEbayQuantity(pushTarget, result.totalStockAfter, order.tenant_id);
       lineResults.push({
         order_item_id: orderItemId,
-        ebay_sync_status: pushTarget.ebay_sync_status,
-        ebay_sync_error: pushTarget.ebay_sync_error,
+        ebay_sync_status,
+        ebay_sync_error,
         shortfall: direction === DIRECTION.DEDUCT ? result.shortfall : 0,
       });
     }
@@ -138,53 +130,28 @@ async function syncOrderStock(order, direction, { reasonPrefix, saleType, refund
   return { hasShortfall, note: notes.join("; ") || null, lineResults };
 }
 
-// Never makes a live call to eBay inline — that used to mean every
-// order/refund request blocked on eBay's API being fast (or even up) before
-// it could respond. Handing the push to the same `push_quantity` job
-// ebay.worker.js already runs (previously only the retry path for a failed
-// inline push) means this only ever costs a fast Redis write, not a live
-// HTTP round trip. Trades off knowing synced/failed immediately — the order
-// now saves with "pending" and the job resolves it asynchronously.
-async function pushEbayQuantity(item, quantity, tenantId) {
-  item.ebay_sync_status = "pending";
-  item.ebay_sync_error = null;
-  try {
-    // Fencing token — claimed atomically here (at enqueue time, not job-run
-    // time) so two pushes for the same SKU enqueued close together get
-    // strictly increasing seqs in the order they were actually requested.
-    // The worker drops any job whose seq is older than what's already
-    // landed, so a slow/retried push can't come back later and overwrite a
-    // newer quantity with a stale one. See MarketplaceListing.js's
-    // push_seq/last_pushed_seq schema comment.
-    const seq = await claimPushSeq(item.sku, tenantId);
-    // tenantId travels with the job so the worker's SKU resolution is scoped
-    // to the right tenant, not the job data — see ebay.adapter.js#pushInventory.
-    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity, tenantId, seq });
-  } catch (qErr) {
-    logger.warn(`[order-stock-sync] could not enqueue eBay push for SKU ${item.sku}`, {
-      error: qErr.message,
-    });
-    item.ebay_sync_status = "failed";
-    item.ebay_sync_error = qErr.message;
-  }
-}
-
 // refund-redesign-spec.md §2.3 — POST /refunds/:id/retry-restock. Deliberately
 // NOT another call to syncOrderStock: the local stock adjustment for a
 // failed-eBay-push line already succeeded (that's a separate concern from
 // whether the eBay notification made it) — re-running syncOrderStock would
-// double-deduct/double-restock the physical count. This only re-reads the
-// SKU's current total (already-correct) stock and re-attempts the eBay push.
+// double-deduct/double-restock the physical count. No need to re-read the
+// SKU's current total here either — sync_listing resolves quantity fresh
+// from the DB at job-run time (see ebay.adapter.js#resolveQuantity), not
+// from a caller-supplied number — so this just (re-)queues the push
+// directly, the same way adjustStock's internal call would have, since this
+// retry path isn't itself going through adjustStockForSku.
 async function retryEbayPushForSku(sku, tenantId) {
-  const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
   const ids = await resolveSkuToIds(sku, tenantId);
   if (!ids) {
     return { ebay_sync_status: "not_applicable", ebay_sync_error: null };
   }
-  const totalStockAfter = await getTotalStockForProductVariant(ids.productId, ids.variantId);
-  const pushTarget = { sku, ebay_sync_status: null, ebay_sync_error: null };
-  await pushEbayQuantity(pushTarget, totalStockAfter, tenantId);
-  return { ebay_sync_status: pushTarget.ebay_sync_status, ebay_sync_error: pushTarget.ebay_sync_error };
+  try {
+    const marketplaceResults = await fanOutMarketplaceInventory(ids.productId, ids.variantId, tenantId);
+    return statusFromMarketplaceResults(marketplaceResults);
+  } catch (err) {
+    logger.warn(`[order-stock-sync] retryEbayPushForSku failed for SKU ${sku}: ${err.message}`);
+    return { ebay_sync_status: "failed", ebay_sync_error: err.message };
+  }
 }
 
 module.exports = { syncOrderStock, retryEbayPushForSku, DIRECTION };

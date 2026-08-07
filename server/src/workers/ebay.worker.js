@@ -20,11 +20,17 @@ connectMongo().catch((err) => {
   process.exit(1);
 });
 
-// Marketplace-listing sync — runs through the adapter dispatcher
-ebayQueue.process("sync_listing", 2, async (job) => {
-  const { listingId } = job.data;
-  logger.info(`[ebayQueue] sync_listing listingId=${listingId}`);
-  const result = await marketplaceSync.syncListing(listingId);
+// Marketplace-listing sync — runs through the adapter dispatcher. Concurrency
+// 1 (was 2): this is now the ONLY writer path for a listing's quantity (see
+// ebay.adapter.js's module header comment — the old separate push_quantity
+// job is gone), and two of these jobs for the SAME listing running at once
+// could still race each other even with the seq fence (both could pass the
+// "is this stale" check before either's write lands). Concurrency 1 makes
+// that race impossible outright rather than narrowing the window.
+ebayQueue.process("sync_listing", 1, async (job) => {
+  const { listingId, seq } = job.data;
+  logger.info(`[ebayQueue] sync_listing listingId=${listingId} seq=${seq}`);
+  const result = await marketplaceSync.syncListing(listingId, seq);
   if (result && result.error) throw new Error(result.error);
   return result;
 });
@@ -40,17 +46,6 @@ ebayQueue.process("poll_orders", 1, async () => {
 ebayQueue.process("poll_inventory", 1, async () => {
   logger.info("[ebayQueue] poll_inventory starting");
   return reconcileEbayInventory();
-});
-
-// Retry target for eBay quantity pushes that failed inline from
-// order-stock-sync.service.js (Stripe payment success / refund restock).
-// Goes through the adapter (not updateInventoryQuantity directly) so a
-// retried push also updates the inventory-sync baseline, same as an
-// inline-successful push would.
-ebayQueue.process("push_quantity", 2, async (job) => {
-  const { sku, quantity, tenantId, seq } = job.data;
-  logger.info(`[ebayQueue] push_quantity sku=${sku} quantity=${quantity} seq=${seq}`);
-  await ebayAdapter.pushInventory(sku, quantity, tenantId, seq);
 });
 
 // Bull's Queue never emits a "ready" event (only the underlying redis client

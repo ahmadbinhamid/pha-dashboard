@@ -7,8 +7,8 @@
 // models/PendingReconciliation.js for why auto-apply was removed.
 
 const PendingReconciliation = require("../models/PendingReconciliation");
-const { adjustStockForSku } = require("./inventory.service");
-const { enqueueEbayJob } = require("../queues/ebay.queue");
+const MarketplaceListing = require("../models/MarketplaceListing");
+const { adjustStockForSku, fanOutMarketplaceInventory } = require("./inventory.service");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
@@ -55,7 +55,6 @@ async function acceptReconciliation(id, tenantId, userId) {
     skipMarketplaceFanOut: true,
   });
 
-  const MarketplaceListing = require("../models/MarketplaceListing");
   await MarketplaceListing.updateOne(
     { _id: row.listing, tenant_id: tenantId },
     { $set: { ebay_synced_quantity: row.ebay_qty, ebay_synced_at: new Date(), ebay_pending_reconcile_qty: null } },
@@ -83,13 +82,15 @@ async function rejectReconciliation(id, tenantId, userId) {
   await row.save();
 
   try {
-    // Matches every other "push our current state to eBay" call site (see
-    // fanOutMarketplaceInventory in inventory.service.js) — sync_listing
-    // rebuilds from current local stock, so it naturally re-asserts our
-    // number over eBay's without needing a sequence token here (the
-    // fencing added by this change guards the lightweight quantity-only
-    // push path specifically — see ebay.adapter.js#pushInventory).
-    await enqueueEbayJob("sync_listing", { listingId: row.listing.toString() });
+    // Goes through fanOutMarketplaceInventory — the ONE place that claims a
+    // push_seq fencing token and enqueues sync_listing (see its own comment
+    // in inventory.service.js) — rather than enqueueing directly, so this
+    // re-push is fenced exactly like every other quantity push instead of
+    // reopening a second, unfenced writer path.
+    const listing = await MarketplaceListing.findOne({ _id: row.listing, tenant_id: tenantId }).select("product variant");
+    if (listing) {
+      await fanOutMarketplaceInventory(listing.product, listing.variant, tenantId);
+    }
   } catch (err) {
     logger.warn(`[pendingReconciliation.service] failed to enqueue re-push for rejected reconciliation ${id}: ${err.message}`);
   }
