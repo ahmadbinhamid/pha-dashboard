@@ -15,14 +15,17 @@
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");
-const { getConfiguredTenants } = require("./ebay.tenant");
-const { markConnectionError } = require("./ebay.settings.service");
+// Namespace imports (not destructured) — same reasoning as ebayApi above:
+// keeps these mockable by tests regardless of when this module is first
+// required, since a destructured reference is bound once at require time
+// and a later mock.method() patch on the source module wouldn't be seen.
+const ebayTenant = require("./ebay.tenant");
+const ebaySettingsService = require("./ebay.settings.service");
 const { resolveSku } = require("../marketplace/listing.resolver");
-const { adjustStockForSku } = require("../inventory.service");
+const { upsertPending } = require("../pendingReconciliation.service");
 const { deleteListing } = require("./ebay.listing.service");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
-const { ADJUSTMENT_TYPE } = require("../../constants/inventory.constants");
 const { EBAY_CONNECTION_STATUS } = require("../../constants/ebay.constants");
 
 // Consecutive misses required before we treat a listing as genuinely deleted
@@ -51,8 +54,8 @@ async function handleMissingFromEbay(listing, sku, tenantId) {
 }
 
 async function reconcileEbayInventory() {
-  const configured = await getConfiguredTenants();
-  const summary = { checked: 0, reconciled: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
+  const configured = await ebayTenant.getConfiguredTenants();
+  const summary = { checked: 0, flagged: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
 
   if (!configured.length) {
     logger.info("[ebay.inventory-sync] no tenants have eBay configured — skipping");
@@ -63,7 +66,7 @@ async function reconcileEbayInventory() {
     try {
       const tenantSummary = await reconcileEbayInventoryForTenant(tenant, settings);
       summary.checked += tenantSummary.checked;
-      summary.reconciled += tenantSummary.reconciled;
+      summary.flagged += tenantSummary.flagged;
       summary.baselined += tenantSummary.baselined;
       summary.deletedFromEbay += tenantSummary.deletedFromEbay;
       summary.errors += tenantSummary.errors;
@@ -72,7 +75,7 @@ async function reconcileEbayInventory() {
       // reconciliation is proof the connection works, even if a previous
       // cycle left connection_status stuck at ERROR/TOKEN_EXPIRED/REVOKED.
       if (settings.connection_status && settings.connection_status !== EBAY_CONNECTION_STATUS.CONNECTED) {
-        await markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
+        await ebaySettingsService.markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
       }
     } catch (err) {
       summary.errors++;
@@ -80,12 +83,12 @@ async function reconcileEbayInventory() {
       // revoked/expired token, so a broken integration failed silently and
       // indefinitely instead of surfacing to the tenant. Found live.
       logger.error(`[ebay.inventory-sync] tenant ${tenant._id} reconciliation failed: ${err.message}`);
-      await markConnectionError(tenant._id, { message: err.message });
+      await ebaySettingsService.markConnectionError(tenant._id, { message: err.message });
     }
   }
 
   logger.info(
-    `[ebay.inventory-sync] run complete: checked=${summary.checked} reconciled=${summary.reconciled} ` +
+    `[ebay.inventory-sync] run complete: checked=${summary.checked} flagged=${summary.flagged} ` +
       `baselined=${summary.baselined} deletedFromEbay=${summary.deletedFromEbay} errors=${summary.errors}`,
   );
 
@@ -130,13 +133,21 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
   }
   const listings = [...byOfferId.values()];
 
-  const summary = { checked: 0, reconciled: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
+  const summary = { checked: 0, flagged: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
 
   if (!listings.length) {
     return summary;
   }
 
-  const ebayItems = await ebayApi.getAllInventoryItems(settings);
+  const { items: ebayItems, complete } = await ebayApi.getAllInventoryItems(settings);
+  if (!complete) {
+    logger.warn(
+      `[ebay.inventory-sync] tenant ${tenant._id}: getAllInventoryItems returned an incomplete page set — ` +
+        `skipping missing-listing detection for this cycle (quantity drift checks below still run on ` +
+        `whatever SKUs we DID get back, since a false "still there, same quantity" is harmless, but a false ` +
+        `"missing" is not).`,
+    );
+  }
 
   const ebayQtyBySku = new Map();
   for (const item of ebayItems) {
@@ -152,6 +163,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
     summary.checked++;
 
     if (ebayQty == null) {
+      if (!complete) continue; // can't trust "missing" from a truncated fetch
       try {
         const result = await handleMissingFromEbay(listing, sku, tenant._id);
         if (result.deleted) summary.deletedFromEbay++;
@@ -170,6 +182,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
         // First time we've tracked this listing — establish a baseline
         // instead of guessing at any historical drift.
         listing.ebay_synced_quantity = ebayQty;
+        listing.ebay_synced_at = new Date();
         await listing.save();
         summary.baselined++;
         continue;
@@ -188,34 +201,36 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
 
       if (listing.ebay_pending_reconcile_qty !== ebayQty) {
         // First poll to see this exact drift — eBay's GetInventoryItem API
-        // can still be catching up to an order we just processed (see the
-        // schema comment on ebay_pending_reconcile_qty). Don't touch stock
-        // yet; just remember what we saw and check again next poll.
+        // can still be catching up to an order we just processed (a push
+        // we made, or an eBay-side sale we already deducted for). Don't
+        // flag anything yet; just remember what we saw and check again
+        // next poll — most of these self-resolve within one cycle and
+        // never need a human to look at them.
         listing.ebay_pending_reconcile_qty = ebayQty;
         await listing.save();
         logger.info(
           `[ebay.inventory-sync] SKU ${sku}: drift ${listing.ebay_synced_quantity} -> ${ebayQty} seen once, ` +
-            `deferring to next poll before reconciling`,
+            `deferring to next poll before flagging`,
         );
         continue;
       }
 
-      // Same drift confirmed on a second consecutive poll — genuine change
-      // (or eBay's lag outlasted a full poll interval), safe to apply now.
-      const delta = ebayQty - listing.ebay_synced_quantity;
-      await adjustStockForSku(sku, delta, {
-        reason: `eBay quantity changed directly on eBay (was ${listing.ebay_synced_quantity}, now ${ebayQty})`,
-        type: ADJUSTMENT_TYPE.EBAY_MANUAL_ADJUSTMENT,
-        userId: null,
+      // Same drift confirmed on a second consecutive poll. This is never
+      // applied to stock automatically — see PendingReconciliation's model
+      // comment for why (this exact auto-apply step is what caused the
+      // Aug 2026 false-restock incident). Flag it for a human to review via
+      // GET/POST /inventory/reconciliations instead.
+      await upsertPending({
         tenantId: tenant._id,
+        listingId: listing._id,
+        sku,
+        localQty: listing.ebay_synced_quantity,
+        ebayQty,
       });
-
-      listing.ebay_synced_quantity = ebayQty;
-      listing.ebay_pending_reconcile_qty = null;
-      await listing.save();
-      summary.reconciled++;
+      summary.flagged++;
       logger.info(
-        `[ebay.inventory-sync] reconciled SKU ${sku}: ${delta > 0 ? "+" : ""}${delta} (eBay now ${ebayQty})`,
+        `[ebay.inventory-sync] flagged SKU ${sku} for review: local baseline ${listing.ebay_synced_quantity}, ` +
+          `eBay reports ${ebayQty}`,
       );
     } catch (err) {
       summary.errors++;
@@ -224,7 +239,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
   }
 
   logger.info(
-    `[ebay.inventory-sync] tenant ${tenant._id}: checked=${summary.checked} reconciled=${summary.reconciled} ` +
+    `[ebay.inventory-sync] tenant ${tenant._id}: checked=${summary.checked} flagged=${summary.flagged} ` +
       `baselined=${summary.baselined} deletedFromEbay=${summary.deletedFromEbay} errors=${summary.errors}`,
   );
 

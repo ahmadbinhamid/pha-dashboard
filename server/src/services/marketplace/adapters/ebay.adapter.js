@@ -51,10 +51,25 @@ const key = "ebay";
 // can tell "eBay changed since we last touched it" apart from "we're the ones
 // who just changed it" — without this, our own push would look identical to
 // a manual edit on eBay's side and get redundantly (and confusingly) diffed.
-async function updateSyncBaseline(productId, variantId, quantity) {
+// Called ONLY after updateInventoryQuantity has confirmed the write
+// succeeded — see pushInventory above — never preemptively.
+async function updateSyncBaseline(productId, variantId, quantity, tenantId, seq = null) {
   await MarketplaceListing.updateOne(
-    { product: productId, variant: variantId || null, platform: key },
-    { $set: { ebay_synced_quantity: quantity } },
+    { tenant_id: tenantId, product: productId, variant: variantId || null, platform: key },
+    {
+      $set: {
+        ebay_synced_quantity: quantity,
+        ebay_synced_at: new Date(),
+        ebay_pending_reconcile_qty: null,
+        ...(seq != null ? { last_pushed_seq: seq } : {}),
+      },
+    },
+    // These are all eBay-discriminator-only fields (declared on ebaySchema,
+    // not MarketplaceListing's base schema) — a base-model updateOne casts
+    // against the base schema only and silently drops anything it doesn't
+    // recognize under Mongoose's default strict mode. See the matching
+    // comment on inventory.service.js's own ebay_synced_quantity stamp.
+    { strict: false },
   );
 }
 
@@ -176,7 +191,7 @@ async function publish(resolved, settings, hooks = {}) {
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity})`);
-  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
+  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id);
 
   if (!listing.ebay_category_id) {
     throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
@@ -247,7 +262,7 @@ async function update(resolved, settings, hooks = {}) {
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku}`);
-  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity);
+  await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id);
 
   if (!listing.ebay_category_id) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);
@@ -321,7 +336,12 @@ async function end(listing) {
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
-async function pushInventory(sku, quantity, tenantId) {
+// seq is the fencing token claimed at enqueue time (see
+// order-stock-sync.service.js#claimPushSeq) — null/undefined for callers
+// that don't participate in fencing (e.g. a direct manual retry with no
+// listing on record yet), in which case the push always applies, same as
+// before fencing existed.
+async function pushInventory(sku, quantity, tenantId, seq = null) {
   // tenantId used to be discovered FROM the SKU lookup (find whatever
   // product resolveSkuToIds returned, then trust its tenant) — but SKUs
   // are only unique per-tenant, so an unscoped lookup could resolve a
@@ -342,11 +362,29 @@ async function pushInventory(sku, quantity, tenantId) {
     throw new Error(`[EbayAdapter] pushInventory: product ${ids.productId} not found for SKU ${sku} under tenant ${tenantId}`);
   }
 
+  const listing = await MarketplaceListing.findOne({
+    tenant_id: tenantId,
+    product: ids.productId,
+    variant: ids.variantId || null,
+    platform: key,
+  }).select("_id external_offer_id last_pushed_seq");
+
+  if (listing && seq != null && seq < listing.last_pushed_seq) {
+    // A newer push already landed for this listing (this job was delayed —
+    // a retry, or just slow to be picked up — and got overtaken). Applying
+    // it now would overwrite a correct, more recent quantity with a stale
+    // one. Drop it; do not throw (it's not a failure, just moot).
+    logger.info(
+      `[EbayAdapter] pushInventory: dropping stale push for SKU ${sku} (seq ${seq} < last_pushed ${listing.last_pushed_seq})`,
+    );
+    return;
+  }
+
   const settings = await getEbaySettings(product.tenant_id);
-  const result = await updateInventoryQuantity(settings, sku, quantity);
+  const result = await updateInventoryQuantity(settings, sku, quantity, listing?.external_offer_id || null);
   if (result.error) throw new Error(result.error);
 
-  await updateSyncBaseline(ids.productId, ids.variantId, quantity);
+  await updateSyncBaseline(ids.productId, ids.variantId, quantity, tenantId, seq);
 }
 
 module.exports = { key, publish, update, end, pushInventory };

@@ -74,9 +74,16 @@ async function processNotification(payload, tenant) {
     return { processed: false };
   }
 
-  // Best-effort orderId: prefer data.orderId, fall back to notificationId.
-  // notificationId is always present and unique per notification event.
-  const orderId = data.orderId || payload?.notification?.notificationId;
+  // orderId must be eBay's actual order id, not a substitute — the whole
+  // point of claimEvent()'s dedup ledger is that the SAME sale claims the
+  // SAME key no matter how many times/ways it's delivered. notificationId
+  // is unique PER NOTIFICATION, not per order — a retried delivery of the
+  // same sale gets a fresh notificationId, so falling back to it here meant
+  // a webhook retry could claim a second, different dedup key for a sale
+  // that was already claimed (by the first delivery, or by the poller's
+  // independent fallback), double-deducting stock for one real sale. Found
+  // during the Aug 2026 sync-loop investigation — skip rather than guess.
+  const orderId = data.orderId;
 
   if (topic === "ORDER.LINE_ITEMS_CREATED") {
     const sku = data.sku;
@@ -89,7 +96,7 @@ async function processNotification(payload, tenant) {
 
     if (!orderId) {
       // No stable key — log and bail rather than risk a double-deduction
-      logger.warn("[ebay.webhook] ORDER.LINE_ITEMS_CREATED has no orderId or notificationId — skipping to avoid double deduction");
+      logger.warn("[ebay.webhook] ORDER.LINE_ITEMS_CREATED has no orderId — skipping to avoid double deduction");
       return { processed: false };
     }
 
@@ -115,7 +122,7 @@ async function processNotification(payload, tenant) {
       if (!sku) return { processed: false };
 
       if (!orderId) {
-        logger.warn("[ebay.webhook] ORDER.LINE_ITEMS_UPDATED has no orderId or notificationId — skipping to avoid double restock");
+        logger.warn("[ebay.webhook] ORDER.LINE_ITEMS_UPDATED has no orderId — skipping to avoid double restock");
         return { processed: false };
       }
 

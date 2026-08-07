@@ -155,6 +155,10 @@ const ebaySchema = new Schema({
   // directly) is what lets the inventory-sync poller tell "eBay changed
   // since we last touched it" apart from "we're the ones who changed it".
   ebay_synced_quantity: { type: Number, default: null },
+  // When ebay_synced_quantity was last confirmed by an actual eBay API
+  // response (a successful push, or a reconciliation poll's read) — not a
+  // guess. Informational/debugging aid for the reconciliation flow.
+  ebay_synced_at: { type: Date, default: null },
   // Consecutive inventory-sync polls where this listing's SKU was absent
   // from eBay's own inventory list — i.e. it was deleted/ended directly on
   // eBay, not through this app. Reset to 0 whenever it's seen again; a small
@@ -173,6 +177,17 @@ const ebaySchema = new Schema({
   // to catch up) before applying it filters that false positive out while
   // still catching genuine manual edits, just one cycle later.
   ebay_pending_reconcile_qty: { type: Number, default: null },
+  // Fencing token for outbound quantity pushes — incremented atomically
+  // every time a push is enqueued (see order-stock-sync.service.js /
+  // ebay.adapter.js#pushInventory). If two pushes for the same listing are
+  // ever in flight at once (a retry racing a newer push), the worker
+  // compares the job's seq against last_pushed_seq and drops anything
+  // older than what's already landed — without this, an out-of-order retry
+  // could silently overwrite a newer, correct quantity with a stale one.
+  // Standard fencing-token pattern for idempotent, order-sensitive async
+  // writers (Kleppmann, "Designing Data-Intensive Applications" ch. 9).
+  push_seq: { type: Number, default: 0 },
+  last_pushed_seq: { type: Number, default: 0 },
   listing_duration: { type: String, default: "GTC" },
   accept_best_offer: { type: Boolean, default: false },
   min_best_offer: { type: Number, default: null },

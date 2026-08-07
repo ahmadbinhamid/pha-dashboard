@@ -524,7 +524,16 @@ async function publishOffer(token, settings, offerId) {
 
 // ── Inventory quantity update ─────────────────────────────────────────────────
 
-async function updateInventoryQuantity(settings, sku, quantity) {
+// offerId is optional (a listing may not have a live offer yet) — when given,
+// the SAME bulk call also revises the offer's availableQuantity, which is
+// the number eBay shows buyers. Previously only shipToLocationAvailability
+// (the inventory item's internal quantity) got updated by this path; the
+// offer's own availableQuantity only ever moved via a full listing
+// republish (sync_listing/update()), so a routine stock-only push could
+// leave the buyer-facing number stale between full republishes. eBay's bulk
+// endpoint supports both in one request — no need for the expensive full
+// offer rebuild just to fix that.
+async function updateInventoryQuantity(settings, sku, quantity, offerId = null) {
   if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] updateInventoryQuantity skipped — credentials not configured");
     return { skipped: true };
@@ -539,6 +548,7 @@ async function updateInventoryQuantity(settings, sku, quantity) {
         {
           sku,
           shipToLocationAvailability: { quantity },
+          ...(offerId ? { offers: [{ offerId, availableQuantity: quantity }] } : {}),
         },
       ],
     };
@@ -754,12 +764,24 @@ async function getAllOpenOrders(settings, { pageSize = 200 } = {}) {
 // forever, growing `items` unboundedly and blocking that tenant's inventory
 // job indefinitely. Now fails loudly instead.
 const MAX_INVENTORY_PAGES = 500; // 500 * 100 = 50,000 items — generous ceiling
+// Returns { items, complete }. `complete: false` means the fetch stopped
+// before covering the whole account (a short/empty page came back while
+// eBay's own reported `total` says more items exist) — a transient API
+// hiccup, not proof those SKUs are actually gone. Callers that use a
+// missing-from-eBay result to decide "delete this listing" (see
+// ebay.inventory-sync.service.js#handleMissingFromEbay) must skip that
+// decision entirely for the cycle when complete is false, or a flaky page
+// read could wrongly delete a listing that's still live. Found live: the
+// stock-corruption incident this whole file's fencing/reconciliation logic
+// exists to prevent was a version of exactly this kind of "trust one
+// possibly-incomplete read" mistake.
 async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
   const token = await getAccessToken(settings);
   if (!token) throw new Error("[eBay] getAllInventoryItems: could not obtain access token");
 
   const items = [];
   let offset = 0;
+  let reportedTotal = null;
 
   for (let page = 0; page < MAX_INVENTORY_PAGES; page++) {
     const res = await fetch(
@@ -774,9 +796,13 @@ async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
 
     const data = await res.json();
     const batch = data.inventoryItems || [];
+    if (typeof data.total === "number") reportedTotal = data.total;
     items.push(...batch);
 
-    if (batch.length < pageSize) return items;
+    if (batch.length < pageSize) {
+      const complete = reportedTotal == null || items.length >= reportedTotal;
+      return { items, complete };
+    }
     offset += pageSize;
   }
 

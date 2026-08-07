@@ -5,13 +5,44 @@
 // Shared by stripe.webhook.service.js and stripe.refund.service.js so the
 // dual-write (local DB + eBay push) logic lives in exactly one place.
 
-const { adjustStockForSku } = require("./inventory.service");
+const { adjustStockForSku, resolveSkuToIds } = require("./inventory.service");
 const { enqueueEbayJob } = require("../queues/ebay.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { formatOrderNumber } = require("../utils/orderNumberFormat");
+const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
 const DIRECTION = { DEDUCT: "deduct", RESTOCK: "restock" };
+
+// Atomically claims the next fencing token for this SKU's eBay listing.
+// Returns null (no fencing applied) when there's no matching listing yet —
+// the worker treats a missing seq as "always apply", same as before this
+// change, so a push for a SKU without a MarketplaceListing record still
+// behaves exactly as it did.
+async function claimPushSeq(sku, tenantId) {
+  try {
+    const ids = await resolveSkuToIds(sku, tenantId);
+    if (!ids) return null;
+    const MarketplaceListing = require("../models/MarketplaceListing");
+    const listing = await MarketplaceListing.findOneAndUpdate(
+      {
+        tenant_id: tenantId,
+        product: ids.productId,
+        variant: ids.variantId || null,
+        platform: MARKETPLACE_PLATFORM.EBAY,
+      },
+      { $inc: { push_seq: 1 } },
+      // push_seq is an eBay-discriminator-only field — see the matching
+      // comment on ebay.adapter.js#updateSyncBaseline for why a base-model
+      // update needs strict: false or this silently never increments.
+      { new: true, strict: false },
+    ).select("push_seq");
+    return listing ? listing.push_seq : null;
+  } catch (err) {
+    logger.warn(`[order-stock-sync] claimPushSeq failed for SKU ${sku}: ${err.message}`);
+    return null;
+  }
+}
 
 // Mutates each order.items[i] with ebay_sync_status/ebay_sync_error IN THE
 // DEFAULT (lines: null) MODE ONLY — caller is responsible for order.save()
@@ -118,9 +149,17 @@ async function pushEbayQuantity(item, quantity, tenantId) {
   item.ebay_sync_status = "pending";
   item.ebay_sync_error = null;
   try {
+    // Fencing token — claimed atomically here (at enqueue time, not job-run
+    // time) so two pushes for the same SKU enqueued close together get
+    // strictly increasing seqs in the order they were actually requested.
+    // The worker drops any job whose seq is older than what's already
+    // landed, so a slow/retried push can't come back later and overwrite a
+    // newer quantity with a stale one. See MarketplaceListing.js's
+    // push_seq/last_pushed_seq schema comment.
+    const seq = await claimPushSeq(item.sku, tenantId);
     // tenantId travels with the job so the worker's SKU resolution is scoped
     // to the right tenant, not the job data — see ebay.adapter.js#pushInventory.
-    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity, tenantId });
+    await enqueueEbayJob("push_quantity", { sku: item.sku, quantity, tenantId, seq });
   } catch (qErr) {
     logger.warn(`[order-stock-sync] could not enqueue eBay push for SKU ${item.sku}`, {
       error: qErr.message,

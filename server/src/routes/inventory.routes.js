@@ -7,6 +7,8 @@ const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/inventory.validation");
 const ctrl = require("../controllers/inventory.controller");
+const reconciliationValidation = require("../validators/pendingReconciliation.validation");
+const reconciliationCtrl = require("../controllers/pendingReconciliation.controller");
 
 // All routes require authentication
 router.use(auth());
@@ -48,5 +50,20 @@ router.post(
 
 // History
 router.get("/:inventoryId/history", asyncHandler(ctrl.getHistory));
+
+// eBay-side quantity drift flagged by the reconciliation poller — see
+// ebay.inventory-sync.service.js. Never auto-applied; a human accepts or
+// rejects each row here.
+router.get("/reconciliations", asyncHandler(reconciliationCtrl.getReconciliations));
+router.post(
+  "/reconciliations/:id/accept",
+  validate(reconciliationValidation.resolveReconciliation),
+  asyncHandler(reconciliationCtrl.acceptReconciliation),
+);
+router.post(
+  "/reconciliations/:id/reject",
+  validate(reconciliationValidation.resolveReconciliation),
+  asyncHandler(reconciliationCtrl.rejectReconciliation),
+);
 
 module.exports = router;

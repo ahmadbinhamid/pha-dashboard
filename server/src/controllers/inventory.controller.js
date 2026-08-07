@@ -65,6 +65,7 @@ exports.adjustStock = async (req, res) => {
       reason,
       type,
       userId: req.user?._id,
+      tenantId: req.tenantId,
     });
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock adjusted");
@@ -92,6 +93,7 @@ exports.setStock = async (req, res) => {
       stock_count,
       reason,
       userId: req.user?._id,
+      tenantId: req.tenantId,
     });
 
     return success(res, await fetchPopulatedRecord(record._id), "Stock set");
