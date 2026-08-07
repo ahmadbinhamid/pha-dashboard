@@ -92,13 +92,22 @@ baseSchema.index(
 // absent), so a plain sparse+unique index still collides every draft
 // against every other draft. Use partialFilterExpression instead, which can
 // actually test the VALUE (not just presence) and correctly excludes null.
+// Also excludes soft-deleted docs (same as the compound index above) — an
+// ended/removed listing's old external id shouldn't block a live one from
+// ever using it, and old soft-deleted test/junk data shouldn't either.
 baseSchema.index(
   { external_listing_id: 1 },
-  { unique: true, partialFilterExpression: { external_listing_id: { $type: "string" } } },
+  {
+    unique: true,
+    partialFilterExpression: { external_listing_id: { $type: "string" }, deleted_at: null },
+  },
 );
 baseSchema.index(
   { external_offer_id: 1 },
-  { unique: true, partialFilterExpression: { external_offer_id: { $type: "string" } } },
+  {
+    unique: true,
+    partialFilterExpression: { external_offer_id: { $type: "string" }, deleted_at: null },
+  },
 );
 
 const MarketplaceListing = model("MarketplaceListing", baseSchema);
