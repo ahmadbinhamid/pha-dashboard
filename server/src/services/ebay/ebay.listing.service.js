@@ -74,45 +74,81 @@ async function createListing(payload, tenantId) {
   const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
   if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
 
-  const listing = await MarketplaceListing.create({
+  // Idempotency — a double-click or retried "Create Listing" request must
+  // not create a second listing for the same product/variant. This used to
+  // silently succeed twice (the Aug 2026 duplicate-listing incident — two
+  // local records ended up sharing one real eBay offer and corrupted stock
+  // via the reconciliation job). Now that MarketplaceListing.js enforces one
+  // listing per (product, variant, platform) at the DB level, a second
+  // attempt would instead fail loudly with a raw duplicate-key error — safer
+  // than silent corruption, but still a bad UX for the common "just
+  // double-clicked" case. Check first so that case returns the existing
+  // listing cleanly, no error, no new record.
+  const existing = await MarketplaceListing.findOne({
     tenant_id: tenantId,
-    platform: MARKETPLACE_PLATFORM.EBAY,
     product,
     variant,
-    title_override,
-    description_override,
-    price_override: price_override != null ? Number(price_override) : null,
-    photo_overrides,
-    state: LISTING_STATE.DRAFT,
-    // eBay discriminator fields
-    ebay_category_id,
-    store_category_id,
-    store_sku,
-    condition,
-    condition_notes,
-    item_specifics,
-    fitment,
-    format,
-    quantity_available: quantity_available != null ? Number(quantity_available) : null,
-    listing_duration,
-    accept_best_offer,
-    min_best_offer: min_best_offer != null ? Number(min_best_offer) : null,
-    fulfillment_policy_id,
-    payment_policy_id,
-    return_policy_id,
-    require_immediate_payment,
-    item_location_zip,
-    package: {
-      length: pkg.length != null ? Number(pkg.length) : null,
-      width: pkg.width != null ? Number(pkg.width) : null,
-      height: pkg.height != null ? Number(pkg.height) : null,
-      weight: pkg.weight != null ? Number(pkg.weight) : null,
-    },
+    platform: MARKETPLACE_PLATFORM.EBAY,
   });
+  if (existing) return existing;
 
-  await syncFitmentCatalog(fitment, tenantId);
+  try {
+    const listing = await MarketplaceListing.create({
+      tenant_id: tenantId,
+      platform: MARKETPLACE_PLATFORM.EBAY,
+      product,
+      variant,
+      title_override,
+      description_override,
+      price_override: price_override != null ? Number(price_override) : null,
+      photo_overrides,
+      state: LISTING_STATE.DRAFT,
+      // eBay discriminator fields
+      ebay_category_id,
+      store_category_id,
+      store_sku,
+      condition,
+      condition_notes,
+      item_specifics,
+      fitment,
+      format,
+      quantity_available: quantity_available != null ? Number(quantity_available) : null,
+      listing_duration,
+      accept_best_offer,
+      min_best_offer: min_best_offer != null ? Number(min_best_offer) : null,
+      fulfillment_policy_id,
+      payment_policy_id,
+      return_policy_id,
+      require_immediate_payment,
+      item_location_zip,
+      package: {
+        length: pkg.length != null ? Number(pkg.length) : null,
+        width: pkg.width != null ? Number(pkg.width) : null,
+        height: pkg.height != null ? Number(pkg.height) : null,
+        weight: pkg.weight != null ? Number(pkg.weight) : null,
+      },
+    });
 
-  return listing;
+    await syncFitmentCatalog(fitment, tenantId);
+
+    return listing;
+  } catch (err) {
+    // The check-then-create above isn't atomic — two truly simultaneous
+    // requests can both pass the check before either one's insert commits.
+    // The unique index still catches that at the DB level; recover the same
+    // way, by returning whichever request actually won, instead of
+    // surfacing a raw E11000 to the client.
+    if (err.code === 11000 && err.keyPattern?.product) {
+      const winner = await MarketplaceListing.findOne({
+        tenant_id: tenantId,
+        product,
+        variant,
+        platform: MARKETPLACE_PLATFORM.EBAY,
+      });
+      if (winner) return winner;
+    }
+    throw err;
+  }
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────

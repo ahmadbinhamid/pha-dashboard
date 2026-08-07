@@ -28,6 +28,9 @@ export function InventoryRow({
 }: InventoryRowProps) {
   const status = computeInventoryStockStatus(record.stock_count, lowStockThreshold);
   const statusConfig = STOCK_STATUS_CONFIG[status];
+  // Variant SKU is the more specific identifier when this row is a variant —
+  // falls back to the product's own SKU otherwise.
+  const sku = record.variant?.sku ?? record.product?.sku ?? null;
 
   return (
     <TableRow>
@@ -38,6 +41,10 @@ export function InventoryRow({
           <div className="mt-0.5 truncate text-xs text-fg/45">{record.variant.display_name}</div>
         )}
       </TableCell>
+
+      {isVisible("sku") && (
+        <TableCell className="whitespace-nowrap text-fg/70">{sku ?? "—"}</TableCell>
+      )}
 
       {isVisible("location") && (
         <TableCell className="max-w-40 truncate">{record.location?.name ?? "—"}</TableCell>

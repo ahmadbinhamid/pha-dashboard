@@ -17,6 +17,7 @@ export interface InventoryRecord {
     id: string;
     title: string;
     slug: string;
+    sku: string | null;
     attachments: import("./product").Attachment[];
   };
   variant: import("./product").ProductVariant | null;

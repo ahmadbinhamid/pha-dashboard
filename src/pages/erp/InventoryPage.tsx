@@ -21,6 +21,7 @@ import { Search, Boxes, Settings } from "lucide-react";
 // Product (sticky) and Actions are structural, not part of this list — every
 // other column can be hidden via "Manage Columns", persisted per browser.
 const INVENTORY_COLUMNS: ColumnDef[] = [
+  { key: "sku", label: "SKU" },
   { key: "location", label: "Location", alwaysVisible: true },
   { key: "stock", label: "Stock", alwaysVisible: true },
   { key: "status", label: "Status" },
@@ -141,6 +142,7 @@ export default function InventoryPage() {
                   <TableHead className="sticky left-0 z-2 min-w-56 sticky-col-header sticky-col-separator-right">
                     Product
                   </TableHead>
+                  {isVisible("sku") && <TableHead>SKU</TableHead>}
                   {isVisible("location") && <TableHead>Location</TableHead>}
                   {isVisible("stock") && <TableHead className="text-right">Stock</TableHead>}
                   {isVisible("status") && <TableHead>Status</TableHead>}
