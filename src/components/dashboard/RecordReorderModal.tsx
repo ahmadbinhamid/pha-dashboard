@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +17,7 @@ import {
 import { useToast } from "@/context";
 import { adjustStock } from "@/lib/api/inventory";
 import type { CriticalStockItem } from "@/types/dashboard";
+import { recordReorderFormSchema, type RecordReorderFormValues } from "@/lib/validation/recordReorder";
 
 interface RecordReorderModalProps {
   item: CriticalStockItem | null;
@@ -27,20 +30,32 @@ interface RecordReorderModalProps {
 export function RecordReorderModal({ item, onOpenChange }: RecordReorderModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [quantity, setQuantity] = useState("");
-  const [error, setError] = useState<string | undefined>();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<RecordReorderFormValues>({
+    resolver: zodResolver(recordReorderFormSchema),
+    defaultValues: { quantity: "" },
+  });
+
+  useEffect(() => {
+    if (!item) reset({ quantity: "" });
+  }, [item, reset]);
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: RecordReorderFormValues) =>
       adjustStock(item!.inventoryId, {
-        adjustment: Number(quantity),
+        adjustment: Number(values.quantity),
         reason: "Reordered from dashboard",
         type: "restock", // matches server/src/constants/inventory.constants.js#ADJUSTMENT_TYPE.RESTOCK
       }),
     onSuccess: () => {
       toast({ title: "Stock updated", description: `${item?.name} restocked.`, tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      reset();
+      reset({ quantity: "" });
       onOpenChange(false);
     },
     onError: (err: Error) => {
@@ -48,31 +63,18 @@ export function RecordReorderModal({ item, onOpenChange }: RecordReorderModalPro
     },
   });
 
-  function reset() {
-    setQuantity("");
-    setError(undefined);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const qty = Number(quantity);
-    if (!qty || qty <= 0) {
-      setError("Enter a quantity greater than 0");
-      return;
-    }
-    mutation.mutate();
-  }
+  const onSubmit = (values: RecordReorderFormValues) => mutation.mutate(values);
 
   return (
     <Modal
       open={!!item}
       onOpenChange={(next) => {
-        if (!next) reset();
+        if (!next) reset({ quantity: "" });
         onOpenChange(next);
       }}
     >
       <ModalContent className="max-w-sm">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <ModalHeader>
             <ModalTitle>Record Reorder</ModalTitle>
             <ModalDescription>
@@ -85,16 +87,8 @@ export function RecordReorderModal({ item, onOpenChange }: RecordReorderModalPro
             </ModalDescription>
           </ModalHeader>
 
-          <FormField label="Quantity received" required error={error}>
-            <Input
-              type="number"
-              min={1}
-              step="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="e.g. 20"
-              autoFocus
-            />
+          <FormField label="Quantity received" required error={errors.quantity?.message}>
+            <Input type="number" min={1} step="1" placeholder="e.g. 20" autoFocus {...register("quantity")} />
           </FormField>
 
           <ModalFooter>

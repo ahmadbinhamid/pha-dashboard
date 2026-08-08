@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +12,12 @@ import { CopyField } from "@/components/ui/CopyField";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { getStripeStatus, updateStripeKeys, updateStripeWebhookSecret } from "@/lib/api/tenantSettings";
 import type { ConnectionStatus, UpdateStripeKeysPayload } from "@/types/tenantSettings";
+import {
+  stripeKeysFormSchema,
+  webhookSecretFormSchema,
+  type StripeKeysFormValues,
+  type WebhookSecretFormValues,
+} from "@/lib/validation/stripeKeys";
 
 export const STRIPE_KEYS_FORM_ID = "stripe-keys-form";
 
@@ -31,8 +39,22 @@ export function StripeKeysCard({
   onMutationStateChange?: (state: { isPending: boolean; isSuccess: boolean; error: string | null }) => void;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<UpdateStripeKeysPayload>({ secret_key: "", publishable_key: "" });
-  const [webhookSecretInput, setWebhookSecretInput] = useState("");
+
+  const { register, handleSubmit, reset } = useForm<StripeKeysFormValues>({
+    resolver: zodResolver(stripeKeysFormSchema),
+    defaultValues: { secret_key: "", publishable_key: "" },
+  });
+
+  const {
+    register: registerWebhook,
+    handleSubmit: handleWebhookSubmit,
+    reset: resetWebhook,
+    watch: watchWebhook,
+  } = useForm<WebhookSecretFormValues>({
+    resolver: zodResolver(webhookSecretFormSchema),
+    defaultValues: { webhook_secret: "" },
+  });
+  const webhookSecretInput = watchWebhook("webhook_secret");
 
   const { data, isLoading } = useQuery({
     queryKey: ["stripe-status"],
@@ -42,14 +64,15 @@ export function StripeKeysCard({
 
   useEffect(() => {
     // Never pre-fill the secret key input — the API never returns it, so
-    // leaving it blank means "unchanged" on save (see updateStripeKeys below).
-    setForm((f) => ({ ...f, publishable_key: status?.publishable_key ?? "" }));
+    // leaving it blank means "unchanged" on save (see onSubmit below).
+    reset({ secret_key: "", publishable_key: status?.publishable_key ?? "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.publishable_key]);
 
   const keysMutation = useMutation({
     mutationFn: updateStripeKeys,
     onSuccess: () => {
-      setForm((f) => ({ ...f, secret_key: "" }));
+      reset((current) => ({ ...current, secret_key: "" }));
       queryClient.invalidateQueries({ queryKey: ["stripe-status"] });
     },
   });
@@ -66,18 +89,21 @@ export function StripeKeysCard({
   const webhookSecretMutation = useMutation({
     mutationFn: updateStripeWebhookSecret,
     onSuccess: () => {
-      setWebhookSecretInput("");
+      resetWebhook({ webhook_secret: "" });
       queryClient.invalidateQueries({ queryKey: ["stripe-status"] });
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (form: StripeKeysFormValues) => {
     // secret_key omitted entirely (not sent as "") when left blank, so the
     // previously-saved key stays in place unless the tenant deliberately types a new one.
     const payload: UpdateStripeKeysPayload = { publishable_key: form.publishable_key };
     if (form.secret_key) payload.secret_key = form.secret_key;
     keysMutation.mutate(payload);
+  };
+
+  const onSubmitWebhookSecret = (values: WebhookSecretFormValues) => {
+    webhookSecretMutation.mutate(values.webhook_secret);
   };
 
   const handleDisconnect = () => {
@@ -100,26 +126,20 @@ export function StripeKeysCard({
               <p className="rounded-xs bg-tag-danger-bg px-3 py-2 text-sm text-tag-danger-fg">{status.last_error}</p>
             )}
 
-            <form id={STRIPE_KEYS_FORM_ID} className="space-y-4" onSubmit={handleSubmit}>
+            <form id={STRIPE_KEYS_FORM_ID} className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
               <FormField
                 label="Secret key"
                 hint={status?.connected ? "Leave blank to keep the currently saved key." : "e.g. sk_live_… or sk_test_… — found in your Stripe Dashboard under Developers → API keys."}
               >
                 <SecretInput
-                  value={form.secret_key ?? ""}
+                  {...register("secret_key")}
                   placeholder={status?.connected ? "•••••••••••••••••••• (saved)" : "sk_live_…"}
-                  onChange={(e) => setForm((f) => ({ ...f, secret_key: e.target.value }))}
                   autoComplete="off"
                 />
               </FormField>
 
               <FormField label="Publishable key" hint="Safe to share — used to initialize card payment forms.">
-                <Input
-                  value={form.publishable_key ?? ""}
-                  placeholder="pk_live_…"
-                  onChange={(e) => setForm((f) => ({ ...f, publishable_key: e.target.value }))}
-                  autoComplete="off"
-                />
+                <Input {...register("publishable_key")} placeholder="pk_live_…" autoComplete="off" />
               </FormField>
 
               {status?.connected && (
@@ -144,7 +164,7 @@ export function StripeKeysCard({
                 {status.webhook_configured ? (
                   <p className="text-sm text-ok">Webhook connected.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <form className="space-y-3" onSubmit={handleWebhookSubmit(onSubmitWebhookSecret)}>
                     {status.webhook_url && (
                       <FormField label="Webhook URL" hint="Add this as an endpoint in Stripe Dashboard → Developers → Webhooks.">
                         <CopyField value={status.webhook_url} />
@@ -152,15 +172,9 @@ export function StripeKeysCard({
                     )}
                     <FormField label="Signing secret" hint="Paste the whsec_… value Stripe shows after creating the endpoint.">
                       <div className="flex gap-2">
-                        <SecretInput
-                          value={webhookSecretInput}
-                          placeholder="whsec_…"
-                          onChange={(e) => setWebhookSecretInput(e.target.value)}
-                          autoComplete="off"
-                        />
+                        <SecretInput {...registerWebhook("webhook_secret")} placeholder="whsec_…" autoComplete="off" />
                         <Button
-                          type="button"
-                          onClick={() => webhookSecretMutation.mutate(webhookSecretInput)}
+                          type="submit"
                           disabled={!webhookSecretInput || webhookSecretMutation.isPending}
                         >
                           Save
@@ -172,7 +186,7 @@ export function StripeKeysCard({
                         {(webhookSecretMutation.error as Error)?.message || "Failed to save"}
                       </p>
                     )}
-                  </div>
+                  </form>
                 )}
               </div>
             )}

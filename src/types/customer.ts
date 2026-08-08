@@ -20,12 +20,3 @@ export interface CustomerDetail extends Customer {
   orders: Order[];
   outstanding_invoices: Order[];
 }
-
-export interface CustomerFormState {
-  name: string;
-  email: string;
-  phone: string;
-  shippingAddress: OrderAddress;
-  useDifferentBilling: boolean;
-  billingAddress: OrderAddress;
-}

@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +11,7 @@ import { SecretInput } from "@/components/ui/SecretInput";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { getSmtpStatus, updateSmtpCredentials } from "@/lib/api/tenantSettings";
 import type { ConnectionStatus, UpdateSmtpCredentialsPayload } from "@/types/tenantSettings";
+import { smtpSettingsFormSchema, type SmtpSettingsFormValues } from "@/lib/validation/smtpSettings";
 
 export const SMTP_SETTINGS_FORM_ID = "smtp-settings-form";
 
@@ -24,9 +27,7 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
   not_connected: "Not connected",
 };
 
-type FormState = Omit<UpdateSmtpCredentialsPayload, "port"> & { port: string };
-
-const EMPTY_FORM: FormState = { host: "", port: "", user: "", pass: "", from_name: "", from_email: "" };
+const EMPTY_FORM: SmtpSettingsFormValues = { host: "", port: "", user: "", pass: "", from_name: "", from_email: "" };
 
 export function SmtpSettingsCard({
   onMutationStateChange,
@@ -34,7 +35,11 @@ export function SmtpSettingsCard({
   onMutationStateChange?: (state: { isPending: boolean; isSuccess: boolean; error: string | null }) => void;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+  const { register, handleSubmit, reset } = useForm<SmtpSettingsFormValues>({
+    resolver: zodResolver(smtpSettingsFormSchema),
+    defaultValues: EMPTY_FORM,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["smtp-status"],
@@ -44,21 +49,22 @@ export function SmtpSettingsCard({
 
   useEffect(() => {
     // Never pre-fill the password — the API never returns it, so leaving it
-    // blank means "unchanged" on save (see handleSubmit below).
-    setForm((f) => ({
-      ...f,
+    // blank means "unchanged" on save (see onSubmit below).
+    reset({
       host: status?.host ?? "",
       port: status?.port ? String(status.port) : "",
       user: status?.user ?? "",
+      pass: "",
       from_name: status?.from_name ?? "",
       from_email: status?.from_email ?? "",
-    }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.host, status?.port, status?.user, status?.from_name, status?.from_email]);
 
   const mutation = useMutation({
     mutationFn: updateSmtpCredentials,
     onSuccess: () => {
-      setForm((f) => ({ ...f, pass: "" }));
+      reset((current) => ({ ...current, pass: "" }));
       queryClient.invalidateQueries({ queryKey: ["smtp-status"] });
     },
   });
@@ -72,8 +78,7 @@ export function SmtpSettingsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isPending, mutation.isSuccess, mutation.isError]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (form: SmtpSettingsFormValues) => {
     // pass omitted entirely (not sent as "") when left blank, so the
     // previously-saved password stays in place unless deliberately changed.
     const payload: UpdateSmtpCredentialsPayload = {
@@ -113,41 +118,24 @@ export function SmtpSettingsCard({
               </p>
             )}
 
-            <form id={SMTP_SETTINGS_FORM_ID} className="space-y-4" onSubmit={handleSubmit}>
+            <form id={SMTP_SETTINGS_FORM_ID} className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField label="SMTP host">
-                  <Input
-                    value={form.host ?? ""}
-                    placeholder="smtp.gmail.com"
-                    onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))}
-                    autoComplete="off"
-                  />
+                  <Input {...register("host")} placeholder="smtp.gmail.com" autoComplete="off" />
                 </FormField>
                 <FormField label="SMTP port" hint="587 (STARTTLS) or 465 (TLS) are most common.">
-                  <Input
-                    type="number"
-                    value={form.port ?? ""}
-                    placeholder="587"
-                    onChange={(e) => setForm((f) => ({ ...f, port: e.target.value }))}
-                    autoComplete="off"
-                  />
+                  <Input type="number" {...register("port")} placeholder="587" autoComplete="off" />
                 </FormField>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField label="Username">
-                  <Input
-                    value={form.user ?? ""}
-                    placeholder="you@yourstore.com"
-                    onChange={(e) => setForm((f) => ({ ...f, user: e.target.value }))}
-                    autoComplete="off"
-                  />
+                  <Input {...register("user")} placeholder="you@yourstore.com" autoComplete="off" />
                 </FormField>
                 <FormField label="Password" hint={status?.connected ? "Leave blank to keep the currently saved password." : undefined}>
                   <SecretInput
-                    value={form.pass ?? ""}
+                    {...register("pass")}
                     placeholder={status?.connected ? "•••••••••••••• (saved)" : "App password or SMTP password"}
-                    onChange={(e) => setForm((f) => ({ ...f, pass: e.target.value }))}
                     autoComplete="off"
                   />
                 </FormField>
@@ -155,19 +143,10 @@ export function SmtpSettingsCard({
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField label="From name" hint="Defaults to your business name.">
-                  <Input
-                    value={form.from_name ?? ""}
-                    onChange={(e) => setForm((f) => ({ ...f, from_name: e.target.value }))}
-                    autoComplete="off"
-                  />
+                  <Input {...register("from_name")} autoComplete="off" />
                 </FormField>
                 <FormField label="From email" hint="Defaults to the username above.">
-                  <Input
-                    type="email"
-                    value={form.from_email ?? ""}
-                    onChange={(e) => setForm((f) => ({ ...f, from_email: e.target.value }))}
-                    autoComplete="off"
-                  />
+                  <Input type="email" {...register("from_email")} autoComplete="off" />
                 </FormField>
               </div>
 

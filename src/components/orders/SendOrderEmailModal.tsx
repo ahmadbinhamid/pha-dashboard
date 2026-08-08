@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +16,7 @@ import {
 import { useToast } from "@/context";
 import { sendOrderEmail } from "@/lib/api/orders";
 import type { OrderDetail } from "@/types/orders";
+import { sendOrderEmailFormSchema, type SendOrderEmailFormValues } from "@/lib/validation/sendOrderEmail";
 
 interface SendOrderEmailModalProps {
   order: OrderDetail;
@@ -22,13 +24,11 @@ interface SendOrderEmailModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const EMPTY_FORM = { tracking_number: "", carrier_name: "" };
+const EMPTY_FORM: SendOrderEmailFormValues = { tracking_number: "", carrier_name: "" };
 
 export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmailModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const isDelivery = order.delivery_method === "delivery";
   // Tracking is captured once (the first "Send Email" fulfils the order) —
   // re-sending afterwards (e.g. the customer says they missed the email)
@@ -36,9 +36,19 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
   const hasSavedTracking = isDelivery && !!order.tracking_number && !!order.carrier_name;
   const needsTrackingInput = isDelivery && !hasSavedTracking;
 
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<SendOrderEmailFormValues>({
+    resolver: zodResolver(sendOrderEmailFormSchema(needsTrackingInput)),
+    defaultValues: EMPTY_FORM,
+  });
+
   const mutation = useMutation({
-    mutationFn: () =>
-      sendOrderEmail(order._id, needsTrackingInput ? { tracking_number: form.tracking_number, carrier_name: form.carrier_name } : {}),
+    mutationFn: (values: SendOrderEmailFormValues) =>
+      sendOrderEmail(order._id, needsTrackingInput ? values : {}),
     onSuccess: () => {
       toast({
         title: isDelivery ? "Shipment email sent" : "Invoice email sent",
@@ -46,8 +56,7 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
         tone: "success",
       });
       queryClient.invalidateQueries({ queryKey: ["order", order._id] });
-      setForm(EMPTY_FORM);
-      setErrors({});
+      reset(EMPTY_FORM);
       onOpenChange(false);
     },
     onError: (err: Error) => {
@@ -55,33 +64,18 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
     },
   });
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (needsTrackingInput) {
-      const nextErrors: Record<string, string> = {};
-      if (!form.tracking_number.trim()) nextErrors.tracking_number = "Tracking number is required";
-      if (!form.carrier_name.trim()) nextErrors.carrier_name = "Carrier name is required";
-      if (Object.keys(nextErrors).length) {
-        setErrors(nextErrors);
-        return;
-      }
-    }
-    mutation.mutate();
-  }
+  const onSubmit = (values: SendOrderEmailFormValues) => mutation.mutate(values);
 
   return (
     <Modal
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          setForm(EMPTY_FORM);
-          setErrors({});
-        }
+        if (!next) reset(EMPTY_FORM);
         onOpenChange(next);
       }}
     >
       <ModalContent>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <ModalHeader>
             <ModalTitle>{needsTrackingInput ? "Mark as shipped" : isDelivery ? "Resend shipping email" : "Send invoice email"}</ModalTitle>
             <ModalDescription>
@@ -95,20 +89,11 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
 
           {needsTrackingInput && (
             <div className="space-y-4">
-              <FormField label="Carrier Name" required error={errors.carrier_name}>
-                <Input
-                  value={form.carrier_name}
-                  onChange={(e) => setForm((f) => ({ ...f, carrier_name: e.target.value }))}
-                  placeholder="e.g. Australia Post"
-                  autoFocus
-                />
+              <FormField label="Carrier Name" required error={errors.carrier_name?.message}>
+                <Input {...register("carrier_name")} placeholder="e.g. Australia Post" autoFocus />
               </FormField>
-              <FormField label="Tracking Number" required error={errors.tracking_number}>
-                <Input
-                  value={form.tracking_number}
-                  onChange={(e) => setForm((f) => ({ ...f, tracking_number: e.target.value }))}
-                  placeholder="e.g. 1234567890AU"
-                />
+              <FormField label="Tracking Number" required error={errors.tracking_number?.message}>
+                <Input {...register("tracking_number")} placeholder="e.g. 1234567890AU" />
               </FormField>
             </div>
           )}

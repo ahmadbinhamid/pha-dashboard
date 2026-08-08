@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Combobox } from "@/components/ui/Combobox";
-import { Input } from "@/components/ui/Input";
+import { YearSelect } from "@/components/shared/YearSelect";
 import {
   getVehicleMakes,
   getVehicleModels,
   getVehicleModelCodes,
   getVehicleYears,
 } from "@/lib/api/vehicleModels";
+import { validateVehicleYearRange } from "@/lib/validation/commonFields";
 import type { FitmentRowFormState } from "@/types/marketplace";
 import { Trash2 } from "lucide-react";
 
@@ -42,6 +43,7 @@ export function FitmentRow({
   const makes = makesRes?.data ?? [];
   const models = row.make ? (modelsRes?.data ?? []) : [];
   const modelCodes = row.make && row.model ? (modelCodesRes?.data ?? []) : [];
+  const yearRangeError = validateVehicleYearRange(row.year_from, row.year_to);
 
   function handleMakeChange(make: string) {
     // Reset everything downstream when make changes
@@ -126,27 +128,19 @@ export function FitmentRow({
         </div>
         <div className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year From</span>
-          <Input
-            type="number"
-            min="1900"
-            max="2100"
-            value={row.year_from}
-            onChange={(e) => onUpdate({ year_from: e.target.value })}
-            placeholder="e.g. 2015"
-          />
+          <YearSelect value={row.year_from} onChange={(year_from) => onUpdate({ year_from })} />
         </div>
         <div className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year To</span>
-          <Input
-            type="number"
-            min="1900"
-            max="2100"
+          <YearSelect
             value={row.year_to}
-            onChange={(e) => onUpdate({ year_to: e.target.value })}
+            onChange={(year_to) => onUpdate({ year_to })}
             placeholder="Present"
+            aria-invalid={!!yearRangeError}
           />
         </div>
       </div>
+      {yearRangeError && <p className="text-xs text-danger">{yearRangeError}</p>}
     </div>
   );
 }

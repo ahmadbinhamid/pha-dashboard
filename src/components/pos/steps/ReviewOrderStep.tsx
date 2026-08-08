@@ -18,6 +18,7 @@ import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliv
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { Order } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
+import { paymentChoiceSchema } from "@/lib/validation/reviewOrder";
 
 interface ReviewOrderStepProps {
   customerDelivery: CustomerDeliveryState;
@@ -103,8 +104,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 
   function handleSubmit() {
     if (!customer) return;
-    if (!paymentChoice) {
-      setPaymentMethodError("Select how this order will be settled");
+    const paymentCheck = paymentChoiceSchema.safeParse(paymentChoice);
+    if (!paymentCheck.success) {
+      setPaymentMethodError(paymentCheck.error.issues[0]?.message ?? "Select how this order will be settled");
       toast({ title: "Missing payment method", description: "Choose how this order will be paid.", tone: "danger" });
       return;
     }
@@ -127,7 +129,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       // not just a truthy value — must be omitted entirely, not nulled.
       billing_address: deliveryMethod === "delivery" && useDifferentBilling ? billingAddress : undefined,
       note: orderNote.trim() || null,
-      payment_method: paymentChoice,
+      payment_method: paymentCheck.data,
       amount_paid: amountPaid || undefined,
     });
   }

@@ -1,4 +1,5 @@
 import type { EbayListingFormState } from "@/types/marketplace";
+import { validateVehicleYearRange, priceSchema } from "@/lib/validation/commonFields";
 
 export type EbayListingErrors = Partial<Record<keyof EbayListingFormState | "min_best_offer_amount", string>>;
 
@@ -28,9 +29,11 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
     errors.photo_overrides = "Maximum 24 images allowed by eBay.";
   }
 
-  // Price — required and must be > 0
+  // Price — required and must be a real positive number (catches "-" and
+  // other non-numeric junk, not just "was it filled in")
+  const priceResult = priceSchema("Price").safeParse(form.price_override);
   const price = Number(form.price_override);
-  if (!form.price_override || isNaN(price) || price <= 0) {
+  if (!priceResult.success) {
     errors.price_override = "A valid price greater than A$0 is required.";
   }
 
@@ -63,10 +66,10 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
 
   // Best offer minimum must be less than the Buy It Now price
   if (form.accept_best_offer && form.min_best_offer) {
-    const min = Number(form.min_best_offer);
-    if (isNaN(min) || min <= 0) {
+    const minResult = priceSchema("Minimum best offer").safeParse(form.min_best_offer);
+    if (!minResult.success) {
       errors.min_best_offer = "Minimum best offer must be greater than A$0.";
-    } else if (!isNaN(price) && price > 0 && min >= price) {
+    } else if (!isNaN(price) && price > 0 && minResult.data >= price) {
       errors.min_best_offer = "Minimum best offer must be less than the listing price.";
     }
   }
@@ -104,6 +107,16 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
     const w = Number(pkg.weight);
     if (isNaN(w) || w <= 0) {
       errors.package = "Package weight must be a positive number.";
+    }
+  }
+
+  // Fitment rows — each vehicle's year range must make sense on its own
+  // (a vehicle can't stop being made before it started).
+  for (const row of form.fitment) {
+    const yearError = validateVehicleYearRange(row.year_from, row.year_to);
+    if (yearError) {
+      errors.fitment = yearError;
+      break;
     }
   }
 

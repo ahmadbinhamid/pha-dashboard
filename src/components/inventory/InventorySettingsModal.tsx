@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -14,11 +16,19 @@ import {
 } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { getInventorySettings, updateInventorySettings } from "@/lib/api/inventory";
+import { inventorySettingsFormSchema, type InventorySettingsFormValues } from "@/lib/validation/inventorySettings";
 
 interface InventorySettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const DEFAULT_FORM: InventorySettingsFormValues = {
+  threshold: "10",
+  emailEnabled: false,
+  email: "",
+  sendTime: "22:00",
+};
 
 export function InventorySettingsModal({ open, onOpenChange }: InventorySettingsModalProps) {
   const { toast } = useToast();
@@ -31,27 +41,34 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
   });
   const settings = data?.data;
 
-  const [threshold, setThreshold] = useState("10");
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [email, setEmail] = useState("");
-  const [sendTime, setSendTime] = useState("22:00");
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+  } = useForm<InventorySettingsFormValues>({
+    resolver: zodResolver(inventorySettingsFormSchema),
+    defaultValues: DEFAULT_FORM,
+  });
 
   useEffect(() => {
     if (settings) {
-      setThreshold(String(settings.low_stock_threshold));
-      setEmailEnabled(settings.email_notifications);
-      setEmail(settings.notification_email ?? "");
-      setSendTime(settings.notification_send_time || "22:00");
+      reset({
+        threshold: String(settings.low_stock_threshold),
+        emailEnabled: settings.email_notifications,
+        email: settings.notification_email ?? "",
+        sendTime: settings.notification_send_time || "22:00",
+      });
     }
-  }, [settings]);
+  }, [settings, reset]);
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: InventorySettingsFormValues) =>
       updateInventorySettings({
-        low_stock_threshold: Number(threshold) || 0,
-        email_notifications: emailEnabled,
-        notification_email: email || null,
-        notification_send_time: sendTime,
+        low_stock_threshold: Number(values.threshold) || 0,
+        email_notifications: values.emailEnabled,
+        notification_email: values.email || null,
+        notification_send_time: values.sendTime,
       }),
     onSuccess: () => {
       toast({ title: "Inventory settings saved", tone: "success" });
@@ -63,65 +80,59 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
     },
   });
 
+  const onSubmit = (values: InventorySettingsFormValues) => mutation.mutate(values);
+
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent className="max-w-lg">
-        <ModalHeader>
-          <ModalTitle>Inventory Settings</ModalTitle>
-          <ModalDescription>Configure stock tracking preferences like low-stock thresholds</ModalDescription>
-        </ModalHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <ModalHeader>
+            <ModalTitle>Inventory Settings</ModalTitle>
+            <ModalDescription>Configure stock tracking preferences like low-stock thresholds</ModalDescription>
+          </ModalHeader>
 
-        <div className="space-y-4">
-          <FormField
-            label="Low Stock Threshold"
-            hint="Alert when a variant's stock falls at or below this number."
-          >
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min="0"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-                className="max-w-32"
-              />
-              <span className="text-sm text-fg/50">units</span>
-            </div>
-          </FormField>
+          <div className="space-y-4">
+            <FormField
+              label="Low Stock Threshold"
+              hint="Alert when a variant's stock falls at or below this number."
+            >
+              <div className="flex items-center gap-2">
+                <Input type="number" min="0" className="max-w-32" {...register("threshold")} />
+                <span className="text-sm text-fg/50">units</span>
+              </div>
+            </FormField>
 
-          <Switch
-            checked={emailEnabled}
-            onCheckedChange={setEmailEnabled}
-            label="Email Notifications"
-            description={emailEnabled ? "Low stock alerts are active" : "Low stock alerts are off"}
-          />
-
-          <FormField label="Recipient Email">
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+            <Controller
+              control={control}
+              name="emailEnabled"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  label="Email Notifications"
+                  description={field.value ? "Low stock alerts are active" : "Low stock alerts are off"}
+                />
+              )}
             />
-          </FormField>
 
-          <FormField label="Send Time" hint="Daily time to send the low stock digest.">
-            <Input
-              type="time"
-              value={sendTime}
-              onChange={(e) => setSendTime(e.target.value)}
-              className="max-w-40"
-            />
-          </FormField>
-        </div>
+            <FormField label="Recipient Email">
+              <Input type="email" placeholder="you@example.com" {...register("email")} />
+            </FormField>
 
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="button" variant="primary" size="md" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Saving…" : "Save changes"}
-          </Button>
-        </ModalFooter>
+            <FormField label="Send Time" hint="Daily time to send the low stock digest.">
+              <Input type="time" className="max-w-40" {...register("sendTime")} />
+            </FormField>
+          </div>
+
+          <ModalFooter>
+            <Button type="button" variant="secondary" size="md" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="md" disabled={mutation.isPending}>
+              {mutation.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </ModalFooter>
+        </form>
       </ModalContent>
     </Modal>
   );

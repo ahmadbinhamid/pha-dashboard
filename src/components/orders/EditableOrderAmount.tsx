@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/context";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { editableAmountFormSchema, type EditableAmountFormValues } from "@/lib/validation/editableAmount";
 
 interface EditableOrderAmountProps {
   orderId: string;
@@ -32,7 +35,15 @@ export function EditableOrderAmount({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(amountCents / 100));
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+  } = useForm<EditableAmountFormValues>({
+    resolver: zodResolver(editableAmountFormSchema),
+    defaultValues: { amount: String(amountCents / 100) },
+  });
 
   const mutation = useMutation({
     mutationFn: (dollars: number) => mutationFn(orderId, dollars),
@@ -46,30 +57,20 @@ export function EditableOrderAmount({
     },
   });
 
+  const onSubmit = (values: EditableAmountFormValues) => mutation.mutate(Number(values.amount));
+
   if (editing) {
     return (
-      <form
-        className="flex items-center justify-end gap-0.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const parsed = Number(value);
-          if (!Number.isFinite(parsed) || parsed < 0) {
-            toast({ title: "Enter a valid amount", tone: "danger" });
-            return;
-          }
-          mutation.mutate(parsed);
-        }}
-      >
+      <form className="flex items-center justify-end gap-0.5" onSubmit={handleSubmit(onSubmit)}>
         <Input
           autoFocus
           type="number"
           step="0.01"
           min="0"
           size="sm"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
           className="w-24 text-right"
           disabled={mutation.isPending}
+          {...register("amount")}
         />
         <Button
           type="submit"
@@ -88,7 +89,7 @@ export function EditableOrderAmount({
           className="h-7 w-7"
           disabled={mutation.isPending}
           onClick={() => {
-            setValue(String(amountCents / 100));
+            reset({ amount: String(amountCents / 100) });
             setEditing(false);
           }}
           aria-label="Cancel"
@@ -104,7 +105,7 @@ export function EditableOrderAmount({
       type="button"
       className="group/amount inline-flex items-center text-fg/60 hover:text-accent"
       onClick={() => {
-        setValue(String(amountCents / 100));
+        reset({ amount: String(amountCents / 100) });
         setEditing(true);
       }}
     >

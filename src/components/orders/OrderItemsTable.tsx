@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Check, X } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
@@ -10,12 +12,22 @@ import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/ut
 import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import type { OrderChannel, OrderItem } from "@/types/orders";
+import {
+  editableUnitPriceFormSchema,
+  editableDiscountFormSchema,
+  type EditableUnitPriceFormValues,
+  type EditableDiscountFormValues,
+} from "@/lib/validation/editableOrderItem";
 
 function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; itemIndex: number; item: OrderItem }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(item.unit_price / 100));
+
+  const { register, handleSubmit, reset } = useForm<EditableUnitPriceFormValues>({
+    resolver: zodResolver(editableUnitPriceFormSchema),
+    defaultValues: { amount: String(item.unit_price / 100) },
+  });
 
   const mutation = useMutation({
     mutationFn: (unitPrice: number) => updateOrderItemPrice(orderId, itemIndex, unitPrice),
@@ -29,30 +41,20 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
     },
   });
 
+  const onSubmit = (values: EditableUnitPriceFormValues) => mutation.mutate(Number(values.amount));
+
   if (editing) {
     return (
-      <form
-        className="flex items-center justify-end gap-0.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const parsed = Number(value);
-          if (!Number.isFinite(parsed) || parsed <= 0) {
-            toast({ title: "Enter a valid price", tone: "danger" });
-            return;
-          }
-          mutation.mutate(parsed);
-        }}
-      >
+      <form className="flex items-center justify-end gap-0.5" onSubmit={handleSubmit(onSubmit)}>
         <Input
           autoFocus
           type="number"
           step="0.01"
           min="0.01"
           size="sm"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
           className="w-24 text-right"
           disabled={mutation.isPending}
+          {...register("amount")}
         />
         <Button
           type="submit"
@@ -84,7 +86,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
       type="button"
       className="group/price inline-flex items-center text-fg hover:text-accent"
       onClick={() => {
-        setValue(String(item.unit_price / 100));
+        reset({ amount: String(item.unit_price / 100) });
         setEditing(true);
       }}
     >
@@ -103,7 +105,11 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(item.discount_amount / 100));
+
+  const { register, handleSubmit, reset } = useForm<EditableDiscountFormValues>({
+    resolver: zodResolver(editableDiscountFormSchema),
+    defaultValues: { amount: String(item.discount_amount / 100) },
+  });
 
   const mutation = useMutation({
     mutationFn: (discountAmount: number) => updateOrderItemDiscount(orderId, itemIndex, discountAmount),
@@ -117,30 +123,20 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
     },
   });
 
+  const onSubmit = (values: EditableDiscountFormValues) => mutation.mutate(Number(values.amount));
+
   if (editing) {
     return (
-      <form
-        className="flex items-center justify-end gap-0.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const parsed = Number(value);
-          if (!Number.isFinite(parsed) || parsed < 0) {
-            toast({ title: "Enter a valid discount", tone: "danger" });
-            return;
-          }
-          mutation.mutate(parsed);
-        }}
-      >
+      <form className="flex items-center justify-end gap-0.5" onSubmit={handleSubmit(onSubmit)}>
         <Input
           autoFocus
           type="number"
           step="0.01"
           min="0"
           size="sm"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
           className="w-24 text-right"
           disabled={mutation.isPending}
+          {...register("amount")}
         />
         <Button
           type="submit"
@@ -172,7 +168,7 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
       type="button"
       className="group/discount inline-flex items-center text-fg/60 hover:text-accent"
       onClick={() => {
-        setValue(String(item.discount_amount / 100));
+        reset({ amount: String(item.discount_amount / 100) });
         setEditing(true);
       }}
     >

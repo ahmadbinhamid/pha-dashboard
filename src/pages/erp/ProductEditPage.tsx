@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -31,10 +32,7 @@ import {
   updateProduct,
 } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
-import type {
-  Product,
-  ProductEditFormState,
-} from "@/types/product";
+import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
 import {
   ShoppingBag,
@@ -42,10 +40,11 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
+import { productEditFormSchema, type ProductEditFormValues } from "@/lib/validation/product";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function productToForm(p: Product): ProductEditFormState {
+function productToForm(p: Product): ProductEditFormValues {
   return {
     title: p.title,
     description: p.description,
@@ -77,7 +76,7 @@ function productToForm(p: Product): ProductEditFormState {
   };
 }
 
-function formToFD(form: ProductEditFormState): FormData {
+function formToFD(form: ProductEditFormValues): FormData {
   const fd = new FormData();
   fd.append("title", form.title.trim());
   fd.append("description", form.description);
@@ -163,11 +162,16 @@ function ProductEditSkeleton() {
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
+// Thin data-loading shell — the real form (ProductEditForm below) only ever
+// mounts once `product` is guaranteed non-null, so useForm's defaultValues
+// can be built from real data on its very first render. Building the form
+// with product-or-undefined defaultValues and reset()-ing once data arrives
+// (the naive approach) leaves a render frame, right after the query
+// resolves but before the effect runs, where the loading guard has already
+// passed but the form is still empty — this sidesteps that race entirely
+// rather than patching around it.
 export default function ProductEditPage() {
   const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: productData, isLoading } = useQuery({
     queryKey: ["product", slug],
@@ -175,10 +179,6 @@ export default function ProductEditPage() {
     enabled: !!slug,
   });
   const product = productData?.data;
-
-  const [form, setForm] = useState<ProductEditFormState | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const savedFormRef = useRef<string>("");
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories", "all"],
@@ -190,15 +190,41 @@ export default function ProductEditPage() {
     label: c.name,
   }));
 
-  useEffect(() => {
-    if (product) {
-      const f = productToForm(product);
-      setForm(f);
-      savedFormRef.current = JSON.stringify(f);
-    }
-  }, [product?._id]);
+  if (isLoading || !product || !slug) {
+    return <ProductEditSkeleton />;
+  }
 
-  const isDirty = form !== null && JSON.stringify(form) !== savedFormRef.current;
+  return <ProductEditForm key={product._id} product={product} slug={slug} categoryOptions={categoryOptions} />;
+}
+
+function ProductEditForm({
+  product,
+  slug,
+  categoryOptions,
+}: {
+  product: Product;
+  slug: string;
+  categoryOptions: { value: string; label: string }[];
+}) {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    getValues,
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<ProductEditFormValues>({
+    resolver: zodResolver(productEditFormSchema),
+    defaultValues: productToForm(product),
+  });
+
+  const form = watch();
 
   const saveMutation = useMutation({
     mutationFn: (fd: FormData) => updateProduct(product!._id, fd),
@@ -208,9 +234,9 @@ export default function ProductEditPage() {
   });
 
   // Immediate, independent of the main Save flow — mirrors the Products list's
-  // publish/hide toggle. Also patches `form`/savedFormRef directly so the
-  // in-progress edit's dirty-check doesn't go stale and a later Save doesn't
-  // silently revert the status back.
+  // publish/hide toggle. Rebases the form's dirty-tracking baseline (via
+  // reset) to include the new status, so an in-progress edit's dirty state
+  // stays accurate and a later Save doesn't silently revert the status back.
   const statusMutation = useMutation({
     mutationFn: (status: Product["status"]) => {
       const fd = new FormData();
@@ -218,12 +244,7 @@ export default function ProductEditPage() {
       return updateProduct(product!._id, fd);
     },
     onSuccess: (_res, status) => {
-      setForm((prev) => (prev ? { ...prev, status } : null));
-      try {
-        savedFormRef.current = JSON.stringify({ ...JSON.parse(savedFormRef.current), status });
-      } catch {
-        /* ignore — worst case isDirty is briefly wrong until next save */
-      }
+      reset({ ...getValues(), status }, { keepDirty: false });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", slug] });
       toast({ title: "Product marked as active", tone: "success" });
@@ -233,31 +254,11 @@ export default function ProductEditPage() {
     },
   });
 
-  const set = <K extends keyof ProductEditFormState>(
-    key: K,
-    value: ProductEditFormState[K],
-  ) => setForm((prev) => (prev ? { ...prev, [key]: value } : null));
-
-  const clearError = (key: string) =>
-    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!form?.title.trim()) e.title = "Title is required";
-    if (!form?.price || Number(form.price) <= 0) e.price = "Price is required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSave = () => {
-    if (!form || !product) return;
-    if (!validate()) return;
-    // Capture the snapshot now — onSuccess fires async and `form` may have
-    // changed by then, causing the dirty check to silently clear unsaved edits.
-    const snapshot = JSON.stringify(form);
-    saveMutation.mutate(formToFD(form), {
+  const onSave = (values: ProductEditFormValues) => {
+    if (!product) return;
+    saveMutation.mutate(formToFD(values), {
       onSuccess: (res) => {
-        savedFormRef.current = snapshot;
+        reset(values);
         queryClient.invalidateQueries({ queryKey: ["products"] });
         queryClient.invalidateQueries({ queryKey: ["listings"] });
         queryClient.invalidateQueries({ queryKey: ["variants", product?._id] });
@@ -275,11 +276,6 @@ export default function ProductEditPage() {
       },
     });
   };
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-  if (isLoading || !product || !form) {
-    return <ProductEditSkeleton />;
-  }
 
   const showSetStockCard = form.stock_control && !form.has_variants;
 
@@ -357,7 +353,7 @@ export default function ProductEditPage() {
               variant="primary"
               size="sm"
               disabled={!isDirty || saveMutation.isPending}
-              onClick={handleSave}
+              onClick={() => handleSubmit(onSave)()}
             >
               {saveMutation.isPending ? "Saving…" : "Save"}
             </Button>
@@ -370,12 +366,8 @@ export default function ProductEditPage() {
 
           {/* 1. Basics */}
           <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
-            <FormField label="Product title" required error={errors.title}>
-              <Input
-                value={form.title}
-                onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                placeholder="Product title"
-              />
+            <FormField label="Product title" required error={errors.title?.message}>
+              <Input {...register("title")} placeholder="Product title" />
             </FormField>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -394,49 +386,49 @@ export default function ProductEditPage() {
                   <label className="text-xs font-medium text-fg/65">Barcode</label>
                   <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
                 </div>
-                <Input
-                  value={form.barcode}
-                  onChange={(e) => set("barcode", e.target.value)}
-                  placeholder="EAN / UPC"
-                  maxLength={13}
-                />
+                <Input {...register("barcode")} placeholder="EAN / UPC" maxLength={13} />
               </div>
 
               <FormField label="Manufacturer part number">
-                <Input
-                  value={form.mpn}
-                  onChange={(e) => set("mpn", e.target.value)}
-                  placeholder='e.g. 45022-TBC-A01'
-                />
+                <Input {...register("mpn")} placeholder='e.g. 45022-TBC-A01' />
               </FormField>
             </div>
 
-            <Switch
-              checked={form.is_published_online}
-              onCheckedChange={(v) => set("is_published_online", v)}
-              label="Show on storefront"
-              description="Visible to customers online as soon as it's created"
+            <Controller
+              control={control}
+              name="is_published_online"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  label="Show on storefront"
+                  description="Visible to customers online as soon as it's created"
+                />
+              )}
             />
           </FormSection>
 
           {/* 2. Classification & fitment */}
           <FormSection number={2} title="Classification & fitment">
             <FormField label="Categories">
-              <MultiSelect
-                options={categoryOptions}
-                value={form.categories}
-                onChange={(v) => set("categories", v)}
-                placeholder="Add category…"
-                searchPlaceholder="Search categories…"
+              <Controller
+                control={control}
+                name="categories"
+                render={({ field }) => (
+                  <MultiSelect
+                    options={categoryOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Add category…"
+                    searchPlaceholder="Search categories…"
+                  />
+                )}
               />
             </FormField>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FormField label="Condition">
-                <NativeSelect
-                  value={form.condition}
-                  onChange={(e) => set("condition", e.target.value as ProductEditFormState["condition"])}
-                >
+                <NativeSelect {...register("condition")}>
                   {CONDITIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -444,10 +436,7 @@ export default function ProductEditPage() {
               </FormField>
 
               <FormField label="Authenticity">
-                <NativeSelect
-                  value={form.authenticity}
-                  onChange={(e) => set("authenticity", e.target.value as ProductEditFormState["authenticity"])}
-                >
+                <NativeSelect {...register("authenticity")}>
                   <option value="">Select authenticity…</option>
                   {AUTHENTICITY_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -469,7 +458,12 @@ export default function ProductEditPage() {
                   vehicle_year: form.vehicle_year,
                   vehicle_year_to: form.vehicle_year_to,
                 }}
-                onChange={(patch) => setForm((prev) => prev ? { ...prev, ...patch } : null)}
+                onChange={(patch) => {
+                  for (const [key, value] of Object.entries(patch)) {
+                    setValue(key as keyof ProductEditFormValues, value as never, { shouldValidate: true, shouldDirty: true });
+                  }
+                }}
+                yearRangeError={errors.vehicle_year_to?.message}
               />
             </div>
           </FormSection>
@@ -477,35 +471,14 @@ export default function ProductEditPage() {
           {/* 3. Pricing */}
           <FormSection number={3} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <FormField label="Retail price" required error={errors.price}>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => { set("price", e.target.value); clearError("price"); }}
-                  placeholder="0.00"
-                />
+              <FormField label="Retail price" required error={errors.price?.message}>
+                <Input type="number" min="0" step="0.01" {...register("price")} placeholder="0.00" />
               </FormField>
-              <FormField label="Cost price">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.cost_price}
-                  onChange={(e) => set("cost_price", e.target.value)}
-                  placeholder="0.00"
-                />
+              <FormField label="Cost price" error={errors.cost_price?.message}>
+                <Input type="number" min="0" step="0.01" {...register("cost_price")} placeholder="0.00" />
               </FormField>
-              <FormField label="Shipping cost">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.shipping_cost}
-                  onChange={(e) => set("shipping_cost", e.target.value)}
-                  placeholder="0.00"
-                />
+              <FormField label="Shipping cost" error={errors.shipping_cost?.message}>
+                <Input type="number" min="0" step="0.01" {...register("shipping_cost")} placeholder="0.00" />
               </FormField>
             </div>
 
@@ -533,11 +506,17 @@ export default function ProductEditPage() {
             title="Stock"
             description="Manage stock for your only location"
             tag={
-              <Switch
-                checked={form.stock_control}
-                onCheckedChange={(v) => set("stock_control", v)}
-                label="Track stock"
-                className="border-none bg-transparent px-0 py-0"
+              <Controller
+                control={control}
+                name="stock_control"
+                render={({ field }) => (
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    label="Track stock"
+                    className="border-none bg-transparent px-0 py-0"
+                  />
+                )}
               />
             }
           >
@@ -551,9 +530,10 @@ export default function ProductEditPage() {
             description="First image is used as the product cover"
             tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
           >
-            <ProductImages
-              images={form.images}
-              onChange={(imgs) => set("images", imgs)}
+            <Controller
+              control={control}
+              name="images"
+              render={({ field }) => <ProductImages images={field.value} onChange={field.onChange} />}
             />
           </FormSection>
 

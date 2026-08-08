@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -15,15 +17,25 @@ import {
 import { AddressFields } from "@/components/pos/AddressFields";
 import { useToast } from "@/context";
 import { updateOrderCustomerDetails } from "@/lib/api/orders";
-import type { OrderDetail, OrderAddress } from "@/types/orders";
-
-const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import type { OrderDetail } from "@/types/orders";
+import { editOrderDetailsFormSchema, type EditOrderDetailsFormValues } from "@/lib/validation/editOrderDetails";
+import { EMPTY_ADDRESS } from "@/lib/validation/address";
 
 interface EditOrderDetailsModalProps {
   order: OrderDetail;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+function orderToForm(order: OrderDetail): EditOrderDetailsFormValues {
+  return {
+    name: order.customer.name,
+    email: order.customer.email ?? "",
+    phone: order.customer.phone ?? "",
+    shippingAddress: order.shipping_address ?? EMPTY_ADDRESS,
+    useDifferentBilling: !!order.billing_address,
+    billingAddress: order.billing_address ?? EMPTY_ADDRESS,
+  };
 }
 
 // Edits the order's OWN customer/address snapshot — deliberately never the
@@ -34,37 +46,42 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
   const queryClient = useQueryClient();
   const isPickup = order.delivery_method === "pickup";
 
-  const [name, setName] = useState(order.customer.name);
-  const [email, setEmail] = useState(order.customer.email ?? "");
-  const [phone, setPhone] = useState(order.customer.phone ?? "");
-  const [shippingAddress, setShippingAddress] = useState<OrderAddress>(order.shipping_address ?? EMPTY_ADDRESS);
-  const [useDifferentBilling, setUseDifferentBilling] = useState(!!order.billing_address);
-  const [billingAddress, setBillingAddress] = useState<OrderAddress>(order.billing_address ?? EMPTY_ADDRESS);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const schema = useMemo(() => editOrderDetailsFormSchema(isPickup), [isPickup]);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<EditOrderDetailsFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: orderToForm(order),
+  });
+
+  const useDifferentBilling = watch("useDifferentBilling");
 
   // Re-sync from the order every time the modal opens — not on every order
   // change, since a background refetch mid-edit shouldn't clobber in-progress input.
   useEffect(() => {
-    if (!open) return;
-    setName(order.customer.name);
-    setEmail(order.customer.email ?? "");
-    setPhone(order.customer.phone ?? "");
-    setShippingAddress(order.shipping_address ?? EMPTY_ADDRESS);
-    setUseDifferentBilling(!!order.billing_address);
-    setBillingAddress(order.billing_address ?? EMPTY_ADDRESS);
-    setErrors({});
+    if (open) reset(orderToForm(order));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: EditOrderDetailsFormValues) =>
       updateOrderCustomerDetails(order._id, {
-        customer: { name: name.trim(), email: email.trim() || null, phone: phone.trim() || null },
+        customer: {
+          name: values.name.trim(),
+          email: values.email.trim() || null,
+          phone: values.phone.trim() || null,
+        },
         ...(isPickup
           ? {}
           : {
-              shipping_address: shippingAddress,
-              billing_address: useDifferentBilling ? billingAddress : null,
+              shipping_address: values.shippingAddress,
+              billing_address: values.useDifferentBilling ? values.billingAddress : null,
             }),
       }),
     onSuccess: () => {
@@ -77,36 +94,12 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
     },
   });
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const nextErrors: Record<string, string> = {};
-    if (!name.trim()) nextErrors.name = "Name is required";
-    if (email.trim() && !EMAIL_RE.test(email.trim())) nextErrors.email = "Enter a valid email";
-
-    if (!isPickup) {
-      if (!shippingAddress.address.trim()) nextErrors.address = "Address is required";
-      if (!shippingAddress.suburb.trim()) nextErrors.suburb = "Suburb is required";
-      if (!shippingAddress.state.trim()) nextErrors.state = "State is required";
-      if (!shippingAddress.postcode.trim()) nextErrors.postcode = "Postcode is required";
-      if (useDifferentBilling) {
-        if (!billingAddress.address.trim()) nextErrors.billingAddress = "Billing address is required";
-        if (!billingAddress.suburb.trim()) nextErrors.billingSuburb = "Billing suburb is required";
-        if (!billingAddress.state.trim()) nextErrors.billingState = "Billing state is required";
-        if (!billingAddress.postcode.trim()) nextErrors.billingPostcode = "Billing postcode is required";
-      }
-    }
-
-    if (Object.keys(nextErrors).length) {
-      setErrors(nextErrors);
-      return;
-    }
-    mutation.mutate();
-  }
+  const onSubmit = (values: EditOrderDetailsFormValues) => mutation.mutate(values);
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent className="max-w-xl">
-        <form onSubmit={handleSubmit} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
           <ModalHeader>
             <ModalTitle>Edit Order Details</ModalTitle>
             <ModalDescription>
@@ -116,20 +109,15 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
           </ModalHeader>
 
           <div className="space-y-4">
-            <FormField label="Name" required error={errors.name}>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer name" />
+            <FormField label="Name" required error={errors.name?.message}>
+              <Input {...register("name")} placeholder="Customer name" />
             </FormField>
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Email" error={errors.email}>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                />
+              <FormField label="Email" error={errors.email?.message}>
+                <Input type="email" {...register("email")} placeholder="name@example.com" />
               </FormField>
               <FormField label="Phone">
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04xx xxx xxx" />
+                <Input {...register("phone")} placeholder="04xx xxx xxx" />
               </FormField>
             </div>
 
@@ -137,34 +125,52 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
               <>
                 <div className="border-t border-border pt-4">
                   <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-fg/45">Shipping Address</p>
-                  <AddressFields
-                    value={shippingAddress}
-                    onChange={setShippingAddress}
-                    errors={{
-                      address: errors.address,
-                      suburb: errors.suburb,
-                      state: errors.state,
-                      postcode: errors.postcode,
-                    }}
+                  <Controller
+                    control={control}
+                    name="shippingAddress"
+                    render={({ field }) => (
+                      <AddressFields
+                        value={field.value}
+                        onChange={field.onChange}
+                        errors={{
+                          address: errors.shippingAddress?.address?.message,
+                          suburb: errors.shippingAddress?.suburb?.message,
+                          state: errors.shippingAddress?.state?.message,
+                          postcode: errors.shippingAddress?.postcode?.message,
+                        }}
+                      />
+                    )}
                   />
                 </div>
 
-                <Checkbox
-                  label="Use a different billing address"
-                  checked={useDifferentBilling}
-                  onChange={(e) => setUseDifferentBilling(e.target.checked)}
+                <Controller
+                  control={control}
+                  name="useDifferentBilling"
+                  render={({ field }) => (
+                    <Checkbox
+                      label="Use a different billing address"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  )}
                 />
 
                 {useDifferentBilling && (
-                  <AddressFields
-                    value={billingAddress}
-                    onChange={setBillingAddress}
-                    errors={{
-                      address: errors.billingAddress,
-                      suburb: errors.billingSuburb,
-                      state: errors.billingState,
-                      postcode: errors.billingPostcode,
-                    }}
+                  <Controller
+                    control={control}
+                    name="billingAddress"
+                    render={({ field }) => (
+                      <AddressFields
+                        value={field.value}
+                        onChange={field.onChange}
+                        errors={{
+                          address: errors.billingAddress?.address?.message,
+                          suburb: errors.billingAddress?.suburb?.message,
+                          state: errors.billingAddress?.state?.message,
+                          postcode: errors.billingAddress?.postcode?.message,
+                        }}
+                      />
+                    )}
                   />
                 )}
               </>
@@ -182,7 +188,13 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md" className="flex-1" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              className="flex-1"
+              disabled={mutation.isPending || isSubmitting}
+            >
               {mutation.isPending ? "Saving…" : "Save Changes"}
             </Button>
           </ModalFooter>

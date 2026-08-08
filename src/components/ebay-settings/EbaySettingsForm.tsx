@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { updateEbaySettings, getBusinessPolicies } from "@/lib/api/ebay";
-import type { EbaySettings, UpdateEbaySettingsPayload } from "@/types/ebaySettings";
+import type { EbaySettings } from "@/types/ebaySettings";
+import { ebaySettingsFormSchema, type EbaySettingsFormValues } from "@/lib/validation/ebaySettingsForm";
 
 const MARKETPLACES = [
   { value: "EBAY_AU", label: "Australia" },
@@ -13,7 +16,7 @@ const MARKETPLACES = [
   { value: "EBAY_GB", label: "United Kingdom" },
 ];
 
-function toFormState(settings: EbaySettings): UpdateEbaySettingsPayload {
+function toFormState(settings: EbaySettings): EbaySettingsFormValues {
   return {
     marketplace_id: settings.marketplace_id,
     merchant_location_key: settings.merchant_location_key ?? "",
@@ -40,10 +43,15 @@ export function EbaySettingsForm({
   onMutationStateChange?: (state: { isPending: boolean; isSuccess: boolean; error: string | null }) => void;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<UpdateEbaySettingsPayload>(() => toFormState(settings));
+
+  const { register, control, handleSubmit, reset } = useForm<EbaySettingsFormValues>({
+    resolver: zodResolver(ebaySettingsFormSchema),
+    defaultValues: toFormState(settings),
+  });
 
   useEffect(() => {
-    setForm(toFormState(settings));
+    reset(toFormState(settings));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
   const { data: policiesData, isLoading: policiesLoading } = useQuery({
@@ -69,10 +77,7 @@ export function EbaySettingsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isPending, mutation.isSuccess, mutation.isError]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    mutation.mutate(form);
-  };
+  const onSubmit = (values: EbaySettingsFormValues) => mutation.mutate(values);
 
   const policySelect = (
     label: string,
@@ -80,24 +85,26 @@ export function EbaySettingsForm({
     options: { id: string; name: string }[] | undefined,
   ) => (
     <FormField label={label}>
-      <Select
-        value={form[field] ?? ""}
-        onValueChange={(v) => setForm((f) => ({ ...f, [field]: v }))}
-        disabled={policiesLoading}
-      >
-        <SelectTrigger>
-          <SelectValue
-            placeholder={policiesLoading ? "Loading…" : !options?.length ? "No policies found" : "Select policy"}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {(options ?? []).map((p) => (
-            <SelectItem key={p.id} value={p.id}>
-              {p.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Controller
+        control={control}
+        name={field}
+        render={({ field: rhfField }) => (
+          <Select value={rhfField.value} onValueChange={rhfField.onChange} disabled={policiesLoading}>
+            <SelectTrigger>
+              <SelectValue
+                placeholder={policiesLoading ? "Loading…" : !options?.length ? "No policies found" : "Select policy"}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {(options ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
     </FormField>
   );
 
@@ -108,30 +115,30 @@ export function EbaySettingsForm({
         description="Marketplace, warehouse address, and default business policies for eBay listings."
       />
       <CardContent>
-        <form id={EBAY_SETTINGS_FORM_ID} className="space-y-5" onSubmit={handleSubmit}>
+        <form id={EBAY_SETTINGS_FORM_ID} className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Marketplace">
-              <Select
-                value={form.marketplace_id ?? "EBAY_AU"}
-                onValueChange={(v) => setForm((f) => ({ ...f, marketplace_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKETPLACES.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="marketplace_id"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARKETPLACES.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </FormField>
             <FormField label="Merchant location key" hint="A unique identifier for your warehouse on eBay.">
-              <Input
-                value={form.merchant_location_key ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, merchant_location_key: e.target.value }))}
-              />
+              <Input {...register("merchant_location_key")} />
             </FormField>
           </div>
 
@@ -143,40 +150,22 @@ export function EbaySettingsForm({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Warehouse street">
-              <Input
-                value={form.warehouse_street ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_street: e.target.value }))}
-              />
+              <Input {...register("warehouse_street")} />
             </FormField>
             <FormField label="Warehouse city">
-              <Input
-                value={form.warehouse_city ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_city: e.target.value }))}
-              />
+              <Input {...register("warehouse_city")} />
             </FormField>
             <FormField label="Warehouse state">
-              <Input
-                value={form.warehouse_state ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_state: e.target.value }))}
-              />
+              <Input {...register("warehouse_state")} />
             </FormField>
             <FormField label="Warehouse postcode">
-              <Input
-                value={form.warehouse_postcode ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_postcode: e.target.value }))}
-              />
+              <Input {...register("warehouse_postcode")} />
             </FormField>
             <FormField label="Warehouse country">
-              <Input
-                value={form.warehouse_country ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_country: e.target.value }))}
-              />
+              <Input {...register("warehouse_country")} />
             </FormField>
             <FormField label="Warehouse phone">
-              <Input
-                value={form.warehouse_phone ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_phone: e.target.value }))}
-              />
+              <Input {...register("warehouse_phone")} />
             </FormField>
           </div>
 
@@ -185,11 +174,7 @@ export function EbaySettingsForm({
               label="Sandbox fallback image URL"
               hint="Used only while 'Use eBay sandbox' is on, when a listing has no public HTTPS image (e.g. your local UPLOADS_URL isn't publicly reachable). Never used in production."
             >
-              <Input
-                value={form.fallback_image_url ?? ""}
-                placeholder="https://example.com/auto-part-placeholder.jpg"
-                onChange={(e) => setForm((f) => ({ ...f, fallback_image_url: e.target.value }))}
-              />
+              <Input {...register("fallback_image_url")} placeholder="https://example.com/auto-part-placeholder.jpg" />
             </FormField>
           )}
         </form>

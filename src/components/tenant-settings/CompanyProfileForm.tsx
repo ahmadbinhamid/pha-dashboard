@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
@@ -8,18 +10,29 @@ import { ColorSwatchInput } from "@/components/ui/ColorSwatchInput";
 import { StringListField } from "@/components/ui/StringListField";
 import { LogoUploadField } from "@/components/tenant-settings/LogoUploadField";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
-import type { TenantSettings, UpdateTenantSettingsPayload } from "@/types/tenantSettings";
+import type { TenantSettings } from "@/types/tenantSettings";
+import { companyProfileFormSchema, type CompanyProfileFormValues } from "@/lib/validation/companyProfile";
 
 export const COMPANY_PROFILE_FORM_ID = "company-profile-form";
 
-function toFormState(settings: TenantSettings): UpdateTenantSettingsPayload {
+function toFormState(settings: TenantSettings): CompanyProfileFormValues {
   return {
     company_name: settings.company_name ?? "",
     abn: settings.abn ?? "",
     phone: settings.phone ?? "",
     email: settings.email ?? "",
-    bank_details: settings.bank_details,
-    pickup_location: settings.pickup_location,
+    bank_details: {
+      bank_name: settings.bank_details?.bank_name ?? "",
+      account_name: settings.bank_details?.account_name ?? "",
+      bsb: settings.bank_details?.bsb ?? "",
+      account_number: settings.bank_details?.account_number ?? "",
+    },
+    pickup_location: {
+      name: settings.pickup_location?.name ?? "",
+      address: settings.pickup_location?.address ?? "",
+      country: settings.pickup_location?.country ?? "",
+      trading_hours: settings.pickup_location?.trading_hours ?? [],
+    },
     warranty_text: settings.warranty_text ?? "",
     legal_disclaimer_text: settings.legal_disclaimer_text ?? "",
     logo_url: settings.logo_url,
@@ -39,10 +52,15 @@ export function CompanyProfileForm({
   onMutationStateChange?: (state: { isPending: boolean; isSuccess: boolean; error: string | null }) => void;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<UpdateTenantSettingsPayload>(() => toFormState(settings));
+
+  const { register, control, handleSubmit, reset } = useForm<CompanyProfileFormValues>({
+    resolver: zodResolver(companyProfileFormSchema),
+    defaultValues: toFormState(settings),
+  });
 
   useEffect(() => {
-    setForm(toFormState(settings));
+    reset(toFormState(settings));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
   const mutation = useMutation({
@@ -61,11 +79,10 @@ export function CompanyProfileForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isPending, mutation.isSuccess, mutation.isError]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (form: CompanyProfileFormValues) => {
     mutation.mutate({
       ...form,
-      pickup_location: form.pickup_location && {
+      pickup_location: {
         ...form.pickup_location,
         trading_hours: (form.pickup_location.trading_hours ?? []).map((s) => s.trim()).filter(Boolean),
       },
@@ -73,36 +90,25 @@ export function CompanyProfileForm({
   };
 
   return (
-    <form id={COMPANY_PROFILE_FORM_ID} className="space-y-6" onSubmit={handleSubmit}>
+    <form id={COMPANY_PROFILE_FORM_ID} className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
       <Card>
         <CardHeader title="General Information" />
         <CardContent className="space-y-4">
           <FormField label="Business Name" required>
-            <Input
-              value={form.company_name ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
-            />
+            <Input {...register("company_name")} />
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Business Email" required>
-              <Input
-                type="email"
-                value={form.email ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
+              <Input type="email" {...register("email")} />
             </FormField>
             <FormField label="Business Phone Number">
-              <Input value={form.phone ?? ""} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+              <Input {...register("phone")} />
             </FormField>
           </div>
 
           <FormField label="ABN" hint="Australian Business Number.">
-            <Input
-              value={form.abn ?? ""}
-              placeholder="12 345 678 901"
-              onChange={(e) => setForm((f) => ({ ...f, abn: e.target.value }))}
-            />
+            <Input {...register("abn")} placeholder="12 345 678 901" />
           </FormField>
         </CardContent>
       </Card>
@@ -111,21 +117,33 @@ export function CompanyProfileForm({
         <CardHeader title="Branding" description="Your logo, favicon and brand colours across receipts, storefront and customer emails" />
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <LogoUploadField
-              shape="circle"
-              title="Business Logo"
-              bullets={["Square image recommended (1:1 ratio)", "PNG or JPG • Max 5MB", "Appears on receipts & storefront"]}
-              value={form.logo_url ?? null}
-              onChange={(url) => setForm((f) => ({ ...f, logo_url: url }))}
-              onRemove={() => setForm((f) => ({ ...f, logo_url: null }))}
+            <Controller
+              control={control}
+              name="logo_url"
+              render={({ field }) => (
+                <LogoUploadField
+                  shape="circle"
+                  title="Business Logo"
+                  bullets={["Square image recommended (1:1 ratio)", "PNG or JPG • Max 5MB", "Appears on receipts & storefront"]}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onRemove={() => field.onChange(null)}
+                />
+              )}
             />
-            <LogoUploadField
-              shape="square"
-              title="Favicon"
-              bullets={["Square image recommended (32×32px)", "PNG or ICO • Max 1MB", "Appears in browser tabs on your storefront"]}
-              value={form.favicon_url ?? null}
-              onChange={(url) => setForm((f) => ({ ...f, favicon_url: url }))}
-              onRemove={() => setForm((f) => ({ ...f, favicon_url: null }))}
+            <Controller
+              control={control}
+              name="favicon_url"
+              render={({ field }) => (
+                <LogoUploadField
+                  shape="square"
+                  title="Favicon"
+                  bullets={["Square image recommended (32×32px)", "PNG or ICO • Max 1MB", "Appears in browser tabs on your storefront"]}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onRemove={() => field.onChange(null)}
+                />
+              )}
             />
           </div>
 
@@ -135,15 +153,17 @@ export function CompanyProfileForm({
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Primary Colour" hint="Used for buttons, links & highlights">
-                <ColorSwatchInput
-                  value={form.brand_colour ?? "#000000"}
-                  onChange={(value) => setForm((f) => ({ ...f, brand_colour: value }))}
+                <Controller
+                  control={control}
+                  name="brand_colour"
+                  render={({ field }) => <ColorSwatchInput value={field.value} onChange={field.onChange} />}
                 />
               </FormField>
               <FormField label="Accent Colour" hint="Secondary colour for backgrounds & tags">
-                <ColorSwatchInput
-                  value={form.accent_colour ?? "#FFFFFF"}
-                  onChange={(value) => setForm((f) => ({ ...f, accent_colour: value }))}
+                <Controller
+                  control={control}
+                  name="accent_colour"
+                  render={({ field }) => <ColorSwatchInput value={field.value} onChange={field.onChange} />}
                 />
               </FormField>
             </div>
@@ -159,93 +179,76 @@ export function CompanyProfileForm({
               label="Order number prefix"
               hint={`e.g. "ORD" → ORD-00001. Only affects orders created from now on — existing orders keep the prefix they were created with.`}
             >
-              <Input
-                value={form.order_number_prefix ?? ""}
-                maxLength={10}
-                onChange={(e) => setForm((f) => ({ ...f, order_number_prefix: e.target.value.toUpperCase() }))}
+              <Controller
+                control={control}
+                name="order_number_prefix"
+                render={({ field }) => (
+                  <Input
+                    value={field.value}
+                    maxLength={10}
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                  />
+                )}
               />
             </FormField>
             <FormField
               label="Invoice number prefix"
               hint={`e.g. "INV" → INV-00001. Only affects invoices created from now on.`}
             >
-              <Input
-                value={form.invoice_number_prefix ?? ""}
-                maxLength={10}
-                onChange={(e) => setForm((f) => ({ ...f, invoice_number_prefix: e.target.value.toUpperCase() }))}
+              <Controller
+                control={control}
+                name="invoice_number_prefix"
+                render={({ field }) => (
+                  <Input
+                    value={field.value}
+                    maxLength={10}
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                  />
+                )}
               />
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Pickup location name" hint="Shown as the heading on pickup-ready emails.">
-              <Input
-                value={form.pickup_location?.name ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, name: e.target.value } }))
-                }
-              />
+              <Input {...register("pickup_location.name")} />
             </FormField>
             <FormField label="Pickup address">
-              <Input
-                value={form.pickup_location?.address ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, address: e.target.value } }))
-                }
-              />
+              <Input {...register("pickup_location.address")} />
             </FormField>
           </div>
 
           <FormField label="Pickup country">
-            <Input
-              value={form.pickup_location?.country ?? ""}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, country: e.target.value } }))
-              }
-            />
+            <Input {...register("pickup_location.country")} />
           </FormField>
 
           <FormField label="Trading hours" hint="Shown to customers on 'ready for pickup' emails, one line per row.">
-            <StringListField
-              values={form.pickup_location?.trading_hours ?? []}
-              onChange={(next) =>
-                setForm((f) => ({ ...f, pickup_location: { ...f.pickup_location!, trading_hours: next } }))
-              }
-              placeholder="e.g. Mon–Fri: 9am – 5pm"
-              addLabel="Add trading hours line"
+            <Controller
+              control={control}
+              name="pickup_location.trading_hours"
+              render={({ field }) => (
+                <StringListField
+                  values={field.value}
+                  onChange={field.onChange}
+                  placeholder="e.g. Mon–Fri: 9am – 5pm"
+                  addLabel="Add trading hours line"
+                />
+              )}
             />
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Bank name">
-              <Input
-                value={form.bank_details?.bank_name ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bank_details: { ...f.bank_details!, bank_name: e.target.value } }))
-                }
-              />
+              <Input {...register("bank_details.bank_name")} />
             </FormField>
             <FormField label="Account name">
-              <Input
-                value={form.bank_details?.account_name ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bank_details: { ...f.bank_details!, account_name: e.target.value } }))
-                }
-              />
+              <Input {...register("bank_details.account_name")} />
             </FormField>
             <FormField label="BSB">
-              <Input
-                value={form.bank_details?.bsb ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, bank_details: { ...f.bank_details!, bsb: e.target.value } }))}
-              />
+              <Input {...register("bank_details.bsb")} />
             </FormField>
             <FormField label="Account number">
-              <Input
-                value={form.bank_details?.account_number ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bank_details: { ...f.bank_details!, account_number: e.target.value } }))
-                }
-              />
+              <Input {...register("bank_details.account_number")} />
             </FormField>
           </div>
         </CardContent>
@@ -255,19 +258,11 @@ export function CompanyProfileForm({
         <CardHeader title="Legal & Warranty Text" description="Shown on the invoice footer." />
         <CardContent className="space-y-4">
           <FormField label="Warranty & returns text">
-            <Textarea
-              rows={3}
-              value={form.warranty_text ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, warranty_text: e.target.value }))}
-            />
+            <Textarea rows={3} {...register("warranty_text")} />
           </FormField>
 
           <FormField label="Legal disclaimer">
-            <Textarea
-              rows={3}
-              value={form.legal_disclaimer_text ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, legal_disclaimer_text: e.target.value }))}
-            />
+            <Textarea rows={3} {...register("legal_disclaimer_text")} />
           </FormField>
         </CardContent>
       </Card>

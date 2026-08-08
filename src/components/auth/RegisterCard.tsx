@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 
@@ -10,18 +12,23 @@ import { AppLogoMark, APP_NAME } from "@/components/branding/AppLogoMark";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { FormField } from "@/components/ui/FormField";
 import Link from "@/components/ui/Link";
+import { registerFormSchema, type RegisterFormValues } from "@/lib/validation/register";
 
 export function RegisterCard() {
   const navigate = useNavigate();
   const { setAuth } = useAuth();
-
-  const [companyName, setCompanyName] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerFormSchema),
+    defaultValues: { company_name: "", first_name: "", last_name: "", email: "", password: "" },
+  });
 
   const registerMutation = useMutation({
     mutationFn: registerTenant,
@@ -40,15 +47,14 @@ export function RegisterCard() {
 
   const isLoading = registerMutation.isPending;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (values: RegisterFormValues) => {
     setErrorMsg("");
     registerMutation.mutate({
-      company_name: companyName.trim(),
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim().toLowerCase(),
-      password,
+      company_name: values.company_name.trim(),
+      first_name: values.first_name.trim(),
+      last_name: values.last_name.trim(),
+      email: values.email.trim().toLowerCase(),
+      password: values.password,
     });
   };
 
@@ -68,88 +74,62 @@ export function RegisterCard() {
           description="Set up your own workspace — you'll be its first admin."
         />
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-fg/75" htmlFor="company_name">
-                Company name
-              </label>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <FormField label="Company name" htmlFor="company_name" error={errors.company_name?.message}>
               <Input
                 id="company_name"
                 type="text"
                 placeholder="Acme Auto Parts"
                 autoComplete="organization"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
                 disabled={isLoading}
+                {...register("company_name")}
               />
-            </div>
+            </FormField>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-fg/75" htmlFor="first_name">
-                  First name
-                </label>
+              <FormField label="First name" htmlFor="first_name" error={errors.first_name?.message}>
                 <Input
                   id="first_name"
                   type="text"
                   placeholder="Jane"
                   autoComplete="given-name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
                   disabled={isLoading}
+                  {...register("first_name")}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-fg/75" htmlFor="last_name">
-                  Last name
-                </label>
+              </FormField>
+              <FormField label="Last name" htmlFor="last_name" error={errors.last_name?.message}>
                 <Input
                   id="last_name"
                   type="text"
                   placeholder="Doe"
                   autoComplete="family-name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
                   disabled={isLoading}
+                  {...register("last_name")}
                 />
-              </div>
+              </FormField>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-fg/75" htmlFor="email">
-                Email
-              </label>
+            <FormField label="Email" htmlFor="email" error={errors.email?.message}>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@partshub.com.au"
                 autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
                 disabled={isLoading}
+                {...register("email")}
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-fg/75" htmlFor="password">
-                Password
-              </label>
+            <FormField label="Password" htmlFor="password" error={errors.password?.message}>
               <Input
                 id="password"
                 type="password"
                 placeholder="At least 6 characters"
                 autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
                 disabled={isLoading}
+                {...register("password")}
               />
-            </div>
+            </FormField>
 
             {errorMsg && (
               <p className="rounded-lg border border-[hsl(var(--danger)/0.3)] bg-[hsl(var(--danger)/0.08)] px-3 py-2 text-xs text-[hsl(var(--danger))]">

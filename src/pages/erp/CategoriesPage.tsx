@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -28,12 +30,13 @@ import type { CategoryPayload } from "@/lib/api/categories";
 import { ThumbnailPicker } from "@/components/categories/ThumbnailPicker";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import type { Category, CategoryFormState } from "@/types/product";
+import type { Category } from "@/types/product";
+import { categoryFormSchema, type CategoryFormValues } from "@/lib/validation/category";
 import { Plus, Layers, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 
-const EMPTY_FORM: CategoryFormState = { name: "", description: "", thumbnail: null };
+const EMPTY_FORM: CategoryFormValues = { name: "", description: "", thumbnail: null };
 
-function categoryToForm(c: Category): CategoryFormState {
+function categoryToForm(c: Category): CategoryFormValues {
   return {
     name: c.name,
     description: c.description ?? "",
@@ -53,9 +56,18 @@ export default function CategoriesPage() {
   const [inputValue, setInputValue] = useState(search);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<CategoryFormState>(EMPTY_FORM);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CategoryFormValues>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: EMPTY_FORM,
+  });
 
   const setPage = (p: number) => {
     setSearchParams((prev) => {
@@ -103,15 +115,13 @@ export default function CategoriesPage() {
 
   const openCreate = () => {
     setEditingCategory(null);
-    setForm(EMPTY_FORM);
-    setErrors({});
+    reset(EMPTY_FORM);
     setFormOpen(true);
   };
 
   const openEdit = (category: Category) => {
     setEditingCategory(category);
-    setForm(categoryToForm(category));
-    setErrors({});
+    reset(categoryToForm(category));
     setFormOpen(true);
   };
 
@@ -153,22 +163,16 @@ export default function CategoriesPage() {
     },
   });
 
-  function buildPayload(): CategoryPayload {
+  function buildPayload(values: CategoryFormValues): CategoryPayload {
     return {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      thumbnail: form.thumbnail?._id ?? null,
+      name: values.name.trim(),
+      description: values.description.trim(),
+      thumbnail: values.thumbnail?._id ?? null,
     };
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      setErrors({ name: "Category name is required" });
-      return;
-    }
-    setErrors({});
-    const payload = buildPayload();
+  const onSubmit = (values: CategoryFormValues) => {
+    const payload = buildPayload(values);
     if (editingCategory) {
       updateMutation.mutate({ id: editingCategory._id, payload });
     } else {
@@ -284,7 +288,7 @@ export default function CategoriesPage() {
       {/* Create / edit modal */}
       <Modal open={formOpen} onOpenChange={setFormOpen}>
         <ModalContent>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <ModalHeader>
               <ModalTitle>{editingCategory ? "Edit category" : "New category"}</ModalTitle>
               <ModalDescription>
@@ -295,28 +299,23 @@ export default function CategoriesPage() {
             </ModalHeader>
 
             <div className="space-y-4">
-              <FormField label="Name" required error={errors.name}>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Engine Parts"
-                  autoFocus
-                />
+              <FormField label="Name" required error={errors.name?.message}>
+                <Input {...register("name")} placeholder="e.g. Engine Parts" autoFocus />
               </FormField>
 
               <FormField label="Description">
                 <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  {...register("description")}
                   placeholder="Short description shown to customers"
                   size="sm"
                 />
               </FormField>
 
               <FormField label="Thumbnail">
-                <ThumbnailPicker
-                  value={form.thumbnail}
-                  onChange={(thumbnail) => setForm((f) => ({ ...f, thumbnail }))}
+                <Controller
+                  control={control}
+                  name="thumbnail"
+                  render={({ field }) => <ThumbnailPicker value={field.value} onChange={field.onChange} />}
                 />
               </FormField>
             </div>

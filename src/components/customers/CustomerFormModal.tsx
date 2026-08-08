@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,12 +18,11 @@ import {
 import { useToast } from "@/context";
 import { createCustomer, updateCustomer } from "@/lib/api/customers";
 import type { CustomerPayload } from "@/lib/api/customers";
-import type { Customer, CustomerFormState } from "@/types/customer";
-import type { OrderAddress } from "@/types/orders";
+import type { Customer } from "@/types/customer";
+import { customerFormSchema, type CustomerFormValues } from "@/lib/validation/customer";
+import { EMPTY_ADDRESS, isAddressFilled } from "@/lib/validation/address";
 
-const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
-
-const EMPTY_FORM: CustomerFormState = {
+const EMPTY_FORM: CustomerFormValues = {
   name: "",
   email: "",
   phone: "",
@@ -30,15 +31,7 @@ const EMPTY_FORM: CustomerFormState = {
   billingAddress: EMPTY_ADDRESS,
 };
 
-// Digits plus common phone punctuation — no letters, mirrors the backend's
-// PHONE_PATTERN in customer.validation.js.
-const PHONE_PATTERN = /^[\d\s\-()+]*$/;
-
-function isAddressFilled(a: OrderAddress) {
-  return !!(a.address.trim() || a.suburb.trim() || a.state.trim() || a.postcode.trim());
-}
-
-function customerToForm(c: Customer): CustomerFormState {
+function customerToForm(c: Customer): CustomerFormValues {
   return {
     name: c.name,
     email: c.email ?? "",
@@ -68,13 +61,24 @@ interface CustomerFormModalProps {
 export function CustomerFormModal({ open, onOpenChange, customer, initialName, onCreated }: CustomerFormModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CustomerFormState>(EMPTY_FORM);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<CustomerFormValues>({
+    resolver: zodResolver(customerFormSchema),
+    defaultValues: EMPTY_FORM,
+  });
+
+  const useDifferentBilling = watch("useDifferentBilling");
 
   useEffect(() => {
     if (open) {
-      setForm(customer ? customerToForm(customer) : { ...EMPTY_FORM, name: initialName ?? "" });
-      setErrors({});
+      reset(customer ? customerToForm(customer) : { ...EMPTY_FORM, name: initialName ?? "" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customer]);
@@ -111,43 +115,18 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  function buildPayload(): CustomerPayload {
-    const shippingFilled = isAddressFilled(form.shippingAddress);
+  function buildPayload(values: CustomerFormValues): CustomerPayload {
     return {
-      name: form.name.trim(),
-      email: form.email.trim() || null,
-      phone: form.phone.trim() || null,
-      shipping_address: shippingFilled ? form.shippingAddress : null,
-      billing_address: form.useDifferentBilling ? form.billingAddress : null,
+      name: values.name.trim(),
+      email: values.email.trim() || null,
+      phone: values.phone.trim() || null,
+      shipping_address: isAddressFilled(values.shippingAddress) ? values.shippingAddress : null,
+      billing_address: values.useDifferentBilling ? values.billingAddress : null,
     };
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const nextErrors: Record<string, string> = {};
-    if (!form.name.trim()) nextErrors.name = "Customer name is required";
-    if (!PHONE_PATTERN.test(form.phone)) nextErrors.phone = "Phone number cannot contain letters";
-
-    const shippingFilled = isAddressFilled(form.shippingAddress);
-    if (shippingFilled) {
-      if (!form.shippingAddress.address.trim()) nextErrors.address = "Address is required";
-      if (!form.shippingAddress.suburb.trim()) nextErrors.suburb = "Suburb is required";
-      if (!form.shippingAddress.state.trim()) nextErrors.state = "State is required";
-      if (!form.shippingAddress.postcode.trim()) nextErrors.postcode = "Postcode is required";
-    }
-    if (form.useDifferentBilling) {
-      if (!form.billingAddress.address.trim()) nextErrors.billingAddress = "Billing address is required";
-      if (!form.billingAddress.suburb.trim()) nextErrors.billingSuburb = "Billing suburb is required";
-      if (!form.billingAddress.state.trim()) nextErrors.billingState = "Billing state is required";
-      if (!form.billingAddress.postcode.trim()) nextErrors.billingPostcode = "Billing postcode is required";
-    }
-
-    if (Object.keys(nextErrors).length) {
-      setErrors(nextErrors);
-      return;
-    }
-    setErrors({});
-    const payload = buildPayload();
+  const onSubmit = (values: CustomerFormValues) => {
+    const payload = buildPayload(values);
     if (customer) {
       updateMutation.mutate({ id: customer._id, payload });
     } else {
@@ -158,7 +137,7 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent className="max-w-xl">
-        <form onSubmit={handleSubmit} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
           <ModalHeader>
             <ModalTitle>{customer ? "Edit customer" : "New customer"}</ModalTitle>
             <ModalDescription>
@@ -167,67 +146,68 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
           </ModalHeader>
 
           <div className="space-y-4">
-            <FormField label="Name" required error={errors.name}>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Wesley England"
-                autoFocus
-              />
+            <FormField label="Name" required error={errors.name?.message}>
+              <Input {...register("name")} placeholder="e.g. Wesley England" autoFocus />
             </FormField>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Email">
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  placeholder="customer@example.com"
-                />
+                <Input type="email" {...register("email")} placeholder="customer@example.com" />
               </FormField>
-              <FormField label="Phone" error={errors.phone}>
-                <Input
-                  value={form.phone}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (PHONE_PATTERN.test(value)) setForm((f) => ({ ...f, phone: value }));
-                  }}
-                  placeholder="0412 345 678"
-                />
+              <FormField label="Phone" error={errors.phone?.message}>
+                <Input {...register("phone")} placeholder="0412 345 678" />
               </FormField>
             </div>
 
             <div className="space-y-4 border-t border-dashed border-border pt-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-fg/45">Shipping address</p>
-              <AddressFields
-                value={form.shippingAddress}
-                onChange={(a) => setForm((f) => ({ ...f, shippingAddress: a }))}
-                errors={{
-                  address: errors.address,
-                  suburb: errors.suburb,
-                  state: errors.state,
-                  postcode: errors.postcode,
-                }}
-                required={false}
+              <Controller
+                control={control}
+                name="shippingAddress"
+                render={({ field }) => (
+                  <AddressFields
+                    value={field.value}
+                    onChange={field.onChange}
+                    errors={{
+                      address: errors.shippingAddress?.address?.message,
+                      suburb: errors.shippingAddress?.suburb?.message,
+                      state: errors.shippingAddress?.state?.message,
+                      postcode: errors.shippingAddress?.postcode?.message,
+                    }}
+                    required={false}
+                  />
+                )}
               />
 
-              <Checkbox
-                label="Use a different billing address"
-                checked={form.useDifferentBilling}
-                onChange={(e) => setForm((f) => ({ ...f, useDifferentBilling: e.target.checked }))}
+              <Controller
+                control={control}
+                name="useDifferentBilling"
+                render={({ field }) => (
+                  <Checkbox
+                    label="Use a different billing address"
+                    checked={field.value}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                )}
               />
 
-              {form.useDifferentBilling && (
-                <AddressFields
-                  value={form.billingAddress}
-                  onChange={(a) => setForm((f) => ({ ...f, billingAddress: a }))}
-                  errors={{
-                    address: errors.billingAddress,
-                    suburb: errors.billingSuburb,
-                    state: errors.billingState,
-                    postcode: errors.billingPostcode,
-                  }}
-                  required={false}
+              {useDifferentBilling && (
+                <Controller
+                  control={control}
+                  name="billingAddress"
+                  render={({ field }) => (
+                    <AddressFields
+                      value={field.value}
+                      onChange={field.onChange}
+                      errors={{
+                        address: errors.billingAddress?.address?.message,
+                        suburb: errors.billingAddress?.suburb?.message,
+                        state: errors.billingAddress?.state?.message,
+                        postcode: errors.billingAddress?.postcode?.message,
+                      }}
+                      required={false}
+                    />
+                  )}
                 />
               )}
             </div>
@@ -244,7 +224,7 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md" className="flex-1" disabled={isSaving}>
+            <Button type="submit" variant="primary" size="md" className="flex-1" disabled={isSaving || isSubmitting}>
               {isSaving ? "Saving…" : customer ? "Save changes" : "Create customer"}
             </Button>
           </ModalFooter>

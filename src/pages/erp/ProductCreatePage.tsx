@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useRef } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
@@ -19,11 +21,12 @@ import { ProductEssentialsProgress } from "@/components/products/ProductEssentia
 import { useToast } from "@/context";
 import { createProduct, addProductNote } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
-import type { ProductCreateFormState, ProductStatus } from "@/types/product";
+import type { ProductStatus, StockEntry } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
+import { productCreateFormSchema, type ProductCreateFormValues } from "@/lib/validation/product";
 
-const INITIAL: ProductCreateFormState = {
+const INITIAL: ProductCreateFormValues = {
   title: "",
   description: "",
   price: "",
@@ -53,7 +56,7 @@ const INITIAL: ProductCreateFormState = {
   notes: [],
 };
 
-function formToFD(form: ProductCreateFormState, status: ProductStatus): FormData {
+function formToFD(form: ProductCreateFormValues, status: ProductStatus): FormData {
   const fd = new FormData();
   fd.append("title", form.title.trim());
   fd.append("description", form.description);
@@ -96,8 +99,25 @@ export default function ProductCreatePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ProductCreateFormState>(INITIAL);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<ProductCreateFormValues>({
+    resolver: zodResolver(productCreateFormSchema),
+    defaultValues: INITIAL,
+  });
+
+  const form = watch();
+  // Notes are drafted before the product exists (addProductNote needs a
+  // productId, which doesn't exist yet) — captured here right before
+  // mutate() so onSuccess can post them once creation succeeds, without
+  // relying on react-query's onMutate-only `context` mechanism.
+  const pendingNotesRef = useRef<string[]>([]);
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories", "all"],
@@ -109,15 +129,13 @@ export default function ProductCreatePage() {
     label: c.name,
   }));
 
-  const clearError = (key: string) =>
-    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
-
   const mutation = useMutation({
     mutationFn: (fd: FormData) => createProduct(fd),
     onSuccess: async (res) => {
       const productId = res.data?._id;
-      if (productId && form.notes.length > 0) {
-        await Promise.allSettled(form.notes.map((text) => addProductNote(productId, text)));
+      const notes = pendingNotesRef.current;
+      if (productId && notes.length > 0) {
+        await Promise.allSettled(notes.map((text) => addProductNote(productId, text)));
       }
       toast({ title: "Product created", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -133,22 +151,9 @@ export default function ProductCreatePage() {
     },
   });
 
-  const set = <K extends keyof ProductCreateFormState>(
-    key: K,
-    value: ProductCreateFormState[K],
-  ) => setForm((prev) => ({ ...prev, [key]: value }));
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!form.title.trim()) e.title = "Title is required";
-    if (!form.price || Number(form.price) <= 0) e.price = "Price is required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = (status: ProductStatus) => {
-    if (!validate()) return;
-    mutation.mutate(formToFD(form, status));
+  const submitProduct = (values: ProductCreateFormValues, status: ProductStatus) => {
+    pendingNotesRef.current = values.notes;
+    mutation.mutate(formToFD(values, status));
   };
 
   const essentials = [
@@ -189,7 +194,7 @@ export default function ProductCreatePage() {
               variant="secondary"
               size="sm"
               disabled={mutation.isPending}
-              onClick={() => handleSubmit("draft")}
+              onClick={() => handleSubmit((values) => submitProduct(values, "draft"))()}
             >
               Save draft
             </Button>
@@ -198,7 +203,7 @@ export default function ProductCreatePage() {
               variant="primary"
               size="sm"
               disabled={mutation.isPending}
-              onClick={() => handleSubmit("active")}
+              onClick={() => handleSubmit((values) => submitProduct(values, "active"))()}
             >
               {mutation.isPending ? "Creating…" : "Create product"}
             </Button>
@@ -211,13 +216,8 @@ export default function ProductCreatePage() {
 
           {/* 1. Basics */}
           <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
-            <FormField label="Product title" required error={errors.title}>
-              <Input
-                value={form.title}
-                onChange={(e) => { set("title", e.target.value); clearError("title"); }}
-                placeholder="e.g. Front brake pad set — ceramic"
-                autoFocus
-              />
+            <FormField label="Product title" required error={errors.title?.message}>
+              <Input {...register("title")} placeholder="e.g. Front brake pad set — ceramic" autoFocus />
             </FormField>
             <p className="-mt-2.5 text-xs text-fg/45">
               Include the part type and a key spec — it's what staff search for at the till.
@@ -229,49 +229,49 @@ export default function ProductCreatePage() {
                   <label className="text-xs font-medium text-fg/65">Barcode</label>
                   <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
                 </div>
-                <Input
-                  value={form.barcode}
-                  onChange={(e) => set("barcode", e.target.value)}
-                  placeholder="Scan or type EAN / UPC"
-                  maxLength={13}
-                />
+                <Input {...register("barcode")} placeholder="Scan or type EAN / UPC" maxLength={13} />
               </div>
 
               <FormField label="Manufacturer part number">
-                <Input
-                  value={form.mpn}
-                  onChange={(e) => set("mpn", e.target.value)}
-                  placeholder='e.g. 45022-TBC-A01'
-                />
+                <Input {...register("mpn")} placeholder='e.g. 45022-TBC-A01' />
               </FormField>
             </div>
 
-            <Switch
-              checked={form.is_published_online}
-              onCheckedChange={(v) => set("is_published_online", v)}
-              label="Show on storefront"
-              description="Visible to customers online as soon as it's created"
+            <Controller
+              control={control}
+              name="is_published_online"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  label="Show on storefront"
+                  description="Visible to customers online as soon as it's created"
+                />
+              )}
             />
           </FormSection>
 
           {/* 2. Classification & fitment */}
           <FormSection number={2} title="Classification & fitment">
             <FormField label="Categories">
-              <MultiSelect
-                options={categoryOptions}
-                value={form.categories}
-                onChange={(v) => set("categories", v)}
-                placeholder="Add category…"
-                searchPlaceholder="Search categories…"
+              <Controller
+                control={control}
+                name="categories"
+                render={({ field }) => (
+                  <MultiSelect
+                    options={categoryOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Add category…"
+                    searchPlaceholder="Search categories…"
+                  />
+                )}
               />
             </FormField>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FormField label="Condition">
-                <NativeSelect
-                  value={form.condition}
-                  onChange={(e) => set("condition", e.target.value as ProductCreateFormState["condition"])}
-                >
+                <NativeSelect {...register("condition")}>
                   {CONDITIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -279,10 +279,7 @@ export default function ProductCreatePage() {
               </FormField>
 
               <FormField label="Authenticity">
-                <NativeSelect
-                  value={form.authenticity}
-                  onChange={(e) => set("authenticity", e.target.value as ProductCreateFormState["authenticity"])}
-                >
+                <NativeSelect {...register("authenticity")}>
                   <option value="">Select authenticity…</option>
                   {AUTHENTICITY_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -304,7 +301,12 @@ export default function ProductCreatePage() {
                   vehicle_year: form.vehicle_year,
                   vehicle_year_to: form.vehicle_year_to,
                 }}
-                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                onChange={(patch) => {
+                  for (const [key, value] of Object.entries(patch)) {
+                    setValue(key as keyof ProductCreateFormValues, value as never, { shouldValidate: true });
+                  }
+                }}
+                yearRangeError={errors.vehicle_year_to?.message}
               />
             </div>
           </FormSection>
@@ -312,35 +314,14 @@ export default function ProductCreatePage() {
           {/* 3. Pricing */}
           <FormSection number={3} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <FormField label="Retail price" required error={errors.price}>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => { set("price", e.target.value); clearError("price"); }}
-                  placeholder="0.00"
-                />
+              <FormField label="Retail price" required error={errors.price?.message}>
+                <Input type="number" min="0" step="0.01" {...register("price")} placeholder="0.00" />
               </FormField>
-              <FormField label="Cost price">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.cost_price}
-                  onChange={(e) => set("cost_price", e.target.value)}
-                  placeholder="0.00"
-                />
+              <FormField label="Cost price" error={errors.cost_price?.message}>
+                <Input type="number" min="0" step="0.01" {...register("cost_price")} placeholder="0.00" />
               </FormField>
-              <FormField label="Shipping cost">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.shipping_cost}
-                  onChange={(e) => set("shipping_cost", e.target.value)}
-                  placeholder="0.00"
-                />
+              <FormField label="Shipping cost" error={errors.shipping_cost?.message}>
+                <Input type="number" min="0" step="0.01" {...register("shipping_cost")} placeholder="0.00" />
               </FormField>
             </div>
 
@@ -368,21 +349,30 @@ export default function ProductCreatePage() {
             title="Stock"
             description="Opening quantity for your only stock location"
             tag={
-              <Switch
-                checked={form.stock_control}
-                onCheckedChange={(v) => {
-                  set("stock_control", v);
-                  if (!v) set("stock_entries", []);
-                }}
-                label="Track stock"
-                className="border-none bg-transparent px-0 py-0"
+              <Controller
+                control={control}
+                name="stock_control"
+                render={({ field }) => (
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(v) => {
+                      field.onChange(v);
+                      if (!v) setValue("stock_entries", []);
+                    }}
+                    label="Track stock"
+                    className="border-none bg-transparent px-0 py-0"
+                  />
+                )}
               />
             }
           >
             {form.stock_control && (
-              <CreateStockSection
-                entries={form.stock_entries}
-                onChange={(entries) => set("stock_entries", entries)}
+              <Controller
+                control={control}
+                name="stock_entries"
+                render={({ field }) => (
+                  <CreateStockSection entries={field.value} onChange={field.onChange} />
+                )}
               />
             )}
           </FormSection>
@@ -394,15 +384,20 @@ export default function ProductCreatePage() {
             description="First image becomes the cover"
             tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
           >
-            <ProductImages
-              images={form.images}
-              onChange={(imgs) => set("images", imgs)}
+            <Controller
+              control={control}
+              name="images"
+              render={({ field }) => <ProductImages images={field.value} onChange={field.onChange} />}
             />
           </FormSection>
 
           {/* 6. Internal notes */}
           <FormSection number={6} title="Internal notes" description="Staff only — never shown to customers">
-            <CreateProductNotesSection notes={form.notes} onChange={(notes) => set("notes", notes)} />
+            <Controller
+              control={control}
+              name="notes"
+              render={({ field }) => <CreateProductNotesSection notes={field.value} onChange={field.onChange} />}
+            />
           </FormSection>
 
         </div>
@@ -415,7 +410,7 @@ export default function ProductCreatePage() {
             price={form.price}
             skuPending
             stockControl={form.stock_control}
-            stockCount={form.stock_entries.reduce((sum, e) => sum + e.qty, 0)}
+            stockCount={form.stock_entries.reduce((sum: number, e: StockEntry) => sum + e.qty, 0)}
           />
         </div>
       </div>

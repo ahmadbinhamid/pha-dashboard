@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +19,7 @@ import { useToast } from "@/context";
 import { recordOrderPayment } from "@/lib/api/orders";
 import { PAYMENT_METHOD_LABEL } from "@/config/paymentMethods";
 import { formatCurrencyFromCents } from "@/utils/format";
-import type { PaymentMethod } from "@/types/payment";
+import { recordPaymentFormSchema, type RecordPaymentFormValues } from "@/lib/validation/recordPayment";
 
 interface RecordPaymentModalProps {
   orderId: string;
@@ -26,23 +28,37 @@ interface RecordPaymentModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const EMPTY_FORM: RecordPaymentFormValues = { payment_method: "cash", amount: "" };
+
 // Staff-entered follow-up payment (cash/bank transfer) against an order's
 // outstanding balance — e.g. collecting the rest of a manual sale's deposit.
 export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChange }: RecordPaymentModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
-  const [amountInput, setAmountInput] = useState("");
-  const [error, setError] = useState<string | undefined>();
 
-  const balanceDueDollars = balanceDueCents / 100;
+  const schema = useMemo(() => recordPaymentFormSchema(balanceDueCents), [balanceDueCents]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<RecordPaymentFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: EMPTY_FORM,
+  });
+
+  useEffect(() => {
+    if (!open) reset(EMPTY_FORM);
+  }, [open, reset]);
 
   const mutation = useMutation({
-    mutationFn: () => recordOrderPayment(orderId, { payment_method: paymentMethod, amount: Number(amountInput) }),
+    mutationFn: (values: RecordPaymentFormValues) =>
+      recordOrderPayment(orderId, { payment_method: values.payment_method, amount: Number(values.amount) }),
     onSuccess: () => {
       toast({ title: "Payment recorded", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-      reset();
+      reset(EMPTY_FORM);
       onOpenChange(false);
     },
     onError: (err: Error) => {
@@ -50,36 +66,18 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
     },
   });
 
-  function reset() {
-    setPaymentMethod("cash");
-    setAmountInput("");
-    setError(undefined);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const amount = Number(amountInput);
-    if (!amount || amount <= 0) {
-      setError("Enter an amount greater than $0");
-      return;
-    }
-    if (amount > balanceDueDollars) {
-      setError(`Amount can't exceed the balance due (${formatCurrencyFromCents(balanceDueCents)})`);
-      return;
-    }
-    mutation.mutate();
-  }
+  const onSubmit = (values: RecordPaymentFormValues) => mutation.mutate(values);
 
   return (
     <Modal
       open={open}
       onOpenChange={(next) => {
-        if (!next) reset();
+        if (!next) reset(EMPTY_FORM);
         onOpenChange(next);
       }}
     >
       <ModalContent>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <ModalHeader>
             <ModalTitle>Record Payment</ModalTitle>
             <ModalDescription>
@@ -90,22 +88,21 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
 
           <div className="space-y-4">
             <FormField label="Payment Method">
-              <NativeSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
+              <NativeSelect {...register("payment_method")}>
                 <option value="cash">{PAYMENT_METHOD_LABEL.cash}</option>
                 <option value="online_transfer">{PAYMENT_METHOD_LABEL.online_transfer}</option>
                 <option value="efpos">{PAYMENT_METHOD_LABEL.efpos}</option>
               </NativeSelect>
             </FormField>
-            <FormField label="Amount" required error={error}>
+            <FormField label="Amount" required error={errors.amount?.message}>
               <Input
                 type="number"
                 min={0}
-                max={balanceDueDollars}
+                max={balanceDueCents / 100}
                 step="0.01"
-                value={amountInput}
-                onChange={(e) => setAmountInput(e.target.value)}
                 placeholder="0.00"
                 autoFocus
+                {...register("amount")}
               />
             </FormField>
           </div>

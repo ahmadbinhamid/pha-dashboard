@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Combobox } from "@/components/ui/Combobox";
-import { Input } from "@/components/ui/Input";
+import { YearSelect } from "@/components/shared/YearSelect";
 import {
   getVehicleMakes,
   getVehicleModels,
@@ -12,9 +12,10 @@ import type { VehicleFormState } from "@/types/product";
 interface ProductVehicleSectionProps {
   values: VehicleFormState;
   onChange: (patch: Partial<VehicleFormState>) => void;
+  yearRangeError?: string;
 }
 
-export function ProductVehicleSection({ values, onChange }: ProductVehicleSectionProps) {
+export function ProductVehicleSection({ values, onChange, yearRangeError }: ProductVehicleSectionProps) {
   const { data: makesRes } = useQuery({
     queryKey: ["vehicle-makes"],
     queryFn: getVehicleMakes,
@@ -105,27 +106,22 @@ export function ProductVehicleSection({ values, onChange }: ProductVehicleSectio
       {/* Year From */}
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-fg/65">Year From</label>
-        <Input
-          type="number"
-          min="1900"
-          max="2100"
+        <YearSelect
           value={values.vehicle_year}
-          onChange={(e) => onChange({ vehicle_year: e.target.value })}
-          placeholder="e.g. 2015"
+          onChange={(year_from) => onChange({ vehicle_year: year_from })}
         />
       </div>
 
       {/* Year To */}
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-fg/65">Year To</label>
-        <Input
-          type="number"
-          min="1900"
-          max="2100"
+        <YearSelect
           value={values.vehicle_year_to}
-          onChange={(e) => onChange({ vehicle_year_to: e.target.value })}
+          onChange={(year_to) => onChange({ vehicle_year_to: year_to })}
           placeholder="Present"
+          aria-invalid={!!yearRangeError}
         />
+        {yearRangeError && <p className="text-xs text-danger">{yearRangeError}</p>}
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ import { RefundSummary, type RefundSummaryFigures } from "./RefundSummary";
 import { RefundEbayConfirmation } from "./RefundEbayConfirmation";
 import { RefundStuckWarning } from "./RefundStuckWarning";
 import type { RefundReason, RefundScope, CreateRefundPayload } from "@/types/refund";
+import { refundAmountSchema } from "@/lib/validation/refund";
 
 interface RefundDialogProps {
   orderId: string;
@@ -58,6 +59,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
   const [internalNote, setInternalNote] = useState("");
   const [ebayConfirmed, setEbayConfirmed] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [amountError, setAmountError] = useState<string | undefined>();
 
   // Generated once per dialog OPEN, not per submit click — a double-click
   // (or a retry after a network hiccup) reuses the same key, so the server
@@ -75,6 +77,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
       setInternalNote("");
       setEbayConfirmed(false);
       setError(undefined);
+      setAmountError(undefined);
     }
   }, [open]);
 
@@ -145,6 +148,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
 
   function handleSubmit() {
     setError(undefined);
+    setAmountError(undefined);
     if (!refundable) return;
 
     if (hasEbayPayment && !ebayConfirmed) {
@@ -161,11 +165,12 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
 
     let payload: CreateRefundPayload;
     if (scope === "amount") {
-      const cents = Math.round((Number(amountDollars) || 0) * 100);
-      if (!Number.isInteger(cents) || cents < 1) {
-        setError("Enter a valid amount");
+      const amountCheck = refundAmountSchema(refundable.max_refundable).safeParse(amountDollars);
+      if (!amountCheck.success) {
+        setAmountError(amountCheck.error.issues[0]?.message ?? "Enter a valid amount");
         return;
       }
+      const cents = Math.round(Number(amountDollars) * 100);
       payload = { ...base, scope: "amount", amount: cents };
     } else if (scope === "full_order") {
       payload = { ...base, scope: "full_order", restock_all: restockAll, refund_shipping: refundShipping };
@@ -247,8 +252,12 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
             {scope === "amount" && (
               <RefundAmountSection
                 amountDollars={amountDollars}
-                onAmountChange={setAmountDollars}
+                onAmountChange={(v) => {
+                  setAmountDollars(v);
+                  setAmountError(undefined);
+                }}
                 maxRefundable={refundable.max_refundable}
+                error={amountError}
               />
             )}
 
