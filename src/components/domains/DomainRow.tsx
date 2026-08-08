@@ -96,7 +96,7 @@ export function DomainRow({ domain, onRequestDelete }: { domain: Domain; onReque
 
       {showDnsInfo && domain.status !== "active" && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={4} style={{ backgroundColor: "#fff" }}>
+          <TableCell colSpan={4} className="bg-card">
             <div className="space-y-3 py-1 text-sm">
               <p className="text-fg/65">
                 Add this TXT record at your DNS provider, then check again — it can take a few minutes (sometimes

@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { resetPassword } from "@/lib/api/auth";
 import { AppLogoMark, APP_NAME } from "@/components/branding/AppLogoMark";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import Link from "@/components/ui/Link";
@@ -79,9 +79,8 @@ export default function ResetPasswordPage() {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <FormField label="New password" htmlFor="new_password" required>
-                    <Input
+                    <PasswordInput
                       id="new_password"
-                      type="password"
                       autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
@@ -91,9 +90,8 @@ export default function ResetPasswordPage() {
                     />
                   </FormField>
                   <FormField label="Confirm new password" htmlFor="confirm_password" required>
-                    <Input
+                    <PasswordInput
                       id="confirm_password"
-                      type="password"
                       autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { getDomains, deleteDomain } from "@/lib/api/domains";
@@ -43,9 +43,10 @@ export default function DomainsPage() {
     // sm:p-6) so this panel reaches the dialog's edges — without that, the
     // gray dialog background (bg-bg) shows as a gutter around the header and
     // table, which read as two separate surfaces instead of one white
-    // section. Inline style (not a bg-white utility) so it can't lose a
-    // specificity/ordering fight with any other background class.
-    <div className="-m-4 space-y-6 p-4 sm:-m-6 sm:p-6" style={{ backgroundColor: "#fff" }}>
+    // section. bg-card (not bg-bg) so the whole panel matches the design
+    // system's surface token — it already resolves to pure white in the
+    // light theme.
+    <div className="-m-4 space-y-6 bg-card p-4 sm:-m-6 sm:p-6">
       <PageHeader
         title="Domains"
         description="Verify a domain you own to use it for your storefront and, later, for accepting payments on it directly."
@@ -56,7 +57,7 @@ export default function DomainsPage() {
         </Button>
       </PageHeader>
 
-      <Card style={{ backgroundColor: "#fff" }}>
+      <Card>
         {isLoading ? (
           <LoadingSkeleton />
         ) : domains.length === 0 ? (

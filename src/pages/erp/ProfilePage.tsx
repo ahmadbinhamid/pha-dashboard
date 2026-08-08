@@ -1,76 +1,29 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { User, KeyRound, Eye, EyeOff } from "lucide-react";
+import { User, KeyRound } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/Label";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/context";
 import { updateProfile, changePassword } from "@/lib/api/auth";
 import { cn } from "@/utils/cn";
+import type { ProfileFormState, PasswordFormState } from "@/types/auth";
 
 const PROFILE_FORM_ID = "profile-information-form";
 const CHANGE_PASSWORD_FORM_ID = "change-password-form";
 
 type Section = "profile" | "change-password";
 
-const EMPTY_PASSWORD_FORM = { current_password: "", new_password: "", confirm_password: "" };
-
-function PasswordField({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-  autoComplete,
-  disabled,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  autoComplete: string;
-  disabled?: boolean;
-}) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div>
-      <Label htmlFor={id} required className="text-xs">
-        {label}
-      </Label>
-      <div className="relative mt-1.5">
-        <Input
-          id={id}
-          type={visible ? "text" : "password"}
-          autoComplete={autoComplete}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required
-          minLength={6}
-          disabled={disabled}
-          className="pr-9"
-        />
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() => setVisible((v) => !v)}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg/35 transition-colors hover:text-fg/60"
-        >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </div>
-  );
-}
+const EMPTY_PASSWORD_FORM: PasswordFormState = { current_password: "", new_password: "", confirm_password: "" };
 
 export default function ProfilePage() {
   const { user, setAuth, token } = useAuth();
   const { toast } = useToast();
   const [section, setSection] = useState<Section>("profile");
-  const [form, setForm] = useState({ first_name: "", last_name: "" });
+  const [form, setForm] = useState<ProfileFormState>({ first_name: "", last_name: "" });
   const [passwordForm, setPasswordForm] = useState(EMPTY_PASSWORD_FORM);
   const [passwordError, setPasswordError] = useState("");
 
@@ -257,33 +210,54 @@ export default function ProfilePage() {
           ) : (
             <Card className="p-4 sm:p-5">
               <form id={CHANGE_PASSWORD_FORM_ID} onSubmit={handlePasswordSubmit} className="space-y-3.5">
-                <PasswordField
-                  id="current_password"
-                  label="Current Password"
-                  placeholder="Enter your current password"
-                  autoComplete="current-password"
-                  value={passwordForm.current_password}
-                  onChange={(v) => setPasswordForm((f) => ({ ...f, current_password: v }))}
-                  disabled={passwordMutation.isPending}
-                />
-                <PasswordField
-                  id="new_password"
-                  label="New Password"
-                  placeholder="Enter your new password"
-                  autoComplete="new-password"
-                  value={passwordForm.new_password}
-                  onChange={(v) => setPasswordForm((f) => ({ ...f, new_password: v }))}
-                  disabled={passwordMutation.isPending}
-                />
-                <PasswordField
-                  id="confirm_password"
-                  label="Confirm Password"
-                  placeholder="Confirm your new password"
-                  autoComplete="new-password"
-                  value={passwordForm.confirm_password}
-                  onChange={(v) => setPasswordForm((f) => ({ ...f, confirm_password: v }))}
-                  disabled={passwordMutation.isPending}
-                />
+                <div>
+                  <Label htmlFor="current_password" required className="text-xs">
+                    Current Password
+                  </Label>
+                  <PasswordInput
+                    id="current_password"
+                    className="mt-1.5"
+                    placeholder="Enter your current password"
+                    autoComplete="current-password"
+                    value={passwordForm.current_password}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, current_password: e.target.value }))}
+                    required
+                    minLength={6}
+                    disabled={passwordMutation.isPending}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new_password" required className="text-xs">
+                    New Password
+                  </Label>
+                  <PasswordInput
+                    id="new_password"
+                    className="mt-1.5"
+                    placeholder="Enter your new password"
+                    autoComplete="new-password"
+                    value={passwordForm.new_password}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, new_password: e.target.value }))}
+                    required
+                    minLength={6}
+                    disabled={passwordMutation.isPending}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirm_password" required className="text-xs">
+                    Confirm Password
+                  </Label>
+                  <PasswordInput
+                    id="confirm_password"
+                    className="mt-1.5"
+                    placeholder="Confirm your new password"
+                    autoComplete="new-password"
+                    value={passwordForm.confirm_password}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, confirm_password: e.target.value }))}
+                    required
+                    minLength={6}
+                    disabled={passwordMutation.isPending}
+                  />
+                </div>
 
                 {passwordError && (
                   <p className="rounded-md border border-[hsl(var(--danger)/0.3)] bg-[hsl(var(--danger)/0.08)] px-3 py-2 text-xs text-[hsl(var(--danger))]">
