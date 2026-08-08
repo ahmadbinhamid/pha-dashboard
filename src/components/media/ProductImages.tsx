@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/utils/cn";
 import { useToast } from "@/context";
@@ -9,6 +9,7 @@ import { Star, X, Plus, Loader2, Image as ImageIcon, Lightbulb } from "lucide-re
 interface ProductImagesProps {
   images: Attachment[];
   onChange: (images: Attachment[]) => void;
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 const tileBase =
@@ -18,7 +19,7 @@ const tileBase =
 // tile plus a mini-grid of the rest, restyled with our own tokens (accent
 // instead of primary, warn/danger for the star/remove controls) and wired to
 // our real upload-from-device flow rather than a shared media-library modal.
-export function ProductImages({ images, onChange }: ProductImagesProps) {
+export function ProductImages({ images, onChange, onUploadingChange }: ProductImagesProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
@@ -35,6 +36,10 @@ export function ProductImages({ images, onChange }: ProductImagesProps) {
       toast({ title: "Upload failed", description: err.message, tone: "danger" });
     },
   });
+
+  useEffect(() => {
+    onUploadingChange?.(uploadMutation.isPending);
+  }, [uploadMutation.isPending, onUploadingChange]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);

@@ -59,3 +59,23 @@ export async function getProfile() {
   const { data } = await apiClient.get<BeResponse<AuthUser>>("/user/profile");
   return data;
 }
+
+export async function updateProfile(payload: { first_name: string; last_name: string }) {
+  const { data } = await apiClient.put<BeResponse<AuthUser>>("/user", payload);
+  return data;
+}
+
+export async function forgotPassword(email: string) {
+  const { data } = await apiClient.post<BeResponse>("/auth/forgot-password", { email });
+  return data;
+}
+
+export async function resetPassword(payload: { token: string; new_password: string }) {
+  const { data } = await apiClient.post<BeResponse>("/auth/reset-password", payload);
+  return data;
+}
+
+export async function changePassword(payload: { current_password: string; new_password: string }) {
+  const { data } = await apiClient.post<BeResponse>("/auth/change-password", payload);
+  return data;
+}

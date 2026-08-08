@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { OrderVolumeChart } from "@/components/dashboard/OrderVolumeChart";
@@ -15,6 +16,8 @@ const ORDER_VOLUME_DAYS = 7;
 const ACTIVITY_REFETCH_MS = 30_000;
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
   const { data: statsRes, isLoading: statsLoading } = useQuery({
     queryKey: ["dashboard", "stats"],
     queryFn: getDashboardStats,
@@ -58,6 +61,7 @@ export default function DashboardPage() {
           subLabel="Across all locations"
           icon={<Boxes className="h-4 w-4" />}
           loading={statsLoading}
+          onClick={() => navigate("/inventory")}
         />
         <MetricCard
           label="Low Stock Items"
@@ -71,6 +75,9 @@ export default function DashboardPage() {
           }
           icon={<AlertTriangle className="h-4 w-4" />}
           loading={statsLoading}
+          onClick={() =>
+            navigate(`/products?stock=${stats && stats.outOfStockCount > 0 ? "out_of_stock" : "low_stock"}`)
+          }
         />
         <MetricCard
           label="Pending Orders"
@@ -82,6 +89,7 @@ export default function DashboardPage() {
           }
           icon={<Clock className="h-4 w-4" />}
           loading={statsLoading}
+          onClick={() => navigate("/orders?fulfillment_status=pending")}
         />
         <MetricCard
           label="Sync Stability"
@@ -89,6 +97,7 @@ export default function DashboardPage() {
           subLabel={stats ? `${stats.channelsOperational}/${stats.channelsTotal} channels operational` : undefined}
           icon={<Radio className="h-4 w-4" />}
           loading={statsLoading}
+          onClick={() => navigate("/listings")}
         />
       </div>
 

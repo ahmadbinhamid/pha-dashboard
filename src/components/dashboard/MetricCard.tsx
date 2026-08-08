@@ -7,15 +7,35 @@ export function MetricCard({
   subLabel,
   icon,
   loading,
+  onClick,
 }: {
   label: string;
   value: React.ReactNode;
   subLabel?: React.ReactNode;
   icon: React.ReactNode;
   loading?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card className="p-4 sm:p-5">
+    <Card
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        "p-4 sm:p-5",
+        onClick && "cursor-pointer transition hover:ring-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      )}
+    >
       <div className="flex items-center gap-2 text-fg/55">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xs bg-bg-2 text-fg/60">
           {icon}

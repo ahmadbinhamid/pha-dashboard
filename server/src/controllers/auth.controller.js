@@ -393,8 +393,13 @@ exports.changePassword = async (req, res) => {
     const user = await findUserByIdWithPassword(userId);
     if (!user) return unauthorized(res, "Unauthorized");
 
+    // 400, not 401 — a wrong current-password entry is a validation
+    // rejection on an otherwise-valid session, not an expired/invalid
+    // token. The frontend's axios interceptor treats any 401 as "session
+    // expired" and force-logs the user out, which would silently bounce
+    // them to /login before they ever saw this error.
     const ok = await comparePassword(current_password, user.password);
-    if (!ok) return unauthorized(res, "Current password is incorrect");
+    if (!ok) return badRequest(res, "Current password is incorrect");
 
     user.password = new_password;
     await saveUser(user);

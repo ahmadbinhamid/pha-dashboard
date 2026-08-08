@@ -39,7 +39,13 @@ export default function DomainsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    // Negative margins cancel out SettingsLayout's <main> padding (p-4
+    // sm:p-6) so this panel reaches the dialog's edges — without that, the
+    // gray dialog background (bg-bg) shows as a gutter around the header and
+    // table, which read as two separate surfaces instead of one white
+    // section. Inline style (not a bg-white utility) so it can't lose a
+    // specificity/ordering fight with any other background class.
+    <div className="-m-4 space-y-6 p-4 sm:-m-6 sm:p-6" style={{ backgroundColor: "#fff" }}>
       <PageHeader
         title="Domains"
         description="Verify a domain you own to use it for your storefront and, later, for accepting payments on it directly."
@@ -50,7 +56,7 @@ export default function DomainsPage() {
         </Button>
       </PageHeader>
 
-      <Card>
+      <Card style={{ backgroundColor: "#fff" }}>
         {isLoading ? (
           <LoadingSkeleton />
         ) : domains.length === 0 ? (

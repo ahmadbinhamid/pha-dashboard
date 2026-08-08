@@ -92,6 +92,15 @@ export function Combobox({
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  if (showCustomOption) {
+                    handleSelect(trimmedQuery);
+                  } else if (filtered.length > 0) {
+                    handleSelect(filtered[0]);
+                  }
+                }}
                 placeholder={searchPlaceholder}
                 className="flex-1 bg-transparent text-sm text-fg outline-none! placeholder:text-fg/40"
               />

@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/ActionsMenu";
 import { useAuth } from "@/context/auth";
-import { LogOut } from "lucide-react";
+import { LogOut, UserCircle } from "lucide-react";
 
 function initials(firstName: string, lastName: string) {
   const a = firstName.trim().charAt(0);
@@ -41,6 +41,11 @@ export function UserMenu() {
           <div className="truncate text-sm font-semibold text-fg">{fullName || "Account"}</div>
           <div className="truncate text-xs text-fg/50">{user.email}</div>
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate("/profile")}>
+          <UserCircle className="h-3.5 w-3.5" />
+          Profile
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem destructive onSelect={handleLogout}>
           <LogOut className="h-3.5 w-3.5" />

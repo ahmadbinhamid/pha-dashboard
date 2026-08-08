@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useParams } from "react-router-dom";
@@ -209,6 +210,7 @@ function ProductEditForm({
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [imagesUploading, setImagesUploading] = useState(false);
 
   const {
     register,
@@ -352,10 +354,10 @@ function ProductEditForm({
               type="button"
               variant="primary"
               size="sm"
-              disabled={!isDirty || saveMutation.isPending}
+              disabled={!isDirty || saveMutation.isPending || imagesUploading}
               onClick={() => handleSubmit(onSave)()}
             >
-              {saveMutation.isPending ? "Saving…" : "Save"}
+              {saveMutation.isPending ? "Saving…" : imagesUploading ? "Uploading images…" : "Save"}
             </Button>
           </div>
         </div>
@@ -533,7 +535,9 @@ function ProductEditForm({
             <Controller
               control={control}
               name="images"
-              render={({ field }) => <ProductImages images={field.value} onChange={field.onChange} />}
+              render={({ field }) => (
+                <ProductImages images={field.value} onChange={field.onChange} onUploadingChange={setImagesUploading} />
+              )}
             />
           </FormSection>
 

@@ -9,6 +9,8 @@ import { useAuth } from "@/context/auth";
 // Auth pages
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
@@ -27,6 +29,7 @@ import ListingsPage from "@/pages/erp/ListingsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
+import ProfilePage from "@/pages/erp/ProfilePage";
 import BusinessInfoPage from "@/pages/erp/settings/BusinessInfoPage";
 import PaymentAccountPage from "@/pages/erp/settings/PaymentAccountPage";
 import PaymentSettingsPage from "@/pages/erp/settings/PaymentSettingsPage";
@@ -77,6 +80,17 @@ export default function App() {
           />
 
           <Route
+            path="/auth/forgot-password"
+            element={
+              <GuestRoute>
+                <ForgotPasswordPage />
+              </GuestRoute>
+            }
+          />
+
+          <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+
+          <Route
             element={
               <ProtectedRoute>
                 <ErpLayout />
@@ -99,6 +113,7 @@ export default function App() {
             <Route path="/listings/new" element={<ListingCreatePage />} />
             <Route path="/listings/:id/edit" element={<ListingEditPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
 
             <Route path="/settings" element={<SettingsLayout />}>
               <Route index element={<Navigate to="/settings/business-info" replace />} />

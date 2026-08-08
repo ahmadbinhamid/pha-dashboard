@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
@@ -118,6 +118,7 @@ export default function ProductCreatePage() {
   // mutate() so onSuccess can post them once creation succeeds, without
   // relying on react-query's onMutate-only `context` mechanism.
   const pendingNotesRef = useRef<string[]>([]);
+  const [imagesUploading, setImagesUploading] = useState(false);
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories", "all"],
@@ -193,7 +194,7 @@ export default function ProductCreatePage() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || imagesUploading}
               onClick={() => handleSubmit((values) => submitProduct(values, "draft"))()}
             >
               Save draft
@@ -202,10 +203,10 @@ export default function ProductCreatePage() {
               type="button"
               variant="primary"
               size="sm"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || imagesUploading}
               onClick={() => handleSubmit((values) => submitProduct(values, "active"))()}
             >
-              {mutation.isPending ? "Creating…" : "Create product"}
+              {mutation.isPending ? "Creating…" : imagesUploading ? "Uploading images…" : "Create product"}
             </Button>
           </div>
         </div>
@@ -387,7 +388,9 @@ export default function ProductCreatePage() {
             <Controller
               control={control}
               name="images"
-              render={({ field }) => <ProductImages images={field.value} onChange={field.onChange} />}
+              render={({ field }) => (
+                <ProductImages images={field.value} onChange={field.onChange} onUploadingChange={setImagesUploading} />
+              )}
             />
           </FormSection>
 

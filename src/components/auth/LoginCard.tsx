@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { AppLogoMark, APP_NAME } from "@/components/branding/AppLogoMark";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -27,6 +27,7 @@ export function LoginCard() {
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
   const [remember, setRemember] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -161,22 +162,33 @@ export function LoginCard() {
                   >
                     Password
                     <Link
-                      href="#"
+                      href="/auth/forgot-password"
                       className="text-xs font-medium text-accent hover:underline"
                     >
                       Forgot password?
                     </Link>
                   </label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••••"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLoadingLogin}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••••"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isLoadingLogin}
+                      className="pr-9"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg/35 transition-colors hover:text-fg/60"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">
