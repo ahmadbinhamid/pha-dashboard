@@ -62,7 +62,11 @@ const Pagination = ({
   return (
     <div
       className={cn(
-        "flex items-center justify-between border-t border-border px-5 py-3",
+        // Stacks on mobile — the row/page controls on the right previously
+        // shared one row with the "Showing X-Y of Z" text unconditionally,
+        // which overflowed/clipped once page-number buttons appeared on a
+        // narrow screen.
+        "flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5",
         className,
       )}
     >
@@ -90,7 +94,12 @@ const Pagination = ({
         )}
       </p>
 
-      <div className="flex items-center gap-4">
+      {/* Rows-per-page and the prev/page-numbers/next group stack as two
+          separate centered rows on mobile — cramming both into one row (an
+          earlier version of this fix) still overflowed/wrapped awkwardly on
+          narrow phones once page-number buttons appeared. At sm:+ they go
+          back to one row, right-aligned by the parent's justify-between. */}
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
         {onLimitChange ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-fg/50">Rows per page</span>
@@ -124,7 +133,7 @@ const Pagination = ({
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <div className="flex items-center gap-0.5">
+            <div className="flex flex-wrap items-center gap-0.5">
               {renderPageNumbers().map((page, index) => {
                 if (page === "...") {
                   return (

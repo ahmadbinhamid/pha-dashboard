@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
+import { StickyTableHead } from "@/components/ui/StickyTableColumn";
 import {
   Modal,
   ModalContent,
@@ -234,7 +235,7 @@ export default function ProductsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {isFetching && !isLoading && (
               <span className="text-xs text-fg/40">Updating…</span>
             )}
@@ -264,9 +265,9 @@ export default function ProductsPage() {
             <Table className="min-w-240">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-64 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={64}>
                     Product
-                  </TableHead>
+                  </StickyTableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Online</TableHead>
                   <TableHead>Stock</TableHead>

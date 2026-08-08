@@ -7,6 +7,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { ManageColumns } from "@/components/ui/ManageColumns";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
@@ -228,9 +229,9 @@ export default function OrdersPage() {
             <Table className="min-w-200">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-36 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={36}>
                     Order
-                  </TableHead>
+                  </StickyTableHead>
                   {isVisible("customer") && <TableHead className="min-w-44">Customer</TableHead>}
                   {isVisible("channel") && <TableHead>Channel</TableHead>}
                   {isVisible("items") && <TableHead className="text-right">Items</TableHead>}
@@ -250,9 +251,9 @@ export default function OrdersPage() {
                       className="group cursor-pointer"
                       onClick={() => navigate(`/orders/${order._id}`)}
                     >
-                      <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                      <StickyTableCell size={36} className="truncate font-medium text-fg">
                         {formatOrderNumber(order.order_number_prefix, order.order_number)}
-                      </TableCell>
+                      </StickyTableCell>
                       {isVisible("customer") && (
                         <TableCell className="max-w-52">
                           <div className="truncate text-fg">{order.customer.name}</div>

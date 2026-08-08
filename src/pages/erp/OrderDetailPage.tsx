@@ -205,7 +205,12 @@ export default function OrderDetailPage() {
         )}
 
         <div className="grid gap-5 lg:grid-cols-3">
-          <div className="space-y-5 lg:col-span-2">
+          {/* min-w-0 overrides the grid item's default min-width: auto — without
+              it, OrderItemsTable's own min-w (needed so its columns don't
+              crush together) forces this whole grid track wider than the
+              viewport instead of just scrolling internally, pushing the
+              entire page into horizontal scroll on mobile. */}
+          <div className="min-w-0 space-y-5 lg:col-span-2">
             <Card>
               <CardHeader title="Items" description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`} />
               <OrderItemsTable items={order.items} orderId={order._id} channel={order.channel} />

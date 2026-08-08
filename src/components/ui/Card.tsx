@@ -26,9 +26,15 @@ export function CardHeader({
   right?: React.ReactNode;
 }) {
   return (
+    // Always a row, even on mobile — `right` is usually a single small
+    // action (an Edit button, a menu trigger) that reads naturally next to
+    // the title; dropping it to its own line below (the previous
+    // flex-col/sm:flex-row behavior) looked broken rather than intentional.
+    // The title keeps min-w-0 so it can still wrap/truncate instead of
+    // pushing `right` off-screen if it's ever long.
     <div
       className={cn(
-        "flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-5",
+        "flex flex-row items-start justify-between gap-3 border-b border-border px-4 py-4 sm:gap-4 sm:px-5",
         className,
       )}
     >
@@ -36,7 +42,7 @@ export function CardHeader({
         <div className="text-sm font-semibold">{title}</div>
         {description ? <div className="mt-1 text-xs text-fg/65">{description}</div> : null}
       </div>
-      {right ? <div className="shrink-0 sm:self-start">{right}</div> : null}
+      {right ? <div className="shrink-0">{right}</div> : null}
     </div>
   );
 }

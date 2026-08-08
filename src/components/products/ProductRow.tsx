@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/Badge";
 import { TableRow, TableCell } from "@/components/ui/Table";
+import { StickyTableCell } from "@/components/ui/StickyTableColumn";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -37,7 +38,7 @@ export function ProductRow({
     <TableRow onClick={onClick} className="group cursor-pointer">
       {/* Product — sticky so it stays readable while the rest scrolls on narrow screens.
           max-w caps the column so a very long title truncates instead of blowing out the table. */}
-      <TableCell className="sticky left-0 z-1 max-w-64 sticky-col-cell sticky-col-separator-right">
+      <StickyTableCell size={64}>
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
             {coverImage?.url ? (
@@ -65,7 +66,7 @@ export function ProductRow({
             </div>
           </div>
         </div>
-      </TableCell>
+      </StickyTableCell>
 
       {/* Status */}
       <TableCell className="whitespace-nowrap">

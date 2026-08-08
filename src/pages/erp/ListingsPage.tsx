@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import {
   Modal,
   ModalContent,
@@ -217,9 +218,9 @@ export default function ListingsPage() {
             <Table className="min-w-180">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={52}>
                     Product
-                  </TableHead>
+                  </StickyTableHead>
                   <TableHead>Platform</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
@@ -245,9 +246,9 @@ export default function ListingsPage() {
                       className="group cursor-pointer"
                       onClick={() => navigate(`/listings/${listing._id}/edit`)}
                     >
-                      <TableCell className="sticky left-0 z-1 max-w-52 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                      <StickyTableCell size={52} className="truncate font-medium text-fg">
                         {productTitle}
-                      </TableCell>
+                      </StickyTableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {listing.platform}

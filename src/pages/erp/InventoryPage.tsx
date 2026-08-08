@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { ManageColumns } from "@/components/ui/ManageColumns";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
+import { StickyTableHead } from "@/components/ui/StickyTableColumn";
 import { InventoryRow } from "@/components/inventory/InventoryRow";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
@@ -139,9 +140,9 @@ export default function InventoryPage() {
             <Table className="min-w-200">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-56 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={56}>
                     Product
-                  </TableHead>
+                  </StickyTableHead>
                   {isVisible("sku") && <TableHead>SKU</TableHead>}
                   {isVisible("location") && <TableHead>Location</TableHead>}
                   {isVisible("stock") && <TableHead className="text-right">Stock</TableHead>}

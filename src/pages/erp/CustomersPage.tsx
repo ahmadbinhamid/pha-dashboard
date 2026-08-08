@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadge";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
@@ -114,9 +115,9 @@ export default function CustomersPage() {
             <Table className="min-w-200">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={52}>
                     Name
-                  </TableHead>
+                  </StickyTableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead className="text-right">Orders</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
@@ -132,10 +133,10 @@ export default function CustomersPage() {
                     className="group cursor-pointer"
                     onClick={() => navigate(`/customers/${customer._id}`)}
                   >
-                    <TableCell className="sticky left-0 z-1 max-w-52 sticky-col-cell sticky-col-separator-right">
+                    <StickyTableCell size={52}>
                       <div className="truncate font-medium text-fg">{customer.name}</div>
                       <div className="truncate text-xs text-fg/50">{customer.email || "—"}</div>
-                    </TableCell>
+                    </StickyTableCell>
                     <TableCell className="text-fg/60">{customer.phone || "—"}</TableCell>
                     <TableCell className="text-right text-fg/60">{customer.orders_count}</TableCell>
                     <TableCell className="text-right text-fg/60">

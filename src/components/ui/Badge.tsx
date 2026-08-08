@@ -23,7 +23,11 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+        // whitespace-nowrap — a badge is a short single-line label by
+        // design; without it, a narrow table column (e.g. mobile) could
+        // wrap "In-Store" onto two lines instead of just letting the pill
+        // stay its natural width.
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold",
         styles[variant],
         className,
       )}

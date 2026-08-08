@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2, UserX, Mail, Phone } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
@@ -98,7 +99,10 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+        {/* min-w-0 — see the matching comment in OrderDetailPage.tsx; without
+            it the order-history table's own min-w forces this grid track
+            (and the whole page) wider than the viewport on mobile. */}
+        <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card>
             <CardHeader
               title="Order History"
@@ -111,9 +115,9 @@ export default function CustomerDetailPage() {
                 <Table className="min-w-120">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky left-0 z-2 min-w-32 sticky-col-header sticky-col-separator-right">
+                      <StickyTableHead size={32}>
                         Order
-                      </TableHead>
+                      </StickyTableHead>
                       <TableHead>Channel</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Total</TableHead>
@@ -127,9 +131,9 @@ export default function CustomerDetailPage() {
                         className="group cursor-pointer"
                         onClick={() => navigate(`/orders/${order._id}`)}
                       >
-                        <TableCell className="sticky left-0 z-1 max-w-32 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                        <StickyTableCell size={32} className="truncate font-medium text-fg">
                           {formatOrderNumber(order.order_number_prefix, order.order_number)}
-                        </TableCell>
+                        </StickyTableCell>
                         <TableCell>
                           <OrderChannelBadge channel={order.channel} />
                         </TableCell>

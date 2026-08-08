@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Check, X } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -205,9 +206,9 @@ export function OrderItemsTable({
       <Table className="min-w-140">
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 top-0 z-3 min-w-48 sticky-col-header sticky-col-separator-right">
+            <StickyTableHead size={48} className="top-0 z-3">
               Item
-            </TableHead>
+            </StickyTableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price (ex GST)</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">GST (11%)</TableHead>
@@ -219,12 +220,12 @@ export function OrderItemsTable({
         <TableBody>
           {items.map((item, i) => (
             <TableRow key={`${item.product}-${item.variant ?? i}`} className="group">
-              <TableCell className="sticky left-0 z-1 max-w-48 sticky-col-cell sticky-col-separator-right">
+              <StickyTableCell size={48}>
                 <div className="truncate font-medium text-fg">{item.name}</div>
                 {item.note && (
                   <div className="mt-1 rounded-xs bg-bg-2 px-2 py-1 text-xs text-fg/55">{item.note}</div>
                 )}
-              </TableCell>
+              </StickyTableCell>
               <TableCell className="text-fg/60">{item.sku ?? "—"}</TableCell>
               <TableCell className="text-right text-fg">
                 {editable ? (

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/Badge";
 import { TableRow, TableCell } from "@/components/ui/Table";
+import { StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { InventoryRowActionsMenu } from "@/components/inventory/InventoryRowActionsMenu";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 import { computeInventoryStockStatus } from "@/utils/inventoryStatus";
@@ -35,12 +36,12 @@ export function InventoryRow({
   return (
     <TableRow>
       {/* Product — sticky so it stays readable while the rest scrolls. */}
-      <TableCell className="sticky left-0 z-1 max-w-64 sticky-col-cell sticky-col-separator-right">
+      <StickyTableCell size={56}>
         <div className="truncate font-medium text-fg">{record.product?.title ?? "—"}</div>
         {record.variant?.display_name && (
           <div className="mt-0.5 truncate text-xs text-fg/45">{record.variant.display_name}</div>
         )}
-      </TableCell>
+      </StickyTableCell>
 
       {isVisible("sku") && (
         <TableCell className="whitespace-nowrap text-fg/70">{sku ?? "—"}</TableCell>

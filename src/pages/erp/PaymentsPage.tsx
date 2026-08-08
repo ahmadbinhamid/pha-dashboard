@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
@@ -98,9 +99,9 @@ export default function PaymentsPage() {
             <Table className="min-w-180">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-36 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={36}>
                     Order
-                  </TableHead>
+                  </StickyTableHead>
                   <TableHead className="min-w-44">Customer</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Refunded</TableHead>
@@ -118,9 +119,9 @@ export default function PaymentsPage() {
                       className="group cursor-pointer"
                       onClick={() => setSelected(payment)}
                     >
-                      <TableCell className="sticky left-0 z-1 max-w-36 truncate font-medium text-fg sticky-col-cell sticky-col-separator-right">
+                      <StickyTableCell size={36} className="truncate font-medium text-fg">
                         {order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}
-                      </TableCell>
+                      </StickyTableCell>
                       <TableCell className="max-w-52">
                         <div className="truncate text-fg">{order?.customer.name ?? "—"}</div>
                         <div className="truncate text-xs text-fg/50">{order?.customer.email ?? ""}</div>

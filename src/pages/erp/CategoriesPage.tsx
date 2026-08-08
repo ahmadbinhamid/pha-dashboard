@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
+import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { useToast } from "@/context";
 import {
   getCategories,
@@ -219,9 +220,9 @@ export default function CategoriesPage() {
             <Table className="min-w-160">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-2 min-w-52 sticky-col-header sticky-col-separator-right">
+                  <StickyTableHead size={52}>
                     Name
-                  </TableHead>
+                  </StickyTableHead>
                   <TableHead>Slug</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -230,7 +231,7 @@ export default function CategoriesPage() {
               <TableBody>
                 {categories.map((category) => (
                   <TableRow key={category._id} className="group">
-                    <TableCell className="sticky left-0 z-1 max-w-52 sticky-col-cell sticky-col-separator-right">
+                    <StickyTableCell size={52}>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
                           {category.thumbnail?.url ? (
@@ -247,7 +248,7 @@ export default function CategoriesPage() {
                         </div>
                         <span className="min-w-0 flex-1 truncate font-medium text-fg">{category.name}</span>
                       </div>
-                    </TableCell>
+                    </StickyTableCell>
                     <TableCell className="whitespace-nowrap text-fg/55">{category.slug}</TableCell>
                     <TableCell className="max-w-xs truncate text-fg/55">
                       {category.description || "—"}
