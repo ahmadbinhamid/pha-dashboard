@@ -24,5 +24,6 @@ router.use("/newsletter", require("./newsletter.routes"));
 router.use("/vehicle-model", require("./vehicle-model.routes"));
 router.use("/dashboard", require("./dashboard.routes"));
 router.use("/tenant-settings", require("./tenantSettings.routes"));
+router.use("/domains", require("./domain.routes"));
 
 module.exports = router;

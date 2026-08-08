@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const routes = require("./routes");
+const domainService = require("./services/domain.service");
 
 // Register marketplace adapters — needed by the API process for endListing on delete
 require("./services/marketplace/registry").register(
@@ -38,7 +39,7 @@ app.use(
   cors({
     origin:
       allowedOrigins.length > 0
-        ? (origin, cb) => {
+        ? async (origin, cb) => {
             // Allow requests with no origin (curl, mobile apps, server-to-server)
             if (!origin) return cb(null, true);
             if (allowedOrigins.includes(origin)) return cb(null, true);
@@ -54,6 +55,20 @@ app.use(
               } catch {
                 // malformed Origin header — fall through to rejection
               }
+            }
+            // A tenant's own DNS-verified custom domain (Settings > Domains)
+            // — see domain.service.js#getActiveHostnames. Only ever accepts
+            // hostnames that passed TXT-record verification, never a
+            // pending/unverified one.
+            try {
+              const { hostname, protocol } = new URL(origin);
+              if (protocol === "https:") {
+                const activeHostnames = await domainService.getActiveHostnames();
+                if (activeHostnames.includes(hostname)) return cb(null, true);
+              }
+            } catch {
+              // malformed Origin header, or the DB lookup failed — fall
+              // through to rejection rather than fail the request open.
             }
             cb(new Error(`CORS: origin ${origin} not allowed`));
           }
