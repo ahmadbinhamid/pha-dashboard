@@ -44,7 +44,7 @@ export default function ActivityLogPage() {
         const next = new URLSearchParams(prev);
         next.set("page", String(p));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -57,7 +57,7 @@ export default function ActivityLogPage() {
         else next.delete(key);
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -69,20 +69,23 @@ export default function ActivityLogPage() {
         next.set("limit", String(l));
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
 
-  const isFirstRender = useRef(true);
+  // Compares against the previous value (not a one-shot "have I mounted"
+  // flag) so this stays idempotent under React 18 StrictMode's dev-only
+  // double-invoke of effects — a boolean flag flips on the first (fake)
+  // invocation and wrongly fires setPage on the second (real) one, pushing
+  // a phantom history entry that made the browser Back button need two
+  // clicks to leave this page.
+  const prevSearchRef = useRef(debouncedSearch);
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
+    if (prevSearchRef.current === debouncedSearch) return;
+    prevSearchRef.current = debouncedSearch;
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
+  }, [debouncedSearch, setPage]);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["dashboard", "activity-log", { type, from, to, search: debouncedSearch, page, limit }],

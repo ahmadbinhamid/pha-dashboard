@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, ExternalLink, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -8,11 +8,15 @@ import { generatePaymentLink } from "@/lib/api/orders";
 
 export function GeneratePaymentLink({ orderId }: { orderId: string }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [link, setLink] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: () => generatePaymentLink(orderId),
-    onSuccess: (res) => setLink(res.data.url),
+    onSuccess: (res) => {
+      setLink(res.data.url);
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+    },
     onError: (err: Error) => {
       toast({ title: "Couldn't generate payment link", description: err.message, tone: "danger" });
     },

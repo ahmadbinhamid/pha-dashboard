@@ -34,6 +34,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
     onSuccess: () => {
       toast({ title: "Price updated", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       setEditing(false);
     },
     onError: (err: Error) => {
@@ -116,6 +117,7 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
     onSuccess: () => {
       toast({ title: "Discount updated", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       setEditing(false);
     },
     onError: (err: Error) => {

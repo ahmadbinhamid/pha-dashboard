@@ -58,6 +58,8 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
     onSuccess: () => {
       toast({ title: "Payment recorded", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
       reset(EMPTY_FORM);
       onOpenChange(false);
     },

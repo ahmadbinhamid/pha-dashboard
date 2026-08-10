@@ -70,7 +70,7 @@ export default function ProductsPage() {
         else next.delete("search");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     }, 400);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
@@ -83,7 +83,7 @@ export default function ProductsPage() {
         else next.delete("status");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -96,7 +96,7 @@ export default function ProductsPage() {
         else next.delete("stock");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -107,7 +107,7 @@ export default function ProductsPage() {
         const next = new URLSearchParams(prev);
         next.set("page", String(p));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -119,7 +119,7 @@ export default function ProductsPage() {
         next.set("limit", String(l));
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -132,7 +132,7 @@ export default function ProductsPage() {
         else next.delete("categories");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );

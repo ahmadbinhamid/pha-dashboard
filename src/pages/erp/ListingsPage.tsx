@@ -71,7 +71,7 @@ export default function ListingsPage() {
         else next.delete("search");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     }, 400);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
@@ -84,7 +84,7 @@ export default function ListingsPage() {
         else next.delete("sync_status");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -95,7 +95,7 @@ export default function ListingsPage() {
         const next = new URLSearchParams(prev);
         next.set("page", String(p));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -107,7 +107,7 @@ export default function ListingsPage() {
         next.set("limit", String(l));
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );

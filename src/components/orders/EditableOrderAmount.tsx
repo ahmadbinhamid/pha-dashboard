@@ -50,6 +50,7 @@ export function EditableOrderAmount({
     onSuccess: () => {
       toast({ title: successMessage, tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       setEditing(false);
     },
     onError: (err: Error) => {

@@ -33,7 +33,7 @@ export default function CustomersPage() {
       const next = new URLSearchParams(prev);
       next.set("page", String(p));
       return next;
-    });
+    }, { replace: true });
   };
 
   const setLimit = (l: number) => {
@@ -42,7 +42,7 @@ export default function CustomersPage() {
       next.set("limit", String(l));
       next.set("page", "1");
       return next;
-    });
+    }, { replace: true });
   };
 
   // Debounce search
@@ -56,7 +56,7 @@ export default function CustomersPage() {
         else next.delete("search");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     }, 400);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);

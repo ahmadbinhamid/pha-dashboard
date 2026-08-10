@@ -40,7 +40,7 @@ export default function PaymentsPage() {
         else next.delete("status");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -51,7 +51,7 @@ export default function PaymentsPage() {
         const next = new URLSearchParams(prev);
         next.set("page", String(p));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -63,7 +63,7 @@ export default function PaymentsPage() {
         next.set("limit", String(l));
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );

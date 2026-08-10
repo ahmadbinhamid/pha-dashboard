@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { User, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -53,6 +53,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   ref,
 ) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { items, clearCart } = useCart();
   const { customer, deliveryMethod, shippingAddress, useDifferentBilling, billingAddress } = customerDelivery;
 
@@ -94,6 +95,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
         description: `Invoice ${formatInvoiceNumber(res.data.invoice_number_prefix, res.data.invoice_number)} generated.`,
         tone: "success",
       });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       clearCart();
       onOrderCreated(res.data);
     },

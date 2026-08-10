@@ -91,7 +91,7 @@ export default function OrdersPage() {
         else next.delete("search");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     }, 400);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchParams]);
@@ -104,7 +104,7 @@ export default function OrdersPage() {
         else next.delete("fulfillment_status");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -117,7 +117,7 @@ export default function OrdersPage() {
         else next.delete("payment_status");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -130,7 +130,7 @@ export default function OrdersPage() {
         else next.delete("channel");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -143,7 +143,7 @@ export default function OrdersPage() {
         else next.delete("delivery_method");
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -154,7 +154,7 @@ export default function OrdersPage() {
         const next = new URLSearchParams(prev);
         next.set("page", String(p));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -166,7 +166,7 @@ export default function OrdersPage() {
         next.set("limit", String(l));
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );

@@ -33,6 +33,8 @@ export function RefundHistoryList({ orderId, refunds }: { orderId: string; refun
       queryClient.invalidateQueries({ queryKey: ["order-refunds", orderId] });
       queryClient.invalidateQueries({ queryKey: ["order-refundable", orderId] });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
       setVoidingId(null);
     },
     onError: (err: Error) => {

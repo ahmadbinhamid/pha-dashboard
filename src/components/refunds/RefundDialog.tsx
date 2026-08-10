@@ -102,6 +102,8 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
       queryClient.invalidateQueries({ queryKey: ["order-refundable", orderId] });
       queryClient.invalidateQueries({ queryKey: ["order-refunds", orderId] });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
       onOpenChange(false);
       onSuccess();
     },

@@ -87,6 +87,7 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
     onSuccess: () => {
       toast({ title: "Order updated", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["order", order._id] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       onOpenChange(false);
     },
     onError: (err: Error) => {
