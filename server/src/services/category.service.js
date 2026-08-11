@@ -51,7 +51,7 @@ async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {},
   // The category facet itself is excluded so every category keeps showing its
   // own count regardless of which ones are already checked; publish/active is
   // dropped too since getProductCountsByCategory always enforces it above.
-  const countFilter = buildProductFilter(productFilters, { authenticated: false });
+  const countFilter = buildProductFilter(productFilters, { authenticated: false, tenantId });
   delete countFilter.categories;
   delete countFilter.is_published_online;
   delete countFilter.status;

@@ -105,5 +105,9 @@ productSchema.index(
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });
+// Supports category.service.js#getProductCountsByCategory — every storefront
+// page load runs this $match, and autoIndex is off in production
+// (loaders/mongoose.js), so this index only takes effect once built manually.
+productSchema.index({ tenant_id: 1, categories: 1, is_published_online: 1, status: 1 });
 
 module.exports = model("Product", productSchema);
