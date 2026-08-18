@@ -42,6 +42,7 @@ interface WizardStorage {
   discounts: Record<string, string>;
   paymentChoice: OrderPaymentChoice | "";
   amountPaidInput: string;
+  shippingCostInput: string;
 }
 
 const EMPTY_WIZARD: WizardStorage = {
@@ -51,6 +52,7 @@ const EMPTY_WIZARD: WizardStorage = {
   discounts: {},
   paymentChoice: "",
   amountPaidInput: "",
+  shippingCostInput: "",
 };
 
 function readStoredWizard(): WizardStorage {
@@ -88,6 +90,7 @@ export default function CreateOrderPage() {
   const [discounts, setDiscounts] = useState<Record<string, string>>(initial.discounts);
   const [paymentChoice, setPaymentChoice] = useState<OrderPaymentChoice | "">(initial.paymentChoice);
   const [amountPaidInput, setAmountPaidInput] = useState(initial.amountPaidInput);
+  const [shippingCostInput, setShippingCostInput] = useState(initial.shippingCostInput);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [reviewPending, setReviewPending] = useState(false);
 
@@ -109,8 +112,8 @@ export default function CreateOrderPage() {
     // it here would just re-write over the clearOrderDraft() call that
     // handleOrderCreated makes right before this effect re-runs.
     if (step === 4) return;
-    persistWizard({ step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput });
-  }, [step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput]);
+    persistWizard({ step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput });
+  }, [step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput]);
 
   function goToStep2() {
     if (items.length === 0) return;
@@ -134,6 +137,7 @@ export default function CreateOrderPage() {
     setDiscounts({});
     setPaymentChoice("");
     setAmountPaidInput("");
+    setShippingCostInput("");
     setCreatedOrder(null);
     setStep(1);
     clearOrderDraft();
@@ -208,6 +212,8 @@ export default function CreateOrderPage() {
           onPaymentChoiceChange={setPaymentChoice}
           amountPaidInput={amountPaidInput}
           onAmountPaidInputChange={setAmountPaidInput}
+          shippingCostInput={shippingCostInput}
+          onShippingCostInputChange={setShippingCostInput}
           onOrderCreated={handleOrderCreated}
           onPendingChange={setReviewPending}
         />

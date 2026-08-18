@@ -202,6 +202,7 @@ async function createManualOrder(
     note,
     amount_paid = 0,
     payment_method,
+    shipping_cost: shippingCostOverride,
   },
   tenant,
 ) {
@@ -226,11 +227,16 @@ async function createManualOrder(
   // Nothing to ship for pickup — skip the per-item shipping cost entirely
   // rather than charging for shipping that never happens. Mirrors createOrder
   // (storefront checkout) so a staff-created delivery order isn't silently free freight.
+  // The staff member can override the computed total on the review step
+  // (e.g. a bulky/oversized item quoted a flat rate) — shippingCostOverride
+  // wins over the per-item sum when provided.
   const shipping_cost = isPickup
     ? 0
-    : Math.round(
-        resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
-      );
+    : shippingCostOverride != null
+      ? Math.round(shippingCostOverride * 100)
+      : Math.round(
+          resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
+        );
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
   const total = subtotal + shipping_cost;
 
@@ -849,13 +855,14 @@ async function getOrderDetailForAdmin(orderId, tenantId) {
 }
 
 // Admin action triggered by the "Send Email" button on the order detail
-// page. DELIVERY orders require tracking info the first time — capturing it
-// here IS the fulfilment step, so the order transitions to FULFILLED in the
-// same write. Once tracking is on file, re-sending (e.g. the customer says
-// they missed the email) reuses it instead of asking again; passing new
-// tracking_number/carrier_name always overwrites what's on file. Both paths
-// attach the same tax invoice PDF; only the accompanying email
-// (shipped-with-tracking vs ready-for-pickup) differs.
+// page. Tracking info is optional for DELIVERY orders — the admin can add
+// it via a toggle in the modal, or send without it. Providing it here IS
+// the fulfilment step's data capture, but marking the order FULFILLED
+// happens either way. Once tracking is on file, re-sending (e.g. the
+// customer says they missed the email) reuses it instead of asking again;
+// passing new tracking_number/carrier_name always overwrites what's on
+// file. Both paths attach the same tax invoice PDF; only the accompanying
+// email (shipped vs ready-for-pickup) differs.
 async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
@@ -900,6 +907,11 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     if (trimmedTracking && trimmedCarrier) {
       order.tracking_number = trimmedTracking;
       order.carrier_name = trimmedCarrier;
+    } else if (trimmedTracking || trimmedCarrier) {
+      throw httpError("Carrier name and tracking number must be provided together", 400);
+    }
+
+    if (order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.COMPLETED) {
       order.fulfillment_status = ORDER_FULFILLMENT_STATUS.COMPLETED;
       // Legacy `status` derived, not set directly — see
       // utils/paymentStatus.js#deriveLegacyOrderStatus. refund.service.js's
@@ -907,10 +919,8 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
       // may legitimately overwrite the legacy `status` field; without this,
       // it would never see "completed" and would incorrectly revert it.
       order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
-      await order.save();
-    } else if (!order.tracking_number || !order.carrier_name) {
-      throw httpError("Tracking number and carrier name are required to notify a delivery order", 400);
     }
+    await order.save();
   }
 
   const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });

@@ -9,6 +9,7 @@
     Your order has now been dispatched.
   </p>
 
+  {{#if carrier_name}}
   <p style="color: #666; font-size: 16px; line-height: 1.5;">
     Your shipping details are below:
   </p>
@@ -21,6 +22,7 @@
       Tracking Number: <strong>{{tracking_number}}</strong>
     </p>
   </div>
+  {{/if}}
 
   <p style="color: #666; font-size: 16px; line-height: 1.5;">
     A copy of your invoice has been attached to this email for your records.
