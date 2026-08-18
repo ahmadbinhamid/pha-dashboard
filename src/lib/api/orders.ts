@@ -72,6 +72,7 @@ export interface CreateManualOrderPayload {
   // Stripe Checkout link is generated separately instead.
   payment_method: OrderPaymentChoice;
   amount_paid?: number; // dollars — omit/0 leaves the invoice fully outstanding
+  shipping_cost?: number; // dollars — overrides the computed per-item shipping total
 }
 
 export const createManualOrder = async (payload: CreateManualOrderPayload) => {

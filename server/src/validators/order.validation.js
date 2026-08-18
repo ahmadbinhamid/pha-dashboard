@@ -128,6 +128,10 @@ const createManualOrder = {
     // Dollars — what the staff member actually collected right now. Omitted
     // or 0 means the full invoice is left outstanding.
     amount_paid: Joi.number().min(0).default(0),
+    // Dollars — overrides the per-item shipping_cost sum the service would
+    // otherwise compute. Omitted falls back to that computed total; ignored
+    // entirely for pickup orders (see order.service.js#createManualOrder).
+    shipping_cost: Joi.number().min(0),
   }),
 };
 

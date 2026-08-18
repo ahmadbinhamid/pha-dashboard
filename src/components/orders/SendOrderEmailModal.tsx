@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -5,6 +6,7 @@ import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
+import { Switch } from "@/components/ui/Switch";
 import {
   Modal,
   ModalContent,
@@ -34,7 +36,11 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
   // re-sending afterwards (e.g. the customer says they missed the email)
   // should reuse what's on file instead of asking again.
   const hasSavedTracking = isDelivery && !!order.tracking_number && !!order.carrier_name;
-  const needsTrackingInput = isDelivery && !hasSavedTracking;
+  const canAddTracking = isDelivery && !hasSavedTracking;
+  // Off by default — tracking is optional, so the fields only appear once
+  // the admin explicitly opts in via the switch.
+  const [addTracking, setAddTracking] = useState(false);
+  const needsTrackingInput = canAddTracking && addTracking;
 
   const {
     register,
@@ -57,6 +63,7 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
       });
       queryClient.invalidateQueries({ queryKey: ["order", order._id] });
       reset(EMPTY_FORM);
+      setAddTracking(false);
       onOpenChange(false);
     },
     onError: (err: Error) => {
@@ -70,31 +77,44 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
     <Modal
       open={open}
       onOpenChange={(next) => {
-        if (!next) reset(EMPTY_FORM);
+        if (!next) {
+          reset(EMPTY_FORM);
+          setAddTracking(false);
+        }
         onOpenChange(next);
       }}
     >
       <ModalContent>
         <form onSubmit={handleSubmit(onSubmit)}>
           <ModalHeader>
-            <ModalTitle>{needsTrackingInput ? "Mark as shipped" : isDelivery ? "Resend shipping email" : "Send invoice email"}</ModalTitle>
+            <ModalTitle>{canAddTracking ? "Mark as shipped" : isDelivery ? "Resend shipping email" : "Send invoice email"}</ModalTitle>
             <ModalDescription>
-              {needsTrackingInput
-                ? `Enter the carrier and tracking number — this marks the order fulfilled and emails ${order.customer.email} with tracking details.`
+              {canAddTracking
+                ? `This marks the order fulfilled and emails ${order.customer.email}. Add tracking details below if you have them.`
                 : isDelivery
                   ? `This will resend the shipping confirmation (with tax invoice attached) to ${order.customer.email}, using the tracking details already on file.`
                   : `This will email the tax invoice (PDF attached) to ${order.customer.email}.`}
             </ModalDescription>
           </ModalHeader>
 
-          {needsTrackingInput && (
+          {canAddTracking && (
             <div className="space-y-4">
-              <FormField label="Carrier Name" required error={errors.carrier_name?.message}>
-                <Input {...register("carrier_name")} placeholder="e.g. Australia Post" autoFocus />
-              </FormField>
-              <FormField label="Tracking Number" required error={errors.tracking_number?.message}>
-                <Input {...register("tracking_number")} placeholder="e.g. 1234567890AU" />
-              </FormField>
+              <Switch
+                checked={addTracking}
+                onCheckedChange={setAddTracking}
+                label="Add tracking details"
+                description="Include a carrier and tracking number in the shipping email."
+              />
+              {addTracking && (
+                <div className="space-y-4">
+                  <FormField label="Carrier Name" required error={errors.carrier_name?.message}>
+                    <Input {...register("carrier_name")} placeholder="e.g. Australia Post" autoFocus />
+                  </FormField>
+                  <FormField label="Tracking Number" required error={errors.tracking_number?.message}>
+                    <Input {...register("tracking_number")} placeholder="e.g. 1234567890AU" />
+                  </FormField>
+                </div>
+              )}
             </div>
           )}
 

@@ -30,6 +30,8 @@ interface ReviewOrderStepProps {
   onPaymentChoiceChange: (choice: OrderPaymentChoice | "") => void;
   amountPaidInput: string;
   onAmountPaidInputChange: (value: string) => void;
+  shippingCostInput: string;
+  onShippingCostInputChange: (value: string) => void;
   onOrderCreated: (order: Order) => void;
   // Bubbles the create-order mutation's pending state up to the page header,
   // which owns the Create button now (and needs to show "Creating…"/disable it).
@@ -47,6 +49,8 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
     onPaymentChoiceChange,
     amountPaidInput,
     onAmountPaidInputChange,
+    shippingCostInput,
+    onShippingCostInputChange,
     onOrderCreated,
     onPendingChange,
   },
@@ -80,9 +84,27 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
   // Nothing to ship for pickup — matches order.service.js#createManualOrder,
   // which only charges freight when delivery_method is "delivery".
-  const shippingTotal =
+  const computedShipping =
     deliveryMethod === "delivery" ? items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) : 0;
+  // The staff member can override the computed freight (e.g. a flat-rate
+  // quote for an oversized item) — an empty input falls back to the sum
+  // above, same convention order.service.js#createManualOrder uses server-side.
+  const shippingTotal =
+    deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
+      ? Math.max(Number(shippingCostInput) || 0, 0)
+      : computedShipping;
   const total = rawSubtotal - totalDiscount + shippingTotal;
+
+  // Pre-fill the field with the computed freight so it reads as "here's the
+  // shipping cost, edit if needed" rather than starting blank — only when
+  // still empty, so it never clobbers a value the staff member (or a
+  // restored draft) already set.
+  useEffect(() => {
+    if (deliveryMethod === "delivery" && shippingCostInput.trim() === "" && computedShipping > 0) {
+      onShippingCostInputChange(computedShipping.toFixed(2));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMethod, computedShipping]);
   const isPaymentLink = paymentChoice === "payment_link";
   const amountPaid = isPaymentLink ? 0 : Math.min(Math.max(Number(amountPaidInput) || 0, 0), total);
   const amountDue = total - amountPaid;
@@ -135,6 +157,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       note: orderNote.trim() || null,
       payment_method: paymentCheck.data,
       amount_paid: amountPaid || undefined,
+      shipping_cost: deliveryMethod === "delivery" && shippingCostInput.trim() !== "" ? shippingTotal : undefined,
     });
   }
 
@@ -189,9 +212,22 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <span>Discount</span>
                 <span>{totalDiscount > 0 ? `-${formatCurrency(totalDiscount)}` : formatCurrency(0)}</span>
               </div>
-              <div className="flex justify-between text-fg/60">
+              <div className="flex items-center justify-between text-fg/60">
                 <span>Shipping</span>
-                <span>{formatCurrency(shippingTotal)}</span>
+                {deliveryMethod === "delivery" ? (
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={shippingCostInput}
+                    onChange={(e) => onShippingCostInputChange(e.target.value)}
+                    placeholder={formatCurrency(computedShipping)}
+                    size="sm"
+                    className="w-28 text-right"
+                  />
+                ) : (
+                  <span>{formatCurrency(shippingTotal)}</span>
+                )}
               </div>
               <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-fg">
                 <span>Total</span>
