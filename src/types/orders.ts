@@ -151,6 +151,10 @@ export interface Order {
   // always null for PICKUP orders.
   tracking_number: string | null;
   carrier_name: string | null;
+  // Optional customer/staff-supplied reference (e.g. a customer's own PO
+  // number) — distinct from order_number/invoice_number, which are always
+  // system-generated. Null until an admin fills it in.
+  reference_number: string | null;
   payment: OrderPaymentSummary | null;
   created_at: string;
   updated_at: string;

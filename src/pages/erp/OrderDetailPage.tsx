@@ -23,8 +23,9 @@ import { OrderNotesSection } from "@/components/orders/OrderNotesSection";
 import { SendOrderEmailModal } from "@/components/orders/SendOrderEmailModal";
 import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal";
 import { EditableOrderAmount } from "@/components/orders/EditableOrderAmount";
+import { EditableOrderText } from "@/components/orders/EditableOrderText";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
-import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost } from "@/lib/api/orders";
+import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost, updateOrderReferenceNumber } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
@@ -115,6 +116,43 @@ export default function OrderDetailPage() {
     },
   });
 
+  // "Print Invoice" opens the same server-rendered PDF the "Download PDF"
+  // action uses (real, pre-paginated pdfkit output) in a new tab, rather
+  // than driving the browser's own print dialog off the on-page HTML — a
+  // browser print reflow has no reliable way to paginate a multi-page
+  // invoice cleanly (rows/sections splitting mid-content, or getting bumped
+  // to a fresh page with a large blank gap left behind), while a real PDF
+  // always paginates exactly as rendered. The window opens synchronously
+  // (before the PDF fetch) so the browser doesn't treat the later redirect
+  // as an unrelated popup and block it.
+  const printPdfMutation = useMutation({
+    mutationFn: async () => {
+      const printWindow = window.open("", "_blank");
+      try {
+        const { blob } = await downloadInvoicePdf(id!);
+        const url = URL.createObjectURL(blob);
+        if (printWindow) {
+          printWindow.location.href = url;
+        } else {
+          // Popup blocked — fall back to a plain download so the invoice
+          // isn't lost, rather than silently doing nothing.
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `invoice-${id}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }
+      } catch (err) {
+        printWindow?.close();
+        throw err;
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't open invoice", description: err.message, tone: "danger" });
+    },
+  });
+
   if (isLoading) return <OrderDetailSkeleton />;
   if (isError || !order) return <NotFoundState />;
 
@@ -166,9 +204,12 @@ export default function OrderDetailPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => window.print()}>
+                <DropdownMenuItem
+                  disabled={printPdfMutation.isPending}
+                  onSelect={() => printPdfMutation.mutate()}
+                >
                   <Printer className="h-3.5 w-3.5 text-fg/50" />
-                  Print Invoice
+                  {printPdfMutation.isPending ? "Preparing…" : "Print Invoice"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={downloadPdfMutation.isPending}
@@ -312,6 +353,18 @@ export default function OrderDetailPage() {
                     <div className="text-xs text-fg/55">{order.tracking_number}</div>
                   </div>
                 )}
+                <div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Order Number</div>
+                  <EditableOrderText
+                    orderId={order._id}
+                    label="Order Number"
+                    value={order.reference_number}
+                    placeholder="Add order number"
+                    mutationFn={updateOrderReferenceNumber}
+                    successMessage="Order number updated"
+                    errorMessage="Couldn't update order number"
+                  />
+                </div>
                 {order.billing_address && (
                   <div>
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">

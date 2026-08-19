@@ -286,6 +286,11 @@ const orderSchema = buildSchema({
   // PICKUP orders, which have nothing to hand off to a carrier.
   tracking_number: { type: String, default: null },
   carrier_name: { type: String, default: null },
+  // Optional customer/staff-supplied reference (e.g. a customer's own PO
+  // number) — unrelated to order_number/invoice_number, which are always
+  // system-generated. Null until an admin fills it in on the order detail
+  // page; shown on the invoice only when set.
+  reference_number: { type: String, default: null },
 });
 
 // Every order created after orderItemSchema switched to `{ _id: true }`

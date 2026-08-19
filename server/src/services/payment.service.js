@@ -42,7 +42,10 @@ async function listPayments({ page = 1, limit = 20, skip = 0, status } = {}, ten
       .sort({ created_at: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("order", "order_number order_number_prefix customer total status"),
+      .populate(
+        "order",
+        "order_number order_number_prefix invoice_number invoice_number_prefix customer total status"
+      ),
     Payment.countDocuments(filter),
   ]);
 

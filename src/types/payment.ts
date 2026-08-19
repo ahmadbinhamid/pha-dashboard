@@ -20,6 +20,8 @@ export interface PaymentOrderSummary {
   _id: string;
   order_number: string;
   order_number_prefix: string;
+  invoice_number: string;
+  invoice_number_prefix: string;
   customer: { name: string; email: string | null; phone: string | null };
   total: number; // cents
   status: string;

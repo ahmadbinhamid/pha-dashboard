@@ -214,6 +214,15 @@ const updateOrderItemDiscount = {
   }),
 };
 
+// See order.service.js#updateOrderReferenceNumber. Optional — blank/null
+// clears it.
+const updateOrderReferenceNumber = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    reference_number: Joi.string().trim().allow("", null),
+  }),
+};
+
 const addOrderNote = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -255,6 +264,7 @@ module.exports = {
   recordPayment,
   addOrderNote,
   updateOrderCustomerDetails,
+  updateOrderReferenceNumber,
   updateOrderItemPrice,
   updateOrderShippingCost,
   updateOrderItemDiscount,

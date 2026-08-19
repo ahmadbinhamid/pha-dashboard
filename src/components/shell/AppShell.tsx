@@ -33,7 +33,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const close = useMemo(() => () => setMobileOpen(false), []);
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-bg">
+    // print:block on this and the nested flex column below — a flex (or
+    // grid) container never fragments across printed pages in Chrome/Firefox
+    // regardless of its own height/overflow, so anything sized larger than
+    // one page just gets cut off rather than flowing onto page 2+. Switching
+    // both to plain block layout for print is what lets a multi-page
+    // printed invoice (see InvoicePrintView.tsx) actually print in full;
+    // h-auto/overflow-visible alone (still needed, for older engines that
+    // don't clip flex overflow but do still respect the fixed height) isn't
+    // sufficient on its own.
+    <div className="flex h-dvh w-full overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
       <div className="pointer-events-none absolute inset-0 noise" aria-hidden="true" />
 
       {/* Sidebar — fixed, never scrolls */}
@@ -55,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         -translate-x-1/2 to sit on the sidebar border) is never clipped.
         Only the inner content div scrolls.
       */}
-      <div className="relative flex h-dvh min-w-0 flex-1 flex-col">
+      <div className="relative flex h-dvh min-w-0 flex-1 flex-col print:block print:h-auto">
         {/* Toggle button — lives here so overflow-y-auto can't clip it */}
         <button
           type="button"

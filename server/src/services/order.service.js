@@ -395,6 +395,21 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
   return order;
 }
 
+// Optional customer/staff-supplied reference (e.g. a customer's own PO
+// number) shown on the invoice when set — distinct from the system-generated
+// order_number/invoice_number, so no total recompute is needed here.
+async function updateOrderReferenceNumber(orderId, { reference_number }, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
+  if (!order) {
+    throw httpError("Order not found", 404);
+  }
+
+  order.reference_number = reference_number || null;
+
+  await order.save();
+  return order;
+}
+
 // Channels whose line items/shipping can be corrected after the fact —
 // storefront prices are the storefront's own listed price (editing it here
 // would desync from what the customer actually saw at checkout), so that
@@ -1018,6 +1033,7 @@ module.exports = {
   createManualOrder,
   recordOrderPayment,
   updateOrderCustomerDetails,
+  updateOrderReferenceNumber,
   getOrderForGuest,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,

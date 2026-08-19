@@ -14,7 +14,7 @@ import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadg
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { CustomerDeleteModal } from "@/components/customers/CustomerDeleteModal";
 import { getCustomer } from "@/lib/api/customers";
-import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
+import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 
 function CustomerDetailSkeleton() {
   return (
@@ -116,7 +116,7 @@ export default function CustomerDetailPage() {
                   <TableHeader>
                     <TableRow>
                       <StickyTableHead size={32}>
-                        Order
+                        Invoice #
                       </StickyTableHead>
                       <TableHead>Channel</TableHead>
                       <TableHead>Status</TableHead>
@@ -132,7 +132,7 @@ export default function CustomerDetailPage() {
                         onClick={() => navigate(`/orders/${order._id}`)}
                       >
                         <StickyTableCell size={32} className="truncate font-medium text-fg">
-                          {formatOrderNumber(order.order_number_prefix, order.order_number)}
+                          {formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number)}
                         </StickyTableCell>
                         <TableCell>
                           <OrderChannelBadge channel={order.channel} />
@@ -172,7 +172,7 @@ export default function CustomerDetailPage() {
                     onClick={() => navigate(`/orders/${order._id}`)}
                   >
                     <div>
-                      <div className="font-medium text-fg">{formatOrderNumber(order.order_number_prefix, order.order_number)}</div>
+                      <div className="font-medium text-fg">{formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number)}</div>
                       <div className="text-xs text-fg/50">
                         {new Date(order.created_at).toLocaleDateString()}
                       </div>

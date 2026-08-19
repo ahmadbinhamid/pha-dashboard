@@ -266,20 +266,26 @@ function drawBillShipTransactionBlock(doc, order) {
   }
   const bottom2 = y2;
 
-  // Transaction — tint background drawn first (fixed height; content here
-  // is always just a label + one value, so a fixed box reads fine).
+  // Order details — tint background drawn first (fixed height; content here
+  // is always a single label + value: reference_number when the customer/
+  // staff set one, otherwise the system order_number).
   const boxPad = 10;
   const boxTop = startY - boxPad + 4;
   const boxHeight = 70;
   doc.roundedRect(col3X - boxPad, boxTop, colWidth + boxPad * 2, boxHeight, 6).fill(COLORS.tint);
   doc.fillColor(COLORS.text);
-  let y3 = drawLabelRule(doc, col3X, startY, colWidth, "TRANSACTION");
+  let y3 = drawLabelRule(doc, col3X, startY, colWidth, "ORDER DETAILS");
   doc.font(FONT).fontSize(7.5).fillColor(COLORS.muted).text("ORDER NUMBER", col3X, y3, { width: colWidth });
   doc
     .font(FONT_BOLD)
     .fontSize(10)
     .fillColor(COLORS.text)
-    .text(formatOrderNumber(order.order_number_prefix, order.order_number), col3X, doc.y + 2, { width: colWidth });
+    .text(
+      order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number),
+      col3X,
+      doc.y + 2,
+      { width: colWidth },
+    );
   const bottom3 = Math.max(doc.y, boxTop + boxHeight);
 
   doc.fillColor(COLORS.text);

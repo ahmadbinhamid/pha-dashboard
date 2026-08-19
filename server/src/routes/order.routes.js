@@ -84,6 +84,13 @@ router.patch(
   validate(v.updateOrderItemDiscount),
   asyncHandler(ctrl.updateOrderItemDiscount),
 );
+router.patch(
+  "/:id/reference-number",
+  auth(),
+  admin,
+  validate(v.updateOrderReferenceNumber),
+  asyncHandler(ctrl.updateOrderReferenceNumber),
+);
 
 // ── Refunds (refund-redesign-spec.md §2) — order-scoped, not payment-scoped:
 // line items and multi-payment allocation are both order-level concerns.

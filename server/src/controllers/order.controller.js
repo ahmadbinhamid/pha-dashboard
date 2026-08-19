@@ -188,6 +188,21 @@ exports.updateOrderShippingCost = async (req, res) => {
   }
 };
 
+exports.updateOrderReferenceNumber = async (req, res) => {
+  try {
+    const order = await orderService.updateOrderReferenceNumber(
+      req.params.id,
+      { reference_number: req.body.reference_number },
+      req.tenantId,
+    );
+    return success(res, order, "Order number updated");
+  } catch (err) {
+    if (err.status === 404) return notFound(res, err.message);
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.updateOrderItemDiscount = async (req, res) => {
   try {
     const order = await orderService.updateOrderItemDiscount(

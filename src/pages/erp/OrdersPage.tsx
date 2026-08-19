@@ -16,7 +16,7 @@ import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
+import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart } from "lucide-react";
 
@@ -59,6 +59,7 @@ const ORDER_COLUMNS: ColumnDef[] = [
   { key: "customer", label: "Customer", alwaysVisible: true },
   { key: "channel", label: "Channel" },
   { key: "items", label: "Items" },
+  { key: "order_id", label: "Order Id" },
   { key: "total", label: "Total" },
   { key: "status", label: "Status" },
   { key: "payment", label: "Payment" },
@@ -230,11 +231,12 @@ export default function OrdersPage() {
               <TableHeader>
                 <TableRow>
                   <StickyTableHead size={36}>
-                    Order
+                    Invoice #
                   </StickyTableHead>
                   {isVisible("customer") && <TableHead className="min-w-44">Customer</TableHead>}
                   {isVisible("channel") && <TableHead>Channel</TableHead>}
                   {isVisible("items") && <TableHead className="text-right">Items</TableHead>}
+                  {isVisible("order_id") && <TableHead>Order Id</TableHead>}
                   {isVisible("total") && <TableHead className="text-right">Total</TableHead>}
                   {isVisible("status") && <TableHead>Status</TableHead>}
                   {isVisible("payment") && <TableHead>Payment</TableHead>}
@@ -252,7 +254,7 @@ export default function OrdersPage() {
                       onClick={() => navigate(`/orders/${order._id}`)}
                     >
                       <StickyTableCell size={36} className="truncate font-medium text-fg">
-                        {formatOrderNumber(order.order_number_prefix, order.order_number)}
+                        {formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number)}
                       </StickyTableCell>
                       {isVisible("customer") && (
                         <TableCell className="max-w-52">
@@ -266,6 +268,9 @@ export default function OrdersPage() {
                         </TableCell>
                       )}
                       {isVisible("items") && <TableCell className="text-right text-fg/60">{itemCount}</TableCell>}
+                      {isVisible("order_id") && (
+                        <TableCell className="text-fg/60">{order.reference_number || "—"}</TableCell>
+                      )}
                       {isVisible("total") && (
                         <TableCell className="text-right text-fg">{formatCurrencyFromCents(order.total)}</TableCell>
                       )}

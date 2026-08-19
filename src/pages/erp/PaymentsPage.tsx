@@ -12,7 +12,7 @@ import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { PaymentRowActionsMenu } from "@/components/payments/PaymentRowActionsMenu";
 import { getPayments } from "@/lib/api/payments";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
+import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Payment, PaymentStatus } from "@/types/payment";
 import { CreditCard } from "lucide-react";
 
@@ -100,7 +100,7 @@ export default function PaymentsPage() {
               <TableHeader>
                 <TableRow>
                   <StickyTableHead size={36}>
-                    Order
+                    Invoice #
                   </StickyTableHead>
                   <TableHead className="min-w-44">Customer</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -120,7 +120,7 @@ export default function PaymentsPage() {
                       onClick={() => setSelected(payment)}
                     >
                       <StickyTableCell size={36} className="truncate font-medium text-fg">
-                        {order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}
+                        {order ? formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number) : "—"}
                       </StickyTableCell>
                       <TableCell className="max-w-52">
                         <div className="truncate text-fg">{order?.customer.name ?? "—"}</div>

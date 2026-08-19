@@ -81,7 +81,11 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
   return (
     <div
-      className="flex min-h-[270mm] flex-col rounded-[10px] border p-7"
+      // print:block — same fix as AppShell.tsx's shell containers: a flex
+      // column doesn't fragment across printed pages, so on a multi-page
+      // invoice this whole card (and the mt-auto footer's "push to the very
+      // bottom" behavior below) has to stop being a flexbox once printing.
+      className="flex min-h-[270mm] flex-col rounded-[10px] border p-7 print:block"
       style={{ borderColor: BORDER, color: INK, background: "#ffffff" }}
     >
       <div className="flex flex-wrap items-start justify-between gap-6 border-b pb-6" style={{ borderColor: BORDER }}>
@@ -162,17 +166,21 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         </div>
 
         <div className="rounded-lg p-4" style={{ background: TINT_BG }}>
-          <LabelRule>Transaction</LabelRule>
+          <LabelRule>Order Details</LabelRule>
           <div className="mt-2.5 text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>
             Order Number
           </div>
-          <div className="text-sm font-bold">{formatOrderNumber(order.order_number_prefix, order.order_number)}</div>
+          <div className="text-sm font-bold">
+            {order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number)}
+          </div>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border" style={{ borderColor: BORDER }}>
         <table className="w-full border-collapse text-sm">
-          <thead>
+          {/* table-header-group repeats this row on every printed page the
+              table spans, so a row that lands on page 2 isn't unlabeled. */}
+          <thead style={{ display: "table-header-group" }}>
             <tr style={{ background: TINT_BG }}>
               <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
                 #
@@ -204,7 +212,16 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               const lineTotal = item.unit_price * item.quantity - item.discount_amount;
               const lineGst = getLineGst(lineTotal);
               return (
-                <tr key={i} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                <tr
+                  key={i}
+                  className="border-b last:border-b-0"
+                  // Without this, the browser's print pagination can slice a
+                  // row in half across a page boundary (reported: a long
+                  // item name got cut off mid-line). pageBreakInside is the
+                  // older alias some print engines still need alongside the
+                  // standard breakInside property.
+                  style={{ borderColor: BORDER, breakInside: "avoid", pageBreakInside: "avoid" }}
+                >
                   <td className="px-3 py-3 align-top text-xs" style={{ color: MUTED }}>
                     {String(i + 1).padStart(2, "0")}
                   </td>
@@ -230,8 +247,26 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         </table>
       </div>
 
-      <div className="grid gap-8 pt-8 sm:grid-cols-2">
-        <div>
+      <div
+        // print:block + inline-block columns below, instead of keeping this
+        // a CSS grid at print time — see the breakInside comment on each
+        // column div just below for why break-inside:avoid moved down onto
+        // them individually instead of living here on the shared wrapper.
+        className="grid gap-8 pt-8 sm:grid-cols-2 print:block"
+      >
+        <div
+          className="print:inline-block print:w-[47%] print:align-top"
+          // break-inside:avoid belongs on each column individually, not on
+          // the two-column wrapper above — putting it on a box that's
+          // wide/tall enough to span most of the section (confirmed by
+          // reproducing outside the app) makes Chrome's print-pagination
+          // fit-estimate for that box unreliable: it can reserve far more
+          // height than the box actually needs and bump the whole thing to a
+          // fresh page, leaving a large blank gap behind on the page it left.
+          // Guarding each shorter column instead avoids that failure mode
+          // while still stopping either one from splitting mid-content.
+          style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+        >
           <div className="rounded-lg p-4" style={{ background: TINT_BG }}>
             <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
               <Landmark className="h-3.5 w-3.5" />
@@ -279,7 +314,10 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           )}
         </div>
 
-        <div className="space-y-1.5 text-sm">
+        <div
+          className="space-y-1.5 text-sm print:inline-block print:w-[47%] print:ml-[4%] print:align-top"
+          style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+        >
           <div className="flex justify-between">
             <span style={{ color: MUTED }}>Subtotal</span>
             <span className="font-semibold">{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
@@ -336,16 +374,38 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
       </div>
 
       <div
-        className="mt-auto grid gap-6 rounded-lg p-5 text-xs sm:grid-cols-2"
+        // mt-auto only makes sense while the card above is a flex column
+        // (pins this to the visual bottom of one page on screen) — once
+        // print:block turns off flex layout for a multi-page invoice, auto
+        // margin has nothing to size against and instead pushes this box all
+        // the way past the end of every page's content, leaving a huge blank
+        // gap before it. print:mt-8 swaps it for a plain fixed gap on print.
+        // print:block (in place of the grid) + inline-block columns below —
+        // see the payment/totals section above for the same treatment.
+        // break-inside:avoid deliberately lives on each column individually
+        // (below), not here on the two-column wrapper — see that section's
+        // comment for why: on this exact wrapper it's what was causing
+        // Chrome to bump the whole box to a fresh page with a big blank gap
+        // left behind, even when it would easily fit where it was.
+        className="mt-auto grid gap-6 rounded-lg p-5 text-xs sm:grid-cols-2 print:mt-8 print:block"
         style={{ background: TINT_BG, color: MUTED }}
       >
-        <div>
+        <div
+          className="print:inline-block print:w-[47%] print:align-top"
+          // Keeps this column's own paragraph from splitting mid-sentence
+          // across a page boundary (reported: "...returns." got orphaned
+          // alone on its own page).
+          style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+        >
           <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
             Warranty &amp; Returns
           </div>
           <p className="mt-1.5 leading-relaxed">{tenant?.warranty_text || "—"}</p>
         </div>
-        <div>
+        <div
+          className="print:inline-block print:w-[47%] print:ml-[4%] print:align-top"
+          style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+        >
           <div className="text-xs font-bold uppercase tracking-wider" style={{ color: INK }}>
             Legal Disclaimer
           </div>

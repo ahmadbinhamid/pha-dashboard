@@ -132,6 +132,15 @@ export const updateOrderShippingCost = async (orderId: string, shipping_cost: nu
   return data;
 };
 
+// Optional customer/staff-supplied reference (e.g. a customer's own PO
+// number) — see order.service.js#updateOrderReferenceNumber. Blank clears it.
+export const updateOrderReferenceNumber = async (orderId: string, reference_number: string) => {
+  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/reference-number`, {
+    reference_number,
+  });
+  return data;
+};
+
 // Corrects a single line item's discount on an eBay/manual order — see
 // order.service.js#updateOrderItemDiscount. Recomputes subtotal/tax_amount/
 // total on the backend.
