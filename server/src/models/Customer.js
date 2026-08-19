@@ -18,6 +18,9 @@ const customerSchema = buildSchema({
   // email's unique partial index below is compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   name: { type: String, required: true, trim: true },
+  // Shown on invoices instead of `name` when present (see
+  // order.service.js#createManualOrder and utils/pdf/invoicePdf.js).
+  company_name: { type: String, trim: true, default: null },
   email: { type: String, lowercase: true, trim: true, default: null },
   phone: { type: String, trim: true, default: null },
   // True once this customer has a real storefront login (vs. a walk-in/POS

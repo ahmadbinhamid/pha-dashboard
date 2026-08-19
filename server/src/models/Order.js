@@ -142,6 +142,9 @@ const orderSchema = buildSchema({
   // have no email or phone on file.
   customer: {
     name: { type: String, required: true },
+    // Shown on the invoice instead of `name` when present — see
+    // utils/pdf/invoicePdf.js and InvoicePrintView.tsx.
+    company_name: { type: String, trim: true, default: null },
     email: { type: String, lowercase: true, trim: true, default: null },
     phone: { type: String, trim: true, default: null },
   },

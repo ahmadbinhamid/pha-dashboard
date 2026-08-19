@@ -131,7 +131,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
       <div className="grid gap-6 py-6 sm:grid-cols-3">
         <div>
           <LabelRule>Bill To</LabelRule>
-          <div className="mt-2.5 text-sm font-bold">{order.customer.name}</div>
+          <div className="mt-2.5 text-sm font-bold">{order.customer.company_name || order.customer.name}</div>
           <div className="mt-1.5 space-y-0.5 text-xs" style={{ color: MUTED }}>
             {billingAddress && <div>{billingAddress.address}</div>}
             {billingAddress && (
@@ -146,7 +146,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
         <div>
           <LabelRule>Ship To</LabelRule>
-          <div className="mt-2.5 text-sm font-bold">{order.customer.name}</div>
+          <div className="mt-2.5 text-sm font-bold">{order.customer.company_name || order.customer.name}</div>
           <div className="mt-1.5 space-y-0.5 text-xs" style={{ color: MUTED }}>
             {isPickup || !order.shipping_address ? (
               <div>Collecting in-store — see seller address above.</div>

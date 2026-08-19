@@ -84,10 +84,14 @@ async function getCustomerById(id, tenantId) {
   };
 }
 
-async function createCustomer({ name, email, phone, has_online_account, shipping_address, billing_address }, tenantId) {
+async function createCustomer(
+  { name, company_name, email, phone, has_online_account, shipping_address, billing_address },
+  tenantId,
+) {
   return Customer.create({
     tenant_id: tenantId,
     name,
+    company_name: company_name || null,
     email: email || null,
     phone: phone || null,
     has_online_account: !!has_online_account,
@@ -98,13 +102,14 @@ async function createCustomer({ name, email, phone, has_online_account, shipping
 
 async function updateCustomer(
   id,
-  { name, email, phone, has_online_account, shipping_address, billing_address },
+  { name, company_name, email, phone, has_online_account, shipping_address, billing_address },
   tenantId,
 ) {
   const customer = await Customer.findOne({ _id: id, tenant_id: tenantId });
   if (!customer) return null;
 
   if (name !== undefined) customer.name = name;
+  if (company_name !== undefined) customer.company_name = company_name || null;
   if (email !== undefined) customer.email = email || null;
   if (phone !== undefined) customer.phone = phone || null;
   if (has_online_account !== undefined) customer.has_online_account = has_online_account;

@@ -8,6 +8,7 @@ const PHONE_PATTERN = /^[\d\s\-()+]*$/;
 export const customerFormSchema = z
   .object({
     name: z.string().trim().min(1, "Customer name is required"),
+    companyName: z.string().trim(),
     email: z.string().trim(),
     phone: z.string().regex(PHONE_PATTERN, "Phone number cannot contain letters"),
     shippingAddress: addressFieldsSchema,

@@ -29,6 +29,8 @@ export type OrderDeliveryMethod = "delivery" | "pickup";
 
 export interface OrderCustomer {
   name: string;
+  // Shown on the invoice instead of `name` when present.
+  company_name: string | null;
   // Optional for "manual" orders — a walk-in Customer record may have
   // neither on file. Always present for storefront/eBay orders.
   email: string | null;

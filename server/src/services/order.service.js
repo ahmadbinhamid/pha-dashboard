@@ -259,6 +259,7 @@ async function createManualOrder(
     items: resolvedItems,
     customer: {
       name: customer.name,
+      company_name: customer.company_name || null,
       email: customer.email || null,
       phone: customer.phone || null,
     },

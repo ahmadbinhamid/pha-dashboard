@@ -24,6 +24,7 @@ import { EMPTY_ADDRESS, isAddressFilled } from "@/lib/validation/address";
 
 const EMPTY_FORM: CustomerFormValues = {
   name: "",
+  companyName: "",
   email: "",
   phone: "",
   shippingAddress: EMPTY_ADDRESS,
@@ -34,6 +35,7 @@ const EMPTY_FORM: CustomerFormValues = {
 function customerToForm(c: Customer): CustomerFormValues {
   return {
     name: c.name,
+    companyName: c.company_name ?? "",
     email: c.email ?? "",
     phone: c.phone ?? "",
     shippingAddress: c.shipping_address ?? EMPTY_ADDRESS,
@@ -118,6 +120,7 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
   function buildPayload(values: CustomerFormValues): CustomerPayload {
     return {
       name: values.name.trim(),
+      company_name: values.companyName.trim() || null,
       email: values.email.trim() || null,
       phone: values.phone.trim() || null,
       shipping_address: isAddressFilled(values.shippingAddress) ? values.shippingAddress : null,
@@ -148,6 +151,10 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
           <div className="space-y-4">
             <FormField label="Name" required error={errors.name?.message}>
               <Input {...register("name")} placeholder="e.g. Wesley England" autoFocus />
+            </FormField>
+
+            <FormField label="Company name" error={errors.companyName?.message}>
+              <Input {...register("companyName")} placeholder="e.g. Acme Pty Ltd" />
             </FormField>
 
             <div className="grid gap-4 sm:grid-cols-2">

@@ -3,6 +3,8 @@ import type { Order, OrderAddress } from "./orders";
 export interface Customer {
   _id: string;
   name: string;
+  // Shown on invoices instead of `name` when present.
+  company_name: string | null;
   email: string | null;
   phone: string | null;
   has_online_account: boolean;

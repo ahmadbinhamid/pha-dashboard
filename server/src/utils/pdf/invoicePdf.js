@@ -219,10 +219,12 @@ function drawBillShipTransactionBlock(doc, order) {
 
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const billingAddress = order.billing_address || order.shipping_address;
+  // Company name takes over the customer's name slot on the invoice when set.
+  const displayName = order.customer.company_name || order.customer.name;
 
   // Bill To
   let y1 = drawLabelRule(doc, col1X, startY, colWidth, "BILL TO");
-  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(order.customer.name, col1X, y1, { width: colWidth });
+  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(displayName, col1X, y1, { width: colWidth });
   y1 = doc.y + 5;
   doc.font(FONT).fontSize(8).fillColor(COLORS.muted);
   if (billingAddress) {
@@ -245,7 +247,7 @@ function drawBillShipTransactionBlock(doc, order) {
 
   // Ship To
   let y2 = drawLabelRule(doc, col2X, startY, colWidth, "SHIP TO");
-  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(order.customer.name, col2X, y2, { width: colWidth });
+  doc.font(FONT_BOLD).fontSize(10.5).fillColor(COLORS.text).text(displayName, col2X, y2, { width: colWidth });
   y2 = doc.y + 5;
   doc.font(FONT).fontSize(8).fillColor(COLORS.muted);
   if (isPickup || !order.shipping_address) {
@@ -286,17 +288,17 @@ function drawBillShipTransactionBlock(doc, order) {
 }
 
 const TABLE_HEADER_HEIGHT = 22;
-// Item names get clamped to 2 lines (ellipsized beyond that) so a row's
-// height is always predictable — an unbroken/very long product title (bad
-// data, but real data we've seen) used to wrap to a dozen+ lines and blow
-// the row past the page boundary mid-draw. pdfkit's own auto-pagination
-// would then kick in *inside* the item-name .text() call, but the sibling
-// cells (price/qty/discount/total) are drawn afterwards at that same
-// pre-computed rowY — now meaningless on whatever page it auto-added —
-// scattering a single row's columns across two or more pages. Measuring
-// each row's height up front and deciding to paginate *before* drawing
-// anything is what actually fixes it.
-const ITEM_NAME_MAX_LINES = 2;
+// Item names wrap to however many lines they actually need — no clamp, no
+// ellipsis — so a long product title is always fully readable rather than
+// cut off. That means each row's height varies per item, so it's measured
+// with heightOfString() up front (estimateItemRowHeight) and checked against
+// the remaining page space *before* anything is drawn (see the loop below).
+// Without that pre-check, a long name could blow past the page boundary
+// mid-draw — pdfkit's own auto-pagination would kick in *inside* the
+// item-name .text() call, but the sibling cells (price/qty/discount/total)
+// are drawn afterwards at that same pre-computed rowY, now meaningless on
+// whatever page it auto-added, scattering a single row's columns across two
+// or more pages.
 
 // Two-line column header ("UNIT PRICE" / "(EX GST)") for the two columns too
 // narrow (60pt/76pt) to fit a GST-qualified label on one line at the
@@ -336,7 +338,7 @@ const ROW_TRAILING_GAP = 17;
 
 function estimateItemRowHeight(doc, item) {
   doc.font(FONT_BOLD).fontSize(9.5);
-  let height = doc.currentLineHeight() * ITEM_NAME_MAX_LINES;
+  let height = doc.heightOfString(item.name, { width: COLUMN_WIDTHS.item });
   if (item.sku) {
     doc.font(FONT).fontSize(7.5);
     height += 2 + doc.currentLineHeight();
@@ -369,13 +371,9 @@ function drawItemsTable(doc, order) {
       .text(String(i + 1).padStart(2, "0"), PAGE_MARGIN + 6 + COLUMNS.number, rowY, { width: COLUMN_WIDTHS.number - 6 });
 
     doc.font(FONT_BOLD).fontSize(9.5).fillColor(COLORS.text);
-    const nameMaxHeight = doc.currentLineHeight() * ITEM_NAME_MAX_LINES;
-    doc.text(item.name, PAGE_MARGIN + COLUMNS.item, rowY, {
-      width: COLUMN_WIDTHS.item,
-      height: nameMaxHeight,
-      ellipsis: true,
-    });
-    let nameBottom = rowY + nameMaxHeight;
+    const nameHeight = doc.heightOfString(item.name, { width: COLUMN_WIDTHS.item });
+    doc.text(item.name, PAGE_MARGIN + COLUMNS.item, rowY, { width: COLUMN_WIDTHS.item });
+    let nameBottom = rowY + nameHeight;
     if (item.sku) {
       doc
         .font(FONT)
@@ -437,7 +435,24 @@ function drawItemsTable(doc, order) {
   doc.y = tableBottom + 22;
 }
 
+// Worst case: bank details box (84) + payment pill/text (~20) on the left,
+// or totals rows (57) + total (30+12+4 divider) + payment rows incl. refund
+// (48+4) + balance-outstanding bar (32) on the right — whichever's taller,
+// plus a safety margin. Every draw call below uses an *absolute* y derived
+// from `startY`, not pdfkit's auto-flowing cursor, so if that math starts
+// beyond the page's bottom margin, pdfkit silently pushes each individual
+// call onto its own new (mostly blank) page instead of raising an error —
+// this pre-check is what avoids that, mirroring drawItemsTable's own
+// per-row overflow check just above.
+const PAYMENT_AND_TOTALS_HEIGHT_ESTIMATE = 240;
+
 function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents, companyProfile) {
+  const bottomLimit = PAGE_HEIGHT - PAGE_MARGIN - FRAME_PADDING;
+  if (doc.y + PAYMENT_AND_TOTALS_HEIGHT_ESTIMATE > bottomLimit) {
+    doc.addPage();
+    doc.y = PAGE_MARGIN;
+  }
+
   const startY = doc.y;
   // Totals only ever hold short currency strings, so it doesn't need as much
   // width as a straight half/half split gives it — handing that space to the

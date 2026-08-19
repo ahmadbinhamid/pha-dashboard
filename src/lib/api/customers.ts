@@ -11,6 +11,7 @@ export interface CustomerListParams {
 
 export interface CustomerPayload {
   name: string;
+  company_name?: string | null;
   email?: string | null;
   phone?: string | null;
   shipping_address?: OrderAddress | null;
