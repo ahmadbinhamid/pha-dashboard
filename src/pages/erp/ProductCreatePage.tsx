@@ -35,9 +35,6 @@ const INITIAL: ProductCreateFormValues = {
   shipping_cost: "",
   is_taxable: false,
   barcode: "",
-  // New products track stock (starting at 0) by default, rather than
-  // silently landing in the untracked "stock_count: null" state.
-  stock_control: true,
   stock_entries: [],
   mpn: "",
   condition: "NEW",
@@ -66,7 +63,8 @@ function formToFD(form: ProductCreateFormValues, status: ProductStatus): FormDat
   if (form.shipping_cost) fd.append("shipping_cost", form.shipping_cost);
   fd.append("is_taxable", String(form.is_taxable));
   fd.append("barcode", form.barcode);
-  fd.append("stock_control", String(form.stock_control));
+  // Stock is always tracked — there's no "track stock" toggle in the UI.
+  fd.append("stock_control", "true");
   if (form.mpn) fd.append("mpn", form.mpn.trim());
   fd.append("condition", form.condition);
   if (form.authenticity) fd.append("authenticity", form.authenticity);
@@ -80,7 +78,7 @@ function formToFD(form: ProductCreateFormValues, status: ProductStatus): FormDat
       year_to: form.vehicle_year_to ? Number(form.vehicle_year_to) : null,
     }),
   );
-  if (form.stock_control && form.stock_entries.length > 0) {
+  if (form.stock_entries.length > 0) {
     fd.append("stock_entries", JSON.stringify(form.stock_entries));
   }
   fd.append("type", form.type);
@@ -216,7 +214,7 @@ export default function ProductCreatePage() {
         <div className="space-y-5 lg:col-span-2">
 
           {/* 1. Basics */}
-          <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
+          <FormSection number={1} title="Basics">
             <FormField label="Product title" required error={errors.title?.message}>
               <Input {...register("title")} placeholder="e.g. Front brake pad set — ceramic" autoFocus />
             </FormField>
@@ -349,32 +347,16 @@ export default function ProductCreatePage() {
             number={4}
             title="Stock"
             description="Opening quantity for your only stock location"
-            tag={
-              <Controller
-                control={control}
-                name="stock_control"
-                render={({ field }) => (
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={(v) => {
-                      field.onChange(v);
-                      if (!v) setValue("stock_entries", []);
-                    }}
-                    label="Track stock"
-                    className="border-none bg-transparent px-0 py-0"
-                  />
-                )}
-              />
-            }
           >
-            {form.stock_control && (
-              <Controller
-                control={control}
-                name="stock_entries"
-                render={({ field }) => (
-                  <CreateStockSection entries={field.value} onChange={field.onChange} />
-                )}
-              />
+            <Controller
+              control={control}
+              name="stock_entries"
+              render={({ field }) => (
+                <CreateStockSection entries={field.value} onChange={field.onChange} />
+              )}
+            />
+            {errors.stock_entries?.message && (
+              <p className="text-xs text-danger">{errors.stock_entries.message}</p>
             )}
           </FormSection>
 
@@ -412,7 +394,6 @@ export default function ProductCreatePage() {
             image={form.images[0]?.url}
             price={form.price}
             skuPending
-            stockControl={form.stock_control}
             stockCount={form.stock_entries.reduce((sum: number, e: StockEntry) => sum + e.qty, 0)}
           />
         </div>

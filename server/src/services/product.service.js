@@ -152,6 +152,44 @@ function buildStockStages(stockFilter) {
   return stages;
 }
 
+// Joins each product to its active marketplace listings (by platform) so
+// `channel` can filter on them — a $lookup rather than a Product-side field
+// since a listing's platform lives on MarketplaceListing, not Product.
+// $lookup bypasses the soft-delete plugin's find middleware, so deleted_at
+// is matched explicitly here.
+function buildChannelStages(channel) {
+  if (!channel) return [];
+
+  const stages = [
+    {
+      $lookup: {
+        from: "marketplacelistings",
+        let: { productId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$product", "$$productId"] },
+              state: LISTING_STATE.ACTIVE,
+              deleted_at: null,
+            },
+          },
+          { $project: { platform: 1 } },
+        ],
+        as: "_channelListings",
+      },
+    },
+  ];
+
+  stages.push(
+    channel === "none"
+      ? { $match: { _channelListings: { $size: 0 } } }
+      : { $match: { "_channelListings.platform": channel } },
+  );
+  stages.push({ $project: { _channelListings: 0 } });
+
+  return stages;
+}
+
 // Same reasoning — shared attachment/category hydration for both listing
 // paths.
 const HYDRATION_STAGES = [
@@ -189,8 +227,12 @@ function withComputedFields(p) {
   };
 }
 
-async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, stockFilter } = {}) {
-  const basePipeline = [{ $match: filter }, ...buildStockStages(stockFilter)];
+async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, stockFilter, channelFilter } = {}) {
+  const basePipeline = [
+    { $match: filter },
+    ...buildStockStages(stockFilter),
+    ...buildChannelStages(channelFilter),
+  ];
 
   const countPipeline = [...basePipeline, { $count: "total" }];
   const pipeline = [
@@ -217,13 +259,14 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
 // already scoped to tenant/published/structured filters — this only adds the
 // stock join/filter (not indexed in Typesense) and re-sorts to match
 // Typesense's relevance order, since $in does not preserve array order.
-async function getProductsByIds(ids, { stockFilter } = {}) {
+async function getProductsByIds(ids, { stockFilter, channelFilter } = {}) {
   if (!ids.length) return { items: [] };
 
   const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
   const pipeline = [
     { $match: { _id: { $in: objectIds } } },
     ...buildStockStages(stockFilter),
+    ...buildChannelStages(channelFilter),
     ...HYDRATION_STAGES,
   ];
 

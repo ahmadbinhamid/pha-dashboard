@@ -9,6 +9,7 @@ const {
   PRODUCT_SORT,
   STOCK_STATUS,
 } = require("../constants/product.constants");
+const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
 const createProduct = {
   body: Joi.object({
@@ -147,6 +148,10 @@ const listProducts = {
       .default(""),
     mpn: Joi.string().allow("").default(""),
     sku: Joi.string().allow("").default(""),
+    // "none" = not listed on any channel; otherwise a specific platform.
+    channel: Joi.string()
+      .valid(...Object.values(MARKETPLACE_PLATFORM), "none", "")
+      .default(""),
   }),
 };
 

@@ -68,7 +68,6 @@ function productToForm(p: Product): ProductEditFormValues {
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
-    stock_control: p.stock_control,
     has_variants: p.has_variants,
     categories: p.categories?.map((c) => c._id) ?? [],
     tags: p.tags ?? [],
@@ -105,7 +104,8 @@ function formToFD(form: ProductEditFormValues): FormData {
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
-  fd.append("stock_control", String(form.stock_control));
+  // Stock is always tracked — there's no "track stock" toggle in the UI.
+  fd.append("stock_control", "true");
   fd.append("has_variants", String(form.has_variants));
   fd.append("categories", JSON.stringify(form.categories));
   fd.append("tags", JSON.stringify(form.tags));
@@ -279,7 +279,7 @@ function ProductEditForm({
     });
   };
 
-  const showSetStockCard = form.stock_control && !form.has_variants;
+  const showSetStockCard = !form.has_variants;
 
   const essentials = [
     form.title.trim().length > 0,
@@ -367,7 +367,7 @@ function ProductEditForm({
         <div className="space-y-5 lg:col-span-2">
 
           {/* 1. Basics */}
-          <FormSection number={1} title="Basics" tag={<span className="text-xs text-fg/40">Required</span>}>
+          <FormSection number={1} title="Basics">
             <FormField label="Product title" required error={errors.title?.message}>
               <Input {...register("title")} placeholder="Product title" />
             </FormField>
@@ -507,20 +507,6 @@ function ProductEditForm({
             number={4}
             title="Stock"
             description="Manage stock for your only location"
-            tag={
-              <Controller
-                control={control}
-                name="stock_control"
-                render={({ field }) => (
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    label="Track stock"
-                    className="border-none bg-transparent px-0 py-0"
-                  />
-                )}
-              />
-            }
           >
             {showSetStockCard && <ProductStockCard productId={product._id} />}
           </FormSection>
@@ -558,7 +544,6 @@ function ProductEditForm({
             image={form.images[0]?.url}
             price={form.price}
             sku={form.sku}
-            stockControl={form.stock_control}
             stockCount={product.stock_count}
           />
         </div>

@@ -105,6 +105,7 @@ exports.getProducts = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
     const stockFilter = req.query.stock || undefined;
+    const channelFilter = req.query.channel || undefined;
 
     if (req.query.search) {
       const categories = req.query.categories
@@ -128,7 +129,7 @@ exports.getProducts = async (req, res) => {
         perPage: SEARCH_CANDIDATE_LIMIT,
       });
 
-      const { items } = await getProductsByIds(ids, { stockFilter });
+      const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
 
       // Typesense's relevance order is the default ("best match") — only
       // override it with an explicit sort spec if the caller asked for one.
@@ -148,7 +149,7 @@ exports.getProducts = async (req, res) => {
     const filter = buildProductFilter(req.query, { authenticated: !!req.user, tenantId: req.tenantId });
     const sort = PRODUCT_SORT_OPTIONS[req.query.sort] || PRODUCT_SORT_OPTIONS.newest;
 
-    const { items, total } = await getProducts(filter, { skip, limit, sort, stockFilter });
+    const { items, total } = await getProducts(filter, { skip, limit, sort, stockFilter, channelFilter });
 
     return success(res, {
       items,

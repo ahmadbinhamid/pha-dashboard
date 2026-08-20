@@ -28,6 +28,7 @@ import type { Product } from "@/types/product";
 import type { EbayListing } from "@/types/marketplace";
 import { Pagination } from "@/components/ui/Pagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
+import { PLATFORM_LABEL, AVAILABLE_PLATFORMS } from "@/config/marketplacePlatforms";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [
@@ -43,6 +44,12 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
+const CHANNEL_FILTERS = [
+  { label: "All Channels", value: "" },
+  ...AVAILABLE_PLATFORMS.map((value) => ({ label: PLATFORM_LABEL[value], value })),
+  { label: "Not Listed", value: "none" },
+];
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
   const navigate = useNavigate();
@@ -53,6 +60,7 @@ export default function ProductsPage() {
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
   const stock = searchParams.get("stock") ?? "";
+  const channel = searchParams.get("channel") ?? "";
   const categories = searchParams.get("categories") ?? "";
   const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
@@ -100,6 +108,19 @@ export default function ProductsPage() {
         const next = new URLSearchParams(prev);
         if (val) next.set("stock", val);
         else next.delete("stock");
+        next.set("page", "1");
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const setChannel = useCallback(
+    (val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set("channel", val);
+        else next.delete("channel");
         next.set("page", "1");
         return next;
       }, { replace: true });
@@ -161,8 +182,8 @@ export default function ProductsPage() {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", { search, status, stock, categories, page, limit }],
-    queryFn: () => getProducts({ search, status, stock, categories, page, limit }),
+    queryKey: ["products", { search, status, stock, channel, categories, page, limit }],
+    queryFn: () => getProducts({ search, status, stock, channel, categories, page, limit }),
   });
 
   const { data: categoriesRes } = useQuery({
@@ -264,6 +285,7 @@ export default function ProductsPage() {
             )}
             <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
             <FilterSelect options={STOCK_FILTERS} value={stock} onChange={setStock} />
+            <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}

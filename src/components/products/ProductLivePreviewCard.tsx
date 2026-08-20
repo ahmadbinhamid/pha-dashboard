@@ -6,7 +6,6 @@ interface ProductLivePreviewCardProps {
   price: string;
   sku?: string | null;
   skuPending?: boolean;
-  stockControl: boolean;
   stockCount?: number | null;
 }
 
@@ -18,7 +17,6 @@ export function ProductLivePreviewCard({
   price,
   sku,
   skuPending,
-  stockControl,
   stockCount,
 }: ProductLivePreviewCardProps) {
   const priceNumber = Number(price) || 0;
@@ -42,9 +40,7 @@ export function ProductLivePreviewCard({
 
       <div className="mt-2 flex items-baseline justify-between gap-2">
         <span className="text-xl font-bold text-fg">{formatCurrency(priceNumber)}</span>
-        <span className="text-xs text-fg/45">
-          {stockControl ? `${stockCount ?? 0} in stock` : "Stock not tracked"}
-        </span>
+        <span className="text-xs text-fg/45">{stockCount ?? 0} in stock</span>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ export interface ProductListParams {
   categories?: string;
   type?: string;
   stock?: string;
+  channel?: string;
 }
 
 export interface ProductListData {

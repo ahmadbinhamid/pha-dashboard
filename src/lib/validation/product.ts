@@ -70,16 +70,22 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
 
 export const productCreateFormSchema = withPriceAndYearChecks({
   ...productFormShape,
-  stock_control: z.boolean(),
   stock_entries: z.custom<StockEntry[]>(),
   notes: z.array(z.string()),
+}).superRefine((values, ctx) => {
+  // Stock is always tracked (no "track stock" toggle) — the opening
+  // quantity for the single Main Warehouse location is required.
+  const entries = (values as { stock_entries: StockEntry[] }).stock_entries;
+  const qty = entries[0]?.qty;
+  if (entries.length === 0 || typeof qty !== "number" || qty < 0) {
+    ctx.addIssue({ code: "custom", message: "Stock quantity is required", path: ["stock_entries"] });
+  }
 });
 
 export const productEditFormSchema = withPriceAndYearChecks({
   ...productFormShape,
   sku: z.string(),
   brand: z.string(),
-  stock_control: z.boolean(),
   has_variants: z.boolean(),
   choices: z.custom<import("@/types/product").Choice[]>(),
 });
