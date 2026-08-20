@@ -78,6 +78,12 @@ export function InventoryHistorySheet({ item, onOpenChange }: InventoryHistorySh
     queryKey: ["inventory-history", item?._id],
     queryFn: () => getInventoryHistory(item!._id),
     enabled: !!item,
+    // An audit log must always reflect the latest state when opened — the
+    // app-wide 5-minute staleTime (AppProviders.tsx) would otherwise show a
+    // stale list if this same item's history was viewed recently, even
+    // though a stock change may have happened in between.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const entries = data?.data ?? [];
 

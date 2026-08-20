@@ -11,9 +11,11 @@ const { logger } = require("../loaders/logging");
 const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
 const { withAttachmentUrls } = require("../utils/attachment");
-const { getTotalStockForProduct } = require("./inventory.service");
+const inventoryService = require("./inventory.service");
+const { getTotalStockForProduct } = inventoryService;
 const { STOCK_STATUS, STOCK_LOW_THRESHOLD } = require("../constants/product.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
+const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 // ── SKU generation ────────────────────────────────────────────────────────────
 
@@ -400,13 +402,29 @@ async function saveVariant(variant) {
   return variant.save();
 }
 
-async function applyStockEntries(productId, stockEntries) {
+// Routed through inventory.service#adjustStock (rather than a raw
+// Inventory.updateOne) so the opening quantity set at product creation
+// shows up in that inventory record's stock history — same as every other
+// stock change (manual adjust, sale, refund, eBay sync). Without this, a
+// product created with e.g. 50 units on hand would read "No stock changes
+// recorded yet." in the History sheet despite genuinely having stock.
+async function applyStockEntries(productId, stockEntries, { tenantId, userId } = {}) {
   for (const entry of stockEntries) {
     if (entry.qty > 0) {
-      await Inventory.updateOne(
-        { product: productId, variant: null, location: entry.location_id },
-        { $set: { stock_count: entry.qty } },
-      );
+      const record = await Inventory.findOne({
+        product: productId,
+        variant: null,
+        location: entry.location_id,
+      });
+      if (!record) continue;
+
+      await inventoryService.adjustStock(record, {
+        adjustment: entry.qty,
+        reason: "Opening stock on product creation",
+        type: ADJUSTMENT_TYPE.RESTOCK,
+        userId,
+        tenantId,
+      });
     }
   }
 }

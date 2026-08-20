@@ -273,7 +273,10 @@ exports.createProduct = async (req, res) => {
     } else if (product.stock_control) {
       await ensureInventoryForProduct(product._id, null, req.tenantId);
       if (parsedStockEntries.length > 0) {
-        await applyStockEntries(product._id, parsedStockEntries);
+        await applyStockEntries(product._id, parsedStockEntries, {
+          tenantId: req.tenantId,
+          userId: req.user?._id,
+        });
       }
     }
 

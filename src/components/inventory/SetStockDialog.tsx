@@ -63,6 +63,11 @@ export function SetStockDialogFull({ item, onOpenChange }: SetStockDialogFullPro
     onSuccess: () => {
       toast({ title: "Stock set", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      // Product.stock_count is a separate cached copy (Products list, the
+      // product-edit page's live preview) — without this it stays stale
+      // until an unrelated action happens to invalidate it, or a reload.
+      queryClient.invalidateQueries({ queryKey: ["product"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       onOpenChange(false);
     },
     onError: (err: Error) => {
