@@ -18,6 +18,8 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ProductRow } from "@/components/products/ProductRow";
+import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
+import { ViewToggle, type ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
@@ -25,7 +27,7 @@ import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { EbayListing } from "@/types/marketplace";
 import { Pagination } from "@/components/ui/Pagination";
-import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
 import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
 
 const STATUS_FILTERS = [
@@ -52,8 +54,12 @@ export default function ProductsPage() {
   const status = searchParams.get("status") ?? "";
   const stock = searchParams.get("stock") ?? "";
   const categories = searchParams.get("categories") ?? "";
+  const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
-  const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
+  const limit = parseInt(
+    searchParams.get("limit") ?? String(view === "grid" ? DEFAULT_PAGE_SIZE_GRID : DEFAULT_PAGE_SIZE),
+    10,
+  );
   const selectedCategories = categories ? categories.split(",") : [];
 
   const [inputValue, setInputValue] = useState(search);
@@ -130,6 +136,23 @@ export default function ProductsPage() {
         const next = new URLSearchParams(prev);
         if (ids.length) next.set("categories", ids.join(","));
         else next.delete("categories");
+        next.set("page", "1");
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const setView = useCallback(
+    (mode: ViewMode) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (mode === "grid") next.set("view", "grid");
+        else next.delete("view");
+        // Drop any explicit limit/page from the other mode — list and grid
+        // use different page-size options (grid's are multiples of its
+        // column counts), so a stale limit can mismatch the new mode's set.
+        next.delete("limit");
         next.set("page", "1");
         return next;
       }, { replace: true });
@@ -249,16 +272,27 @@ export default function ProductsPage() {
               searchPlaceholder="Search categories…"
               className="w-48"
             />
+            <ViewToggle value={view} onChange={setView} />
           </div>
         </div>
 
-        {/* Table */}
+        {/* List / Grid */}
         {isLoading ? (
-          <LoadingSkeleton />
+          view === "grid" ? <ProductGridSkeleton /> : <LoadingSkeleton />
         ) : products.length === 0 ? (
           <EmptyState
             search={search}
             onNew={() => navigate("/products/new")}
+          />
+        ) : view === "grid" ? (
+          <ProductGrid
+            products={products}
+            onProductClick={(product) => navigate(`/products/${product.slug}/edit`)}
+            onEdit={(product) => navigate(`/products/${product.slug}/edit`)}
+            onDelete={(product) => setDeleteTarget(product)}
+            onTogglePublish={(product, published) =>
+              publishMutation.mutate({ id: product._id, published })
+            }
           />
         ) : (
           <div className="overflow-x-auto">
@@ -301,6 +335,7 @@ export default function ProductsPage() {
           totalPages={totalPages}
           totalItems={total}
           itemsPerPage={limit}
+          perPageOptions={view === "grid" ? PER_PAGE_OPTIONS_GRID : undefined}
           onLimitChange={setLimit}
           isLoading={isFetching}
           onPageChange={setPage}
