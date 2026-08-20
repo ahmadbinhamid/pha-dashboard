@@ -6,7 +6,7 @@
 const Order = require("../../models/Order");
 const Payment = require("../../models/Payment");
 const stripeKeysService = require("./stripe.keys.service");
-const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS } = require("../../constants/order.constants");
+const { ORDER_STATUS, ORDER_FULFILLMENT_STATUS, ORDER_CHANNEL } = require("../../constants/order.constants");
 const { PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { logger } = require("../../loaders/logging");
 
@@ -18,6 +18,14 @@ async function cleanupAbandonedOrders() {
   const orders = await Order.find({
     status: ORDER_STATUS.PENDING_PAYMENT,
     created_at: { $lt: cutoff },
+    // Only storefront orders go through Stripe checkout — a manual
+    // (counter-sale) or eBay order left at pending_payment is a staff
+    // decision (e.g. awaiting a bank transfer), not an abandoned Stripe
+    // session, and has no PaymentIntent to ever resolve either way. Found
+    // live: staff resetting a manual order back to pending_payment got it
+    // silently re-cancelled by this job every hour since it never has a
+    // Payment record to check against.
+    channel: ORDER_CHANNEL.STOREFRONT,
   });
 
   const summary = { checked: orders.length, cancelled: 0, skippedPaid: 0, errors: 0 };
