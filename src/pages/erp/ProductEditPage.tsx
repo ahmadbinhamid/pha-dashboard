@@ -120,7 +120,7 @@ function formToFD(form: ProductEditFormValues): FormData {
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function ProductEditSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-24">
+    <div className="space-y-5 pb-24">
       {/* Header */}
       <div className="space-y-2">
         <Skeleton className="h-3 w-32" />
@@ -296,7 +296,7 @@ function ProductEditForm({
   const marginPct = hasMargin ? Math.round((profitPerUnit / priceNumber) * 100) : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-24">
+    <div className="space-y-5 pb-24">
 
       {/* Sticky page header */}
       <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">

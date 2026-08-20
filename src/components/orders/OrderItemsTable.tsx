@@ -198,13 +198,19 @@ export function OrderItemsTable({
   // the fact — the backend rejects an edit for storefront orders, so don't
   // offer it here.
   const editable = channel === "ebay" || channel === "manual";
+  const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 
   return (
     <div className="max-h-140 overflow-auto">
       <Table className="min-w-140">
         <TableHeader>
           <TableRow>
-            <StickyTableHead size={48} className="top-0 z-3">
+            <StickyTableHead
+              size={48}
+              width={itemColWidth ?? undefined}
+              onResize={setItemColWidth}
+              className="top-0 z-3"
+            >
               Item
             </StickyTableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
@@ -218,7 +224,7 @@ export function OrderItemsTable({
         <TableBody>
           {items.map((item, i) => (
             <TableRow key={`${item.product}-${item.variant ?? i}`} className="group">
-              <StickyTableCell size={48}>
+              <StickyTableCell size={48} width={itemColWidth ?? undefined} onResize={setItemColWidth}>
                 <div className="truncate font-medium text-fg">{item.name}</div>
                 {item.note && (
                   <div className="mt-1 rounded-xs bg-bg-2 px-2 py-1 text-xs text-fg/55">{item.note}</div>

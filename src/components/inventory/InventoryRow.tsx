@@ -10,6 +10,8 @@ interface InventoryRowProps {
   record: InventoryRecord;
   lowStockThreshold: number;
   isVisible: (key: string) => boolean;
+  columnWidth?: number;
+  onColumnResize?: (width: number) => void;
   onAdjust: () => void;
   onSetStock: () => void;
   onViewHistory: () => void;
@@ -23,6 +25,8 @@ export function InventoryRow({
   record,
   lowStockThreshold,
   isVisible,
+  columnWidth,
+  onColumnResize,
   onAdjust,
   onSetStock,
   onViewHistory,
@@ -36,7 +40,7 @@ export function InventoryRow({
   return (
     <TableRow>
       {/* Product — sticky so it stays readable while the rest scrolls. */}
-      <StickyTableCell size={56}>
+      <StickyTableCell size={56} width={columnWidth} onResize={onColumnResize}>
         <div className="truncate font-medium text-fg">{record.product?.title ?? "—"}</div>
         {record.variant?.display_name && (
           <div className="mt-0.5 truncate text-xs text-fg/45">{record.variant.display_name}</div>

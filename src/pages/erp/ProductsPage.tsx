@@ -72,6 +72,7 @@ export default function ProductsPage() {
 
   const [inputValue, setInputValue] = useState(search);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [productColWidth, setProductColWidth] = useState<number | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -321,7 +322,11 @@ export default function ProductsPage() {
             <Table className="min-w-240">
               <TableHeader>
                 <TableRow>
-                  <StickyTableHead size={64}>
+                  <StickyTableHead
+                    size={64}
+                    width={productColWidth ?? undefined}
+                    onResize={setProductColWidth}
+                  >
                     Product
                   </StickyTableHead>
                   <TableHead>Status</TableHead>
@@ -339,6 +344,8 @@ export default function ProductsPage() {
                     key={product._id}
                     product={product}
                     listingPlatforms={listingPlatformsMap.get(product._id) ?? []}
+                    columnWidth={productColWidth ?? undefined}
+                    onColumnResize={setProductColWidth}
                     onClick={() => navigate(`/products/${product.slug}/edit`)}
                     onEdit={() => navigate(`/products/${product.slug}/edit`)}
                     onDelete={() => setDeleteTarget(product)}

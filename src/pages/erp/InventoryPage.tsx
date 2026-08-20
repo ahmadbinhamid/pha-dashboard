@@ -43,6 +43,7 @@ export default function InventoryPage() {
   const [setStockTarget, setSetStockTarget] = useState<InventoryRecord | null>(null);
   const [historyTarget, setHistoryTarget] = useState<InventoryRecord | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [productColWidth, setProductColWidth] = useState<number | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -140,7 +141,11 @@ export default function InventoryPage() {
             <Table className="min-w-200">
               <TableHeader>
                 <TableRow>
-                  <StickyTableHead size={56}>
+                  <StickyTableHead
+                    size={56}
+                    width={productColWidth ?? undefined}
+                    onResize={setProductColWidth}
+                  >
                     Product
                   </StickyTableHead>
                   {isVisible("sku") && <TableHead>SKU</TableHead>}
@@ -159,6 +164,8 @@ export default function InventoryPage() {
                     record={record}
                     lowStockThreshold={lowStockThreshold}
                     isVisible={isVisible}
+                    columnWidth={productColWidth ?? undefined}
+                    onColumnResize={setProductColWidth}
                     onAdjust={() => setAdjustTarget(record)}
                     onSetStock={() => setSetStockTarget(record)}
                     onViewHistory={() => setHistoryTarget(record)}

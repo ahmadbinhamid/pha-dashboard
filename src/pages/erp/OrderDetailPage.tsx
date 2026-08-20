@@ -44,7 +44,7 @@ function AddressBlock({ address }: { address: OrderAddress }) {
 
 function OrderDetailSkeleton() {
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24">
+    <div className="space-y-5 pb-24">
       <Skeleton className="h-3 w-32" />
       <div className="flex items-center justify-between">
         <div className="space-y-1.5">
@@ -75,7 +75,7 @@ function OrderDetailSkeleton() {
 
 function NotFoundState() {
   return (
-    <div className="mx-auto max-w-5xl py-20 text-center">
+    <div className="py-20 text-center">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
         <PackageX className="h-8 w-8 text-fg/30" />
       </div>
@@ -174,7 +174,7 @@ export default function OrderDetailPage() {
   const totalDue = getBalanceDue(order.total, order.payments, order.payment_status);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24 print:pb-0">
+    <div className="space-y-5 pb-24 print:pb-0">
       {/* On-screen admin view — the actual invoice (matching what's emailed
           to the customer) is rendered separately below, for print only. */}
       <div className="space-y-5 print:hidden">
@@ -404,6 +404,7 @@ export default function OrderDetailPage() {
                   refunds={order.refunds}
                   total={order.total}
                   channel={order.channel}
+                  customerEmail={order.customer.email}
                 />
               </CardContent>
             </Card>

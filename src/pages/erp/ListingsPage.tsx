@@ -59,6 +59,7 @@ export default function ListingsPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EbayListing | null>(null);
   const [inputValue, setInputValue] = useState(search);
+  const [productColWidth, setProductColWidth] = useState<number | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -218,7 +219,11 @@ export default function ListingsPage() {
             <Table className="min-w-180">
               <TableHeader>
                 <TableRow>
-                  <StickyTableHead size={52}>
+                  <StickyTableHead
+                    size={52}
+                    width={productColWidth ?? undefined}
+                    onResize={setProductColWidth}
+                  >
                     Product
                   </StickyTableHead>
                   <TableHead>Platform</TableHead>
@@ -246,7 +251,12 @@ export default function ListingsPage() {
                       className="group cursor-pointer"
                       onClick={() => navigate(`/listings/${listing._id}/edit`)}
                     >
-                      <StickyTableCell size={52} className="truncate font-medium text-fg">
+                      <StickyTableCell
+                        size={52}
+                        width={productColWidth ?? undefined}
+                        onResize={setProductColWidth}
+                        className="truncate font-medium text-fg"
+                      >
                         {productTitle}
                       </StickyTableCell>
                       <TableCell>

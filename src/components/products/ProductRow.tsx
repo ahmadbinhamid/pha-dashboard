@@ -18,6 +18,8 @@ import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 interface ProductRowProps {
   product: Product;
   listingPlatforms?: string[];
+  columnWidth?: number;
+  onColumnResize?: (width: number) => void;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -27,6 +29,8 @@ interface ProductRowProps {
 export function ProductRow({
   product,
   listingPlatforms = [],
+  columnWidth,
+  onColumnResize,
   onClick,
   onEdit,
   onDelete,
@@ -37,8 +41,10 @@ export function ProductRow({
   return (
     <TableRow onClick={onClick} className="group cursor-pointer">
       {/* Product — sticky so it stays readable while the rest scrolls on narrow screens.
-          max-w caps the column so a very long title truncates instead of blowing out the table. */}
-      <StickyTableCell size={64}>
+          max-w caps the column so a very long title truncates instead of blowing out the table.
+          Width is user-resizable from any row's own drag handle, not just the
+          header's — see StickyTableColumn. */}
+      <StickyTableCell size={64} width={columnWidth} onResize={onColumnResize}>
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
             {coverImage?.url ? (

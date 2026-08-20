@@ -20,6 +20,7 @@ export function OrderPaymentSummaryCard({
   refunds,
   total,
   channel,
+  customerEmail,
 }: {
   orderId: string;
   paymentStatus: OrderPaymentStatus;
@@ -27,6 +28,7 @@ export function OrderPaymentSummaryCard({
   refunds: Refund[];
   total: number;
   channel: OrderChannel;
+  customerEmail?: string | null;
 }) {
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
@@ -74,7 +76,7 @@ export function OrderPaymentSummaryCard({
           >
             Record Payment
           </Button>
-          <GeneratePaymentLink orderId={orderId} />
+          <GeneratePaymentLink orderId={orderId} customerEmail={customerEmail} />
         </div>
       )}
 

@@ -18,7 +18,7 @@ import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 
 function CustomerDetailSkeleton() {
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24">
+    <div className="space-y-5 pb-24">
       <Skeleton className="h-3 w-32" />
       <div className="flex items-center justify-between">
         <div className="space-y-1.5">
@@ -45,7 +45,7 @@ function CustomerDetailSkeleton() {
 
 function NotFoundState() {
   return (
-    <div className="mx-auto max-w-5xl py-20 text-center">
+    <div className="py-20 text-center">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
         <UserX className="h-8 w-8 text-fg/30" />
       </div>
@@ -73,7 +73,7 @@ export default function CustomerDetailPage() {
   if (isError || !customer) return <NotFoundState />;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24">
+    <div className="space-y-5 pb-24">
       <BreadcrumbNav items={[{ label: "Customers", href: "/customers" }, { label: customer.name }]} />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

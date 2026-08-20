@@ -170,7 +170,7 @@ export default function ProductCreatePage() {
   const marginPct = hasMargin ? Math.round((profitPerUnit / priceNumber) * 100) : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       {/* Sticky header */}
       <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
         <BreadcrumbNav
