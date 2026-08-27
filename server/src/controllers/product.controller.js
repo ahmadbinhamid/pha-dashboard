@@ -9,6 +9,7 @@ const {
   getProductSuggestions,
   findProductById,
   addProductNote,
+  sendProductInfoEmail,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecordWithSlug,
@@ -524,6 +525,20 @@ exports.addProductNote = async (req, res) => {
     );
     if (!product) return notFound(res, "Product not found");
     return created(res, product, "Note added");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.sendProductEmail = async (req, res) => {
+  try {
+    const product = await sendProductInfoEmail(
+      req.params.id,
+      { name: req.body.name, email: req.body.email },
+      req.tenantId,
+    );
+    if (!product) return notFound(res, "Product not found");
+    return success(res, product, "Email sent");
   } catch (err) {
     return systemfailure(res, err);
   }

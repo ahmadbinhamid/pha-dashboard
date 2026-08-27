@@ -1,11 +1,9 @@
 // services/attachment.service.js
 
 const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 const Attachment = require("../models/Attachment");
-const { getAttachmentType } = require("../utils/attachment");
-const config = require("../config");
+const { getAttachmentType, buildAttachmentFilePath } = require("../utils/attachment");
 
 async function listAttachments(tenantId, { skip, limit }) {
   const [items, total] = await Promise.all([
@@ -35,7 +33,7 @@ async function findAttachment(id, tenantId) {
 
 function removeAttachmentFile(fileName) {
   if (!fileName) return;
-  const diskPath = path.join(config.uploads.dir, fileName);
+  const diskPath = buildAttachmentFilePath(fileName);
   if (fs.existsSync(diskPath)) {
     fs.unlinkSync(diskPath);
   }

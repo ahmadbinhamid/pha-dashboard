@@ -182,6 +182,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
               Cover
             </span>
             <CoverPin />
+            <RemoveControl idx={0} />
           </div>
           <AddTile className="h-full w-28" />
         </div>
@@ -199,6 +200,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
               Cover
             </span>
             <CoverPin />
+            <RemoveControl idx={0} />
           </div>
 
           <div className="grid h-full w-1/2 auto-rows-[4.5rem] grid-cols-3 content-start gap-2 overflow-y-auto pr-0.5">

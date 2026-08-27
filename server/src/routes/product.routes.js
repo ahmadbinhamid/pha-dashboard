@@ -77,5 +77,11 @@ router.post(
   validate(v.addProductNote),
   asyncHandler(ctrl.addProductNote),
 );
+router.post(
+  "/:id/send-email",
+  auth(),
+  validate(v.sendProductEmail),
+  asyncHandler(ctrl.sendProductEmail),
+);
 
 module.exports = router;

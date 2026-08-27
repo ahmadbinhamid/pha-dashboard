@@ -1,5 +1,6 @@
 // utils/attachment.js
 
+const path = require("path");
 const config = require("../config");
 
 /** MIME types we treat as images */
@@ -31,6 +32,15 @@ function buildAttachmentUrl(fileName) {
   return `${config.uploads.url}/${fileName}`;
 }
 
+// Absolute on-disk path for an uploaded file — same base dir removeAttachmentFile
+// (attachment.service.js) already deletes from. Workers share this volume with
+// the API (see docker-compose.yml), so it's also safe to hand straight to
+// nodemailer as an attachment `path` (see product.service.js#sendProductInfoEmail).
+function buildAttachmentFilePath(fileName) {
+  if (!fileName) return null;
+  return path.join(config.uploads.dir, fileName);
+}
+
 // `url` is a Mongoose virtual on the Attachment model (derived from
 // file_name) — it's only computed automatically when a full Mongoose
 // document is serialized. Anywhere attachments come back as plain objects
@@ -49,6 +59,7 @@ module.exports = {
   IMAGE_MIMES,
   getAttachmentType,
   buildAttachmentUrl,
+  buildAttachmentFilePath,
   withAttachmentUrl,
   withAttachmentUrls,
 };

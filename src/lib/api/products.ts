@@ -80,6 +80,16 @@ export const addProductNote = async (id: string, text: string) => {
   return data;
 };
 
+export interface SendProductEmailPayload {
+  name: string;
+  email: string;
+}
+
+export const sendProductEmail = async (id: string, payload: SendProductEmailPayload) => {
+  const { data } = await apiClient.post<BeResponse<Product>>(`/product/${id}/send-email`, payload);
+  return data;
+};
+
 export const getVariants = async (id: string) => {
   const { data } = await apiClient.get<BeResponse<ProductVariant[]>>(
     `/product/${id}/variants`,

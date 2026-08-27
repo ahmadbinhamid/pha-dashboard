@@ -10,9 +10,11 @@ const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
-const { withAttachmentUrls } = require("../utils/attachment");
+const { withAttachmentUrls, buildAttachmentFilePath } = require("../utils/attachment");
 const inventoryService = require("./inventory.service");
 const { getTotalStockForProduct } = inventoryService;
+const { getCompanyProfile } = require("./tenantSettings.service");
+const emailService = require("./email/email.service");
 const { STOCK_STATUS, STOCK_LOW_THRESHOLD } = require("../constants/product.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
@@ -298,6 +300,36 @@ async function addProductNote(productId, { text, userId }, tenantId) {
   return product;
 }
 
+// Emails a product's title/SKU to a recipient the admin picks, with every
+// product image attached — triggered by the "Send Email" action beside Add
+// to Cart on the product edit page. Attachments are handed to nodemailer by
+// disk path rather than base64 — see buildAttachmentFilePath.
+async function sendProductInfoEmail(productId, { name, email }, tenantId) {
+  const product = await getPopulatedProduct(productId, tenantId);
+  if (!product) return null;
+
+  const companyProfile = await getCompanyProfile(tenantId);
+  const attachments = (product.attachments || [])
+    .filter((att) => att.file_name)
+    .map((att) => ({
+      filename: att.original_name || att.file_name,
+      path: buildAttachmentFilePath(att.file_name),
+      contentType: att.mime_type || undefined,
+    }));
+
+  await emailService.sendProductInfo({
+    to: email,
+    name,
+    productTitle: product.title,
+    productSku: product.sku,
+    attachments,
+    companyProfile,
+    tenantId,
+  });
+
+  return product;
+}
+
 async function getProductBySlug(slug, tenantId) {
   const product = await Product.findOne({ slug, tenant_id: tenantId })
     .populate("attachments")
@@ -459,6 +491,7 @@ module.exports = {
   getProductSuggestions,
   findProductById,
   addProductNote,
+  sendProductInfoEmail,
   getProductBySlug,
   getPopulatedProduct,
   createProductRecordWithSlug,

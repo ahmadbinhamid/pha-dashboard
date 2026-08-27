@@ -27,6 +27,7 @@ import { ProductNotesSection } from "@/components/products/ProductNotesSection";
 import { FormSection } from "@/components/products/FormSection";
 import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
 import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
+import { SendProductEmailModal } from "@/components/products/SendProductEmailModal";
 import { useToast } from "@/context";
 import {
   getProduct,
@@ -39,6 +40,7 @@ import {
   ShoppingBag,
   ChevronDown,
   CheckCircle2,
+  Mail,
 } from "lucide-react";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 import { productEditFormSchema, type ProductEditFormValues } from "@/lib/validation/product";
@@ -211,6 +213,7 @@ function ProductEditForm({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imagesUploading, setImagesUploading] = useState(false);
+  const [sendEmailOpen, setSendEmailOpen] = useState(false);
 
   const {
     register,
@@ -339,7 +342,28 @@ function ProductEditForm({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <AddToCartButton product={product} display="labeled" />
+            <div className="flex items-center">
+              <AddToCartButton product={product} display="labeled" className="rounded-r-none" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="h-9 w-6 rounded-l-none border-l border-border px-0"
+                    title="More actions"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setSendEmailOpen(true)}>
+                    <Mail className="h-3.5 w-3.5 text-fg/50" />
+                    Send Email
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Button
               type="button"
               variant="secondary"
@@ -541,13 +565,15 @@ function ProductEditForm({
         <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <ProductLivePreviewCard
             title={form.title}
-            image={form.images[0]?.url}
+            images={form.images}
             price={form.price}
             sku={form.sku}
             stockCount={product.stock_count}
           />
         </div>
       </div>
+
+      <SendProductEmailModal product={product} open={sendEmailOpen} onOpenChange={setSendEmailOpen} />
     </div>
   );
 }

@@ -391,7 +391,7 @@ export default function ProductCreatePage() {
         <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <ProductLivePreviewCard
             title={form.title}
-            image={form.images[0]?.url}
+            images={form.images}
             price={form.price}
             skuPending
             stockCount={form.stock_entries.reduce((sum: number, e: StockEntry) => sum + e.qty, 0)}

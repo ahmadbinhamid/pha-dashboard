@@ -263,6 +263,30 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
   });
 }
 
+/**
+ * Send a product's title/SKU/images to a recipient the admin picks —
+ * triggered by the "Send Email" action on the product edit page. Images are
+ * attached by disk path (not base64) since the email worker shares the same
+ * uploads volume as the API — see product.service.js#sendProductInfoEmail.
+ */
+async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    fromName: tenantFromName(companyProfile),
+    tenantId,
+    to,
+    subject: `Product Info — ${productTitle}`,
+    template: "productInfo",
+    variables: {
+      name,
+      product_title: productTitle,
+      product_sku: productSku || null,
+      has_images: attachments.length > 0,
+      ...tenantBrandVars(companyProfile),
+    },
+    attachments,
+  });
+}
+
 module.exports = {
   sendOTP,
   accountVerified,
@@ -275,4 +299,5 @@ module.exports = {
   sendOrderReceivedPickup,
   sendManualOrderReceipt,
   sendPaymentLink,
+  sendProductInfo,
 };

@@ -165,6 +165,20 @@ const addProductNote = {
   }),
 };
 
+const sendProductEmail = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({
+    name: Joi.string().trim().min(1).required().messages({
+      "string.empty": "Recipient name is required",
+      "any.required": "Recipient name is required",
+    }),
+    email: Joi.string().trim().lowercase().email().required().messages({
+      "string.email": "Enter a valid email address",
+      "any.required": "Recipient email is required",
+    }),
+  }),
+};
+
 const suggestProducts = {
   query: Joi.object({
     q: Joi.string().trim().min(1).required(),
@@ -181,4 +195,5 @@ module.exports = {
   listProducts,
   suggestProducts,
   addProductNote,
+  sendProductEmail,
 };
