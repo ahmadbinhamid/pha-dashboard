@@ -295,7 +295,7 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
     // duplicate-delivering the same email to the recipient several times.
     // A longer ceiling makes hitting it rare; fewer attempts caps the
     // worst-case duplicate count if it's ever hit anyway.
-    { timeout: 120000, attempts: 2 },
+    { timeout: 180000, attempts: 2 },
   );
 }
 
