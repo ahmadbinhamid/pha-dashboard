@@ -270,21 +270,33 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
  * uploads volume as the API — see product.service.js#sendProductInfoEmail.
  */
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
-  return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
-    to,
-    subject: `Product Info — ${productTitle}`,
-    template: "productInfo",
-    variables: {
-      name,
-      product_title: productTitle,
-      product_sku: productSku || null,
-      has_images: attachments.length > 0,
-      ...tenantBrandVars(companyProfile),
+  return enqueueEmailJob(
+    {
+      fromName: tenantFromName(companyProfile),
+      tenantId,
+      to,
+      subject: `Product Info — ${productTitle}`,
+      template: "productInfo",
+      variables: {
+        name,
+        product_title: productTitle,
+        product_sku: productSku || null,
+        has_images: attachments.length > 0,
+        ...tenantBrandVars(companyProfile),
+      },
+      attachments,
     },
-    attachments,
-  });
+    // Product photos can be several MB each and are sent through a
+    // deliberately rate-limited SMTP transporter (see config.smtp) — the
+    // queue's default 30s job timeout is fine for a lightweight OTP/PDF
+    // email but too short here, and since a Bull job timeout can't actually
+    // cancel an in-flight SMTP send, a spurious timeout used to trigger up
+    // to 5 retries that each *also* completed the real send afterward,
+    // duplicate-delivering the same email to the recipient several times.
+    // A longer ceiling makes hitting it rare; fewer attempts caps the
+    // worst-case duplicate count if it's ever hit anyway.
+    { timeout: 120000, attempts: 2 },
+  );
 }
 
 module.exports = {
