@@ -13,9 +13,7 @@ const routes = require("./routes");
 const domainService = require("./services/domain.service");
 
 // Register marketplace adapters — needed by the API process for endListing on delete
-require("./services/marketplace/registry").register(
-  require("./services/marketplace/adapters/ebay.adapter"),
-);
+require("./services/marketplace/registerAdapters").registerAdapters();
 const { requestLogger, errorLogger } = require("./middlewares/logging");
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");

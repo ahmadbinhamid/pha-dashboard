@@ -10,6 +10,9 @@
 //
 // Interface:
 //   key                                            -> "ebay"
+//   manifest                                        -> catalogue entry (see registry.js#list)
+//   capabilities                                    -> { publish, inventory, batch, orders, webhooks, inboundInventory, variants }
+//   loadSettings(tenantId)                          -> resolved eBay settings, or null if never connected
 //   publish(resolved, settings, hooks?, seq?)      -> { external_listing_id, external_offer_id, quantity }
 //   update(resolved, settings, hooks?, seq?)       -> { external_listing_id, external_offer_id, quantity }
 //   end(listing)                                   -> void
@@ -52,6 +55,51 @@ const MarketplaceListing = require("../../../models/MarketplaceListing");
 
 const key = "ebay";
 
+// GET /api/v1/channels merges this with the tenant's ChannelConnection
+// status/health (see channel.controller.js) — logo is left null, not a path
+// into assets/branding (no eBay asset exists there), since the frontend
+// isn't touched in this run and can decide how to render an icon for it.
+const manifest = {
+  key,
+  name: "eBay",
+  logo: null,
+  description: "Publish listings and sync inventory with eBay.",
+  status: "active",
+  authType: "oauth",
+  setupSteps: [
+    "Connect your eBay seller account via OAuth",
+    "Set your eBay marketplace and warehouse address",
+    "Choose default fulfillment/payment/return business policies",
+  ],
+  requiredTenantData: ["marketplace_id", "warehouse_address", "business_policies"],
+};
+
+const capabilities = {
+  publish: true,
+  inventory: true,
+  batch: false,
+  orders: true,
+  webhooks: true,
+  inboundInventory: true,
+  variants: true,
+};
+
+// Resolves this tenant's eBay settings for the generic sync dispatcher (see
+// sync.service.js). Deliberately mirrors getEbaySettings' own contract
+// exactly (an object — possibly with every field null/default for a never-
+// connected tenant — never `null` itself), NOT the newer generic
+// loadSettings contract's "null means not connected" convention.
+// NOTE: an eBay tenant with active listings but no credentials configured
+// still reaches publish()/update() below exactly as it always has, and gets
+// the same "credentials not configured" thrown error (retried by Bull same
+// as today) — the generic "not connected" skip in sync.service.js is for
+// adapters whose loadSettings legitimately returns null (a platform with no
+// resolvable settings at all), which never happens for eBay. Changing that
+// would be an observable behavior change for eBay this migration must avoid.
+async function loadSettings(tenantId) {
+  return getEbaySettings(tenantId);
+}
+
 // Keeps MarketplaceListing.ebay_synced_quantity current whenever WE push a
 // quantity to eBay, so the inventory-sync poller (ebay.inventory-sync.service.js)
 // can tell "eBay changed since we last touched it" apart from "we're the ones
@@ -73,17 +121,26 @@ async function updateSyncBaseline(productId, variantId, quantity, tenantId, seq 
     { tenant_id: tenantId, product: productId, variant: variantId || null, platform: key },
     {
       $set: {
+        // TODO(dual-write): remove ebay_synced_quantity/ebay_synced_at after
+        // backfill — synced_quantity/synced_at (base schema, generic) are
+        // the replacement. Both are written during the transition so a
+        // rollback to pre-migration code (which only reads
+        // ebay_synced_quantity) keeps working.
         ebay_synced_quantity: quantity,
         ebay_synced_at: new Date(),
         ebay_pending_reconcile_qty: null,
+        synced_quantity: quantity,
+        synced_at: new Date(),
         ...(seq != null ? { last_pushed_seq: seq } : {}),
       },
     },
-    // These are all eBay-discriminator-only fields (declared on ebaySchema,
-    // not MarketplaceListing's base schema) — a base-model update casts
-    // against the base schema only and silently drops anything it doesn't
-    // recognize under Mongoose's default strict mode. See the matching
-    // comment on inventory.service.js's own ebay_synced_quantity stamp.
+    // ebay_synced_quantity/ebay_synced_at/ebay_pending_reconcile_qty are
+    // eBay-discriminator-only fields (declared on ebaySchema, not
+    // MarketplaceListing's base schema) — a base-model update casts against
+    // the base schema only and silently drops anything it doesn't recognize
+    // under Mongoose's default strict mode. synced_quantity/synced_at/
+    // last_pushed_seq no longer need this (moved to the base schema), but
+    // the still-discriminator-only fields above do.
     { strict: false },
   );
 }
@@ -367,4 +424,4 @@ async function end(listing) {
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
-module.exports = { key, publish, update, end };
+module.exports = { key, manifest, capabilities, loadSettings, publish, update, end };

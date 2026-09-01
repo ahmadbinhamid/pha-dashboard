@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"FE,BE,EMAIL,EBAY\" -c \"cyan,green,yellow,magenta\" \"npm run dev:fe\" \"npm run dev:be\" \"npm run dev:worker:email\" \"npm run dev:worker:ebay\"",
+    "dev": "concurrently -n \"FE,BE,PLATFORM,CHANNELS\" -c \"cyan,green,yellow,magenta\" \"npm run dev:fe\" \"npm run dev:be\" \"npm run dev:worker:platform\" \"npm run dev:worker:channels\"",
     "dev:fe": "vite",
     "dev:be": "npm --prefix server run dev",
-    "dev:worker:email": "npm --prefix server run worker:email",
-    "dev:worker:ebay": "npm --prefix server run worker:ebay",
+    "dev:worker:platform": "npm --prefix server run worker:platform",
+    "dev:worker:channels": "npm --prefix server run worker:channels",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

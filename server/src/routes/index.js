@@ -19,6 +19,7 @@ router.use("/order", require("./order.routes"));
 router.use("/refund", require("./refund.routes"));
 router.use("/payment", require("./payment.routes"));
 router.use("/ebay", require("./ebay.routes"));
+router.use("/channels", require("./channel.routes"));
 router.use("/inquiry", require("./inquiry.routes"));
 router.use("/newsletter", require("./newsletter.routes"));
 router.use("/vehicle-model", require("./vehicle-model.routes"));

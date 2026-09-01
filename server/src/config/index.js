@@ -113,6 +113,38 @@ const config = {
     redirectUri: get("EBAY_REDIRECT_URI", null),
   },
 
+  channels: {
+    // ChannelSyncLog TTL — see models/ChannelSyncLog.js.
+    syncLogTtlDays: getNum("CHANNEL_SYNC_LOG_TTL_DAYS", 30),
+    // Full catalogue syncs can be thousands of listings; logging every
+    // success would flood the collection for no operational benefit (see
+    // channel.constants.js and sync.service.js). Failures are always logged
+    // in full regardless of this flag.
+    logSuccesses: get("CHANNEL_LOG_SUCCESSES", "false") === "true",
+    // Consecutive transport/auth failures before a platform's queue is
+    // paused — see ChannelConnection.consecutive_failures and
+    // services/marketplace/circuitBreaker.js.
+    circuitBreakerThreshold: getNum("CHANNEL_CIRCUIT_BREAKER_THRESHOLD", 10),
+    // Debounced sync_listing enqueue delay — see queues/channel.queue.js.
+    // Matches Bull's existing default id/delay pattern already used for
+    // eBay before this migration (no prior explicit value, so this is the
+    // first time it's configurable rather than hardcoded).
+    debounceMs: getNum("CHANNEL_SYNC_DEBOUNCE_MS", 5000),
+    // Per-queue Bull limiter ({max, duration}), keyed by platform — see
+    // queues/channel.queue.js. eBay's queue has never had a limiter (the old
+    // queues/ebay.queue.js never set one), so it stays unset by default
+    // here too — only set EBAY_QUEUE_RATE_MAX/_DURATION_MS if you actually
+    // want to newly throttle it; leaving both unset preserves eBay's current
+    // unrestricted throughput exactly, per this migration's zero-behavior-
+    // change invariant.
+    rateLimits: {
+      ebay:
+        getNum("EBAY_QUEUE_RATE_MAX", 0) > 0
+          ? { max: getNum("EBAY_QUEUE_RATE_MAX", 0), duration: getNum("EBAY_QUEUE_RATE_DURATION_MS", 1000) }
+          : null,
+    },
+  },
+
   stripe: {
     // BYOK — no platform-level secret/webhook/publishable key anymore; each
     // tenant supplies their own via Settings → Payment Account, stored
