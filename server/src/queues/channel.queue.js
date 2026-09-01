@@ -69,9 +69,17 @@ const DEFAULT_JOB_OPTS = {
 // below). ebay.queue.js's enqueueEbayJob calls this directly (never the
 // override-checking enqueueChannelJob) so registering itself as eBay's
 // override can never recurse back into itself.
+//
+// opts.bypassDebounce: true skips the debounce jobId/delay entirely — Bull
+// assigns its own unique id and the job runs immediately (subject to normal
+// queue order/rate limits). Used by channel.service.js#retryChannelLog: a
+// manual "retry this failed job" action must always actually enqueue
+// something, never collapse into (or get blocked by) whatever debounced job
+// already exists for that listing.
 async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
   const queue = getQueue(platform);
-  const jobOpts = { ...DEFAULT_JOB_OPTS, ...opts };
+  const { bypassDebounce, ...restOpts } = opts;
+  const jobOpts = { ...DEFAULT_JOB_OPTS, ...restOpts };
 
   // Debounce: collapse rapid-fire sync_listing calls for the SAME listing
   // into one delayed job, keyed by listing id (not by payload) — a fresh
@@ -81,21 +89,36 @@ async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
   // time rather than trusting whichever payload happened to win (see
   // sync.service.js#syncListing and inventory.service.js#fanOutMarketplaceInventory),
   // so which of the N calls' payload "wins" the dedup doesn't matter.
-  //
-  // Bull gotcha (verified for bull@4.16.5, this repo's pinned version — see
-  // package.json): a completed job with a custom jobId stays in Redis's
-  // "completed" set unless removeOnComplete is true — a later .add() with
-  // the SAME jobId is then silently ignored (Bull still considers that id
-  // "taken" and just returns the old completed job; it never runs again).
-  // removeOnComplete: true is what actually frees the id back up for the
-  // next debounce window. removeOnFail stays false so a failed debounced
-  // job is still visible/retryable rather than vanishing.
-  if (jobName === "sync_listing" && payload?.listingId) {
+  if (jobName === "sync_listing" && payload?.listingId && !bypassDebounce) {
+    const jobId = `sync:${platform}:${payload.listingId}`;
+
+    // Bull gotcha (verified for bull@4.16.5, this repo's pinned version —
+    // see package.json): add() returns the EXISTING job for a jobId present
+    // in ANY state — waiting, delayed, active, completed, OR failed — it
+    // does not create a new one. removeOnComplete: true frees a completed
+    // job's id back up for the next debounce window. removeOnFail used to
+    // stay false "so a failed job is still visible/retryable" — but that
+    // reasoning was backwards: a failed job sitting under this jobId
+    // doesn't make it retryable, it makes every SUBSEQUENT sync_listing
+    // call for that listing silently a no-op forever, since add() just
+    // keeps returning the same dead failed job. ChannelSyncLog is the
+    // durable failure record now (see sync.service.js#logSyncEvent), so
+    // nothing is lost by removing a failed job from Bull — removeOnFail:
+    // true is the fix going forward. Defensively also clear out any job
+    // already sitting in a terminal state under this id (e.g. one that
+    // failed before this fix was deployed, back when removeOnFail was
+    // false) so this jobId can never be permanently stuck either way.
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "completed" || state === "failed") await existing.remove();
+    }
+
     Object.assign(jobOpts, {
-      jobId: `sync:${platform}:${payload.listingId}`,
+      jobId,
       delay: opts.delay ?? config.channels.debounceMs,
       removeOnComplete: true,
-      removeOnFail: false,
+      removeOnFail: true,
     });
   }
 

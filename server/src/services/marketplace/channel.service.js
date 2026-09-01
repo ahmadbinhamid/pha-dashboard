@@ -69,6 +69,13 @@ async function getChannelLogs(tenantId, platform, { page = 1, limit = 20 } = {})
 // sync_listing job with no fencing seq (null), same as an explicit manual
 // "resync this listing" action elsewhere in this codebase, so it always
 // applies rather than being dropped by the seq fence.
+//
+// bypassDebounce: true — a manual retry must always actually enqueue a job.
+// The debounced jobId (`sync:<platform>:<listingId>`) may currently be
+// occupied by the very failed job this retry exists to recover from, or by
+// an unrelated in-flight debounced job for the same listing; either way
+// this needs its own fresh, immediate job rather than folding into (or
+// being silently dropped by) whatever's already sitting under that id.
 async function retryChannelLog(tenantId, platform, logId) {
   const log = await ChannelSyncLog.findOne({ _id: logId, tenant_id: tenantId, platform }).lean();
   if (!log) return null;
@@ -78,7 +85,7 @@ async function retryChannelLog(tenantId, platform, logId) {
     throw err;
   }
 
-  await enqueueChannelJob(platform, "sync_listing", { listingId: log.entity_id.toString(), seq: null });
+  await enqueueChannelJob(platform, "sync_listing", { listingId: log.entity_id.toString(), seq: null }, { bypassDebounce: true });
   return { requeued: true, listingId: log.entity_id.toString() };
 }
 
