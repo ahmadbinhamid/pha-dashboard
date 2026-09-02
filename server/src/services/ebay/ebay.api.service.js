@@ -369,7 +369,19 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
   const spnArr = (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : [])
     .map((s) => (s == null ? "" : String(s).trim()))
     .filter((s) => s !== "" && s !== "null");
-  if (spnArr.length > 0) aspects["Superseded Part Number"] = spnArr;
+  // Same class of error as buildVehicleAspects above (errorId 25002):
+  // "Superseded Part Number" is cardinality SINGLE in eBay's motor-parts
+  // category schema, even though this app's own data model allows several
+  // (a part can legitimately supersede/be superseded by more than one other
+  // part number — see MarketplaceListing.js's superseded_part_number array).
+  // Sending the whole array got every affected listing stuck in a
+  // permanent sync Error ("Superseded Part Number should contain only one
+  // value. Remove the extra values and try again."). Only the first entry
+  // is sent to eBay; the rest still show on this app's own product page,
+  // just not as an eBay item specific — no dynamic per-category cardinality
+  // lookup here, matching how Brand/MPN/Authenticity/Warranty/Make/Model/
+  // Series/Year are all already handled as single-value in this function.
+  if (spnArr.length > 0) aspects["Superseded Part Number"] = [spnArr[0]];
   // Dedicated authenticity / warranty fields (override dynamic aspects of same name)
   if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
   if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
