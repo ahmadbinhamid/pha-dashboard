@@ -22,7 +22,7 @@ require("../models/index"); // register all schemas before any populate() calls
 const { logger } = require("../loaders/logging");
 const registry = require("../services/marketplace/registry");
 const { registerAdapters } = require("../services/marketplace/registerAdapters");
-const { getQueue } = require("../queues/channel.queue");
+const { getQueue, enqueueChannelJob } = require("../queues/channel.queue");
 const marketplaceSync = require("../services/marketplace/sync.service");
 
 // eBay's sync_listing concurrency has been 1 since the seq-fencing
@@ -35,6 +35,69 @@ const SYNC_LISTING_CONCURRENCY = { ebay: 1 };
 const DEFAULT_CONCURRENCY = 2;
 
 const activeQueues = [];
+
+// Debounced sync_listing jobs are keyed by listing id (see
+// channel.queue.js's jobId `sync:<platform>:<listingId>`) — while that job
+// is ACTIVE (already picked up, mid-flight), Bull's add() with the same
+// jobId returns the existing (active) job rather than creating a new one:
+// a stock change's fan-out call landing in that window is silently
+// swallowed. Concretely:
+//   t=0  job J starts syncing listing L, resolves quantity 5
+//   t=1  stock changes to 3 -> fan-out bumps push_seq -> enqueues
+//        sync:ebay:L -> J is ACTIVE under that id -> Bull returns the
+//        existing job, the add is a no-op
+//   t=3  J completes, pushes 5 to eBay, removeOnComplete frees the id ->
+//        nothing is queued; eBay shows 5, local stock is 3, no error logged
+//
+// Fixed here (the "completed" handler), not inside syncListing or
+// enqueueChannelJobDirect, because the jobId slot is only free again once
+// removeOnComplete has actually run — re-enqueueing any earlier would just
+// be swallowed the same way. Verified for bull@4.16.5 (this repo's pinned
+// version — see package.json): Queue#processJob awaits
+// job.moveToCompleted() (the call that performs the Redis-side removal)
+// BEFORE emitting "completed" — see node_modules/bull/lib/queue.js — so by
+// the time this handler runs, the jobId is guaranteed free and a
+// re-enqueue here creates a genuinely new job rather than being swallowed.
+//
+// Applies to every channel (keyed generically off push_seq/job.data, no
+// eBay-specific logic) — not just eBay.
+async function recoverMidFlightChange(platformKey, job, result) {
+  // Only a job that actually applied a sync (not one skipped/dropped —
+  // stale_seq, not_connected, circuit_open, inventory_not_supported all
+  // return { skipped: true }, never { ok: true } — see sync.service.js)
+  // can have left the listing mid-flight in the first place; whatever job
+  // DID apply the current value already ran this same check itself.
+  if (!result?.ok) return;
+
+  const { listingId, seq } = job.data;
+  // seq is null for a caller that doesn't participate in fencing (e.g. an
+  // explicit manual resync with no stock change behind it) — nothing to
+  // compare push_seq against.
+  if (!listingId || seq == null) return;
+
+  const currentPushSeq = await marketplaceSync.getListingPushSeq(listingId);
+  if (currentPushSeq == null) return; // listing no longer exists
+
+  // Strictly greater than what THIS job applied — an equal push_seq means
+  // nothing has changed since, so there's nothing to recover. This is what
+  // keeps this from looping: it only ever fires again in response to a NEW
+  // real stock change bumping push_seq further, never on its own.
+  if (currentPushSeq <= seq) return;
+
+  logger.info(
+    `[channelWorker:${platformKey}] mid-flight change recovered for listing ${listingId}: ` +
+      `push_seq is now ${currentPushSeq} but job ${job.id} only applied seq ${seq} — re-enqueueing`,
+  );
+  // delay: 0 — this is already-confirmed drift (push_seq has definitely
+  // moved past what was applied), not a fresh input worth debouncing
+  // behind the normal window; every second spent waiting is a second eBay
+  // keeps showing a quantity we already know is wrong. Still goes through
+  // the normal debounced jobId (not bypassDebounce), so it can't create a
+  // second concurrent job for this listing if an unrelated fan-out call
+  // lands at the same moment — it either coalesces with that job or (if
+  // this wins the race) is itself subject to the same recovery check.
+  await enqueueChannelJob(platformKey, "sync_listing", { listingId, seq: currentPushSeq }, { delay: 0 });
+}
 
 function attachSyncListingProcessor(adapter) {
   const queue = getQueue(adapter.key);
@@ -51,7 +114,21 @@ function attachSyncListingProcessor(adapter) {
     return result;
   });
 
-  queue.on("completed", (job) => logger.info(`[channelWorker:${adapter.key}] completed job ${job.id} (${job.name})`));
+  queue.on("completed", (job, result) => {
+    logger.info(`[channelWorker:${adapter.key}] completed job ${job.id} (${job.name})`);
+    if (job.name !== "sync_listing") return;
+    // Never let a re-enqueue failure surface as an unhandled rejection out
+    // of this event listener — log and move on, same as any other
+    // best-effort recovery path in this codebase.
+    recoverMidFlightChange(adapter.key, job, result).catch((err) => {
+      logger.error(`[channelWorker:${adapter.key}] mid-flight recovery check failed for job ${job.id}: ${err.message}`);
+    });
+  });
+  // A failed job (retries exhausted) deliberately does NOT run the
+  // mid-flight recovery check — a job that never successfully applied
+  // anything has nothing to have left "mid-flight" from its own
+  // perspective, and retries/the circuit breaker (see sync.service.js,
+  // circuitBreaker.js) already own recovering from failures.
   queue.on("failed", (job, err) => logger.error(`[channelWorker:${adapter.key}] failed job ${job?.id} (${job?.name}): ${err?.message}`));
 
   activeQueues.push(queue);
@@ -173,4 +250,11 @@ if (require.main === module) {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-module.exports = { startChannelWorker, shutdown };
+module.exports = {
+  startChannelWorker,
+  shutdown,
+  // Exported for tests (channel.worker.midflight.test.js) — not part of
+  // the module's own operational surface.
+  attachSyncListingProcessor,
+  recoverMidFlightChange,
+};

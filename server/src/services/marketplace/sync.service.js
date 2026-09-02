@@ -239,6 +239,12 @@ async function syncListing(listingId, seq = null) {
       jobType: isUpdate ? "update" : "publish",
       entityId: listing._id,
       status: CHANNEL_SYNC_LOG_STATUS.FAILURE,
+      // Generic pass-through — an adapter error that names itself (e.g.
+      // ebay.adapter.js's ConditionUnverifiedError, code
+      // "CONDITION_UNVERIFIED") surfaces that in the channel logs UI instead
+      // of only in stdout; an ordinary Error with no .code just logs null,
+      // same as before this existed.
+      errorCode: err.code ?? null,
       errorMessage: err.message,
       durationMs: Date.now() - startedAt,
     });
@@ -285,4 +291,16 @@ async function endListing(listingId) {
   }
 }
 
-module.exports = { syncListing, endListing };
+// Returns a listing's current push_seq (coalesced to 0 — see
+// MarketplaceListing.js's own comment on why every comparison site does
+// this), or null if the listing no longer exists. Used by
+// channel.worker.js's mid-flight recovery check (see
+// recoverMidFlightChange) — kept here rather than a direct model query in
+// the worker, so DB access for listing sync state stays in this service
+// layer, matching every other marketplace-listing read/write in this file.
+async function getListingPushSeq(listingId) {
+  const listing = await MarketplaceListing.findById(listingId).select("push_seq").lean();
+  return listing ? (listing.push_seq ?? 0) : null;
+}
+
+module.exports = { syncListing, endListing, getListingPushSeq };
