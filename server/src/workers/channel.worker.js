@@ -20,10 +20,12 @@ const mongoose = require("mongoose");
 const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { logger } = require("../loaders/logging");
+const config = require("../config");
 const registry = require("../services/marketplace/registry");
 const { registerAdapters } = require("../services/marketplace/registerAdapters");
 const { getQueue, enqueueChannelJob } = require("../queues/channel.queue");
 const marketplaceSync = require("../services/marketplace/sync.service");
+const refreshService = require("../services/marketplace/refresh.service");
 
 // eBay's sync_listing concurrency has been 1 since the seq-fencing
 // migration — two jobs for the SAME listing racing each other could still
@@ -33,6 +35,16 @@ const marketplaceSync = require("../services/marketplace/sync.service");
 // brand-new adapter with no established throughput characteristics yet.
 const SYNC_LISTING_CONCURRENCY = { ebay: 1 };
 const DEFAULT_CONCURRENCY = 2;
+
+// sync_batch (Task 3, Google Shopping) — a full-catalogue sync is a heavy,
+// long-running job in its own right (chunked internally — see
+// sync.service.js#syncBatch), so this stays low regardless of platform;
+// running many tenants' full syncs at once on one platform's queue would
+// just contend with each other and with normal sync_listing traffic on the
+// same underlying API. Not merged with SYNC_LISTING_CONCURRENCY — a
+// platform can reasonably want a different value for each job type.
+const SYNC_BATCH_CONCURRENCY = { };
+const DEFAULT_BATCH_CONCURRENCY = 1;
 
 const activeQueues = [];
 
@@ -135,6 +147,79 @@ function attachSyncListingProcessor(adapter) {
   return queue;
 }
 
+// sync_batch (Task 3) — attached only for an adapter that actually declares
+// batch support (capabilities.batch === true AND a real publishBatch
+// export), so an adapter without it (eBay) never gets a processor
+// registered for a job type it can't handle. job.data is { tenantId } —
+// unlike sync_listing, there's no debounce jobId here at all (see
+// channel.queue.js: the debounce condition is keyed to the literal jobName
+// "sync_listing", so "sync_batch" never matches it and gets Bull's default
+// auto-generated id/opts) — a full-catalogue sync is an explicit, one-shot
+// trigger, not something rapid-fire calls should coalesce.
+function attachSyncBatchProcessor(adapter, queue) {
+  const concurrency = SYNC_BATCH_CONCURRENCY[adapter.key] ?? DEFAULT_BATCH_CONCURRENCY;
+
+  queue.process("sync_batch", concurrency, async (job) => {
+    // listingIds is set only by refresh.service.js#sweepStaleListings — an
+    // explicit refresh restricted to the specific stale listings it found,
+    // as opposed to the post-connect full-catalogue sync's plain
+    // { tenantId } payload, which still means "every ACTIVE listing" (see
+    // sync.service.js#syncBatch's own comment on this opt).
+    const { tenantId, listingIds } = job.data;
+    logger.info(`[channelWorker:${adapter.key}] sync_batch tenantId=${tenantId}${listingIds ? ` (refresh, ${listingIds.length} listing(s))` : ""}`);
+    return marketplaceSync.syncBatch(adapter.key, tenantId, listingIds ? { listingIds } : {});
+  });
+}
+
+// refresh_stale (Task 3) — periodic sweep for any platform whose adapter
+// opts into a refresh cadence via `refreshIntervalDays` (see registry.js's
+// interface comment and refresh.service.js's own module header for why this
+// exists: Google Merchant Center expires a listing that isn't refreshed
+// within 30 days, and this app's own sync otherwise only fires on a stock
+// change or at connect time). Attached ONLY for an adapter that actually
+// declares this field — eBay's adapter never sets it, so eBay ends up with
+// no refresh_stale processor AND no repeatable schedule at all, with zero
+// eBay-specific code needed here (the caller below is the only gate).
+function attachRefreshStaleScheduler(adapter, queue) {
+  queue.process("refresh_stale", 1, async () => {
+    logger.info(`[channelWorker:${adapter.key}] refresh_stale sweep starting`);
+    return refreshService.sweepStaleListings(adapter.key);
+  });
+
+  // Bull's Queue never emits a "ready" event (only the underlying redis
+  // client does, internally) — isReady() is the real API for this. Same
+  // pattern as attachEbayPolling below.
+  queue.isReady().then(async () => {
+    // Same Bull gotcha as eBay's poll_orders/poll_inventory (see
+    // attachEbayPolling's own comment): a repeatable job is keyed by its
+    // interval, not just its jobId — changing
+    // CHANNEL_REFRESH_SWEEP_INTERVAL_HOURS between deploys would register a
+    // second schedule in Redis alongside the old one rather than replacing
+    // it. Clear any stale refresh_stale schedule before registering the
+    // current one.
+    const existing = await queue.getRepeatableJobs();
+    for (const job of existing) {
+      if (job.name === "refresh_stale") {
+        await queue.removeRepeatableByKey(job.key);
+        logger.info(`[channelWorker:${adapter.key}] removed stale repeatable schedule: ${job.key}`);
+      }
+    }
+
+    queue.add(
+      "refresh_stale",
+      {},
+      {
+        repeat: { every: config.channels.refreshSweepIntervalHours * 60 * 60 * 1000 },
+        jobId: "refresh_stale_repeat",
+        removeOnComplete: true,
+        removeOnFail: false,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
+      },
+    );
+  });
+}
+
 // Ported unchanged from the old workers/ebay.worker.js.
 function attachEbayPolling(queue) {
   const { pollAndProcessOrders } = require("../services/ebay/ebay.orders.service");
@@ -214,6 +299,12 @@ async function startChannelWorker({ platforms } = {}) {
 
   for (const adapter of adapters) {
     const queue = attachSyncListingProcessor(adapter);
+    if (adapter.capabilities?.batch === true && typeof adapter.publishBatch === "function") {
+      attachSyncBatchProcessor(adapter, queue);
+    }
+    if (adapter.refreshIntervalDays) {
+      attachRefreshStaleScheduler(adapter, queue);
+    }
     if (adapter.key === "ebay") attachEbayPolling(queue);
     queue.isReady().then(() => logger.info(`[channelWorker:${adapter.key}] ready`));
   }
@@ -256,5 +347,7 @@ module.exports = {
   // Exported for tests (channel.worker.midflight.test.js) — not part of
   // the module's own operational surface.
   attachSyncListingProcessor,
+  attachSyncBatchProcessor,
+  attachRefreshStaleScheduler,
   recoverMidFlightChange,
 };

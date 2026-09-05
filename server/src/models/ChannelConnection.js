@@ -140,4 +140,23 @@ const ebaySchema = new Schema({
 // collide with MarketplaceListing's own "ebay" discriminator.
 ChannelConnection.discriminator("ChannelConnectionEbay", ebaySchema, MARKETPLACE_PLATFORM.EBAY);
 
+// ── Google (Merchant API) discriminator ──────────────────────────────────────
+
+const googleSchema = new Schema({
+  merchant_id: { type: String, default: null },
+  data_source_id: { type: String, default: null },
+  feed_label: { type: String, default: null },
+  content_language: { type: String, default: null },
+  target_country: { type: String, default: null },
+});
+
+// Same naming-collision reason as the eBay discriminator above — and the
+// same collision would happen against MarketplaceListing's OWN "google"
+// discriminator (see models/MarketplaceListing.js) if this were registered
+// under the bare name "google", exactly like "ebay" collided there.
+// Registered as "ChannelConnectionGoogle" (model name) while still
+// discriminating on platform: "google" (MARKETPLACE_PLATFORM.GOOGLE, the 3rd
+// argument) — every query elsewhere (`{ platform: "google" }`) is unaffected.
+ChannelConnection.discriminator("ChannelConnectionGoogle", googleSchema, MARKETPLACE_PLATFORM.GOOGLE);
+
 module.exports = ChannelConnection;

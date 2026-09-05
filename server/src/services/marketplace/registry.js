@@ -11,6 +11,18 @@
 //   loadSettings(tenantId) -> resolved connection/settings object, or null
 //   publish(...) / update(...) / end(...)
 //   publishBatch(...)        - optional
+//   refreshIntervalDays      - optional <number|null>. Declares that this
+//                              platform expires a listing that isn't
+//                              refreshed within this many days (e.g. Google
+//                              Merchant Center: 30 — see
+//                              services/marketplace/refresh.service.js's own
+//                              module header for the incident this closes).
+//                              null/absent means "this platform never
+//                              expires listings" (eBay) — the refresh sweep
+//                              (refresh.service.js, wired in
+//                              workers/channel.worker.js) treats a missing
+//                              field as opt-out, so an adapter that never
+//                              sets this needs zero changes.
 
 const adapters = new Map();
 

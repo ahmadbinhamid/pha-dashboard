@@ -179,6 +179,36 @@ async function syncListing(listingId, seq = null) {
       ? await adapter.update(resolved, settings, hooks, seq)
       : await adapter.publish(resolved, settings, hooks, seq);
 
+    // Additive to the existing success shape every adapter has always
+    // returned ({ external_listing_id, external_offer_id, quantity }) —
+    // an adapter can now ALSO signal "this listing must not be pushed at
+    // all", e.g. google.adapter.js excluding an untracked-stock product
+    // from Google Shopping entirely rather than publishing it as in_stock.
+    // eBay's adapter never sets this, so this branch is a no-op for eBay —
+    // it always falls through to the unchanged success handling below.
+    if (ids?.skipped) {
+      logger.info(`[marketplace.sync] listing ${listingId}: adapter skipped this sync (${ids.reason})`);
+      // Reusing NOT_LISTED rather than adding a new LISTING_SYNC_STATUS enum
+      // value for "explicitly excluded" — the closest existing meaning
+      // ("not published to this channel") without a schema change for one
+      // adapter-specific reason code.
+      await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.NOT_LISTED, sync_error: null });
+      // A skip is not a failure — the connection itself is fine, only this
+      // one listing's data made it ineligible — so this still counts as a
+      // healthy call for circuit-breaker purposes, same as any other success.
+      await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
+      await logSyncEvent({
+        tenantId: listing.tenant_id,
+        platform: listing.platform,
+        jobType: isUpdate ? "update" : "publish",
+        entityId: listing._id,
+        status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
+        errorCode: ids.reason,
+        durationMs: Date.now() - startedAt,
+      });
+      return { skipped: true, reason: ids.reason };
+    }
+
     await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
 
     // Determined AFTER the write succeeded, from what was actually pushed —
@@ -291,6 +321,204 @@ async function endListing(listingId) {
   }
 }
 
+// ── Batch sync (Task 3 — Google Shopping, or any future capabilities.batch
+// adapter) ──────────────────────────────────────────────────────────────────
+//
+// A full catalogue sync is thousands of products — one sync_listing job
+// (one Bull message, one populate, one ChannelSyncLog row per success) per
+// product is not acceptable for a feed channel. syncBatch reads the
+// tenant's ACTIVE listings for a platform via a Mongo CURSOR (never loads
+// the whole catalogue into memory), dispatches adapter.publishBatch() in
+// chunks (config.channels.batchChunkSize, default 500), and tracks every
+// item's own success/failure/skip individually — a per-item failure never
+// fails the rest of the chunk or the batch.
+//
+// opts.listingIds: optional — restricts the cursor to this specific set of
+// listing ids instead of every ACTIVE listing for the tenant. Additive: no
+// existing caller passes this (the post-connect full sync and the existing
+// tests all call syncBatch(platform, tenantId) with no opts, unaffected).
+// Added for refresh.service.js#sweepStaleListings, which already knows
+// exactly which listings are stale and must re-push ONLY those — not the
+// tenant's entire catalogue — while still reusing this file's existing
+// chunking/fencing/publishBatch/ChannelSyncLog machinery rather than
+// duplicating it.
+async function syncBatch(platform, tenantId, opts = {}) {
+  const adapter = getAdapter(platform);
+  if (adapter.capabilities?.batch !== true || typeof adapter.publishBatch !== "function") {
+    throw new Error(`[marketplace.sync] adapter "${platform}" does not support batch sync`);
+  }
+
+  const settings = typeof adapter.loadSettings === "function" ? await adapter.loadSettings(tenantId) : null;
+  if (settings === null) {
+    logger.warn(`[marketplace.sync] syncBatch: "${platform}" has no connection for tenant ${tenantId} — skipping`);
+    return { skipped: true, reason: "not_connected" };
+  }
+
+  if (await circuitBreaker.isOpen(tenantId, platform)) {
+    logger.warn(`[marketplace.sync] syncBatch: circuit open for ${platform}/${tenantId} — skipping until resumed`);
+    return { skipped: true, reason: "circuit_open" };
+  }
+
+  const chunkSize = opts.chunkSize ?? config.channels.batchChunkSize;
+  const summary = { processed: 0, succeeded: 0, failed: 0, skipped: 0 };
+
+  const query = { tenant_id: tenantId, platform, state: LISTING_STATE.ACTIVE };
+  if (opts.listingIds && opts.listingIds.length) query._id = { $in: opts.listingIds };
+
+  const cursor = MarketplaceListing.find(query)
+    .populate({ path: "product", populate: { path: "attachments" } })
+    .populate("photo_overrides")
+    .cursor();
+
+  let chunk = [];
+  const flush = async () => {
+    if (!chunk.length) return;
+    await processBatchChunk(adapter, settings, chunk, summary);
+    chunk = [];
+  };
+
+  try {
+    for (let listing = await cursor.next(); listing != null; listing = await cursor.next()) {
+      chunk.push(listing);
+      if (chunk.length >= chunkSize) await flush();
+    }
+    await flush();
+
+    await circuitBreaker.recordSuccess(tenantId, platform);
+    logger.info(
+      `[marketplace.sync] syncBatch ${platform}/${tenantId} complete: processed=${summary.processed} ` +
+        `succeeded=${summary.succeeded} failed=${summary.failed} skipped=${summary.skipped}`,
+    );
+    return { ok: true, ...summary };
+  } catch (err) {
+    // A THROW here means the batch call itself (transport/auth to the
+    // platform, or a bug) failed — distinct from a per-item failure inside
+    // a chunk, which processBatchChunk already contains and logs without
+    // ever throwing. This is what actually counts toward the breaker.
+    logger.error(`[marketplace.sync] syncBatch ${platform}/${tenantId} failed: ${err.message}`);
+    await circuitBreaker.recordFailure(tenantId, platform, err);
+    throw err;
+  }
+}
+
+// Resolves each listing in the chunk, drops any whose fencing token has
+// gone stale since it was read off the cursor (mirrors syncListing's own
+// `seq < last_pushed_seq` check), dispatches the survivors through
+// adapter.publishBatch in one call, then writes back each item's own result
+// individually. A per-item failure is recorded and skipped over — never
+// thrown — so it can never fail the rest of the chunk.
+async function processBatchChunk(adapter, settings, chunk, summary) {
+  const candidates = [];
+  for (const listing of chunk) {
+    if (!listing.product) continue; // product deleted out from under a listing
+    const seq = listing.push_seq ?? 0;
+    const variant = listing.variant ? await ProductVariant.findById(listing.variant).populate("attachments") : null;
+    const resolved = resolveListing(listing, listing.product, variant);
+    candidates.push({ listing, resolved, seq });
+  }
+  if (!candidates.length) return;
+
+  // Fencing re-check, batched into ONE query rather than per-item — a
+  // listing whose last_pushed_seq has moved past the push_seq captured off
+  // the cursor was already synced more recently by something else
+  // (typically a single-listing sync_listing job) since it was read here;
+  // pushing our now-stale value would overwrite a newer, correct one. Same
+  // invariant as syncListing's `seq < listing.last_pushed_seq` check, just
+  // re-verified fresh right before dispatch instead of trusting a value
+  // read possibly-much-earlier in this cursor pass.
+  const ids = candidates.map((c) => c.listing._id);
+  const currentSeqs = await MarketplaceListing.find({ _id: { $in: ids } }).select("last_pushed_seq").lean();
+  const lastPushedById = new Map(currentSeqs.map((d) => [String(d._id), d.last_pushed_seq ?? 0]));
+
+  const toPush = [];
+  for (const candidate of candidates) {
+    const currentLastPushed = lastPushedById.get(String(candidate.listing._id)) ?? 0;
+    if (candidate.seq < currentLastPushed) {
+      summary.processed++;
+      summary.skipped++;
+      await logSyncEvent({
+        tenantId: candidate.listing.tenant_id,
+        platform: candidate.listing.platform,
+        jobType: "sync_batch",
+        entityId: candidate.listing._id,
+        status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
+        errorCode: "stale_seq",
+      });
+      continue;
+    }
+    toPush.push(candidate);
+  }
+  if (!toPush.length) return;
+
+  const results = await adapter.publishBatch(toPush.map((c) => c.resolved), settings);
+
+  for (let i = 0; i < toPush.length; i++) {
+    const { listing, seq } = toPush[i];
+    const result = results[i];
+    summary.processed++;
+
+    if (result?.skipped) {
+      summary.skipped++;
+      await listing.updateOne({ $set: { sync_status: LISTING_SYNC_STATUS.NOT_LISTED, sync_error: null } });
+      await logSyncEvent({
+        tenantId: listing.tenant_id,
+        platform: listing.platform,
+        jobType: "sync_batch",
+        entityId: listing._id,
+        status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
+        errorCode: result.reason,
+      });
+      continue;
+    }
+
+    if (!result?.ok) {
+      summary.failed++;
+      const errorMessage = result?.error || "Unknown batch item failure";
+      await listing.updateOne({ $set: { sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: errorMessage } });
+      // Deliberately NOT calling circuitBreaker.recordFailure here — a
+      // per-item failure inside a successfully-dispatched batch call is a
+      // product-data problem (google.adapter.js#publishBatch already
+      // catches per-item errors and never lets one propagate up to fail
+      // the whole call), not evidence the connection is unhealthy. Only the
+      // OUTER batch call throwing (see syncBatch's own catch) counts
+      // toward the breaker.
+      await logSyncEvent({
+        tenantId: listing.tenant_id,
+        platform: listing.platform,
+        jobType: "sync_batch",
+        entityId: listing._id,
+        status: CHANNEL_SYNC_LOG_STATUS.FAILURE,
+        errorMessage,
+      });
+      continue;
+    }
+
+    summary.succeeded++;
+    const outOfStock = result.quantity === 0;
+    // $set + $max in one call — $max so this can never regress
+    // last_pushed_seq backward if something newer already landed between
+    // the fencing re-check above and this write finally happening.
+    await listing.updateOne({
+      $set: {
+        external_listing_id: result.external_listing_id || listing.external_listing_id,
+        external_offer_id: result.external_offer_id || listing.external_offer_id,
+        sync_status: outOfStock ? LISTING_SYNC_STATUS.OUT_OF_STOCK : LISTING_SYNC_STATUS.SYNCED,
+        state: LISTING_STATE.ACTIVE,
+        synced_at: new Date(),
+        sync_error: null,
+      },
+      $max: { last_pushed_seq: seq },
+    });
+    await logSyncEvent({
+      tenantId: listing.tenant_id,
+      platform: listing.platform,
+      jobType: "sync_batch",
+      entityId: listing._id,
+      status: CHANNEL_SYNC_LOG_STATUS.SUCCESS,
+    });
+  }
+}
+
 // Returns a listing's current push_seq (coalesced to 0 — see
 // MarketplaceListing.js's own comment on why every comparison site does
 // this), or null if the listing no longer exists. Used by
@@ -303,4 +531,4 @@ async function getListingPushSeq(listingId) {
   return listing ? (listing.push_seq ?? 0) : null;
 }
 
-module.exports = { syncListing, endListing, getListingPushSeq };
+module.exports = { syncListing, endListing, getListingPushSeq, syncBatch };

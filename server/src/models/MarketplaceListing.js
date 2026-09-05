@@ -252,4 +252,38 @@ const ebaySchema = new Schema({
 
 MarketplaceListing.discriminator(MARKETPLACE_PLATFORM.EBAY, ebaySchema);
 
+// ── Google (Merchant API) discriminator ──────────────────────────────────────
+//
+// Google is feed-shaped, not listing-shaped — there's no offer/publish
+// lifecycle the way eBay has one. external_listing_id holds the Merchant
+// API product resource name (channel~contentLanguage~feedLabel~offerId — see
+// google.adapter.js); external_offer_id is left null for every Google
+// listing, same as it would be for a listing that's never had an offer
+// created — the base schema's partial unique index on external_offer_id
+// already excludes null (`partialFilterExpression: { external_offer_id: {
+// $type: "string" }, ... }` above), so every Google listing sharing null
+// there doesn't collide.
+const googleSchema = new Schema({
+  // Google's own taxonomy id (https://support.google.com/merchants/answer/6324436)
+  // — a completely different concept from eBay's category id, not reused.
+  google_product_category: { type: String, default: null },
+  gtin: { type: String, default: null },
+  mpn: { type: String, default: null },
+  // Google's own condition enum ("new" | "refurbished" | "used") — lowercase,
+  // unlike eBay's ConditionEnum strings; kept as its own field rather than
+  // sharing a name with the eBay discriminator's `condition` to avoid
+  // implying they're interchangeable.
+  condition: { type: String, default: null },
+  feed_label: { type: String, default: null },
+  content_language: { type: String, default: null },
+  shipping_label: { type: String, default: null },
+  custom_label_0: { type: String, default: null },
+  custom_label_1: { type: String, default: null },
+  custom_label_2: { type: String, default: null },
+  custom_label_3: { type: String, default: null },
+  custom_label_4: { type: String, default: null },
+});
+
+MarketplaceListing.discriminator(MARKETPLACE_PLATFORM.GOOGLE, googleSchema);
+
 module.exports = MarketplaceListing;
