@@ -8,7 +8,7 @@ import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
 import { cn } from "@/utils/cn";
 import { formatCurrencyFromCents, formatCompactNumber } from "@/utils/format";
-import type { RevenueTrendPoint } from "@/types/dashboard";
+import type { OrderVolumePoint } from "@/types/dashboard";
 import type { OrderChannel } from "@/types/orders";
 
 type ViewMode = "total" | "channels";
@@ -34,29 +34,26 @@ function channelLabel(key: string) {
   return ORDER_CHANNEL_LABEL[key as OrderChannel] ?? key;
 }
 
-function formatMonthLabel(month: string) {
-  const d = new Date(`${month}-01T00:00:00`);
-  return d.toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+function formatDayLabel(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-AU", { month: "short", day: "numeric" });
 }
 
-function formatMonthShort(month: string) {
-  const d = new Date(`${month}-01T00:00:00`);
-  return d.toLocaleDateString("en-AU", { month: "short" });
-}
-
-function formatMonthLong(month: string) {
-  const d = new Date(`${month}-01T00:00:00`);
-  return d.toLocaleDateString("en-AU", { month: "long", year: "numeric" });
+function formatDayLong(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function ChartTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
-  const point = payload[0].payload as RevenueTrendPoint & { label: string };
+  const point = payload[0].payload as OrderVolumePoint & { label: string };
   const channelKeys = Object.keys(point.byChannel);
 
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2.5 text-xs shadow-lg">
-      <div className="mb-1.5 font-semibold text-fg">{formatMonthLong(point.month)}</div>
+      <div className="mb-1.5 font-semibold text-fg">{formatDayLong(point.date)}</div>
       <div className="flex items-center justify-between gap-4 text-fg/60">
         <span>Gross revenue</span>
         <span className="font-medium tabular-nums text-fg">{formatCurrencyFromCents(point.revenueCents)}</span>
@@ -89,15 +86,21 @@ function ChartTooltip({ active, payload }: TooltipContentProps) {
 export function RevenueTrendChart({
   points,
   previousPeriodRevenueCents,
+  rangeLabel,
   loading,
 }: {
-  points: RevenueTrendPoint[];
+  points: OrderVolumePoint[];
   previousPeriodRevenueCents?: number;
+  // The dashboard's shared date-range filter, already formatted (see
+  // formatDateRangeLabel in utils/dateRange.ts) — this chart and Order
+  // Volume both read the exact same range, so the badge always shows the
+  // real applied window instead of a value that can drift from the filter.
+  rangeLabel: string;
   loading?: boolean;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("total");
 
-  const data = useMemo(() => points.map((p) => ({ ...p, label: formatMonthLabel(p.month) })), [points]);
+  const data = useMemo(() => points.map((p) => ({ ...p, label: formatDayLabel(p.date) })), [points]);
 
   const channelKeys = useMemo(() => {
     const totals = new Map<string, number>();
@@ -107,8 +110,8 @@ export function RevenueTrendChart({
       }
     }
     // Every ORDER_CHANNEL is pre-seeded at 0 server-side so lines don't
-    // break on a zero-order month — but a channel this tenant has never
-    // once used shouldn't clutter the legend/chart with a flat zero line.
+    // break on a zero-order day — but a channel this tenant has never once
+    // used shouldn't clutter the legend/chart with a flat zero line.
     return Array.from(totals.entries())
       .filter(([, cents]) => cents > 0)
       .sort((a, b) => b[1] - a[1])
@@ -117,15 +120,15 @@ export function RevenueTrendChart({
 
   const summary = useMemo(() => {
     const totalRevenueCents = points.reduce((sum, p) => sum + p.revenueCents, 0);
-    const monthlyAverageCents = points.length > 0 ? Math.round(totalRevenueCents / points.length) : 0;
-    const peak = points.reduce<RevenueTrendPoint | null>(
+    const dailyAverageCents = points.length > 0 ? Math.round(totalRevenueCents / points.length) : 0;
+    const peak = points.reduce<OrderVolumePoint | null>(
       (best, p) => (!best || p.revenueCents > best.revenueCents ? p : best),
       null,
     );
 
-    // Which channel contributed the most revenue in the peak month
+    // Which channel contributed the most revenue on the peak day
     // specifically (not across the whole period) — matches "Top performing
-    // channel: eBay" sitting under the Peak Month figure.
+    // channel: eBay" sitting under the Peak Day figure.
     let peakChannel: string | null = null;
     if (peak) {
       for (const [key, cents] of Object.entries(peak.byChannel)) {
@@ -141,25 +144,23 @@ export function RevenueTrendChart({
       : null;
 
     // "Pacing" caption for the average tile — real signal (is the latest
-    // month running hot/cold vs the period average), not a static string.
+    // day running hot/cold vs the period average), not a static string.
     const latest = points[points.length - 1] ?? null;
     let pacing: "up" | "down" | "steady" = "steady";
-    if (latest && monthlyAverageCents > 0) {
-      const ratio = latest.revenueCents / monthlyAverageCents;
+    if (latest && dailyAverageCents > 0) {
+      const ratio = latest.revenueCents / dailyAverageCents;
       if (ratio >= 1.1) pacing = "up";
       else if (ratio <= 0.9) pacing = "down";
     }
 
-    return { totalRevenueCents, monthlyAverageCents, peak, peakChannel, periodChangePct, pacing };
+    return { totalRevenueCents, dailyAverageCents, peak, peakChannel, periodChangePct, pacing };
   }, [points, previousPeriodRevenueCents]);
 
   return (
     <Card className="p-4 shadow-card transition-shadow duration-300 hover:shadow-md sm:p-5">
       <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <DashboardSectionLabel badge={`${points.length || 6} Months`}>
-            Revenue Trends &amp; Channel Analytics
-          </DashboardSectionLabel>
+          <DashboardSectionLabel badge={rangeLabel}>Revenue Trends &amp; Channel Analytics</DashboardSectionLabel>
           <p className="mt-1 text-xs text-fg/50">Channel sales comparison and revenue tracking over time</p>
         </div>
         <div className="inline-flex shrink-0 rounded-md border border-border bg-bg-2/40 p-0.5">
@@ -182,7 +183,7 @@ export function RevenueTrendChart({
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <DashboardStatTile
           loading={loading}
-          label={`${points.length || 6}-Month Revenue`}
+          label="Period Revenue"
           value={formatCurrencyFromCents(summary.totalRevenueCents)}
           caption={
             summary.periodChangePct === null
@@ -195,19 +196,19 @@ export function RevenueTrendChart({
         />
         <DashboardStatTile
           loading={loading}
-          label="Monthly Average"
-          value={formatCurrencyFromCents(summary.monthlyAverageCents)}
+          label="Daily Average"
+          value={formatCurrencyFromCents(summary.dailyAverageCents)}
           caption={summary.pacing === "up" ? "Trending up" : summary.pacing === "down" ? "Trending down" : "Consistent pacing"}
           captionTone={summary.pacing === "up" ? "ok" : summary.pacing === "down" ? "danger" : "neutral"}
         />
         <DashboardStatTile
           loading={loading}
-          label="Peak Month"
+          label="Peak Day"
           value={
             summary.peak ? (
               <>
                 {formatCurrencyFromCents(summary.peak.revenueCents)}{" "}
-                <span className="text-xs font-normal text-fg/50">({formatMonthShort(summary.peak.month)})</span>
+                <span className="text-xs font-normal text-fg/50">({formatDayLabel(summary.peak.date)})</span>
               </>
             ) : (
               "—"

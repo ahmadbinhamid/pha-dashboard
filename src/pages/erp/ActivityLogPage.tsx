@@ -6,12 +6,14 @@ import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { Input } from "@/components/ui/Input";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ActivityTrendChart } from "@/components/activity/ActivityTrendChart";
 import { ActivityEventRow } from "@/components/activity/ActivityEventRow";
 import { listActivityLog, getActivityAnalytics } from "@/lib/api/dashboard";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import type { DateRangeValue } from "@/utils/dateRange";
 import type { ActivityEventType } from "@/types/dashboard";
 
 const TYPE_FILTERS: { label: string; value: ActivityEventType | "" }[] = [
@@ -55,6 +57,23 @@ export default function ActivityLogPage() {
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        next.set("page", "1");
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  // Sets from/to together in one history entry — two sequential updateFilter
+  // calls would each replace the URL independently and could race.
+  const updateDateRange = useCallback(
+    (range: DateRangeValue) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (range.from) next.set("from", range.from);
+        else next.delete("from");
+        if (range.to) next.set("to", range.to);
+        else next.delete("to");
         next.set("page", "1");
         return next;
       }, { replace: true });
@@ -152,23 +171,12 @@ export default function ActivityLogPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 w-56"
             />
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => updateFilter("from", e.target.value)}
-                className="h-9 w-auto"
-                aria-label="From date"
-              />
-              <span className="text-xs text-fg/40">to</span>
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => updateFilter("to", e.target.value)}
-                className="h-9 w-auto"
-                aria-label="To date"
-              />
-            </div>
+            <DateRangePicker
+              value={{ from: from || undefined, to: to || undefined }}
+              onChange={updateDateRange}
+              placeholder="Last 14 days"
+              allowClear
+            />
           </div>
           {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
         </div>

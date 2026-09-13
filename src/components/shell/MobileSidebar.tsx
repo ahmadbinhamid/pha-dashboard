@@ -39,8 +39,14 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
             {isLoading ? (
               <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
             ) : (
-              <div className="shrink-0 overflow-hidden rounded-xl ring-1 ring-[hsl(var(--accent)/0.28)]">
-                <TenantLogo logoUrl={settings.logoUrl} name={settings.storeName} sizeClass="h-11" maxWidthClass="max-w-11" />
+              <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl ring-1 ring-[hsl(var(--accent)/0.28)]">
+                <TenantLogo
+                  logoUrl={settings.logoUrl}
+                  name={settings.storeName}
+                  sizeClass="h-11"
+                  maxWidthClass="max-w-11"
+                  objectFit="cover"
+                />
               </div>
             )}
             <div className="min-w-0">

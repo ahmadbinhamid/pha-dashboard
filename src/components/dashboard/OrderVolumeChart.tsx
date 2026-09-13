@@ -133,18 +133,18 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3">
-        <DashboardStatTile variant="plain" loading={loading} label="Total Orders" value={totals.orders} />
+      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-4">
+        <DashboardStatTile variant="soft" loading={loading} label="Total Orders" value={totals.orders} />
         <DashboardStatTile
-          variant="plain"
+          variant="soft"
           loading={loading}
           label="Total Revenue"
           value={<span className="text-ok">{formatCurrencyFromCents(totals.revenueCents)}</span>}
         />
         <DashboardStatTile
-          variant="plain"
+          variant="soft"
           loading={loading}
-          label="Items Shipped"
+          label="Shipped Items"
           value={<span className="text-accent">{totals.items}</span>}
         />
       </div>

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/Button";
-import { UserMenu } from "@/components/shell/UserMenu";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { NotificationBell } from "@/components/shell/NotificationBell";
 import { cn } from "@/utils/cn";
@@ -107,7 +106,6 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
             </Button>
             <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
             <ThemeToggle />
-            <UserMenu />
           </div>
         </div>
       </header>

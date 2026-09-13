@@ -203,11 +203,28 @@ async function getStats(tenantId) {
   };
 }
 
-// ── Order volume trend ───────────────────────────────────────────────────────
+// ── Dashboard trend (order volume + revenue, by channel) ───────────────────
 
-// One bucket per calendar day for the last `days` days (including today),
-// always returning a fully-populated series (zero-filled) so the chart never
-// has to guess about missing days.
+function startOfUtcDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+// Single source of truth for the whole dashboard's date-range filter — one
+// bucket per calendar day across the requested window, always returning a
+// fully-populated series (zero-filled) so a chart never has to guess about
+// missing days. Two ways to specify the window: `days` (last N days ending
+// today — the default) or an explicit `from`/`to` pair (an arbitrary custom
+// range, which doesn't have to end today). `from`/`to` take precedence when
+// both are given. Every known ORDER_CHANNEL value is pre-seeded at 0 on
+// every bucket (not just channels that happened to have an order that day)
+// so a multi-line "by channel" chart never has to treat a zero-order day as
+// a missing data point and break the line.
+//
+// Also returns previousPeriodRevenueCents — real revenue for the
+// same-length window immediately before the requested one — so the
+// dashboard can show a genuine "+X% vs prior period" figure instead of a
+// fabricated target. Fetched in the same query (one wider $gte down to the
+// start of the prior period) rather than a second round trip.
 //
 // Every boundary here is built with Date.UTC(...) rather than the local-time
 // setters (setDate/setHours) that used to be here — those construct a LOCAL
@@ -219,96 +236,61 @@ async function getStats(tenantId) {
 // day earlier than intended. Since order.created_at is a real timestamp
 // compared with the same toISOString() slice, bucketing everything through
 // UTC from construction onward is what keeps the two sides consistent.
-async function getOrderVolumeTrend(tenantId, days = 7) {
-  const now = new Date();
-  const sinceUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (days - 1)));
+function startOfUtcDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
+  let sinceUtc, untilUtc;
+  if (from && to) {
+    sinceUtc = startOfUtcDay(new Date(from));
+    untilUtc = startOfUtcDay(new Date(to));
+  } else {
+    untilUtc = startOfUtcDay(new Date());
+    sinceUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() - (days - 1)));
+  }
+  // "to" is a whole day, not an instant — the upper query bound is the start
+  // of the day AFTER it, so orders placed any time during that last day are
+  // still included.
+  const exclusiveUntilUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() + 1));
+  const dayCount = Math.round((exclusiveUntilUtc - sinceUtc) / 86_400_000);
+  const previousSinceUtc = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth(), sinceUtc.getUTCDate() - dayCount));
 
   const orders = await Order.find({
     tenant_id: tenantId,
-    created_at: { $gte: sinceUtc },
+    created_at: { $gte: previousSinceUtc, $lt: exclusiveUntilUtc },
     status: { $ne: ORDER_STATUS.CANCELLED },
   })
-    .select("created_at total items")
+    .select("created_at total items channel")
     .lean();
 
+  const channelKeys = Object.values(ORDER_CHANNEL);
   const byDate = new Map();
-  for (let i = 0; i < days; i++) {
+  for (let i = 0; i < dayCount; i++) {
     const d = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth(), sinceUtc.getUTCDate() + i));
     const key = d.toISOString().slice(0, 10);
-    byDate.set(key, { date: key, orders: 0, revenueCents: 0, items: 0 });
+    const byChannel = {};
+    for (const channel of channelKeys) byChannel[channel] = 0;
+    byDate.set(key, { date: key, orders: 0, revenueCents: 0, items: 0, byChannel });
   }
 
+  let previousPeriodRevenueCents = 0;
   for (const order of orders) {
-    const key = new Date(order.created_at).toISOString().slice(0, 10);
+    const createdAt = new Date(order.created_at);
+    if (createdAt < sinceUtc) {
+      previousPeriodRevenueCents += order.total;
+      continue;
+    }
+    const key = createdAt.toISOString().slice(0, 10);
     const bucket = byDate.get(key);
     if (!bucket) continue; // order.created_at rounding edge case — ignore rather than crash
     bucket.orders += 1;
     bucket.revenueCents += order.total;
     bucket.items += order.items.reduce((sum, i) => sum + i.quantity, 0);
-  }
-
-  return Array.from(byDate.values());
-}
-
-// ── Monthly revenue trend ───────────────────────────────────────────────────
-
-// One bucket per calendar month for the last `months` months (including the
-// current month), always zero-filled — same "always fully populated"
-// contract as getOrderVolumeTrend above — plus a per-channel revenue split.
-// Every known ORDER_CHANNEL value is pre-seeded at 0 on every bucket (not
-// just the channels that happened to have an order that month) so a
-// multi-line "by channel" chart never has to treat a zero-order month as a
-// missing data point and break the line.
-//
-// Also returns previousPeriodRevenueCents — the same-length window
-// immediately before `points` — so the dashboard can show a real "+X% vs
-// prior period" figure instead of a fabricated target. Fetched in the same
-// query (a 2x-wide window, split after the fact) rather than a second round
-// trip.
-//
-// Built entirely with Date.UTC(...) for the same reason getOrderVolumeTrend
-// above is — local-time month/date construction, fed through toISOString(),
-// shifts every bucket into the wrong month on a server whose local timezone
-// is ahead of UTC.
-async function getMonthlyRevenueTrend(tenantId, months = 6) {
-  const now = new Date();
-  const sinceUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months * 2 - 1), 1));
-
-  const orders = await Order.find({
-    tenant_id: tenantId,
-    created_at: { $gte: sinceUtc },
-    status: { $ne: ORDER_STATUS.CANCELLED },
-  })
-    .select("created_at total channel")
-    .lean();
-
-  const channelKeys = Object.values(ORDER_CHANNEL);
-  const byMonth = new Map();
-  for (let i = 0; i < months * 2; i++) {
-    const bucketDate = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth() + i, 1));
-    const key = bucketDate.toISOString().slice(0, 7); // yyyy-mm
-    const byChannel = {};
-    for (const channel of channelKeys) byChannel[channel] = 0;
-    byMonth.set(key, { month: key, revenueCents: 0, orders: 0, byChannel });
-  }
-
-  for (const order of orders) {
-    const key = new Date(order.created_at).toISOString().slice(0, 7);
-    const bucket = byMonth.get(key);
-    if (!bucket) continue; // order.created_at rounding edge case — ignore rather than crash
-    bucket.revenueCents += order.total;
-    bucket.orders += 1;
     bucket.byChannel[order.channel] = (bucket.byChannel[order.channel] || 0) + order.total;
   }
 
-  // Map insertion order is chronological (built oldest-first above) — the
-  // first half is the prior period, the second half is what the chart shows.
-  const allBuckets = Array.from(byMonth.values());
-  const previousPeriodBuckets = allBuckets.slice(0, months);
-  const points = allBuckets.slice(months);
-  const previousPeriodRevenueCents = previousPeriodBuckets.reduce((sum, b) => sum + b.revenueCents, 0);
-
-  return { points, previousPeriodRevenueCents };
+  return { points: Array.from(byDate.values()), previousPeriodRevenueCents };
 }
 
 // ── Recent activity — synthesized from Orders + InventoryHistory ───────────
@@ -564,7 +546,6 @@ module.exports = {
   getStats,
   getChannelHealth,
   getOrderVolumeTrend,
-  getMonthlyRevenueTrend,
   getRecentActivity,
   listActivity,
   getActivityAnalytics,

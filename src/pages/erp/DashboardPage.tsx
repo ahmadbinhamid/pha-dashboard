@@ -8,39 +8,26 @@ import { OrderVolumeChart } from "@/components/dashboard/OrderVolumeChart";
 import { ActiveChannelsCard } from "@/components/dashboard/ActiveChannelsCard";
 import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
 import { CriticalStockCard } from "@/components/dashboard/CriticalStockCard";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/ActionsMenu";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import {
   getDashboardStats,
   getActiveChannels,
-  getRevenueTrend,
   getOrderVolume,
   getRecentActivity,
   getCriticalStock,
 } from "@/lib/api/dashboard";
 import { formatCurrency } from "@/utils/format";
-import { Boxes, AlertTriangle, Clock, Radio, Calendar } from "lucide-react";
+import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
+import type { DateRangeValue } from "@/utils/dateRange";
+import { Boxes, AlertTriangle, Clock, Radio } from "lucide-react";
 
-const REVENUE_TREND_MONTHS = 6;
-const ORDER_VOLUME_RANGE_OPTIONS = [7, 14, 30, 90] as const;
 // Recent Activity polls rather than push — good enough at this scale, and
 // honest about not actually being a websocket-driven live feed.
 const ACTIVITY_REFETCH_MS = 30_000;
 
-// The real [today - (days-1), today] window the order-volume chart is
-// actually querying — shown so the date-range control reads as a real
-// applied filter ("1 Jul – 31 Jul 2025"), not a static decoration.
-function formatDateRangeLabel(days: number) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - (days - 1));
-  const startLabel = start.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
-  const endLabel = end.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
-  return `${startLabel} – ${endLabel}`;
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [orderVolumeDays, setOrderVolumeDays] = useState<(typeof ORDER_VOLUME_RANGE_OPTIONS)[number]>(7);
+  const [orderVolumeRange, setOrderVolumeRange] = useState<DateRangeValue>(() => getPresetRange(7));
 
   const { data: statsRes, isLoading: statsLoading } = useQuery({
     queryKey: ["dashboard", "stats"],
@@ -52,14 +39,14 @@ export default function DashboardPage() {
     queryFn: getActiveChannels,
   });
 
-  const { data: revenueTrendRes, isLoading: revenueTrendLoading } = useQuery({
-    queryKey: ["dashboard", "revenue-trend", REVENUE_TREND_MONTHS],
-    queryFn: () => getRevenueTrend(REVENUE_TREND_MONTHS),
-  });
-
+  // Single query for the whole date-range-filtered section of the dashboard
+  // — Order Volume and Revenue Trends & Channel Analytics both render off
+  // this same per-day series, so they always agree on what period they're
+  // showing instead of drifting apart (Revenue Trends used to be pinned to a
+  // fixed trailing 6 months regardless of what the picker said).
   const { data: volumeRes, isLoading: volumeLoading } = useQuery({
-    queryKey: ["dashboard", "order-volume", orderVolumeDays],
-    queryFn: () => getOrderVolume(orderVolumeDays),
+    queryKey: ["dashboard", "order-volume", orderVolumeRange],
+    queryFn: () => getOrderVolume(orderVolumeRange),
   });
 
   const { data: activityRes, isLoading: activityLoading } = useQuery({
@@ -75,9 +62,9 @@ export default function DashboardPage() {
 
   const stats = statsRes?.data;
   const channels = channelsRes?.data ?? [];
-  const revenueTrendPoints = revenueTrendRes?.data?.points ?? [];
-  const previousPeriodRevenueCents = revenueTrendRes?.data?.previousPeriodRevenueCents;
-  const volumePoints = volumeRes?.data ?? [];
+  const volumePoints = volumeRes?.data?.points ?? [];
+  const previousPeriodRevenueCents = volumeRes?.data?.previousPeriodRevenueCents;
+  const rangeLabel = formatDateRangeLabel(orderVolumeRange);
   const activityEvents = activityRes?.data ?? [];
   const criticalStock = criticalStockRes?.data ?? [];
 
@@ -95,30 +82,9 @@ export default function DashboardPage() {
             </span>
           </span>
         }
-        description="Store performance overview, sales volume & real-time inventory telemetry"
+        description="Store performance overview, sales volume & real time inventory telemetry"
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-xs font-semibold text-fg shadow-(--shadow-input) transition hover:bg-muted/50"
-            >
-              <Calendar className="h-3.5 w-3.5 text-fg/45" />
-              {formatDateRangeLabel(orderVolumeDays)}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {ORDER_VOLUME_RANGE_OPTIONS.map((days) => (
-              <DropdownMenuItem
-                key={days}
-                onSelect={() => setOrderVolumeDays(days)}
-                className={days === orderVolumeDays ? "font-semibold text-accent" : undefined}
-              >
-                Last {days} days
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DateRangePicker value={orderVolumeRange} onChange={setOrderVolumeRange} />
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -177,9 +143,10 @@ export default function DashboardPage() {
       </div>
 
       <RevenueTrendChart
-        points={revenueTrendPoints}
+        points={volumePoints}
         previousPeriodRevenueCents={previousPeriodRevenueCents}
-        loading={revenueTrendLoading}
+        rangeLabel={rangeLabel}
+        loading={volumeLoading}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

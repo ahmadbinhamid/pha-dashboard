@@ -5,13 +5,13 @@ const Joi = require("joi");
 const getOrderVolume = {
   query: Joi.object({
     days: Joi.number().integer().min(1).max(90).default(7),
-  }),
-};
-
-const getRevenueTrend = {
-  query: Joi.object({
-    months: Joi.number().integer().min(1).max(24).default(6),
-  }),
+    // Custom range — an alternative to `days` (getOrderVolumeTrend prefers
+    // from/to over days when both are present). .and() requires either both
+    // or neither, and to >= from stops an inverted range from silently
+    // producing a negative-length (empty) bucket series.
+    from: Joi.date().iso(),
+    to: Joi.date().iso().min(Joi.ref("from")),
+  }).and("from", "to"),
 };
 
 const getActivity = {
@@ -46,7 +46,6 @@ const getActivityAnalytics = {
 
 module.exports = {
   getOrderVolume,
-  getRevenueTrend,
   getActivity,
   getCriticalStock,
   listActivityLog,

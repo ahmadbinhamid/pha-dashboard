@@ -11,10 +11,11 @@ const CAPTION_TONE: Record<StatTileTone, string> = {
 };
 
 // Small "label / value / caption" tile used inside the dashboard's chart
-// cards — RevenueTrendChart's 4-up summary row (boxed) and OrderVolumeChart's
-// footer totals (plain, no box — that footer sits directly under a divider
-// instead of inside its own card-like tile) — pulled out so both stop
-// hand-rolling the same label/value/caption markup.
+// cards — RevenueTrendChart's 4-up summary row (boxed), OrderVolumeChart's
+// footer totals (soft — a bigger, borderless card), and a plain (no box,
+// sits directly under a divider) variant for anywhere a tile shouldn't look
+// like its own card — pulled out so every consumer stops hand-rolling the
+// same label/value/caption markup.
 export function DashboardStatTile({
   label,
   value,
@@ -28,11 +29,19 @@ export function DashboardStatTile({
   value: React.ReactNode;
   caption?: React.ReactNode;
   captionTone?: StatTileTone;
-  variant?: "boxed" | "plain";
+  variant?: "boxed" | "soft" | "plain";
   loading?: boolean;
   className?: string;
 }) {
-  const box = variant === "boxed" && "rounded-xl border border-border bg-muted/50 p-3.5 hover:bg-muted/70";
+  const box =
+    variant === "boxed"
+      ? "rounded-xl border border-border bg-muted/50 p-3.5 hover:bg-muted/70"
+      : variant === "soft"
+        ? "rounded-2xl bg-muted/60 px-4 py-2.5 hover:bg-muted/80"
+        : false;
+
+  const valueSize = variant === "soft" ? "text-xl" : "text-lg";
+  const valueSpacing = variant === "soft" ? "mt-0.5" : "mt-1";
 
   // min-w-0 — every consumer places this in a CSS grid row (grid items
   // default to min-width: auto, i.e. "never narrower than my content"), so
@@ -51,7 +60,7 @@ export function DashboardStatTile({
   return (
     <div className={cn("min-w-0 transition-colors duration-200", box, className)}>
       <p className="truncate text-[11px] font-medium text-fg/50">{label}</p>
-      <p className="mt-0.5 truncate text-lg font-bold tracking-tight text-fg tabular-nums">{value}</p>
+      <p className={cn("truncate font-bold tracking-tight text-fg tabular-nums", valueSize, valueSpacing)}>{value}</p>
       {caption ? (
         <p className={cn("mt-0.5 truncate text-[10px] font-medium", CAPTION_TONE[captionTone])}>{caption}</p>
       ) : null}
