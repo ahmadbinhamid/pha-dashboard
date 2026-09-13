@@ -145,8 +145,8 @@
 :root {
   /* Surfaces — matched to parthub.shop's HSL tokens (background/card/
      secondary from their compiled CSS: hsl(0 0% 97%) / hsl(0 0% 100%) /
-     hsl(220 14% 96%)). */
-  --bg: 0 0% 97%;
+     hsl(220 14% 96%)), except --bg itself, bumped to pure white per request. */
+  --bg: 0 0% 100%;
   --bg-2: 220 14% 96%;
   --surface: 220 14% 96%;
   --surface-elevated: 0 0% 100%;
