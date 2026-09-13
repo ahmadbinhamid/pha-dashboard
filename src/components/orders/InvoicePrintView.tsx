@@ -2,7 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Landmark, MapPin, Phone, Mail, User, Truck, ClipboardList, Shield, Scale, Heart } from "lucide-react";
 import { TenantLogo } from "@/components/branding/TenantLogo";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
-import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst, formatOrderNumber, formatInvoiceNumber } from "@/utils/format";
+import {
+  formatCurrencyFromCents,
+  getExclusiveUnitPrice,
+  getLineGst,
+  formatOrderNumber,
+  formatInvoiceNumber,
+  stripEbayAddressPrefix,
+} from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
@@ -194,7 +201,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <ColumnHeading icon={User}>Bill To</ColumnHeading>
           <div className="mt-2.5 text-sm font-bold">{order.customer.company_name || order.customer.name}</div>
           <div className="mt-1.5 space-y-0.5 text-xs" style={{ color: MUTED }}>
-            {billingAddress && <div>{billingAddress.address}</div>}
+            {billingAddress && <div>{stripEbayAddressPrefix(billingAddress.address)}</div>}
             {billingAddress && (
               <div>
                 {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
@@ -213,7 +220,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               <div>Collecting in-store — see seller address above.</div>
             ) : (
               <>
-                <div>{order.shipping_address.address}</div>
+                <div>{stripEbayAddressPrefix(order.shipping_address.address)}</div>
                 <div>
                   {order.shipping_address.suburb} {order.shipping_address.state} {order.shipping_address.postcode}
                 </div>

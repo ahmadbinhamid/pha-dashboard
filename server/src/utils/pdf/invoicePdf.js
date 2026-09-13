@@ -18,6 +18,7 @@ const path = require("path");
 const PDFDocument = require("pdfkit");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
 const { formatOrderNumber, formatInvoiceNumber } = require("../orderNumberFormat");
+const { stripEbayAddressPrefix } = require("../addressFormat");
 
 const PAGE_MARGIN = 54;
 const FRAME_PADDING = 20; // gap between the card border and its content
@@ -407,7 +408,7 @@ function drawBillShipTransactionBlock(doc, order) {
   y1 = doc.y + 5;
   doc.font(FONT).fontSize(8).fillColor(COLORS.muted);
   if (billingAddress) {
-    doc.text(billingAddress.address, col1X, y1, { width: colWidth });
+    doc.text(stripEbayAddressPrefix(billingAddress.address), col1X, y1, { width: colWidth });
     y1 = doc.y + 1;
     doc.text(`${billingAddress.suburb} ${billingAddress.state} ${billingAddress.postcode}, Australia`, col1X, y1, {
       width: colWidth,
@@ -433,7 +434,7 @@ function drawBillShipTransactionBlock(doc, order) {
     doc.text("Collecting in-store — see seller address above.", col2X, y2, { width: colWidth });
     y2 = doc.y;
   } else {
-    doc.text(order.shipping_address.address, col2X, y2, { width: colWidth });
+    doc.text(stripEbayAddressPrefix(order.shipping_address.address), col2X, y2, { width: colWidth });
     y2 = doc.y + 1;
     doc.text(
       `${order.shipping_address.suburb} ${order.shipping_address.state} ${order.shipping_address.postcode}`,
