@@ -67,6 +67,18 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
   // carries the chart rather than drawing a redundant line on top of itself.
   const showTrendLine = metric !== "revenueCents";
 
+  // Bar and line ride on separate y-axes so their unrelated units (dollars
+  // vs. a count) don't fight over one scale — but with both domains topping
+  // out just above their own max, the bar's peak (~87% of the chart height)
+  // actually reached higher than the line's (~74%), so the "background" bar
+  // visually collided with the "foreground" line instead of sitting under
+  // it. Squashing the bar axis's domain to 4x its max (bars occupy only the
+  // bottom quarter) while giving the line axis just 1.2x (it uses nearly
+  // the full height) keeps the line floating clearly above — but only when
+  // a line is actually drawn; with Revenue selected the bar is the only
+  // series on screen and should use the normal, comfortable height.
+  const revenueDomainMultiplier = showTrendLine ? 4 : 1.15;
+
   return (
     <Card className="p-4 shadow-card transition-shadow duration-300 hover:shadow-md sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -104,8 +116,8 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
                 tickLine={false}
                 tick={{ fontSize: 11, fill: "var(--color-fg)", opacity: 0.45 }}
               />
-              <YAxis yAxisId="revenue" hide domain={[0, (max: number) => max * 1.15]} />
-              <YAxis yAxisId="metric" orientation="right" hide domain={[0, (max: number) => max * 1.35]} />
+              <YAxis yAxisId="revenue" hide domain={[0, (max: number) => max * revenueDomainMultiplier]} />
+              <YAxis yAxisId="metric" orientation="right" hide domain={[0, (max: number) => max * 1.2]} />
               <Tooltip cursor={{ fill: "var(--color-border)", opacity: 0.3 }} content={ChartTooltip} />
               <Bar
                 yAxisId="revenue"

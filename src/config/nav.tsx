@@ -8,6 +8,7 @@ import {
   Boxes,
   History,
   Settings,
+  BarChart2,
 } from "lucide-react";
 
 export type NavItem = {
@@ -31,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customers", href: "/customers", icon: (p) => <Users {...p} /> },
   { label: "Orders", href: "/orders", icon: (p) => <ShoppingCart {...p} /> },
   { label: "Payments", href: "/payments", icon: (p) => <CreditCard {...p} /> },
+  { label: "Reports", href: "/reports", icon: (p) => <BarChart2 {...p} /> },
   { label: "Activity Log", href: "/activity-log", icon: (p) => <History {...p} /> },
   { label: "Settings", href: "/settings", icon: (p) => <Settings {...p} /> },
 ];

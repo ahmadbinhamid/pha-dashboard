@@ -297,12 +297,22 @@ async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
 // No dedicated activity/audit log exists in this system; this merges the two
 // event sources this app actually has, newest first.
 
+// Same "A$1,234.56" convention as invoicePdf.js#formatMoney — kept as its
+// own copy rather than a shared import since that one lives under utils/pdf
+// for a PDF-rendering context, while this is a plain activity-feed string.
+function formatOrderTotal(cents) {
+  return `A$${(cents / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function mapOrderEvent(o) {
   return {
     id: `order_${o._id}`,
     type: "order",
-    title: `New order — ${o.customer.name}`,
-    description: `${formatOrderNumber(o.order_number_prefix, o.order_number)} via ${o.channel}`,
+    title: `New Order ${formatOrderNumber(o.order_number_prefix, o.order_number)}`,
+    // Channel isn't folded into this string — tags[0] carries the raw
+    // channel value (see below) so the frontend renders it as its own
+    // OrderChannelBadge pill instead of plain "via storefront" text.
+    description: formatOrderTotal(o.total),
     timestamp: o.created_at,
     tags: [o.channel, o.status],
   };
@@ -353,7 +363,7 @@ async function getRecentActivity(tenantId, limit = 10) {
     Order.find({ tenant_id: tenantId })
       .sort({ created_at: -1 })
       .limit(limit)
-      .select("order_number order_number_prefix channel status created_at customer")
+      .select("order_number order_number_prefix channel status total created_at customer")
       .lean(),
     findRecentStockEvents(tenantId, limit),
   ]);
@@ -421,7 +431,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
       ? Order.find(orderFilter)
           .sort({ created_at: -1 })
           .limit(fetchCount)
-          .select("order_number order_number_prefix channel status created_at customer")
+          .select("order_number order_number_prefix channel status total created_at customer")
           .lean()
       : [],
     includeOrders ? Order.countDocuments(orderFilter) : 0,
@@ -550,4 +560,8 @@ module.exports = {
   listActivity,
   getActivityAnalytics,
   getCriticalStock,
+  // Exported so reports.service.js can reuse the same inventory-value
+  // aggregation instead of duplicating it (the Reports page's Inventory
+  // Insights card and its turnover-ratio denominator both need it).
+  getInventoryValue,
 };

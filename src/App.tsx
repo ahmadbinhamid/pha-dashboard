@@ -25,6 +25,7 @@ import OrdersPage from "@/pages/erp/OrdersPage";
 import OrderDetailPage from "@/pages/erp/OrderDetailPage";
 import CreateOrderPage from "@/pages/erp/CreateOrderPage";
 import PaymentsPage from "@/pages/erp/PaymentsPage";
+import ReportsPage from "@/pages/erp/ReportsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
             <Route path="/listings/new" element={<ListingCreatePage />} />
             <Route path="/listings/:id/edit" element={<ListingEditPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />

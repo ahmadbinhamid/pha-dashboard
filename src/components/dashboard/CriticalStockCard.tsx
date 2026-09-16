@@ -87,7 +87,7 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
                       <div className="truncate font-mono text-[11px] text-fg/40">{item.sku}</div>
                     </TableCell>
                     <TableCell className="px-0 py-2 text-center">
-                      <Badge variant="danger">{item.stockCount} units</Badge>
+                      <Badge variant={item.stockCount === 0 ? "danger" : "warn"}>{item.stockCount} units</Badge>
                     </TableCell>
                     <TableCell className="px-0 py-2 text-right last:pr-0">
                       <Button variant="primary" size="sm" onClick={() => setReorderTarget(item)}>

@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
-import { ActivityEventRow } from "@/components/activity/ActivityEventRow";
+import { RecentActivityRow } from "@/components/dashboard/RecentActivityRow";
 import type { ActivityEvent } from "@/types/dashboard";
 
 function eventHref(event: ActivityEvent) {
@@ -38,9 +38,9 @@ export function RecentActivityCard({ events, loading }: { events: ActivityEvent[
               <div
                 key={event.id}
                 onClick={() => navigate(eventHref(event))}
-                className="cursor-pointer rounded-lg border border-transparent bg-muted/40 p-2 shadow-(--shadow-input) transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-muted/70"
+                className="cursor-pointer rounded-xl border border-transparent bg-muted/40 p-3 transition-colors duration-200 hover:border-border hover:bg-muted/70"
               >
-                <ActivityEventRow event={event} />
+                <RecentActivityRow event={event} />
               </div>
             ))}
           </div>

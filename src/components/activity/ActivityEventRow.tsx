@@ -1,4 +1,4 @@
-import { ShoppingCart, Boxes, RefreshCw, AlertTriangle } from "lucide-react";
+import { ShoppingCart, Package, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
@@ -10,15 +10,21 @@ import type { ActivityEvent } from "@/types/dashboard";
 const RESTOCK_ADJUSTMENT_TAGS = new Set(["restock", "transfer_in"]);
 const LOSS_ADJUSTMENT_TAGS = new Set(["damaged", "lost", "stolen"]);
 
-function eventVisual(event: ActivityEvent): { icon: typeof ShoppingCart; style: string } {
+// Shared by this full row and the dashboard's compact RecentActivityRow so
+// both read an event's type/tags into the same icon+color exactly once,
+// rather than each guessing at it independently. Restock keeps its own
+// RefreshCw icon (it's a distinct "stock coming back in" action, not just
+// another adjustment) — every other stock event (plain adjustment, loss)
+// shares the Package icon, differing only by tone (accent vs. danger).
+export function eventVisual(event: ActivityEvent): { icon: typeof ShoppingCart; style: string } {
   if (event.type === "order") return { icon: ShoppingCart, style: "bg-ok/10 text-ok" };
   const adjustmentTag = event.tags[0];
-  if (adjustmentTag && RESTOCK_ADJUSTMENT_TAGS.has(adjustmentTag)) return { icon: RefreshCw, style: "bg-ok/10 text-ok" };
-  if (adjustmentTag && LOSS_ADJUSTMENT_TAGS.has(adjustmentTag)) return { icon: AlertTriangle, style: "bg-danger/10 text-danger" };
-  return { icon: Boxes, style: "bg-warn/10 text-warn" };
+  if (adjustmentTag && RESTOCK_ADJUSTMENT_TAGS.has(adjustmentTag)) return { icon: RefreshCw, style: "bg-warn/10 text-warn" };
+  if (adjustmentTag && LOSS_ADJUSTMENT_TAGS.has(adjustmentTag)) return { icon: Package, style: "bg-danger/10 text-danger" };
+  return { icon: Package, style: "bg-accent/10 text-accent" };
 }
 
-function formatTime(iso: string) {
+export function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
