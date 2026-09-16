@@ -640,20 +640,17 @@ function drawFooter(doc, companyProfile, topY) {
   );
   const blockHeight = 11 + 6 + bodyHeight;
 
-  // Pinned to the bottom of the page, like InvoicePrintView.tsx's `mt-auto`
-  // footer — falls back to sitting right below the preceding content only if
-  // the order has enough line items to push that content past where the
-  // footer would otherwise sit. Once a fresh page has been started, pinning
-  // no longer makes sense (it would strand the footer far below its own
-  // content), so it flows from the top of that page instead.
+  // Always pinned to the foot of whichever page it lands on, like
+  // InvoicePrintView.tsx's `mt-auto` footer — including a page added just
+  // for it, which it would otherwise start at the top of, leaving the rest
+  // of the sheet blank beneath it. It only sits higher than the foot when
+  // the preceding content reaches that far down the page itself.
   let anchorY = topY + 26;
-  let pinToBottom = true;
   if (anchorY + blockHeight > BOTTOM_LIMIT) {
     doc.addPage();
     anchorY = PAGE_MARGIN;
-    pinToBottom = false;
   }
-  const ruleY = pinToBottom ? Math.max(anchorY, BOTTOM_LIMIT - blockHeight) : anchorY;
+  const ruleY = Math.max(anchorY, BOTTOM_LIMIT - blockHeight);
 
   drawRule(doc, ruleY);
   const textY = ruleY + 10;
