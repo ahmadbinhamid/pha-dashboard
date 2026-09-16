@@ -484,9 +484,9 @@
   }
 
   /* Without this, Chromium/Firefox silently drop background colors and
-     images on print by default — the invoice's tinted cards, the green
-     "Payment Received" pill, and the orange Balance Outstanding bar would
-     all render as plain white/gray instead of their real colors. */
+     images on print by default — the invoice's solid ink "Total inc GST"
+     bar and its amber Balance Outstanding bar would both render as plain
+     white instead of their real colors (see InvoicePrintView.tsx). */
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
