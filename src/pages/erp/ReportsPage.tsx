@@ -207,55 +207,62 @@ export default function ReportsPage() {
 
       <InventoryTurnoverCard turnover={turnover} loading={turnoverLoading} error={turnoverFailed} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <Card className="flex flex-col justify-between gap-4 p-5 shadow-card transition-shadow duration-300 hover:shadow-md lg:col-span-5">
-          <div className="flex items-center justify-between">
-            <DashboardSectionLabel badge={rangeLabel}>Revenue Overview</DashboardSectionLabel>
-          </div>
-
-          <div className="flex items-center gap-4 text-xs font-medium">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-accent" />
-              <span className="text-fg/60">Revenue (AUD)</span>
+      {/* Sized by CONTAINER width, for the same reason as the row further
+          down: AppShell's sidebar is 260px expanded and 72px collapsed, so a
+          viewport breakpoint mis-measures this row by ~190px. Three across
+          only once the row itself is wide enough to hold a chart, a pie and a
+          category list side by side. */}
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-6 @3xl:grid-cols-12">
+          <Card className="flex flex-col justify-between gap-4 p-5 shadow-card transition-shadow duration-300 hover:shadow-md @3xl:col-span-7 @6xl:col-span-5">
+            <div className="flex items-center justify-between">
+              <DashboardSectionLabel badge={rangeLabel}>Revenue Overview</DashboardSectionLabel>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-cat-1)" }} />
-              <span className="text-fg/60">Orders</span>
+
+            <div className="flex items-center gap-4 text-xs font-medium">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+                <span className="text-fg/60">Revenue (AUD)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-cat-1)" }} />
+                <span className="text-fg/60">Orders</span>
+              </div>
             </div>
+
+            <div className="h-64 w-full">
+              {volumeLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={revenueChartData}>
+                    <CartesianGrid vertical={false} stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: "var(--color-fg)", opacity: 0.5 }} />
+                    <YAxis yAxisId="left" hide />
+                    <YAxis yAxisId="right" orientation="right" hide />
+                    <Tooltip content={RevenueOverviewTooltip} cursor={{ fill: "var(--color-border)", opacity: 0.3 }} />
+                    <Bar yAxisId="left" dataKey="revenueCents" fill="var(--color-accent)" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="orders"
+                      stroke="var(--color-cat-1)"
+                      strokeWidth={2.5}
+                      dot={{ r: 4, fill: "var(--color-cat-1)" }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+
+          <div className="@3xl:col-span-5 @6xl:col-span-3">
+            <RevenueByChannelCard rows={channelRows} loading={channelLoading} />
           </div>
 
-          <div className="h-64 w-full">
-            {volumeLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={revenueChartData}>
-                  <CartesianGrid vertical={false} stroke="var(--color-border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: "var(--color-fg)", opacity: 0.5 }} />
-                  <YAxis yAxisId="left" hide />
-                  <YAxis yAxisId="right" orientation="right" hide />
-                  <Tooltip content={RevenueOverviewTooltip} cursor={{ fill: "var(--color-border)", opacity: 0.3 }} />
-                  <Bar yAxisId="left" dataKey="revenueCents" fill="var(--color-accent)" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="orders"
-                    stroke="var(--color-cat-1)"
-                    strokeWidth={2.5}
-                    dot={{ r: 4, fill: "var(--color-cat-1)" }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
+          <div className="@3xl:col-span-12 @6xl:col-span-4">
+            <TopCategoriesCard rows={categoryRows} loading={categoriesLoading} />
           </div>
-        </Card>
-
-        <div className="lg:col-span-3">
-          <RevenueByChannelCard rows={channelRows} loading={channelLoading} />
-        </div>
-
-        <div className="lg:col-span-4">
-          <TopCategoriesCard rows={categoryRows} loading={categoriesLoading} />
         </div>
       </div>
 

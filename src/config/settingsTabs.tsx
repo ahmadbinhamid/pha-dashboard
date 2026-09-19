@@ -48,30 +48,8 @@ export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
   { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
   { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  {
-    id: "users",
-    label: "User Management",
-    icon: (p) => <Users {...p} />,
-    available: false,
-    summary: "Invite staff, assign them to warehouses, and deactivate accounts without deleting their order history.",
-    planned: [
-      "Invite teammates by email with a role attached",
-      "Suspend or remove access without losing who did what",
-      "See who's active, and when they last signed in",
-    ],
-  },
-  {
-    id: "roles",
-    label: "Roles & Permissions",
-    icon: (p) => <Shield {...p} />,
-    available: false,
-    summary: "Define what each role can see and change. Accounts are currently fixed to Admin, Staff and Super Admin.",
-    planned: [
-      "Custom roles beyond the three built-in ones",
-      "Per-area permissions — pricing, refunds, settings, exports",
-      "Approval limits on refunds and manual price edits",
-    ],
-  },
+  { id: "users", label: "User Management", icon: (p) => <Users {...p} />, available: true },
+  { id: "roles", label: "Roles & Permissions", icon: (p) => <Shield {...p} />, available: true },
   {
     id: "taxes",
     label: "Taxes & Shipping",

@@ -30,6 +30,7 @@ import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import ProfilePage from "@/pages/erp/ProfilePage";
 import SettingsPage from "@/pages/erp/SettingsPage";
+import InvitePage from "@/pages/InvitePage";
 import PayOrderPage from "@/pages/PayOrderPage";
 
 function HomeRedirect() {
@@ -54,6 +55,12 @@ export default function App() {
           {/* Public — no login, no tenant context beyond the order id + guest
               token in the URL. Shared across every tenant's payment links. */}
           <Route path="/pay/:orderId" element={<PayOrderPage />} />
+
+          {/* Invite landing page. Deliberately NOT behind GuestRoute: the
+              link is equally valid for someone already signed in (they accept)
+              and for someone with no account yet (they sign up and join in one
+              step) — see InvitePage. The token in the URL is the credential. */}
+          <Route path="/invite" element={<InvitePage />} />
 
           <Route
             path="/login"

@@ -1,0 +1,31 @@
+{{> _header}}
+
+<div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+  <h2 style="color: #18140f; text-align: center;">You've been invited to {{organisation_name}}</h2>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    {{#if inviter_name}}{{inviter_name}} has invited you{{else}}You've been invited{{/if}}
+    to join <strong>{{organisation_name}}</strong> on {{app_name}}{{#if role_name}} as <strong>{{role_name}}</strong>{{/if}}.
+  </p>
+
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="{{invite_url}}" style="background-color: #c2790b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+      Accept Invitation
+    </a>
+  </div>
+
+  <p style="color: #666; font-size: 14px; line-height: 1.5;">
+    This invitation was sent to <strong>{{email}}</strong> and can only be accepted by that address.
+    {{#if expires_on}}It expires on {{expires_on}}.{{/if}}
+  </p>
+
+  <p style="color: #999; font-size: 13px; line-height: 1.5;">
+    If you weren't expecting this, you can ignore this email — nothing happens until you accept.
+  </p>
+
+  <p style="color: #999; font-size: 12px; word-break: break-all;">
+    Button not working? Paste this into your browser:<br />{{invite_url}}
+  </p>
+</div>
+
+{{> _footer}}

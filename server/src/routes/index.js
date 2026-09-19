@@ -30,5 +30,8 @@ router.use("/reports", require("./reports.routes"));
 router.use("/tenant-settings", require("./tenantSettings.routes"));
 router.use("/domains", require("./domain.routes"));
 router.use("/notification", require("./notification.routes"));
+router.use("/members", require("./member.routes"));
+router.use("/roles", require("./role.routes"));
+router.use("/invitations", require("./invitation.routes"));
 
 module.exports = router;

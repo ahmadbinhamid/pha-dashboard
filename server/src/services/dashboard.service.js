@@ -54,6 +54,30 @@ async function getInventoryValue(tenantId) {
 // baseline to compare against" is the more honest read than the number.
 const MAX_MEANINGFUL_CHANGE_PCT = 500;
 
+/**
+ * Current stock value broken down by the product's FIRST category (the same
+ * one reports.service.js attributes a line to), keyed by category id as a
+ * string. Products with no category are grouped under "" so the caller can
+ * account for them rather than silently losing their value.
+ *
+ * Returned in dollars, like getInventoryValue — Product.price is dollars.
+ */
+async function getInventoryValueByCategory(tenantId) {
+  const rows = await Inventory.aggregate([
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+    { $unwind: "$product" },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
+    {
+      $group: {
+        _id: { $ifNull: [{ $arrayElemAt: ["$product.categories", 0] }, null] },
+        totalValue: { $sum: { $multiply: ["$stock_count", "$product.price"] } },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((r) => [r._id ? String(r._id) : "", r.totalValue || 0]));
+}
+
 async function getInventoryValueChangePct(tenantId, currentValue, days = 7) {
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - days);
@@ -204,10 +228,6 @@ async function getStats(tenantId) {
 }
 
 // ── Dashboard trend (order volume + revenue, by channel) ───────────────────
-
-function startOfUtcDay(date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
 
 // Single source of truth for the whole dashboard's date-range filter — one
 // bucket per calendar day across the requested window, always returning a
@@ -564,4 +584,5 @@ module.exports = {
   // aggregation instead of duplicating it (the Reports page's Inventory
   // Insights card and its turnover-ratio denominator both need it).
   getInventoryValue,
+  getInventoryValueByCategory,
 };

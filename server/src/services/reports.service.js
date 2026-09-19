@@ -18,7 +18,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
-const { getInventoryValue } = require("./dashboard.service");
+const { getInventoryValue, getInventoryValueByCategory } = require("./dashboard.service");
 
 function startOfUtcDay(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -307,15 +307,21 @@ async function getInventoryTurnover(tenantId, params = {}) {
     }
   }
 
-  // Category value denominators — current stock value per category, so
-  // "Category Comparison" turnover isn't just cumulative COGS spread evenly
-  // across categories with wildly different inventory levels. Falls back to
-  // the tenant's total when a category has no distinct value on record
-  // (avoids a divide-by-zero blowing that category's ratio up to Infinity).
+  // Category value denominators — the REAL current stock value held in each
+  // category, so a category's turnover reflects its own inventory rather than
+  // a share of the tenant's total. It used to be `total / number of
+  // categories`, which made every category's ratio move whenever an unrelated
+  // category happened to make a sale, and made "fastest turning" meaningless
+  // when categories held wildly different amounts of stock.
+  //
+  // A category with no stock on record keeps the old fallback: dividing by
+  // zero would blow its ratio up to Infinity, and the tenant total at least
+  // keeps it finite and comparable-ish.
+  const valueByCategory = await getInventoryValueByCategory(tenantId);
   const categoryValueCents = new Map();
-  for (const info of productInfo.values()) {
-    if (!info.categoryId) continue;
-    if (!categoryValueCents.has(info.categoryId)) categoryValueCents.set(info.categoryId, inventoryValueCents / Math.max(categoryIds.size, 1));
+  for (const categoryId of categoryIds) {
+    const dollars = valueByCategory.get(String(categoryId));
+    if (dollars) categoryValueCents.set(categoryId, Math.round(dollars * 100));
   }
 
   let cumulativeCogsCents = 0;

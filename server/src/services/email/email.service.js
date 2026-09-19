@@ -325,7 +325,32 @@ async function sendLowStockDigest({ to, items, companyProfile, tenantId }) {
   });
 }
 
+/**
+ * Invite someone into a tenant's organisation. Sent from the tenant's own
+ * brand (not the platform's) via tenantBrandVars, same as the order emails —
+ * the recipient is being asked to join *that business*, not this product.
+ */
+async function sendTeamInvite({ to, organisationName, inviterName, roleName, inviteUrl, expiresAt, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    fromName: tenantFromName(companyProfile),
+    tenantId,
+    to,
+    subject: `You've been invited to ${organisationName}`,
+    template: "teamInvite",
+    variables: {
+      email: to,
+      organisation_name: organisationName,
+      inviter_name: inviterName,
+      role_name: roleName,
+      invite_url: inviteUrl,
+      expires_on: expiresAt ? new Date(expiresAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : null,
+      ...tenantBrandVars(companyProfile),
+    },
+  });
+}
+
 module.exports = {
+  sendTeamInvite,
   sendOTP,
   accountVerified,
   sendPasswordReset,

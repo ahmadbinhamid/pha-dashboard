@@ -10,6 +10,9 @@ const Tenant = require("../models/Tenant");
 const { createUser } = require("./user.service");
 const { generateSlug, ensureUniqueSlug } = require("../utils/slug");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
+const { seedSystemRoles } = require("./role.service");
+const { addMember } = require("./membership.service");
+const { SYSTEM_ROLE } = require("../constants/access.constants");
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -79,6 +82,18 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
       status: USER_STATUS.ACTIVE,
       verified_at: new Date(),
     });
+
+    // Give the organisation its system roles and make the founder a Super
+    // Admin member of it. Membership — not User.tenant_id — is what grants
+    // access now (see membership.service.js), and a tenant whose only user
+    // has no membership would be one nobody can administer.
+    const roles = await seedSystemRoles(tenant._id);
+    await addMember({
+      tenantId: tenant._id,
+      userId: user._id,
+      roleId: roles[SYSTEM_ROLE.SUPER_ADMIN]._id,
+    });
+
     return { tenant, user };
   } catch (err) {
     // No DB transaction spans Tenant + User creation (standalone MongoDB,
