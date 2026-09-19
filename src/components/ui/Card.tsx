@@ -9,7 +9,13 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-2xl bg-card shadow-card ring-1 ring-inset ring-border", className)} {...rest}>
+    // A real border, not `ring-1 ring-inset`: an inset ring is painted with
+    // the element's own background, i.e. BENEATH its descendants, so any
+    // full-bleed child with a background of its own paints straight over it.
+    // That was visible as the card's left and right edge vanishing alongside
+    // a table's header row, which reads as a broken border. A border sits
+    // outside the padding box, where no child can reach it.
+    <div className={cn("rounded-2xl border border-border bg-card shadow-card", className)} {...rest}>
       {children}
     </div>
   );

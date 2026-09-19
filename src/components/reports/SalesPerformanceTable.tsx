@@ -40,12 +40,12 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
             <Table className="text-[11px]">
               <TableHeader className="bg-transparent">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-auto px-1 pb-2 first:pl-0 text-[10px] font-medium normal-case tracking-normal text-fg/40">Channel</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px] font-medium normal-case tracking-normal text-fg/40">Revenue</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px] font-medium normal-case tracking-normal text-fg/40">Orders</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px] font-medium normal-case tracking-normal text-fg/40">Items</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px] font-medium normal-case tracking-normal text-fg/40">AOV</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 last:pr-0 text-right text-[10px] font-medium normal-case tracking-normal text-fg/40">Profit</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 first:pl-0 text-[10px]">Channel</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Revenue</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Orders</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Items</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">AOV</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 last:pr-0 text-right text-[10px]">Profit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -68,13 +68,13 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
                       reference. first:/last: modifier still needed (see
                       below) since a plain px-0 doesn't dedupe against the
                       base's first:pl-5/last:pr-5 in tailwind-merge. */}
-                  <TableHead className="h-auto px-0 pb-1.5 first:pl-0 text-[11px] font-medium normal-case tracking-normal text-fg/40">
+                  <TableHead className="h-auto px-0 pb-1.5 first:pl-0">
                     Part &amp; SKU
                   </TableHead>
-                  <TableHead className="h-auto px-0 pb-1.5 text-center text-[11px] font-medium normal-case tracking-normal text-fg/40">
+                  <TableHead className="h-auto px-0 pb-1.5 text-center">
                     Available Stock
                   </TableHead>
-                  <TableHead className="h-auto px-0 pb-1.5 last:pr-0 text-right text-[11px] font-medium normal-case tracking-normal text-fg/40">
+                  <TableHead className="h-auto px-0 pb-1.5 last:pr-0 text-right">
                     Action
                   </TableHead>
                 </TableRow>
