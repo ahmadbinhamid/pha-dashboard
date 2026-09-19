@@ -50,6 +50,28 @@ const TONE_STYLES: Record<
   },
 };
 
+export type MetricCardSize = "sm" | "md";
+
+// Two densities of the same card. "md" is the Dashboard's hero row; "sm" is
+// for pages where the numbers are context rather than the point of the page
+// (the Activity Log), so the cards shouldn't outweigh the content below them.
+const SIZE_STYLES: Record<MetricCardSize, { card: string; icon: string; value: string; gap: string; footer: string }> = {
+  md: {
+    card: "p-4 sm:p-5",
+    icon: "h-9 w-9",
+    value: "text-2xl sm:text-3xl",
+    gap: "mt-3",
+    footer: "mt-3 pt-2.5",
+  },
+  sm: {
+    card: "p-3 sm:p-3.5",
+    icon: "h-7 w-7",
+    value: "text-xl",
+    gap: "mt-1.5",
+    footer: "mt-2 pt-1.5",
+  },
+};
+
 const BADGE_TONE: Record<MetricCardTone, string> = {
   accent: "bg-accent/10 text-accent",
   danger: "bg-danger/10 text-danger",
@@ -64,6 +86,7 @@ export function MetricCard({
   subLabel,
   icon,
   tone = "accent",
+  size = "md",
   loading,
   onClick,
 }: {
@@ -74,10 +97,12 @@ export function MetricCard({
   subLabel?: React.ReactNode;
   icon: React.ReactNode;
   tone?: MetricCardTone;
+  size?: MetricCardSize;
   loading?: boolean;
   onClick?: () => void;
 }) {
   const toneStyles = TONE_STYLES[tone];
+  const sizeStyles = SIZE_STYLES[size];
 
   return (
     <Card
@@ -95,7 +120,8 @@ export function MetricCard({
           : undefined
       }
       className={cn(
-        "group relative flex min-w-0 flex-col overflow-hidden p-4 transition-all duration-300 sm:p-5",
+        "group relative flex min-w-0 flex-col overflow-hidden transition-all duration-300",
+        sizeStyles.card,
         onClick &&
           cn(
             "cursor-pointer hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
@@ -114,7 +140,8 @@ export function MetricCard({
         <span className="text-xs font-medium text-fg/55 transition-colors group-hover:text-fg/70">{label}</span>
         <span
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+            "flex shrink-0 items-center justify-center rounded-full transition-all duration-300",
+            sizeStyles.icon,
             toneStyles.icon,
             toneStyles.iconHover,
           )}
@@ -124,15 +151,15 @@ export function MetricCard({
       </div>
 
       {loading ? (
-        <Skeleton className="mt-3 h-7 w-20" />
+        <Skeleton className={cn("h-7 w-20", sizeStyles.gap)} />
       ) : (
         // flex-wrap + min-w-0 on the value — a long currency value next to a
         // badge can exceed the card's width at some viewport sizes; without
         // these the badge got hard-clipped by the card's overflow-hidden
         // instead of wrapping to its own line. Found live: an extreme
         // percentage badge ("+2094...") got cut off mid-character.
-        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-          <span className="min-w-0 truncate text-2xl font-bold tracking-tight text-fg tabular-nums sm:text-3xl">
+        <div className={cn("flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1", sizeStyles.gap)}>
+          <span className={cn("min-w-0 truncate font-bold tracking-tight text-fg tabular-nums", sizeStyles.value)}>
             {value}
           </span>
           {badge ? (
@@ -149,11 +176,12 @@ export function MetricCard({
       )}
 
       {loading ? (
-        <Skeleton className="mt-3 h-3 w-28" />
+        <Skeleton className={cn("h-3 w-28", sizeStyles.gap)} />
       ) : subLabel ? (
         <div
           className={cn(
-            "mt-3 flex items-center justify-between gap-2 border-t border-border pt-2.5 text-xs text-fg/50 transition-colors duration-300",
+            "flex items-center justify-between gap-2 border-t border-border text-xs text-fg/50 transition-colors duration-300",
+            sizeStyles.footer,
             toneStyles.caption,
           )}
         >

@@ -27,8 +27,12 @@ import { downloadCsv } from "@/utils/csv";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
+
+const DEFAULT_RANGE_DAYS = 7;
 export default function ReportsPage() {
-  const [range, setRange] = useState<DateRangeValue>(() => getPresetRange(30));
+  // Opens on the last 7 days: the range people check most often, and the one
+  // the charts on this page read best at (daily buckets, every day labelled).
+  const [range, setRange] = useState<DateRangeValue>(() => getPresetRange(DEFAULT_RANGE_DAYS));
   const rangeParams = { from: range.from, to: range.to };
 
   const { data: summaryRes, isLoading: summaryLoading } = useQuery({
@@ -71,7 +75,7 @@ export default function ReportsPage() {
     queryFn: () => getInventoryTurnover(rangeParams),
   });
 
-  const days = summaryRes?.data?.range.days ?? 30;
+  const days = summaryRes?.data?.range.days ?? DEFAULT_RANGE_DAYS;
 
   const summary = summaryRes?.data;
   const channelRows = channelRes?.data ?? [];
