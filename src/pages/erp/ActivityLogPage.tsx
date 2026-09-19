@@ -10,7 +10,7 @@ import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ActivityTrendChart } from "@/components/activity/ActivityTrendChart";
-import { ActivityEventRow } from "@/components/activity/ActivityEventRow";
+import { ActivityLogTable } from "@/components/activity/ActivityLogTable";
 import { listActivityLog, getActivityAnalytics } from "@/lib/api/dashboard";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { DateRangeValue } from "@/utils/dateRange";
@@ -186,13 +186,7 @@ export default function ActivityLogPage() {
         ) : events.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="divide-y divide-border/60 px-5">
-            {events.map((event) => (
-              <div key={event.id} className="py-3.5">
-                <ActivityEventRow event={event} showDate />
-              </div>
-            ))}
-          </div>
+          <ActivityLogTable events={events} />
         )}
 
         <Pagination
@@ -211,10 +205,11 @@ export default function ActivityLogPage() {
 
 function LoadingSkeleton() {
   return (
-    <div className="divide-y divide-border/60 px-5">
+    <div className="divide-y divide-border/60">
       {[220, 260, 180, 240, 200, 150].map((w, i) => (
-        <div key={i} className="flex items-center gap-3 py-3.5">
-          <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-bg-2" />
+        <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+          <div className="h-3.5 w-28 animate-pulse rounded-xs bg-bg-2" />
+          <div className="h-7 w-7 shrink-0 animate-pulse rounded-lg bg-bg-2" />
           <div className="h-3.5 animate-pulse rounded-xs bg-bg-2" style={{ width: w }} />
         </div>
       ))}

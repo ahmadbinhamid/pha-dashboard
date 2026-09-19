@@ -1,16 +1,14 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { TooltipContentProps } from "recharts";
 import { BarChart2, DollarSign, Download, Lightbulb, Package, RefreshCw, ShoppingCart, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { ReportsMetricCard } from "@/components/reports/ReportsMetricCard";
+import { RevenueOverviewChart } from "@/components/reports/RevenueOverviewChart";
 import { InventoryTurnoverCard } from "@/components/reports/InventoryTurnoverCard";
 import { RevenueByChannelCard } from "@/components/reports/RevenueByChannelCard";
 import { TopCategoriesCard } from "@/components/reports/TopCategoriesCard";
@@ -29,30 +27,6 @@ import { downloadCsv } from "@/utils/csv";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
-import type { OrderVolumePoint } from "@/types/dashboard";
-
-function formatDayLabel(dateStr: string) {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-AU", { month: "short", day: "numeric" });
-}
-
-function RevenueOverviewTooltip({ active, payload }: TooltipContentProps) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0].payload as OrderVolumePoint & { label: string };
-  return (
-    <div className="rounded-md border border-border bg-card px-3 py-2.5 text-xs shadow-lg">
-      <div className="mb-1.5 font-semibold text-fg">{point.label}</div>
-      <div className="flex items-center justify-between gap-4 text-fg/60">
-        <span>Revenue</span>
-        <span className="font-medium tabular-nums text-fg">{formatCurrencyFromCents(point.revenueCents)}</span>
-      </div>
-      <div className="flex items-center justify-between gap-4 text-fg/60">
-        <span>Orders</span>
-        <span className="font-medium tabular-nums text-fg">{point.orders}</span>
-      </div>
-    </div>
-  );
-}
-
 export default function ReportsPage() {
   const [range, setRange] = useState<DateRangeValue>(() => getPresetRange(30));
   const rangeParams = { from: range.from, to: range.to };
@@ -108,10 +82,7 @@ export default function ReportsPage() {
 
   const rangeLabel = formatDateRangeLabel(range);
 
-  const revenueChartData = useMemo(
-    () => (volumeRes?.data?.points ?? []).map((p) => ({ ...p, label: formatDayLabel(p.date) })),
-    [volumeRes],
-  );
+  const revenueChartData = useMemo(() => volumeRes?.data?.points ?? [], [volumeRes]);
 
   // Real derived series (revenue ÷ orders per day) — no dedicated backend
   // field for it, unlike the other 4 cards' sparklines, since it's a simple
@@ -219,41 +190,7 @@ export default function ReportsPage() {
               <DashboardSectionLabel badge={rangeLabel}>Revenue Overview</DashboardSectionLabel>
             </div>
 
-            <div className="flex items-center gap-4 text-xs font-medium">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-accent" />
-                <span className="text-fg/60">Revenue (AUD)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-cat-1)" }} />
-                <span className="text-fg/60">Orders</span>
-              </div>
-            </div>
-
-            <div className="h-64 w-full">
-              {volumeLoading ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={revenueChartData}>
-                    <CartesianGrid vertical={false} stroke="var(--color-border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: "var(--color-fg)", opacity: 0.5 }} />
-                    <YAxis yAxisId="left" hide />
-                    <YAxis yAxisId="right" orientation="right" hide />
-                    <Tooltip content={RevenueOverviewTooltip} cursor={{ fill: "var(--color-border)", opacity: 0.3 }} />
-                    <Bar yAxisId="left" dataKey="revenueCents" fill="var(--color-accent)" radius={[4, 4, 0, 0]} barSize={20} />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="orders"
-                      stroke="var(--color-cat-1)"
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: "var(--color-cat-1)" }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+            <RevenueOverviewChart points={revenueChartData} loading={volumeLoading} />
           </Card>
 
           <div className="@3xl:col-span-5 @6xl:col-span-3">
