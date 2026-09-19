@@ -30,6 +30,7 @@ const { fanOutMarketplaceInventory } = require("../services/inventory.service");
 const { enqueueSearchJob } = require("../queues/search.queue");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
+const { duplicateKeyMessage } = require("../utils/duplicateKey");
 const { buildProductFilter } = require("../utils/productFilter");
 const {
   parseField,
@@ -396,8 +397,10 @@ exports.createProduct = async (req, res) => {
 
     return created(res, await getPopulatedProduct(product._id, req.tenantId), "Product created");
   } catch (err) {
-    if (err.code === 11000)
-      return requestConflict(res, "Product slug already exists");
+    // Name the index that actually rejected the write: slug and sku are both
+    // unique here, so a hardcoded slug message misreports sku collisions.
+    const conflict = duplicateKeyMessage(err, "Product", { slug: "slug", sku: "SKU" });
+    if (conflict) return requestConflict(res, conflict);
     return systemfailure(res, err);
   }
 };
@@ -518,8 +521,8 @@ exports.updateProduct = async (req, res) => {
 
     return success(res, await getPopulatedProduct(product._id, req.tenantId), "Product updated");
   } catch (err) {
-    if (err.code === 11000)
-      return requestConflict(res, "Product slug already exists");
+    const conflict = duplicateKeyMessage(err, "Product", { slug: "slug", sku: "SKU" });
+    if (conflict) return requestConflict(res, conflict);
     return systemfailure(res, err);
   }
 };
