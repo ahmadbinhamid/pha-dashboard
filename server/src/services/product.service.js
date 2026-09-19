@@ -22,11 +22,18 @@ const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 // ── SKU generation ────────────────────────────────────────────────────────────
 
 async function generateNextSku(tenant) {
-  // SKUs are zero-padded to 6 digits, so lexicographic desc = numeric desc
+  // SKUs are zero-padded to 6 digits, so lexicographic desc = numeric desc.
+  // withDeleted: the unique { tenant_id, sku } index still covers
+  // soft-deleted products, so this counter has to see them too. Without it,
+  // deleting the newest product makes the next create re-issue that row's
+  // SKU and die on a duplicate key — permanently, since every retry
+  // recomputes the same number.
   const last = await Product.findOne(
     { tenant_id: tenant._id, sku: new RegExp(`^${tenant.code}-\\d{6}$`) },
     { sku: 1 },
-  ).sort({ sku: -1 });
+  )
+    .setOptions({ withDeleted: true })
+    .sort({ sku: -1 });
 
   const num = last?.sku ? parseInt(last.sku.slice(tenant.code.length + 1), 10) : 0;
   return `${tenant.code}-${String(num + 1).padStart(6, "0")}`;

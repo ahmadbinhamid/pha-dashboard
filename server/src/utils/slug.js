@@ -20,7 +20,12 @@ async function ensureUniqueSlug(Model, baseSlug, excludeId = null, tenantId = nu
     if (excludeId) query._id = { $ne: excludeId };
     if (tenantId) query.tenant_id = tenantId;
 
-    const exists = await Model.findOne(query);
+    // withDeleted: the unique slug index covers soft-deleted documents, so
+    // a slug one of them holds is genuinely taken even though the default
+    // find filter hides it. Without this the check returns a slug the
+    // insert then rejects, and the retry below can never converge because
+    // it recomputes the same answer every time.
+    const exists = await Model.findOne(query).setOptions({ withDeleted: true });
     if (!exists) return slug;
 
     slug = `${baseSlug}-${counter}`;
