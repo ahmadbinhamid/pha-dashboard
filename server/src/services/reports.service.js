@@ -259,7 +259,7 @@ async function getSalesPerformanceByChannel(tenantId, params = {}) {
     .sort((a, b) => b.revenueCents - a.revenueCents);
 }
 
-// ── 30-day inventory turnover & stock velocity ──────────────────────────────
+// ── Inventory turnover & stock velocity (over the requested range) ──────────
 //
 // Inventory turnover = COGS / average inventory value. This app keeps no
 // historical inventory-*value* time series (only point-in-time value, plus
@@ -271,8 +271,8 @@ async function getSalesPerformanceByChannel(tenantId, params = {}) {
 // direction a real one would (more sold against a roughly-steady inventory
 // base pushes the ratio up) without pretending to know what inventory value
 // looked like on each past day.
-async function getInventoryTurnover(tenantId, { days = 30 } = {}) {
-  const range = resolveRange({ days });
+async function getInventoryTurnover(tenantId, params = {}) {
+  const range = resolveRange(params);
   const { sinceUtc, dayCount } = range;
   const { orders, productInfo } = await fetchRangeOrdersWithProductInfo(tenantId, range);
   const inventoryValueCents = Math.round((await getInventoryValue(tenantId)) * 100);

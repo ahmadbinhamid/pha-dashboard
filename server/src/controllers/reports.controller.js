@@ -45,8 +45,8 @@ exports.getSalesPerformance = async (req, res) => {
 
 exports.getInventoryTurnover = async (req, res) => {
   try {
-    const { days } = req.query;
-    const turnover = await reportsService.getInventoryTurnover(req.tenantId, { days });
+    const { days, from, to } = req.query;
+    const turnover = await reportsService.getInventoryTurnover(req.tenantId, { days, from, to });
     return success(res, turnover);
   } catch (err) {
     return systemfailure(res, err);

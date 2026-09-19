@@ -87,11 +87,17 @@ export default function ReportsPage() {
     queryFn: getDashboardStats,
   });
 
-  const days = summaryRes?.data?.range.days ?? 30;
-  const { data: turnoverRes, isLoading: turnoverLoading } = useQuery({
-    queryKey: ["reports", "inventory-turnover", days],
-    queryFn: () => getInventoryTurnover(days),
+  // Filtered on the same {from, to} as the cards above, not on a bare day
+  // COUNT derived from the summary — that only ever meant "the last N days
+  // ending today", so picking a past range silently showed this card a
+  // different window, and any range outside the endpoint's old 7-90 day
+  // bounds failed the request outright.
+  const { data: turnoverRes, isLoading: turnoverLoading, isError: turnoverFailed } = useQuery({
+    queryKey: ["reports", "inventory-turnover", range],
+    queryFn: () => getInventoryTurnover(rangeParams),
   });
+
+  const days = summaryRes?.data?.range.days ?? 30;
 
   const summary = summaryRes?.data;
   const channelRows = channelRes?.data ?? [];
@@ -199,7 +205,7 @@ export default function ReportsPage() {
         />
       </div>
 
-      <InventoryTurnoverCard turnover={turnover} loading={turnoverLoading} />
+      <InventoryTurnoverCard turnover={turnover} loading={turnoverLoading} error={turnoverFailed} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="flex flex-col justify-between gap-4 p-5 shadow-card transition-shadow duration-300 hover:shadow-md lg:col-span-5">
@@ -253,53 +259,75 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-5">
-          <SalesPerformanceTable rows={performanceRows} loading={performanceLoading} />
-        </div>
+      {/* Two cards here, export panel on its own row below — NOT three
+          across. Three needs ~1285px to render without something breaking
+          (sales table ~470, insight tiles ~390 for a two-word label on one
+          line, export rows ~380, plus gaps) and this row only has ~1170px on
+          a 1512px screen. Every three-across split just moves the damage:
+          5/3/4 wrapped every insight label onto two lines, 5/4/3 truncated
+          every export title mid-word.
 
-        <div className="lg:col-span-3">
-          <InventoryInsightsCard stats={stats} turnoverRate={turnover?.summary.avgTurnoverRate} loading={statsLoading} />
-        </div>
+          Sized by CONTAINER width, not viewport width, because AppShell's
+          sidebar is 260px expanded and 72px collapsed — the same viewport
+          hands this row ~190px more or less space without any viewport
+          breakpoint firing. */}
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-6 @3xl:grid-cols-12">
+          <div className="@3xl:col-span-7">
+            <SalesPerformanceTable rows={performanceRows} loading={performanceLoading} />
+          </div>
 
-        <div className="lg:col-span-4">
-          <ReportsExportPanel
-            loading={performanceLoading || categoriesLoading || channelLoading}
-            datasets={[
-              {
-                id: "sales-summary",
-                title: "Sales Summary Report",
-                rows: performanceRows.map((r) => ({
-                  channel: r.channel,
-                  revenue: (r.revenueCents / 100).toFixed(2),
-                  orders: r.orders,
-                  itemsSold: r.itemsSold,
-                })),
-              },
-              {
-                id: "inventory-valuation",
-                title: "Inventory Valuation Report",
-                rows: stats ? [{ totalInventoryValue: stats.totalInventoryValue.toFixed(2), lowStockCount: stats.lowStockCount, outOfStockCount: stats.outOfStockCount }] : [],
-              },
-              {
-                id: "channel-performance",
-                title: "Channel Performance Report",
-                rows: channelRows.map((r) => ({ channel: r.channel, revenue: (r.revenueCents / 100).toFixed(2), percentOfTotal: r.pct.toFixed(1) })),
-              },
-              {
-                id: "category-breakdown",
-                title: "Category Breakdown Report",
-                rows: categoryRows.map((r) => ({ category: r.name, revenue: (r.revenueCents / 100).toFixed(2), percentOfTotal: r.pct.toFixed(1) })),
-              },
-            ]}
-          />
+          <div className="@3xl:col-span-5">
+            <InventoryInsightsCard stats={stats} turnoverRate={turnover?.summary.avgTurnoverRate} loading={statsLoading} />
+          </div>
+
+          <div className="@3xl:col-span-12">
+            <ReportsExportPanel
+              loading={performanceLoading || categoriesLoading || channelLoading}
+              // Titles double as the CSV filename (see ReportsExportPanel)
+              // and as the row label, which truncates in this card's share of
+              // the row — so they drop the "Report" suffix the card heading
+              // already implies.
+              datasets={[
+                {
+                  id: "sales-summary",
+                  title: "Sales Summary",
+                  rows: performanceRows.map((r) => ({
+                    channel: r.channel,
+                    revenue: (r.revenueCents / 100).toFixed(2),
+                    orders: r.orders,
+                    itemsSold: r.itemsSold,
+                  })),
+                },
+                {
+                  id: "inventory-valuation",
+                  title: "Inventory Valuation",
+                  // Stock levels as they stand right now — this one comes from
+                  // the dashboard stats endpoint, which takes no date range, so
+                  // it can't claim to cover the selected one.
+                  scopeLabel: "at current stock levels",
+                  rows: stats ? [{ totalInventoryValue: stats.totalInventoryValue.toFixed(2), lowStockCount: stats.lowStockCount, outOfStockCount: stats.outOfStockCount }] : [],
+                },
+                {
+                  id: "channel-performance",
+                  title: "Channel Performance",
+                  rows: channelRows.map((r) => ({ channel: r.channel, revenue: (r.revenueCents / 100).toFixed(2), percentOfTotal: r.pct.toFixed(1) })),
+                },
+                {
+                  id: "category-breakdown",
+                  title: "Category Breakdown",
+                  rows: categoryRows.map((r) => ({ category: r.name, revenue: (r.revenueCents / 100).toFixed(2), percentOfTotal: r.pct.toFixed(1) })),
+                },
+              ]}
+            />
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-accent/20 bg-accent/5 p-4 text-xs sm:flex-row">
         <div className="flex items-center gap-2 font-medium text-fg">
           <Lightbulb className="h-4 w-4 shrink-0 text-accent" />
-          <span>All reports are based on your selected date range and filters.</span>
+          <span>Sales reports cover your selected date range; inventory figures are current stock.</span>
         </div>
         <div className="flex items-center gap-2 text-[11px] font-semibold text-accent">
           <RefreshCw className="h-3.5 w-3.5" />

@@ -10,6 +10,11 @@ import type { DashboardStats } from "@/types/dashboard";
 
 const TONE_STYLES = {
   accent: { box: "bg-accent/5 border-accent/20", icon: "text-accent" },
+  // For a figure that isn't a status. Stock turnover has no "healthy"
+  // threshold defined anywhere in the app, so it can't honestly borrow
+  // either the success or the warning treatment — it used to render in the
+  // success green, which read as "turnover is good" even at 0.0x.
+  neutral: { box: "bg-muted/40 border-border", icon: "text-fg/45" },
   warn: { box: "bg-warn/5 border-warn/20", icon: "text-warn" },
   danger: { box: "bg-danger/5 border-danger/20", icon: "text-danger" },
   ok: { box: "bg-ok/5 border-ok/20", icon: "text-ok" },
@@ -46,7 +51,10 @@ function InsightBox({
         <span className="text-[10px] font-semibold uppercase leading-tight">{label}</span>
       </div>
       <p className="truncate text-[13px] font-bold text-fg tabular-nums">{value}</p>
-      {caption ? <p className={cn("truncate text-[10px] font-semibold", styles.icon)}>{caption}</p> : null}
+      {/* Wraps instead of truncating — at ~70px of usable width this line
+          was being cut mid-word ("7.4% vs l..."), which reads as broken
+          rather than as an abbreviation. */}
+      {caption ? <p className={cn("text-[10px] font-semibold leading-tight", styles.icon)}>{caption}</p> : null}
     </div>
   );
 }
@@ -78,7 +86,12 @@ export function InventoryInsightsCard({
             <InsightBox
               tone="accent"
               icon={<Box className="h-3.5 w-3.5" />}
-              label="Total Inventory Value"
+              // Labels are trimmed to what the card's own title doesn't
+              // already say ("Inventory Insights"), because at 3/12 of the
+              // row each box is ~125px wide — "Total Inventory Value" and
+              // "Out of Stock Items" each spilled onto a THIRD line there,
+              // shoving the value down and leaving the four boxes ragged.
+              label="Inventory Value"
               // Compact notation ("A$414K") — this box is one of 4 in a
               // 2-col grid inside a 3/12-width card, too narrow to fit a
               // full "A$414,499.00" without truncating mid-number. Compact
@@ -87,24 +100,24 @@ export function InventoryInsightsCard({
               value={`A$${formatCompactNumber(stats.totalInventoryValue)}`}
               caption={
                 stats.inventoryValueChangePct !== null
-                  ? `${stats.inventoryValueChangePct >= 0 ? "↗" : "↘"} ${Math.abs(stats.inventoryValueChangePct).toFixed(1)}% vs last 7 days`
+                  ? `${stats.inventoryValueChangePct >= 0 ? "↗" : "↘"} ${Math.abs(stats.inventoryValueChangePct).toFixed(1)}% ·\u00a07d`
                   : undefined
               }
             />
             <InsightBox
               tone="warn"
               icon={<AlertTriangle className="h-3.5 w-3.5" />}
-              label="Low Stock Items"
+              label="Low Stock"
               value={stats.lowStockCount}
             />
             <InsightBox
               tone="danger"
               icon={<AlertTriangle className="h-3.5 w-3.5" />}
-              label="Out of Stock Items"
+              label="Out of Stock"
               value={stats.outOfStockCount}
             />
             <InsightBox
-              tone="ok"
+              tone="neutral"
               icon={<RefreshCw className="h-3.5 w-3.5" />}
               label="Stock Turnover"
               value={turnoverRate !== undefined ? `${turnoverRate.toFixed(1)}x` : "—"}

@@ -13,12 +13,27 @@ export interface ExportDataset {
   id: string;
   title: string;
   rows: Record<string, unknown>[];
+  // What the rows actually cover. Defaults to the page's date range, which
+  // is wrong for a dataset built from current stock levels rather than
+  // orders in the window — that one passes its own wording.
+  scopeLabel?: string;
 }
 
 export function ReportsExportPanel({ datasets, loading }: { datasets: ExportDataset[]; loading?: boolean }) {
   return (
     <Card className="flex h-full flex-col p-5 shadow-card transition-shadow duration-300 hover:shadow-md">
-      <DashboardSectionLabel>Export Reports</DashboardSectionLabel>
+      <div className="flex items-center justify-between gap-3">
+        <DashboardSectionLabel>Export Reports</DashboardSectionLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={datasets.every((d) => d.rows.length === 0)}
+          onClick={() => datasets.forEach((d) => d.rows.length > 0 && downloadCsv(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows))}
+        >
+          Export All
+        </Button>
+      </div>
 
       <CardContent className="flex-1 space-y-2 divide-y divide-border px-0 pt-4">
         {loading
@@ -31,7 +46,10 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-fg">{dataset.title}</p>
-                    <p className="truncate text-[10px] text-fg/40">{dataset.rows.length} rows for the selected range</p>
+                    <p className="truncate text-[10px] text-fg/40">
+                      {dataset.rows.length} {dataset.rows.length === 1 ? "row" : "rows"}{" "}
+                      {dataset.scopeLabel ?? "for the selected range"}
+                    </p>
                   </div>
                 </div>
 
@@ -48,15 +66,6 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
             ))}
       </CardContent>
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full"
-        disabled={datasets.every((d) => d.rows.length === 0)}
-        onClick={() => datasets.forEach((d) => d.rows.length > 0 && downloadCsv(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows))}
-      >
-        Export All
-      </Button>
     </Card>
   );
 }

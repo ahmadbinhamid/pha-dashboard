@@ -29,9 +29,7 @@ export const getSalesPerformance = async (params: ReportsDateRangeParams) => {
   return data;
 };
 
-export const getInventoryTurnover = async (days = 30) => {
-  const { data } = await apiClient.get<BeResponse<InventoryTurnoverResponse>>("/reports/inventory-turnover", {
-    params: { days },
-  });
+export const getInventoryTurnover = async (params: ReportsDateRangeParams) => {
+  const { data } = await apiClient.get<BeResponse<InventoryTurnoverResponse>>("/reports/inventory-turnover", { params });
   return data;
 };

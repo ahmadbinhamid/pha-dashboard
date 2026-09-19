@@ -4,7 +4,11 @@
 
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const str = String(value);
+  // A nested object/array stringifies to "[object Object]", which silently
+  // ships a useless column (hit by the turnover export's per-category rates
+  // — those are flattened into real columns at the call site now). JSON is
+  // the honest fallback for anything still shaped that way.
+  const str = typeof value === "object" ? JSON.stringify(value) : String(value);
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 

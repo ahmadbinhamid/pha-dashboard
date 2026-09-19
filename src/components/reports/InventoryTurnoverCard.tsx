@@ -14,11 +14,12 @@ import {
   YAxis,
 } from "recharts";
 import type { TooltipContentProps } from "recharts";
-import { Download, RefreshCw } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
+import type { StatTileTone } from "@/components/dashboard/DashboardStatTile";
 import { cn } from "@/utils/cn";
 import { downloadCsv } from "@/utils/csv";
 import { formatCurrencyFromCents } from "@/utils/format";
@@ -59,6 +60,16 @@ function formatDsi(days: number) {
   return `${days.toFixed(1)} days`;
 }
 
+// A capped "365+ days" is the WORST reading this card can produce, so it
+// can't share the success tone with a genuinely fast-turning figure — the
+// caption color was previously fixed at "ok", which painted a category that
+// barely moves in green. Capped falls back to neutral rather than danger:
+// it usually means missing Product.cost_price data (see the service's own
+// caveat), not a real inventory problem worth alarming about.
+function dsiTone(days: number): StatTileTone {
+  return Number.isFinite(days) && days <= DSI_DISPLAY_CAP ? "ok" : "neutral";
+}
+
 function TurnoverTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload as InventoryTurnoverResponse["points"][number] & { label: string };
@@ -85,7 +96,15 @@ function TurnoverTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function InventoryTurnoverCard({ turnover, loading }: { turnover?: InventoryTurnoverResponse; loading?: boolean }) {
+export function InventoryTurnoverCard({
+  turnover,
+  loading,
+  error,
+}: {
+  turnover?: InventoryTurnoverResponse;
+  loading?: boolean;
+  error?: boolean;
+}) {
   const [viewMode, setViewMode] = useState<ViewMode>("rate");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
 
@@ -95,6 +114,42 @@ export function InventoryTurnoverCard({ turnover, loading }: { turnover?: Invent
     () => (turnover?.points ?? []).map((p) => ({ ...p, label: formatDayLabel(p.date) })),
     [turnover],
   );
+
+  // A point's `categoryRates` is a nested object, which the CSV writer could
+  // only render as "[object Object]" — flattened here into one column per
+  // category, in categoryRanking's order so every row carries the same
+  // columns. Days-of-inventory is exported UNCAPPED (the tiles cap the
+  // display; the file keeps the real figure).
+  const exportRows = useMemo(
+    () =>
+      (turnover?.points ?? []).map((point) => ({
+        date: point.date,
+        unitsMoved: point.unitsMoved,
+        cogs: (point.cogsCents / 100).toFixed(2),
+        turnoverRate: point.turnoverRate.toFixed(4),
+        daysOfInventory: Number.isFinite(point.daysOfInventory) ? point.daysOfInventory.toFixed(1) : "",
+        ...Object.fromEntries(
+          categoryNames.map((name) => [`turnover_${name}`, (point.categoryRates[name] ?? 0).toFixed(4)]),
+        ),
+      })),
+    [turnover, categoryNames],
+  );
+
+  if (error) {
+    return (
+      <Card className="space-y-5 p-5 shadow-card sm:p-6">
+        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
+            <AlertTriangle className="h-8 w-8 text-fg/30" />
+          </div>
+          <div>
+            <p className="font-medium text-fg">Turnover data couldn't be loaded</p>
+            <p className="mt-1 text-sm text-fg/50">Try a different date range, or reload the page.</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   if (loading || !turnover) {
     return (
@@ -163,7 +218,7 @@ export function InventoryTurnoverCard({ turnover, loading }: { turnover?: Invent
 
           <button
             type="button"
-            onClick={() => downloadCsv("inventory_turnover", turnover.points as unknown as Record<string, unknown>[])}
+            onClick={() => downloadCsv("inventory_turnover", exportRows)}
             className="flex items-center gap-1.5 rounded-xl bg-muted px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-muted/70"
           >
             <Download className="h-3.5 w-3.5 text-fg/50" />
@@ -181,13 +236,13 @@ export function InventoryTurnoverCard({ turnover, loading }: { turnover?: Invent
         <DashboardStatTile
           label="Days to Sell (DSI)"
           value={formatDsi(summary.avgDaysOfInventory)}
-          captionTone="accent"
+          captionTone={dsiTone(summary.avgDaysOfInventory)}
           caption="Lower is faster-moving"
         />
         <DashboardStatTile
           label="Fastest Turning Category"
           value={summary.fastestCategory ? `${summary.fastestCategory.name} (${summary.fastestCategory.turnoverRate.toFixed(1)}x)` : "—"}
-          captionTone="ok"
+          captionTone={summary.fastestCategory ? dsiTone(summary.fastestCategory.daysOfInventory) : "neutral"}
           caption={summary.fastestCategory ? `${formatDsi(summary.fastestCategory.daysOfInventory)} turn` : "No sales yet"}
         />
         <DashboardStatTile label="Units Dispatched" value={summary.totalUnitsMoved} caption="Total for the period" />
