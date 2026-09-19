@@ -5,11 +5,11 @@ import {
   formatCurrencyFromCents,
   getExclusiveUnitPrice,
   getLineGst,
-  formatOrderNumber,
   formatInvoiceNumber,
   stripEbayAddressPrefix,
 } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
+import { richTextToParagraph } from "@/utils/richText";
 import type { OrderDetail } from "@/types/orders";
 
 // Print-only invoice, structured to match the tax-invoice PDF attached to
@@ -133,7 +133,11 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   });
   const billingAddress = order.billing_address ?? order.shipping_address;
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
-  const orderNumberValue = order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number);
+  // "Order Number" is the customer's OWN reference, typed on the order detail
+  // page — optional, and omitted from the strip entirely when it's blank
+  // rather than falling back to our internal ORD-000xx (the invoice already
+  // carries its own number, so printing a second house number under a label
+  // the buyer reads as "yours" just looked like their PO had been ignored).
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
@@ -143,14 +147,18 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const sellerContactLine = [tenant?.phone, tenant?.email, tenant?.abn ? `ABN ${tenant.abn}` : null]
     .filter(Boolean)
     .join(" · ");
-  // Free-text fields are authored as separate lines in Settings; the footer
-  // sets them as a single flowing paragraph (no bullets), so the lines are
-  // rejoined rather than rendered as a list.
-  const warrantyText = (tenant?.warranty_text || "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join(" ");
+  // Policy fields are authored in a rich-text editor and stored as HTML; the
+  // footer sets each as one flowing paragraph of plain text, which is also
+  // all the PDF can draw (see utils/richText.ts, mirrored server-side).
+  const warrantyText = richTextToParagraph(tenant?.warranty_text);
+  const legalText = richTextToParagraph(tenant?.legal_disclaimer_text);
+
+  const metaCells = [
+    { label: "Invoice Date", value: orderDate },
+    { label: "Due Date", value: "Upon receipt" },
+    ...(order.reference_number ? [{ label: "Order Number", value: order.reference_number }] : []),
+    { label: "Sales Channel", value: channelLabel },
+  ];
 
   return (
     <div
@@ -194,11 +202,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
       {/* Heavy rule closing the letterhead, then the four transaction facts. */}
       <div className="mt-5 border-t-[3px]" style={{ borderColor: INK }} />
-      <div className="grid grid-cols-4 gap-5 border-b py-3.5" style={{ borderColor: BORDER }}>
-        <MetaCell label="Invoice Date" value={orderDate} first />
-        <MetaCell label="Due Date" value="Upon receipt" />
-        <MetaCell label="Order Number" value={orderNumberValue} />
-        <MetaCell label="Sales Channel" value={channelLabel} />
+      <div
+        className={`grid gap-5 border-b py-3.5 ${metaCells.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}
+        style={{ borderColor: BORDER }}
+      >
+        {metaCells.map((cell, i) => (
+          <MetaCell key={cell.label} label={cell.label} value={cell.value} first={i === 0} />
+        ))}
       </div>
 
       {/* Ship To / Bill To pushed to opposite edges of the sheet. */}
@@ -438,7 +448,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           >
             <SectionLabel>Legal Disclaimer</SectionLabel>
             <p className="mt-2 font-mono text-[9.5px] leading-relaxed" style={{ color: MUTED }}>
-              {tenant?.legal_disclaimer_text || "—"}
+              {legalText || "—"}
             </p>
           </div>
         </div>

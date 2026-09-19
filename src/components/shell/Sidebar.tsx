@@ -6,7 +6,6 @@ import { TenantLogo } from "@/components/branding/TenantLogo";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { APP_NAME } from "@/components/branding/AppLogoMark";
 import { NavItemsList } from "@/components/shell/NavItemsList";
-import { UserMenu } from "@/components/shell/UserMenu";
 
 type SidebarProps = {
   collapsed: boolean;
@@ -68,10 +67,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <NavItemsList collapsed={collapsed} />
         </Suspense>
       </nav>
-
-      <div className={cn("shrink-0 border-t border-border p-2", collapsed && "flex justify-center")}>
-        {collapsed ? <UserMenu /> : <UserMenu variant="full" />}
-      </div>
     </div>
   );
 }

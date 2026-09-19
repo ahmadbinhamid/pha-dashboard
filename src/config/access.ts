@@ -4,8 +4,18 @@
 // each call site.
 
 import type { InvitationStatus, MembershipStatus } from "@/types/access";
+import type { AuthUser } from "@/types/auth";
 
 export const SYSTEM_ROLE_SUPER_ADMIN = "Super Admin";
+
+// The signed-in user's PLATFORM role (AuthUser.role), as opposed to the
+// per-tenant Role records the team surface manages. Shown in the account menu
+// and on the Profile page, so the wording lives here rather than in each.
+export const ACCOUNT_ROLE_LABEL: Record<AuthUser["role"], string> = {
+  superadmin: "Super Admin",
+  admin: "Admin",
+  user: "User",
+};
 
 type BadgeVariant = "default" | "ok" | "warn" | "danger" | "muted" | "outline";
 

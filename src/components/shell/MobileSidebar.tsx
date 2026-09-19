@@ -8,7 +8,6 @@ import { TenantLogo } from "@/components/branding/TenantLogo";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { APP_NAME } from "@/components/branding/AppLogoMark";
 import { NavItemsList } from "@/components/shell/NavItemsList";
-import { UserMenu } from "@/components/shell/UserMenu";
 
 export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, isLoading } = useOrgSettings();
@@ -75,10 +74,6 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
             <NavItemsList onItemClick={onClose} />
           </Suspense>
         </nav>
-
-        <div className="shrink-0 border-t border-border p-2">
-          <UserMenu variant="full" />
-        </div>
       </div>
     </div>
   );

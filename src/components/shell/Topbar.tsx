@@ -4,6 +4,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { NotificationBell } from "@/components/shell/NotificationBell";
+import { UserMenu } from "@/components/shell/UserMenu";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/context/cart";
 import { Menu, Search, Settings, ShoppingCart } from "lucide-react";
@@ -104,6 +105,9 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
             </Button>
             <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
             <ThemeToggle />
+            {/* Right-most: the account menu, which is where the avatar lives
+                now instead of in the sidebar footer. */}
+            <UserMenu />
           </div>
         </div>
       </header>

@@ -19,7 +19,8 @@
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
-const { formatOrderNumber, formatInvoiceNumber } = require("../orderNumberFormat");
+const { formatInvoiceNumber } = require("../orderNumberFormat");
+const { richTextToParagraph } = require("../richText");
 const { stripEbayAddressPrefix } = require("../addressFormat");
 
 const PAGE_WIDTH = 595.28; // A4 points
@@ -237,13 +238,18 @@ function drawLetterhead(doc, order, companyProfile) {
   return ruleY;
 }
 
-// The four facts a reader actually looks up, in equal hairline-divided
-// cells directly under the letterhead rule.
+// The facts a reader actually looks up, in equal hairline-divided cells
+// directly under the letterhead rule.
+//
+// "Order Number" is the customer's OWN reference, typed on the order detail
+// page. It's optional, so the cell is dropped when it's blank rather than
+// falling back to our internal ORD-000xx — the strip then splits three ways
+// instead of four, since every width here is derived from cells.length.
 function drawMetaStrip(doc, order, topY) {
   const cells = [
     ["Invoice Date", formatDate(order.created_at)],
     ["Due Date", "Upon receipt"],
-    ["Order Number", order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number)],
+    ...(order.reference_number ? [["Order Number", order.reference_number]] : []),
     ["Sales Channel", channelLabelFor(order)],
   ];
   const cellWidth = CONTENT_WIDTH / cells.length;
@@ -623,16 +629,11 @@ function drawFooter(doc, companyProfile, topY) {
   const colGap = 26;
   const colWidth = (CONTENT_WIDTH - colGap) / 2;
   const lineGap = 1.4;
-  // Free-text fields are authored as separate lines in Settings; the footer
-  // sets them as a single flowing paragraph, so the lines are rejoined
-  // rather than rendered as a list (same as InvoicePrintView.tsx).
-  const warrantyText =
-    (companyProfile.warranty_text || "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .join(" ") || "—";
-  const legalText = companyProfile.legal_disclaimer_text || "—";
+  // Policy fields are authored in a rich-text editor and stored as HTML.
+  // pdfkit draws plain strings, so each is flattened to one flowing paragraph
+  // — the same call InvoicePrintView.tsx makes, so the two can't disagree.
+  const warrantyText = richTextToParagraph(companyProfile.warranty_text) || "—";
+  const legalText = richTextToParagraph(companyProfile.legal_disclaimer_text) || "—";
 
   doc.font(MONO).fontSize(7);
   const bodyHeight = Math.max(

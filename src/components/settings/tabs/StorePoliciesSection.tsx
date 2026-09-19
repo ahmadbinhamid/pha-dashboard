@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
-import { FormField } from "@/components/ui/FormField";
-import { Textarea } from "@/components/ui/Textarea";
+import { RichTextField } from "@/components/ui/RichTextField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { useToast } from "@/context";
@@ -54,26 +53,29 @@ export function StorePoliciesSection({ settings, loading }: { settings?: TenantS
       }
     >
       <div className="space-y-5">
-        <FormField
+        {/* Rich text, but the invoice can only set plain lines (pdfkit draws
+            strings, not HTML), so formatting here is for the storefront and
+            for authoring — headings, bold and bullets flatten to one line
+            each on the printed invoice. See utils/richText.ts. */}
+        <RichTextField
           label="Warranty & Returns"
-          hint="One point per line. The invoice runs them together into a paragraph; the storefront shows them as a list."
-        >
-          <Textarea
-            rows={7}
-            value={form.warranty_text}
-            onChange={(e) => setForm((f) => (f ? { ...f, warranty_text: e.target.value } : f))}
-            placeholder="Returns are accepted within 30 days of purchase."
-          />
-        </FormField>
+          hint="One point per line or bullet. The invoice runs them together into a paragraph; the storefront keeps the formatting."
+          value={form.warranty_text}
+          onChange={(html) => setForm((f) => (f ? { ...f, warranty_text: html } : f))}
+          placeholder="Returns are accepted within 30 days of purchase."
+          minHeight="180px"
+          disabled={mutation.isPending}
+        />
 
-        <FormField label="Legal Disclaimer" hint="Fitment liability and compatibility wording, shown verbatim.">
-          <Textarea
-            rows={7}
-            value={form.legal_disclaimer_text}
-            onChange={(e) => setForm((f) => (f ? { ...f, legal_disclaimer_text: e.target.value } : f))}
-            placeholder="Customers are responsible for confirming part compatibility before purchase."
-          />
-        </FormField>
+        <RichTextField
+          label="Legal Disclaimer"
+          hint="Fitment liability and compatibility wording, shown verbatim."
+          value={form.legal_disclaimer_text}
+          onChange={(html) => setForm((f) => (f ? { ...f, legal_disclaimer_text: html } : f))}
+          placeholder="Customers are responsible for confirming part compatibility before purchase."
+          minHeight="180px"
+          disabled={mutation.isPending}
+        />
       </div>
     </SettingsSection>
   );
