@@ -367,6 +367,19 @@
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+/* A horizontally-scrolling strip of controls (the Settings tab bar, its
+   sub-tab pills) sits directly above its own content, so the 6px thumb below
+   reads as a stray border rather than as a scrollbar — and it's redundant
+   there, since the cut-off tab already shows there's more to reach. Scrolling
+   itself (wheel, trackpad, keyboard) is untouched. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

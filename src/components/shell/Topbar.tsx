@@ -6,12 +6,10 @@ import { CommandPalette } from "@/components/shell/CommandPalette";
 import { NotificationBell } from "@/components/shell/NotificationBell";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/context/cart";
-import { usePathname } from "@/hooks";
 import { Menu, Search, Settings, ShoppingCart } from "lucide-react";
 
 export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
   const navigate = useNavigate();
-  const pathname = usePathname();
   const { totalItems } = useCart();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -98,7 +96,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0"
-              onClick={() => navigate("/settings", { state: { from: pathname } })}
+              onClick={() => navigate("/settings")}
               aria-label="Settings"
               title="Settings"
             >
