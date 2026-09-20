@@ -119,14 +119,17 @@ export function LoginCard() {
 
   return (
     <div className="w-full max-w-105">
-      <div className="mb-6 flex flex-col items-center justify-center gap-2">
+      {/* Only shown below `lg` — the split LoginPage's brand panel already
+          carries the logo above `lg`, so repeating it here would be a
+          second mark on the same screen. */}
+      <div className="mb-6 flex flex-col items-center justify-center gap-2 lg:hidden">
         {/* The lockup already spells out the app name — no separate text label
             beside it, or the name would show up twice. */}
         <AppLogoMark className="h-12" />
         <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
       </div>
 
-      <Card className="overflow-hidden bg-bg/80 backdrop-blur supports-backdrop-filter:bg-bg/65">
+      <Card className="overflow-hidden">
         {step === "credentials" && (
           <>
             <CardHeader
