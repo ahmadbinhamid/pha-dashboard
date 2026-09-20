@@ -53,13 +53,14 @@ export function StorePoliciesSection({ settings, loading }: { settings?: TenantS
       }
     >
       <div className="space-y-5">
-        {/* Rich text, but the invoice can only set plain lines (pdfkit draws
-            strings, not HTML), so formatting here is for the storefront and
-            for authoring — headings, bold and bullets flatten to one line
-            each on the printed invoice. See utils/richText.ts. */}
+        {/* Bold, italic and bullets carry through to the invoice — both the
+            preview and the PDF draw the same parsed blocks (utils/richText.ts,
+            mirrored server-side). Headings print as a bold line, and colour
+            and alignment are dropped: a 7pt footer column has no room for
+            them, and pdfkit paints strings, not HTML. */}
         <RichTextField
           label="Warranty & Returns"
-          hint="One point per line or bullet. The invoice runs them together into a paragraph; the storefront keeps the formatting."
+          hint="Bold, italic and bullet points appear on the invoice as written. Headings print as a bold line."
           value={form.warranty_text}
           onChange={(html) => setForm((f) => (f ? { ...f, warranty_text: html } : f))}
           placeholder="Returns are accepted within 30 days of purchase."
@@ -69,7 +70,7 @@ export function StorePoliciesSection({ settings, loading }: { settings?: TenantS
 
         <RichTextField
           label="Legal Disclaimer"
-          hint="Fitment liability and compatibility wording, shown verbatim."
+          hint="Fitment liability and compatibility wording, printed on the invoice with its formatting."
           value={form.legal_disclaimer_text}
           onChange={(html) => setForm((f) => (f ? { ...f, legal_disclaimer_text: html } : f))}
           placeholder="Customers are responsible for confirming part compatibility before purchase."

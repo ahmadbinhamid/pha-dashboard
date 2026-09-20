@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { TenantLogo } from "@/components/branding/TenantLogo";
+import { InvoiceRichText } from "@/components/orders/InvoiceRichText";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import {
   formatCurrencyFromCents,
@@ -9,7 +10,6 @@ import {
   stripEbayAddressPrefix,
 } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
-import { richTextToParagraph } from "@/utils/richText";
 import type { OrderDetail } from "@/types/orders";
 
 // Print-only invoice, structured to match the tax-invoice PDF attached to
@@ -147,11 +147,6 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const sellerContactLine = [tenant?.phone, tenant?.email, tenant?.abn ? `ABN ${tenant.abn}` : null]
     .filter(Boolean)
     .join(" · ");
-  // Policy fields are authored in a rich-text editor and stored as HTML; the
-  // footer sets each as one flowing paragraph of plain text, which is also
-  // all the PDF can draw (see utils/richText.ts, mirrored server-side).
-  const warrantyText = richTextToParagraph(tenant?.warranty_text);
-  const legalText = richTextToParagraph(tenant?.legal_disclaimer_text);
 
   const metaCells = [
     { label: "Invoice Date", value: orderDate },
@@ -438,18 +433,22 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
           >
             <SectionLabel>Warranty &amp; Returns</SectionLabel>
-            <p className="mt-2 font-mono text-[9.5px] leading-relaxed" style={{ color: MUTED }}>
-              {warrantyText || "—"}
-            </p>
+            <InvoiceRichText
+              value={tenant?.warranty_text}
+              className="mt-2 font-mono text-[9.5px] leading-relaxed"
+              style={{ color: MUTED }}
+            />
           </div>
           <div
             className="print:inline-block print:w-[48%] print:ml-[4%] print:align-top"
             style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
           >
             <SectionLabel>Legal Disclaimer</SectionLabel>
-            <p className="mt-2 font-mono text-[9.5px] leading-relaxed" style={{ color: MUTED }}>
-              {legalText || "—"}
-            </p>
+            <InvoiceRichText
+              value={tenant?.legal_disclaimer_text}
+              className="mt-2 font-mono text-[9.5px] leading-relaxed"
+              style={{ color: MUTED }}
+            />
           </div>
         </div>
 
