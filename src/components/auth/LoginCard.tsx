@@ -146,12 +146,12 @@ export function LoginCard() {
                     className="text-xs font-semibold text-fg/75"
                     htmlFor="email"
                   >
-                    Work email
+                    Email
                   </label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@partshub.com.au"
+                    placeholder="you@autopartspro.com.au"
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

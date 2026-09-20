@@ -241,9 +241,18 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
                     <TableRow key={listing._id}>
                       <TableCell className="max-w-64 truncate font-medium text-fg">{productTitle}</TableCell>
                       <TableCell className="whitespace-nowrap text-fg/70">
-                        <span className="inline-flex items-center gap-1.5">
-                          {PlatformLogo ? <PlatformLogo className="h-3.5 w-3.5 shrink-0" /> : null}
-                          {PLATFORM_LABEL[listing.platform] ?? listing.platform}
+                        {/* Icon only, no name label — the brand mark already
+                            identifies the channel, so text repeating it was
+                            redundant. Kept as a title tooltip on hover. */}
+                        <span
+                          className="inline-flex items-center"
+                          title={PLATFORM_LABEL[listing.platform] ?? listing.platform}
+                        >
+                          {PlatformLogo ? (
+                            <PlatformLogo className="h-5 w-5 shrink-0" />
+                          ) : (
+                            PLATFORM_LABEL[listing.platform] ?? listing.platform
+                          )}
                         </span>
                       </TableCell>
                       <TableCell>
