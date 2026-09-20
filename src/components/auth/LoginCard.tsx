@@ -118,13 +118,13 @@ export function LoginCard() {
 
   return (
     <div className="w-full lg:max-w-105">
-      {/* Below `lg`, LoginPage renders this as a full-bleed sheet pulled up
-          over its own compact brand header: rounded top only, no border/
-          shadow, so it reads as one continuous surface rather than a card
-          floating inside another container. At `lg` and up it's the usual
-          floating card (rounded all around, bordered, shadowed) — see
-          LoginPage for the header this pairs with on each breakpoint. */}
-      <Card className="overflow-hidden rounded-b-none rounded-t-3xl border-0 shadow-[0_-8px_24px_-8px_rgba(0,0,0,0.15)] lg:rounded-2xl lg:border lg:border-border lg:shadow-card">
+      {/* No border or shadow at any size, matching the reference — the form
+          reads as plain page content, not a floating bordered card. Below
+          `lg` it's LoginPage's full-bleed sheet (rounded top only, pulled up
+          over its own compact brand header); at `lg` and up the rounding
+          stays for the corners but there's nothing drawing a boundary
+          around it. */}
+      <Card className="overflow-hidden rounded-b-none rounded-t-3xl border-0 shadow-none lg:rounded-2xl">
         {step === "credentials" && (
           <>
             {/* A bespoke header instead of the shared CardHeader — that one's

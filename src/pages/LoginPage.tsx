@@ -107,8 +107,11 @@ export default function LoginPage() {
 
       {/* Compact brand header — below `lg` only. Same dark/grid treatment,
           logo + headline only (no subtext/pills/copyright — there isn't
-          room, and the sheet below needs the space more). */}
-      <div className="relative overflow-hidden bg-[hsl(220_20%_6%)] px-6 pb-16 pt-[max(2.5rem,env(safe-area-inset-top))] lg:hidden">
+          room, and the sheet below needs the space more). Sized to land
+          around ~30% of a typical phone viewport — big enough for the logo
+          and headline to actually read, without pushing the form itself
+          below the fold. */}
+      <div className="relative overflow-hidden bg-[hsl(220_20%_6%)] px-6 pb-10 pt-[max(2rem,env(safe-area-inset-top))] lg:hidden">
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
@@ -127,13 +130,13 @@ export default function LoginPage() {
           }}
         />
 
-        <div className="relative z-10 mb-6 flex items-center gap-2">
-          <img src="/branding/logo-mark.png" alt="" className="h-9 w-auto shrink-0" />
-          <span className="text-xl font-extrabold leading-none tracking-tight text-white">
+        <div className="relative z-10 mb-6 flex items-center gap-2.5">
+          <img src="/branding/logo-mark.png" alt="" className="h-10 w-auto shrink-0" />
+          <span className="text-2xl font-extrabold leading-none tracking-tight text-white">
             AutoParts<span className="text-accent">Pro</span>
           </span>
         </div>
-        <p className="relative z-10 text-[2rem] font-extrabold leading-[1.15] tracking-tight text-white">
+        <p className="relative z-10 text-4xl font-extrabold leading-[1.1] tracking-tight text-white">
           One platform.
           <br />
           Every marketplace.
