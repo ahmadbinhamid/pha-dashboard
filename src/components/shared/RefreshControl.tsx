@@ -2,18 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { cn } from "@/utils/cn";
 
-// "Updated 3m ago" + a refresh button, for the pages that auto-refetch on a
-// timer (Dashboard, Reports — see config/refresh.ts).
+// A refresh icon for the pages that auto-refetch on a timer (Dashboard,
+// Reports — see config/refresh.ts), with the data's age in its tooltip.
 //
 // Both halves earn their place:
-//   * The timestamp is the only way to tell a figure from 10 seconds ago from
-//     one from an hour ago. It matters most after a tab has been in the
-//     background, where TanStack suspends the interval entirely, so the page
-//     can be arbitrarily out of date with nothing on screen saying so.
 //   * The button re-pulls everything at once, for the "I just recorded a
 //     payment, show me" case that a timer can't answer.
+//   * The age is the only way to tell a figure from 10 seconds ago from one
+//     from an hour ago. It matters most after a tab has been in the
+//     background, where TanStack suspends the interval entirely, so the page
+//     can be arbitrarily out of date with nothing on screen saying so. It sits
+//     in the tooltip rather than on the page: it's a question people ask
+//     occasionally, not a number worth a permanent slot in every header.
 //
 // Takes a LIST of key prefixes because a page's data isn't always under one
 // root: Reports reads six /reports endpoints plus the dashboard's stats.
@@ -41,6 +44,7 @@ export function RefreshControl({
   /** Key prefixes covering the page's queries, e.g. [["reports"], ["dashboard", "stats"]]. */
   queryKeys: QueryKey[];
   className?: string;
+  /** Leading word of the tooltip, before the age. */
   label?: string;
 }) {
   const queryClient = useQueryClient();
@@ -83,28 +87,29 @@ export function RefreshControl({
   }, [queryClient, keysSignature]);
 
   const age = formatAge(state.updatedAt);
+  const tooltip = state.fetching ? "Refreshing…" : age ? `${label} ${age}` : "Refresh data";
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      {age ? (
-        <span className="hidden whitespace-nowrap text-xs text-fg/45 sm:inline">
-          {label} {state.fetching ? "…" : age}
-        </span>
-      ) : null}
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="gap-1.5"
-        disabled={state.fetching}
-        onClick={refresh}
-        aria-label="Refresh data"
-        title="Refresh data"
-      >
-        <RefreshCw className={cn("h-3.5 w-3.5", state.fetching && "animate-spin")} />
-        <span className="hidden sm:inline">Refresh</span>
-      </Button>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={cn("h-9 w-9", className)}
+          // Not disabled while fetching: a disabled button swallows pointer
+          // events, which would hide the very tooltip carrying the age. A
+          // second click mid-flight is harmless — TanStack dedupes an
+          // in-flight fetch for the same key.
+          onClick={refresh}
+          aria-label={tooltip}
+        >
+          <RefreshCw className={cn("h-4 w-4", state.fetching && "animate-spin")} />
+        </Button>
+      </TooltipTrigger>
+      {/* No `title` on the button: it would duplicate this as a second,
+          slower native tooltip. */}
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }

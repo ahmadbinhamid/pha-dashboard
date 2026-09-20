@@ -117,9 +117,6 @@ export default function ReportsPage() {
         description="Track performance, inventory turnover velocity, and cross-channel profitability."
       >
         <DateRangePicker value={range} onChange={setRange} />
-        {/* Two roots: the /reports endpoints, plus the dashboard stats query
-            behind Inventory Insights and the inventory-valuation export. */}
-        <RefreshControl queryKeys={[["reports"], ["dashboard", "stats"]]} />
         <Button
           variant="primary"
           size="sm"
@@ -142,6 +139,9 @@ export default function ReportsPage() {
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
+        {/* Two roots: the /reports endpoints, plus the dashboard stats query
+            behind Inventory Insights and the inventory-valuation export. */}
+        <RefreshControl queryKeys={[["reports"], ["dashboard", "stats"]]} />
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
