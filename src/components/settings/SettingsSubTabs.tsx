@@ -30,12 +30,12 @@ export function SettingsSubTabs({
               onClick={() => onSelect(section.id)}
               className={cn(
                 "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
-                active ? "bg-accent text-accent-fg" : "text-fg/60 hover:bg-muted/60 hover:text-fg",
+                active ? "bg-primary text-primary-fg" : "text-fg/60 hover:bg-muted/60 hover:text-fg",
               )}
             >
               {section.icon({ className: "h-4 w-4" })}
               {section.label}
-              {count !== undefined ? <span className={cn(active ? "text-accent-fg/75" : "text-fg/40")}>({count})</span> : null}
+              {count !== undefined ? <span className={cn(active ? "text-primary-fg/75" : "text-fg/40")}>({count})</span> : null}
             </button>
           );
         })}

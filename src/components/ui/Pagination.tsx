@@ -157,7 +157,7 @@ const Pagination = ({
                     className={cn(
                       "flex h-8 min-w-8 items-center justify-center rounded-md px-1.5 text-xs font-medium transition",
                       isActive
-                        ? "bg-accent text-accent-fg"
+                        ? "bg-primary text-primary-fg"
                         : "text-fg/60 hover:bg-bg-2",
                     )}
                   >

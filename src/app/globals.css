@@ -23,6 +23,8 @@
   --color-ring: hsl(var(--ring));
   --color-accent: hsl(var(--accent));
   --color-accent-fg: hsl(var(--accent-fg));
+  --color-primary: hsl(var(--primary));
+  --color-primary-fg: hsl(var(--primary-fg));
   --color-surface: hsl(var(--surface));
   --color-surface-elevated: hsl(var(--surface-elevated));
   --color-gold: hsl(var(--gold));
@@ -170,6 +172,13 @@
   --gold: 24 95% 53%;
   --gold-muted: 22 45% 40%;
 
+  /* Primary action color (buttons, active tabs) — deliberately the app's
+     own ink color, not the brand accent: aliased to --fg/--bg rather than a
+     fixed black/white pair so it inverts automatically in dark mode, the
+     same way --muted below aliases --bg-2 instead of repeating its value. */
+  --primary: var(--fg);
+  --primary-fg: var(--bg);
+
   /* Semantic — --danger and --ok already matched parthub's destructive/
      badge-new almost exactly, so left as-is; --warn has no parthub
      equivalent to port. */
@@ -244,6 +253,14 @@
   --accent-fg: 0 0% 100%;
   --gold: 24 95% 53%;
   --gold-muted: 22 45% 40%;
+
+  /* Primary action color — dark mode only, aliased to the brand accent
+     instead of --fg/--bg: a light-on-dark button read as flat/washed out
+     next to the app's own orange, and the accent already has the contrast
+     to work as a fill here. Light mode intentionally keeps --primary on
+     --fg (see above) — this divergence is deliberate, not an oversight. */
+  --primary: var(--accent);
+  --primary-fg: var(--accent-fg);
 
   /* Semantic — kept our own --danger value here rather than parthub's dark
      destructive (hsl(0 62% 30%)): that's tuned as a button-fill color in

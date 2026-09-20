@@ -54,13 +54,13 @@ export function ProfileSectionNav({
               className={cn(
                 "group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-left transition-colors",
                 "lg:w-full lg:shrink lg:gap-2.5 lg:px-2.5 lg:py-2",
-                active ? "bg-accent/10" : "hover:bg-muted/60",
+                active ? "bg-primary/10" : "hover:bg-muted/60",
               )}
             >
               <span
                 className={cn(
                   "grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors lg:h-7 lg:w-7 lg:rounded-lg",
-                  active ? "bg-accent text-accent-fg" : "bg-muted text-fg/50 group-hover:text-fg/70",
+                  active ? "bg-primary text-primary-fg" : "bg-muted text-fg/50 group-hover:text-fg/70",
                 )}
               >
                 <section.icon className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
@@ -69,7 +69,7 @@ export function ProfileSectionNav({
               <span
                 className={cn(
                   "min-w-0 truncate text-xs font-semibold transition-colors lg:text-[13px]",
-                  active ? "text-accent" : "text-fg/75 group-hover:text-fg",
+                  active ? "text-primary" : "text-fg/75 group-hover:text-fg",
                 )}
               >
                 {section.label}

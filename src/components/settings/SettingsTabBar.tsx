@@ -28,7 +28,7 @@ export function SettingsTabBar({
             onClick={() => onSelect(tab.id)}
             className={cn(
               "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 pb-3 text-xs font-semibold transition-colors",
-              active ? "border-accent text-accent" : "border-transparent text-fg/55 hover:text-fg",
+              active ? "border-primary text-primary" : "border-transparent text-fg/55 hover:text-fg",
             )}
           >
             {tab.icon({ className: "h-3.5 w-3.5" })}
