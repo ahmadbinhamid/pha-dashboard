@@ -8,7 +8,6 @@ import { ComingSoonPanel } from "@/components/settings/ComingSoonPanel";
 import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
-import { ActivityTab } from "@/components/settings/tabs/ActivityTab";
 // UsersTab/RolesTab are fully built but not wired up right now — see
 // config/settingsTabs.tsx's comment on "users"/"roles" for why. Both tabs
 // fall through to the generic `available: false` branch below instead.
@@ -89,8 +88,6 @@ export default function SettingsPage() {
             onSelectProvider={(id) => navigate(id ? `/settings/integrations/${id}` : "/settings/integrations")}
             settings={settings}
           />
-        ) : activeTab.id === "activity" ? (
-          <ActivityTab />
         ) : (
           <ComingSoonPanel title={activeTab.label} summary={activeTab.summary} planned={activeTab.planned} />
         )}

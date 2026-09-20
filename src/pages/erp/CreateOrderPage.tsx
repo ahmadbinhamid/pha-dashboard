@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { OrderStepper } from "@/components/pos/OrderStepper";
 import { OrderSummaryPanel } from "@/components/pos/OrderSummaryPanel";
 import { AddProductsStep } from "@/components/pos/steps/AddProductsStep";
@@ -107,6 +108,7 @@ export default function CreateOrderPage() {
   const [amountPaidInput, setAmountPaidInput] = useState(initial.amountPaidInput);
   const [shippingCostInput, setShippingCostInput] = useState(initial.shippingCostInput);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
 
   const customerDeliveryRef = useRef<StepHandle>(null);
@@ -159,7 +161,11 @@ export default function CreateOrderPage() {
   }
 
   function handleCancel() {
-    if (!window.confirm("Cancel this order? Your cart and progress will be cleared.")) return;
+    setCancelConfirmOpen(true);
+  }
+
+  function confirmCancel() {
+    setCancelConfirmOpen(false);
     clearCart();
     clearOrderDraft();
     navigate("/orders");
@@ -255,6 +261,17 @@ export default function CreateOrderPage() {
       {step === 4 && createdOrder && (
         <OrderConfirmationStep order={createdOrder} paymentMethod={paymentChoice} onStartNewOrder={startNewOrder} />
       )}
+
+      <ConfirmModal
+        open={cancelConfirmOpen}
+        onOpenChange={setCancelConfirmOpen}
+        title="Cancel this order?"
+        description="Your cart and progress will be cleared."
+        confirmLabel="Cancel Order"
+        cancelLabel="Keep Editing"
+        tone="danger"
+        onConfirm={confirmCancel}
+      />
     </div>
   );
 }

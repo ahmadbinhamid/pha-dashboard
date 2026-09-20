@@ -160,8 +160,9 @@ export function RevenueTrendChart({
     <Card className="p-4 shadow-card transition-shadow duration-300 hover:shadow-md sm:p-5">
       <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <DashboardSectionLabel badge={rangeLabel}>Revenue Trends &amp; Channel Analytics</DashboardSectionLabel>
-          <p className="mt-1 text-xs text-fg/50">Channel sales comparison and revenue tracking over time</p>
+          <DashboardSectionLabel badge={rangeLabel} description="Channel sales comparison and revenue tracking over time">
+            Revenue Trends &amp; Channel Analytics
+          </DashboardSectionLabel>
         </div>
         <div className="inline-flex shrink-0 rounded-md border border-border bg-bg-2/40 p-0.5">
           {VIEW_TABS.map((tab) => (

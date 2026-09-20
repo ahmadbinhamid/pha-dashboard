@@ -305,11 +305,18 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
  * services/inventory-digest.service.js. Always called with at least one
  * item; the sweep never calls this for an empty digest (see that service's
  * own comment on why — an empty "0 items low" email is just noise).
+ *
+ * `to` is the tenant's OWN inbox (this is an alert about their own store,
+ * not customer-facing), so unlike the order emails above this always sends
+ * from the platform mailbox — never the tenant's own BYOK SMTP — same as
+ * sendInquiryNotification/sendNewsletterSignupNotification. `pdfBase64` is
+ * the full item list built by utils/pdf/lowStockReportPdf.js — base64 since
+ * Bull job payloads are JSON over Redis, same reasoning as the order emails'
+ * invoice PDFs.
  */
-async function sendLowStockDigest({ to, items, companyProfile, tenantId }) {
+async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFilename }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    from: defaultFrom(),
     to,
     subject: `Low Stock Alert — ${items.length} item${items.length === 1 ? "" : "s"} need attention`,
     template: "lowStockDigest",
@@ -320,8 +327,16 @@ async function sendLowStockDigest({ to, items, companyProfile, tenantId }) {
         stock: i.stock,
       })),
       item_count: items.length,
+      item_word: items.length === 1 ? "item" : "items",
       ...tenantBrandVars(companyProfile),
     },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
   });
 }
 

@@ -175,11 +175,12 @@ export function InventoryTurnoverCard({
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/10 text-accent">
               <RefreshCw className="h-4 w-4" />
             </span>
-            <DashboardSectionLabel>{turnover.points.length}-Day Inventory Turnover &amp; Stock Velocity</DashboardSectionLabel>
+            <DashboardSectionLabel
+              description="Cumulative turnover (Cost of Goods Sold ÷ current inventory value) and Days Sales of Inventory over the period."
+            >
+              {turnover.points.length}-Day Inventory Turnover &amp; Stock Velocity
+            </DashboardSectionLabel>
           </div>
-          <p className="text-xs text-fg/50">
-            Cumulative turnover (Cost of Goods Sold ÷ current inventory value) and Days Sales of Inventory over the period.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

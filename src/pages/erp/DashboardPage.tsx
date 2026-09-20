@@ -81,15 +81,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            Dashboard
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-semibold text-ok">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok" aria-hidden="true" />
-              Live Sync
-            </span>
-          </span>
-        }
+        title="Dashboard"
         description="Store performance overview, sales volume & real time inventory telemetry"
       >
         <DateRangePicker value={orderVolumeRange} onChange={setOrderVolumeRange} />

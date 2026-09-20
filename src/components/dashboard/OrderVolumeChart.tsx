@@ -83,8 +83,9 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
     <Card className="p-4 shadow-card transition-shadow duration-300 hover:shadow-md sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <DashboardSectionLabel badge="Daily Cycle">Order Volume &amp; Fulfillment</DashboardSectionLabel>
-          <p className="mt-1 text-xs text-fg/50">Daily orders dispatch and fulfillment velocity</p>
+          <DashboardSectionLabel badge="Daily Cycle" description="Daily orders dispatch and fulfillment velocity">
+            Order Volume &amp; Fulfillment
+          </DashboardSectionLabel>
         </div>
         <div className="inline-flex shrink-0 rounded-md border border-border bg-bg-2/40 p-0.5">
           {METRIC_TABS.map((tab) => (

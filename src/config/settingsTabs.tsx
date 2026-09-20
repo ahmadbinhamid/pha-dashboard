@@ -3,7 +3,6 @@ import {
   Blocks,
   CreditCard,
   Globe,
-  History,
   Palette,
   Receipt,
   Shield,
@@ -31,8 +30,7 @@ export type SettingsTabId =
   | "roles"
   | "taxes"
   | "notifications"
-  | "billing"
-  | "activity";
+  | "billing";
 
 export type SettingsTab = {
   id: SettingsTabId;
@@ -110,7 +108,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     summary: "Your subscription, invoices and usage limits. Billing isn't handled in-app yet.",
     planned: ["Current plan and usage against its limits", "Payment method and billing contact", "Downloadable past invoices"],
   },
-  { id: "activity", label: "Activity", icon: (p) => <History {...p} />, available: true },
 ];
 
 export const DEFAULT_SETTINGS_TAB: SettingsTabId = "store";
