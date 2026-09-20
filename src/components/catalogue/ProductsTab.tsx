@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { StickyTableHead } from "@/components/ui/StickyTableColumn";
 import {
   Modal,
@@ -30,7 +31,7 @@ import type { ChannelSummary } from "@/types/channel";
 import { Pagination } from "@/components/ui/Pagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
 import { GOOGLE_LISTING_FORM_INITIAL } from "@/types/marketplace";
-import { Plus, Search, Package, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Search, Package, Trash2, AlertTriangle, Info } from "lucide-react";
 
 const STATUS_FILTERS = [
   { label: "All Status", value: "" },
@@ -352,12 +353,32 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                     Product
                   </StickyTableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Online</TableHead>
+                  {/* "Storefront", not "Online" — a product being published
+                      here (your own shop) is a different question from
+                      whether it's LISTED anywhere, which is what the
+                      Channels column answers. The two used to share the
+                      word "online" and were easy to conflate. */}
+                  <TableHead>Storefront</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-fg/30" aria-hidden="true" />
                       Channels ({channels.length})
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-fg/35 hover:text-fg/60" aria-label="What the channel dots mean">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-56 normal-case">
+                          <p className="font-semibold text-fg">One dot per sales channel</p>
+                          <ul className="mt-1.5 space-y-1">
+                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-ok" />Live</li>
+                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warn" />Needs a push, or on sale</li>
+                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-danger" />Error</li>
+                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-fg/20" />Not listed</li>
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
                     </span>
                   </TableHead>
                   <TableHead className="text-right">Price</TableHead>

@@ -205,12 +205,9 @@ export function LoginCard() {
                   </span>
                 </Button>
 
-                <div className="text-center text-xs text-fg/55">
-                  Don&apos;t have an account?{" "}
-                  <Link href="/register" className="text-accent hover:underline">
-                    Sign up
-                  </Link>
-                </div>
+                {/* Public signup is disabled — see App.tsx's commented-out
+                    /register route for why. Nothing routes here today, so
+                    this link isn't shown. */}
 
                 <div className="text-center text-xs text-fg/55">
                   By continuing you agree to the{" "}

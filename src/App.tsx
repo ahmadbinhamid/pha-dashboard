@@ -7,7 +7,8 @@ import { useAuth } from "@/context/auth";
 
 // Auth pages
 import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+// Only imported by the commented-out /register route below.
+// import RegisterPage from "@/pages/RegisterPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 
@@ -71,6 +72,10 @@ export default function App() {
             }
           />
 
+          {/* Public self-signup is disabled — every account now comes in
+              through an invite (see InvitePage) or is provisioned directly.
+              Route and import kept, not deleted, so re-enabling this is a
+              one-line uncomment rather than rebuilding the page.
           <Route
             path="/register"
             element={
@@ -79,6 +84,7 @@ export default function App() {
               </GuestRoute>
             }
           />
+          */}
 
           <Route
             path="/auth/forgot-password"

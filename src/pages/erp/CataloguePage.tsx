@@ -12,7 +12,7 @@ import { ListingsTab } from "@/components/catalogue/ListingsTab";
 import { getChannels } from "@/lib/api/channels";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
-import { Plus, RefreshCw } from "lucide-react";
+import { ArrowRight, Blocks, Plus, RefreshCw } from "lucide-react";
 
 type CatalogueTab = "products" | "listings";
 
@@ -47,6 +47,22 @@ export default function CataloguePage() {
   function handleProductSelected(product: Product) {
     setPickerOpen(false);
     navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`);
+  }
+
+  function openChannel(channel: (typeof channels)[number]) {
+    if (channel.connection.status !== "connected") {
+      navigate(`/settings/integrations/${channel.key}`);
+      return;
+    }
+    // Same URL param ListingsTab already reads (l_platform) — clicking a
+    // channel card is now a real shortcut into "show me just this channel's
+    // listings", not a purely decorative status strip.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", "listings");
+      next.set("l_platform", channel.key);
+      return next;
+    });
   }
 
   function syncAll() {
@@ -86,11 +102,41 @@ export default function CataloguePage() {
         </div>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        {isLoading
-          ? Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16" />)
-          : channels.map((channel) => <ChannelSummaryCard key={channel.key} channel={channel} />)}
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
+        </div>
+      ) : channels.length === 0 ? (
+        // A blank strip here (the old behaviour — the grid rendered zero
+        // children with nothing to explain why) reads as a bug, not as "you
+        // haven't connected anything yet". This is the one place on the page
+        // that says so and points at where to fix it.
+        <button
+          type="button"
+          onClick={() => navigate("/settings/integrations")}
+          className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-border p-4 text-left transition-colors hover:border-accent/40 hover:bg-muted/40"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/10 text-accent">
+            <Blocks className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-fg">No sales channels connected</span>
+            <span className="block text-xs text-fg/50">Connect eBay or Google Shopping to start listing products.</span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-fg/30" />
+        </button>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {channels.map((channel, i) => (
+            <ChannelSummaryCard
+              key={channel.key}
+              channel={channel}
+              index={i}
+              onClick={() => openChannel(channel)}
+            />
+          ))}
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as CatalogueTab)}>
         <TabsList>
