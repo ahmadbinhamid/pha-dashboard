@@ -108,6 +108,30 @@ async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
 }
 
 /**
+ * Notify the platform's own inbox (config.smtp.alertsTo, same address
+ * utils/emailSender.js#sendErrorAlert uses) of a "Request a Demo" submission
+ * from the marketing site. Unlike sendInquiryNotification/
+ * sendNewsletterSignupNotification, this has no tenant to resolve `to` from —
+ * a demo request is someone who doesn't have an account yet, asking about the
+ * product itself.
+ */
+async function sendDemoRequestNotification({ fullName, businessName, phone, workEmail, message }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to: config.smtp.alertsTo,
+    subject: `[Demo Request] ${businessName} — ${fullName}`,
+    template: "demoRequest",
+    variables: {
+      full_name: fullName,
+      business_name: businessName,
+      phone: phone || null,
+      work_email: workEmail,
+      message: message || null,
+    },
+  });
+}
+
+/**
  * Notify a customer that their DELIVERY order has shipped, with tracking
  * details and the tax invoice attached as a PDF (base64-encoded — Bull job
  * payloads are JSON over Redis, so a raw Buffer wouldn't round-trip to the
@@ -371,6 +395,7 @@ module.exports = {
   sendPasswordReset,
   sendInquiryNotification,
   sendNewsletterSignupNotification,
+  sendDemoRequestNotification,
   sendOrderShipped,
   sendOrderReadyForPickup,
   sendOrderConfirmation,

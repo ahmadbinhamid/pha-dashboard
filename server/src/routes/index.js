@@ -24,6 +24,7 @@ router.use("/listings", require("./listing.routes"));
 router.use("/channels", require("./channel.routes"));
 router.use("/inquiry", require("./inquiry.routes"));
 router.use("/newsletter", require("./newsletter.routes"));
+router.use("/demo-request", require("./demoRequest.routes"));
 router.use("/vehicle-model", require("./vehicle-model.routes"));
 router.use("/dashboard", require("./dashboard.routes"));
 router.use("/reports", require("./reports.routes"));

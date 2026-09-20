@@ -29,4 +29,15 @@ const paymentLimiter = rateLimit({
   handler: tooManyRequests("Too many payment requests. Please slow down."),
 });
 
-module.exports = { loginLimiter, paymentLimiter };
+// 1 hour / 5 attempts — a public, unauthenticated form that queues a real
+// email send (platform SMTP mailbox + worker-platform capacity) otherwise
+// has no cost to spam. A genuine lead submits once.
+const publicFormLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: tooManyRequests("Too many requests. Please try again later."),
+});
+
+module.exports = { loginLimiter, paymentLimiter, publicFormLimiter };
