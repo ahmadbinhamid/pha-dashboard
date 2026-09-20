@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from "react";
 
-// Shared by ThemeToggle (quick light/dark button in the Topbar), UserMenu's
-// account panel (Light/Dark picker in the Sidebar) and Settings → Appearance
-// (the full three-way picker) — an external store (not a plain per-component
-// useState) is what makes changing the theme in one immediately reflect in
-// the others, since they all subscribe to the same module-level value instead
-// of holding independent copies.
+// Shared by UserMenu's account panel (the quick Light/Dark picker in the
+// Topbar's avatar dropdown) and Settings → Appearance (the full three-way
+// picker) — an external store (not a plain per-component useState) is what
+// makes changing the theme in one immediately reflect in the other, since
+// both subscribe to the same module-level value instead of holding
+// independent copies.
 //
 // Two levels here: the MODE the user picked (which can be "system") and the
 // PREFERENCE that resolves to (only ever light or dark, since that's what the

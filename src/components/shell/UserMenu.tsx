@@ -7,23 +7,35 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/ActionsMenu";
 import { useAuth } from "@/context/auth";
+import { useThemePreference, type ThemePreference } from "@/hooks";
 import { ACCOUNT_ROLE_LABEL } from "@/config/access";
 import { personInitials } from "@/utils/initials";
-import { ChevronsUpDown, LogOut, User } from "lucide-react";
+import { cn } from "@/utils/cn";
+import { ChevronsUpDown, LogOut, Moon, Settings, Sun, User } from "lucide-react";
+
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+];
 
 // One account panel, two triggers. "compact" (Topbar, right-most) is just the
 // avatar; "full" (a sidebar footer) adds name + role and a chevron. Both open
-// the SAME menu: identity, then Profile and Logout. Settings and Activity Log
-// are not repeated here — the Topbar has its own Settings button and both are
-// in the sidebar nav.
-// Theme is deliberately NOT here — the Topbar's ThemeToggle is the one place
-// to switch it, rather than two controls holding the same state.
+// the SAME menu, in this order: identity, the Light/Dark theme control
+// (shares state with any other place reading useThemePreference — an
+// external store, so flipping the theme from either place updates both
+// instantly), then Profile and Settings, then Logout. Theme sits above the
+// navigation links since it's a toggle acted on in place rather than
+// somewhere the menu sends you. Settings and theme used to be their own
+// standalone Topbar icons — moved in here so the header's icon row is just
+// Search / Create Order / Notifications, with everything account-related
+// behind one avatar.
 //
 // The panel aligns to whichever edge of the trigger has room: a sidebar
 // trigger opens rightward from its start edge, the Topbar avatar sits against
 // the window's right edge so it opens leftward from its end edge.
 export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full" }) {
   const { user, logout } = useAuth();
+  const { preference, setTheme } = useThemePreference();
   const navigate = useNavigate();
 
   if (!user) return null;
@@ -79,6 +91,34 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
 
         <DropdownMenuSeparator className="mx-0" />
 
+        <div className="px-3 py-2.5">
+          <span className="text-xs text-fg/55">Theme</span>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            {THEME_OPTIONS.map((opt) => {
+              const active = preference === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setTheme(opt.value);
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    active ? "bg-accent/10 text-accent" : "text-fg/60 hover:bg-muted/60",
+                  )}
+                >
+                  <opt.icon className="h-3.5 w-3.5" />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <DropdownMenuSeparator className="mx-0" />
+
         <div className="p-1">
           {/* Kept because the Topbar avatar used to BE a link to /profile —
               turning it into a menu trigger would otherwise have removed the
@@ -86,6 +126,10 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
           <DropdownMenuItem className="px-2 py-1.5 text-xs" onSelect={() => navigate("/profile")}>
             <User className="h-3.5 w-3.5" />
             Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem className="px-2 py-1.5 text-xs" onSelect={() => navigate("/settings")}>
+            <Settings className="h-3.5 w-3.5" />
+            Settings
           </DropdownMenuItem>
         </div>
 
