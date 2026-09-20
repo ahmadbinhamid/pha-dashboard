@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart2, DollarSign, Download, Lightbulb, Package, RefreshCw, ShoppingCart, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RefreshControl } from "@/components/shared/RefreshControl";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +24,7 @@ import {
   getSalesPerformance,
   getTopCategories,
 } from "@/lib/api/reports";
+import { PAGE_REFETCH_MS } from "@/config/refresh";
 import { downloadCsv } from "@/utils/csv";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
@@ -38,31 +40,37 @@ export default function ReportsPage() {
   const { data: summaryRes, isLoading: summaryLoading } = useQuery({
     queryKey: ["reports", "summary", range],
     queryFn: () => getReportsSummary(rangeParams),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: volumeRes, isLoading: volumeLoading } = useQuery({
     queryKey: ["reports", "revenue-overview", range],
     queryFn: () => getOrderVolume(rangeParams),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: channelRes, isLoading: channelLoading } = useQuery({
     queryKey: ["reports", "revenue-by-channel", range],
     queryFn: () => getRevenueByChannel(rangeParams),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: categoriesRes, isLoading: categoriesLoading } = useQuery({
     queryKey: ["reports", "top-categories", range],
     queryFn: () => getTopCategories({ ...rangeParams, limit: 6 }),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: performanceRes, isLoading: performanceLoading } = useQuery({
     queryKey: ["reports", "sales-performance", range],
     queryFn: () => getSalesPerformance(rangeParams),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: statsRes, isLoading: statsLoading } = useQuery({
     queryKey: ["dashboard", "stats"],
     queryFn: getDashboardStats,
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   // Filtered on the same {from, to} as the cards above, not on a bare day
@@ -73,6 +81,7 @@ export default function ReportsPage() {
   const { data: turnoverRes, isLoading: turnoverLoading, isError: turnoverFailed } = useQuery({
     queryKey: ["reports", "inventory-turnover", range],
     queryFn: () => getInventoryTurnover(rangeParams),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const days = summaryRes?.data?.range.days ?? DEFAULT_RANGE_DAYS;
@@ -108,6 +117,9 @@ export default function ReportsPage() {
         description="Track performance, inventory turnover velocity, and cross-channel profitability."
       >
         <DateRangePicker value={range} onChange={setRange} />
+        {/* Two roots: the /reports endpoints, plus the dashboard stats query
+            behind Inventory Insights and the inventory-valuation export. */}
+        <RefreshControl queryKeys={[["reports"], ["dashboard", "stats"]]} />
         <Button
           variant="primary"
           size="sm"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RefreshControl } from "@/components/shared/RefreshControl";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RevenueTrendChart } from "@/components/dashboard/RevenueTrendChart";
 import { OrderVolumeChart } from "@/components/dashboard/OrderVolumeChart";
@@ -17,12 +18,15 @@ import {
   getCriticalStock,
 } from "@/lib/api/dashboard";
 import { formatCurrency } from "@/utils/format";
+import { PAGE_REFETCH_MS } from "@/config/refresh";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
 import { Boxes, AlertTriangle, Clock, Radio } from "lucide-react";
 
 // Recent Activity polls rather than push — good enough at this scale, and
-// honest about not actually being a websocket-driven live feed.
+// honest about not actually being a websocket-driven live feed. Faster than
+// the page-wide PAGE_REFETCH_MS on purpose: it's the one panel where a
+// several-minute lag reads as "nothing is happening".
 const ACTIVITY_REFETCH_MS = 30_000;
 
 export default function DashboardPage() {
@@ -32,11 +36,13 @@ export default function DashboardPage() {
   const { data: statsRes, isLoading: statsLoading } = useQuery({
     queryKey: ["dashboard", "stats"],
     queryFn: getDashboardStats,
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: channelsRes, isLoading: channelsLoading } = useQuery({
     queryKey: ["dashboard", "channels"],
     queryFn: getActiveChannels,
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   // Single query for the whole date-range-filtered section of the dashboard
@@ -47,6 +53,7 @@ export default function DashboardPage() {
   const { data: volumeRes, isLoading: volumeLoading } = useQuery({
     queryKey: ["dashboard", "order-volume", orderVolumeRange],
     queryFn: () => getOrderVolume(orderVolumeRange),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const { data: activityRes, isLoading: activityLoading } = useQuery({
@@ -58,6 +65,7 @@ export default function DashboardPage() {
   const { data: criticalStockRes, isLoading: criticalStockLoading } = useQuery({
     queryKey: ["dashboard", "critical-stock"],
     queryFn: () => getCriticalStock(10),
+    refetchInterval: PAGE_REFETCH_MS,
   });
 
   const stats = statsRes?.data;
@@ -85,6 +93,7 @@ export default function DashboardPage() {
         description="Store performance overview, sales volume & real time inventory telemetry"
       >
         <DateRangePicker value={orderVolumeRange} onChange={setOrderVolumeRange} />
+        <RefreshControl queryKeys={[["dashboard"]]} />
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
