@@ -3,12 +3,12 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
-import { downloadCsv } from "@/utils/csv";
+import { downloadPdf } from "@/utils/pdf";
 
 // Real-data replacement for the reference mockup's "Recent Reports" panel
 // (a list of pre-generated PDFs with fixed timestamps) — this app has no
 // report-generation/storage feature, so instead of faking that history,
-// each row downloads a real CSV of data already loaded on the page.
+// each row downloads a real PDF of data already loaded on the page.
 export interface ExportDataset {
   id: string;
   title: string;
@@ -29,7 +29,11 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
           size="sm"
           className="shrink-0"
           disabled={datasets.every((d) => d.rows.length === 0)}
-          onClick={() => datasets.forEach((d) => d.rows.length > 0 && downloadCsv(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows))}
+          onClick={() =>
+            datasets.forEach(
+              (d) => d.rows.length > 0 && downloadPdf(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows, { title: d.title }),
+            )
+          }
         >
           Export All
         </Button>
@@ -56,10 +60,10 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
                 <button
                   type="button"
                   disabled={dataset.rows.length === 0}
-                  onClick={() => downloadCsv(dataset.title.toLowerCase().replace(/\s+/g, "_"), dataset.rows)}
+                  onClick={() => downloadPdf(dataset.title.toLowerCase().replace(/\s+/g, "_"), dataset.rows, { title: dataset.title })}
                   className="flex shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-fg transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <span>CSV</span>
+                  <span>PDF</span>
                   <Download className="h-3 w-3 text-fg/50" />
                 </button>
               </div>

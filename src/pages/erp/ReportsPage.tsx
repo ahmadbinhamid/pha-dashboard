@@ -25,7 +25,7 @@ import {
   getTopCategories,
 } from "@/lib/api/reports";
 import { PAGE_REFETCH_MS } from "@/config/refresh";
-import { downloadCsv } from "@/utils/csv";
+import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
@@ -124,7 +124,7 @@ export default function ReportsPage() {
           disabled={!summary}
           onClick={() =>
             summary &&
-            downloadCsv("reports_summary", [
+            downloadPdf("reports_summary", [
               {
                 range: `${summary.range.from} – ${summary.range.to}`,
                 revenue: (summary.revenueCents / 100).toFixed(2),
@@ -137,7 +137,7 @@ export default function ReportsPage() {
           }
         >
           <Download className="h-4 w-4" />
-          Export CSV
+          Export PDF
         </Button>
         {/* Two roots: the /reports endpoints, plus the dashboard stats query
             behind Inventory Insights and the inventory-valuation export. */}
@@ -244,7 +244,7 @@ export default function ReportsPage() {
           <div className="@3xl:col-span-12">
             <ReportsExportPanel
               loading={performanceLoading || categoriesLoading || channelLoading}
-              // Titles double as the CSV filename (see ReportsExportPanel)
+              // Titles double as the PDF filename (see ReportsExportPanel)
               // and as the row label, which truncates in this card's share of
               // the row — so they drop the "Report" suffix the card heading
               // already implies.

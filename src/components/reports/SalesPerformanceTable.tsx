@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
-import { downloadCsv } from "@/utils/csv";
+import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderChannel } from "@/types/orders";
 import type { SalesPerformanceRow } from "@/types/reports";
@@ -77,7 +77,7 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
         size="sm"
         className="w-full"
         onClick={() =>
-          downloadCsv(
+          downloadPdf(
             "sales_performance_by_channel",
             rows.map((r) => ({
               channel: channelLabel(r.channel),
@@ -87,6 +87,7 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
               avgOrderValue: (r.avgOrderValueCents / 100).toFixed(2),
               grossProfit: (r.grossProfitCents / 100).toFixed(2),
             })),
+            { title: "Sales Performance by Channel" },
           )
         }
       >

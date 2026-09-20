@@ -21,7 +21,7 @@ import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLa
 import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
 import type { StatTileTone } from "@/components/dashboard/DashboardStatTile";
 import { cn } from "@/utils/cn";
-import { downloadCsv } from "@/utils/csv";
+import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { InventoryTurnoverResponse } from "@/types/reports";
 
@@ -51,7 +51,7 @@ function formatDayLabel(dateStr: string) {
 // (Product.cost_price is optional) sends this toward a meaningless
 // thousands-of-days figure rather than a real "how long this sits on the
 // shelf" estimate. Capping the display (not the underlying number, which
-// stays real for the tooltip/CSV export) keeps the KPI tiles readable
+// stays real for the tooltip/PDF export) keeps the KPI tiles readable
 // instead of printing something like "1130451.8 days". Found live against
 // this tenant's dev data, where only a handful of products have cost set.
 const DSI_DISPLAY_CAP = 365;
@@ -115,7 +115,7 @@ export function InventoryTurnoverCard({
     [turnover],
   );
 
-  // A point's `categoryRates` is a nested object, which the CSV writer could
+  // A point's `categoryRates` is a nested object, which the PDF table could
   // only render as "[object Object]" — flattened here into one column per
   // category, in categoryRanking's order so every row carries the same
   // columns. Days-of-inventory is exported UNCAPPED (the tiles cap the
@@ -219,7 +219,7 @@ export function InventoryTurnoverCard({
 
           <button
             type="button"
-            onClick={() => downloadCsv("inventory_turnover", exportRows)}
+            onClick={() => downloadPdf("inventory_turnover", exportRows, { title: "Inventory Turnover" })}
             className="flex items-center gap-1.5 rounded-xl bg-muted px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-muted/70"
           >
             <Download className="h-3.5 w-3.5 text-fg/50" />
