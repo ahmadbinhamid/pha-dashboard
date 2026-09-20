@@ -6,8 +6,7 @@ import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
 
 import { ArrowRight } from "lucide-react";
-import { AppLogoMark } from "@/components/branding/AppLogoMark";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
@@ -118,32 +117,36 @@ export function LoginCard() {
   const isLoadingResend = resendMutation.isPending;
 
   return (
-    <div className="w-full max-w-105">
-      {/* Only shown below `lg` — the split LoginPage's brand panel already
-          carries the logo above `lg`, so repeating it here would be a
-          second mark on the same screen. */}
-      <div className="mb-6 flex flex-col items-center justify-center gap-2 lg:hidden">
-        {/* The lockup already spells out the app name — no separate text label
-            beside it, or the name would show up twice. */}
-        <AppLogoMark className="h-12" />
-        <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
-      </div>
-
-      <Card className="overflow-hidden">
+    <div className="w-full lg:max-w-105">
+      {/* Below `lg`, LoginPage renders this as a full-bleed sheet pulled up
+          over its own compact brand header: rounded top only, no border/
+          shadow, so it reads as one continuous surface rather than a card
+          floating inside another container. At `lg` and up it's the usual
+          floating card (rounded all around, bordered, shadowed) — see
+          LoginPage for the header this pairs with on each breakpoint. */}
+      <Card className="overflow-hidden rounded-b-none rounded-t-3xl border-0 shadow-[0_-8px_24px_-8px_rgba(0,0,0,0.15)] lg:rounded-2xl lg:border lg:border-border lg:shadow-card">
         {step === "credentials" && (
           <>
-            <CardHeader
-              title="Sign in"
-              description="Use your work email to access inventory, orders, and analytics."
-            />
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
+            {/* A bespoke header instead of the shared CardHeader — that one's
+                built for compact in-app panels (small title, divider
+                underneath); a sign-in form reads better as a proper page
+                headline: bigger, bolder, no divider line crowding it. */}
+            <div className="px-6 pb-2 pt-8 lg:pt-6">
+              <h1 className="text-3xl font-extrabold tracking-tight text-fg lg:text-[2rem]">
+                Welcome back
+              </h1>
+              <p className="mt-2 text-base text-fg/60">
+                Sign in to manage inventory, orders and analytics.
+              </p>
+            </div>
+            <CardContent className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2 sm:px-6 lg:pb-6">
+              <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-2">
                   <label
                     className="text-xs font-semibold text-fg/75"
                     htmlFor="email"
                   >
-                    Email
+                    Work email
                   </label>
                   <Input
                     id="email"
@@ -172,7 +175,7 @@ export function LoginCard() {
                   </label>
                   <PasswordInput
                     id="password"
-                    placeholder="••••••••••"
+                    placeholder="Enter your password"
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -181,14 +184,11 @@ export function LoginCard() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <LoginCheckbox
-                    checked={remember}
-                    onChange={setRemember}
-                    label="Remember me"
-                  />
-                  <span className="text-xs text-fg/55">SSO ready</span>
-                </div>
+                <LoginCheckbox
+                  checked={remember}
+                  onChange={setRemember}
+                  label="Keep me signed in on this device"
+                />
 
                 {errorMsg && (
                   <p className="rounded-lg border border-[hsl(var(--danger)/0.3)] bg-[hsl(var(--danger)/0.08)] px-3 py-2 text-xs text-[hsl(var(--danger))]">
@@ -201,7 +201,7 @@ export function LoginCard() {
                   className="w-full"
                   disabled={isLoadingLogin}
                 >
-                  {isLoadingLogin ? "Signing in…" : "Continue"}
+                  {isLoadingLogin ? "Signing in…" : "Sign in"}
                   <span className="ml-2 opacity-80">
                     <ArrowRight className="h-4 w-4" />
                   </span>
@@ -209,15 +209,18 @@ export function LoginCard() {
 
                 {/* Public signup is disabled — see App.tsx's commented-out
                     /register route for why. Nothing routes here today, so
-                    this link isn't shown. */}
+                    this link isn't shown. SSO is likewise skipped: there's
+                    no SSO backend behind this app, so a "Continue with
+                    company SSO" button (seen in the reference design) would
+                    be decorative rather than functional. */}
 
                 <div className="text-center text-xs text-fg/55">
-                  By continuing you agree to the{" "}
-                  <Link href="#" className="text-fg/70 hover:underline">
+                  By signing in you agree to the{" "}
+                  <Link href="#" className="text-fg/70 underline hover:text-fg">
                     Terms
                   </Link>{" "}
                   and{" "}
-                  <Link href="#" className="text-fg/70 hover:underline">
+                  <Link href="#" className="text-fg/70 underline hover:text-fg">
                     Privacy Policy
                   </Link>
                   .
