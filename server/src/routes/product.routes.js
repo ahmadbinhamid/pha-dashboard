@@ -30,6 +30,10 @@ router.get(
   validate(v.suggestProducts),
   asyncHandler(ctrl.suggestProducts),
 );
+// Registered ahead of "/:slug" below — same single path segment, and that
+// route is public (auth(false)), so it would otherwise serve this as an
+// unauthenticated storefront lookup for a product literally named "stats".
+router.get("/stats", auth(), asyncHandler(ctrl.getProductStats));
 router.get(
   "/:slug",
   auth(false),

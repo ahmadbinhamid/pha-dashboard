@@ -25,6 +25,17 @@ export const getOrders = async (params: OrderListParams = {}) => {
   return data;
 };
 
+export interface OrderStats {
+  totalRevenueCents: number;
+  pendingFulfillmentCount: number;
+  unpaidCount: number;
+}
+
+export const getOrderStats = async () => {
+  const { data } = await apiClient.get<BeResponse<OrderStats>>("/order/stats");
+  return data;
+};
+
 export const getOrderDetail = async (id: string) => {
   const { data } = await apiClient.get<BeResponse<OrderDetail>>(`/order/${id}/detail`);
   return data;

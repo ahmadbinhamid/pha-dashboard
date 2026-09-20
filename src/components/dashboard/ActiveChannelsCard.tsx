@@ -80,7 +80,7 @@ export function ActiveChannelsCard({ channels, loading }: { channels: ChannelHea
           channels.map((channel, i) => (
             <div
               key={channel.key}
-              onClick={() => navigate("/catalogue?tab=listings")}
+              onClick={() => navigate("/products?tab=listings")}
               className={cn(
                 "group flex cursor-pointer items-center justify-between gap-2 rounded-xl border bg-muted/40 px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:bg-muted/70",
                 STATUS_BORDER[channel.status],
@@ -113,7 +113,7 @@ export function ActiveChannelsCard({ channels, loading }: { channels: ChannelHea
         )}
       </CardContent>
 
-      <Button variant="primary" size="sm" className="mt-2 w-full gap-1.5" onClick={() => navigate("/catalogue?tab=listings")}>
+      <Button variant="primary" size="sm" className="mt-2 w-full gap-1.5" onClick={() => navigate("/products?tab=listings")}>
         Manage All Integrations
         <ChevronRight className="h-3.5 w-3.5" />
       </Button>

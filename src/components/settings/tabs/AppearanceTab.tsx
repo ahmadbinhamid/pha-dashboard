@@ -2,11 +2,9 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { FormField } from "@/components/ui/FormField";
-import { ColorSwatchInput } from "@/components/ui/ColorSwatchInput";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { LogoUploadField } from "@/components/tenant-settings/LogoUploadField";
-import { SettingsSection, SettingsFieldGrid } from "@/components/settings/SettingsSection";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 import {
   DarkPreview,
   LightPreview,
@@ -97,7 +95,7 @@ export function AppearanceTab({ settings, loading }: { settings?: TenantSettings
 
       <SettingsSection
         title="Brand Identity"
-        description="Your logo and colours, used across invoices, the storefront header and customer emails."
+        description="Your logo, used across invoices, the storefront header and customer emails."
         footer={
           <>
             <Button variant="ghost" disabled={!settings || mutation.isPending} onClick={() => settings && setBrand(toBrandState(settings))}>
@@ -139,21 +137,6 @@ export function AppearanceTab({ settings, loading }: { settings?: TenantSettings
                 onRemove={() => setBrand((b) => (b ? { ...b, favicon_url: null } : b))}
               />
             </div>
-
-            <SettingsFieldGrid>
-              <FormField label="Primary Colour" hint="Used for buttons, links and highlights.">
-                <ColorSwatchInput
-                  value={brand.brand_colour}
-                  onChange={(value) => setBrand((b) => (b ? { ...b, brand_colour: value } : b))}
-                />
-              </FormField>
-              <FormField label="Accent Colour" hint="Secondary colour for backgrounds and tags.">
-                <ColorSwatchInput
-                  value={brand.accent_colour}
-                  onChange={(value) => setBrand((b) => (b ? { ...b, accent_colour: value } : b))}
-                />
-              </FormField>
-            </SettingsFieldGrid>
           </div>
         )}
       </SettingsSection>

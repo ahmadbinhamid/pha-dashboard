@@ -35,7 +35,7 @@ const SYNC_STATUS_FILTERS = [
   { label: "Not listed", value: "not_listed" },
 ];
 
-// Catalogue page's "Listings" tab — the flat, listing-centric view (every
+// Products page's "Listings" tab — the flat, listing-centric view (every
 // real MarketplaceListing row, one per row), as opposed to the Products
 // tab's product-centric grouped view. Reuses the exact mutations
 // ListingsPage.tsx already had (push/edit/delete) — only the presentation

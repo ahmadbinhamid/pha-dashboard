@@ -16,6 +16,11 @@ const refundCtrl = require("../controllers/refund.controller");
 // guest_access_token (query param) instead of a JWT. resolveGuestTenant()
 // reads the storefront's own tenant identifier (X-Tenant-Slug header).
 router.post("/", resolveGuestTenant(), validate(v.createOrder), asyncHandler(ctrl.createOrder));
+
+// Registered ahead of the guest "/:id" route below — same single path
+// segment, so it would otherwise be swallowed by that catch-all (id="stats").
+router.get("/stats", auth(), admin, asyncHandler(ctrl.getOrderStats));
+
 router.get("/:id", resolveGuestTenant(), validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 
 // ── Admin ─────────────────────────────────────────────────────────────────

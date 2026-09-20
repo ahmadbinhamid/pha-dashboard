@@ -5,32 +5,35 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { ChannelSummaryCard } from "@/components/channels/ChannelSummaryCard";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ProductPickerModal } from "@/components/listings/ProductPickerModal";
-import { ProductsTab } from "@/components/catalogue/ProductsTab";
-import { ListingsTab } from "@/components/catalogue/ListingsTab";
+import { ProductsTab } from "@/components/products/ProductsTab";
+import { ListingsTab } from "@/components/listings/ListingsTab";
 import { getChannels } from "@/lib/api/channels";
+import { getProductStats } from "@/lib/api/products";
 import { useToast } from "@/context";
+import { formatCurrency } from "@/utils/format";
 import type { Product } from "@/types/product";
-import { ArrowRight, Blocks, Plus, RefreshCw } from "lucide-react";
+import { ArrowRight, Blocks, Layers, Plus, RefreshCw, Tag, TriangleAlert } from "lucide-react";
 
-type CatalogueTab = "products" | "listings";
+type ProductsPageTab = "products" | "listings";
 
-// The merged Products + Listings page ("Catalogue"). Fetches GET /channels
-// ONCE here (shared ["channels"] query key — same one GoogleConnectCard.tsx/
+// The merged Products + Listings page. Fetches GET /channels ONCE here
+// (shared ["channels"] query key — same one GoogleConnectCard.tsx/
 // ProductEditPage.tsx already use) and passes it down to both tabs, so
 // there's a single source of truth for "which channels exist" driving the
 // summary cards, the Products tab's per-channel columns, and the Listings
 // tab's sidebar/counts — none of them hardcode a platform list.
-export default function CataloguePage() {
+export default function ProductsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const activeTab: CatalogueTab = searchParams.get("tab") === "listings" ? "listings" : "products";
-  const setActiveTab = (tab: CatalogueTab) => {
+  const activeTab: ProductsPageTab = searchParams.get("tab") === "listings" ? "listings" : "products";
+  const setActiveTab = (tab: ProductsPageTab) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("tab", tab);
@@ -43,6 +46,29 @@ export default function CataloguePage() {
     queryFn: getChannels,
   });
   const channels = data?.data ?? [];
+
+  const { data: statsRes, isLoading: statsLoading } = useQuery({
+    queryKey: ["products", "stats"],
+    queryFn: getProductStats,
+  });
+  const stats = statsRes?.data;
+
+  const connectedChannelCount = channels.filter((c) => c.connection.status === "connected").length;
+  const totalListings = channels.reduce(
+    (sum, c) => sum + Object.values(c.listing_counts).reduce((a, b) => a + b, 0),
+    0,
+  );
+  const hasOutOfStock = !!stats && stats.outOfStockCount > 0;
+
+  function goToStockFilter(stock: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", "products");
+      next.set("stock", stock);
+      next.set("p_page", "1");
+      return next;
+    });
+  }
 
   function handleProductSelected(product: Product) {
     setPickerOpen(false);
@@ -82,8 +108,8 @@ export default function CataloguePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Catalogue"
-        description="One product record, many channels. Products is the source of truth; Listings is the per-channel work queue."
+        title="Products"
+        description="Auto parts inventory, multi-channel feeds, and specifications."
       >
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="md" className="gap-2" onClick={syncAll}>
@@ -101,6 +127,44 @@ export default function CataloguePage() {
           </Button>
         </div>
       </PageHeader>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          size="sm"
+          label="Total SKUs"
+          value={stats ? stats.totalSkus : "—"}
+          subLabel={stats ? `${stats.totalStockUnits} unit${stats.totalStockUnits !== 1 ? "s" : ""} in stock` : undefined}
+          icon={<Layers className="h-4 w-4" />}
+          loading={statsLoading}
+        />
+        <MetricCard
+          size="sm"
+          label="Channel Listings"
+          value={totalListings}
+          subLabel={`Across ${connectedChannelCount || channels.length} channel${(connectedChannelCount || channels.length) !== 1 ? "s" : ""}`}
+          icon={<Blocks className="h-4 w-4" />}
+          loading={isLoading}
+          onClick={() => setActiveTab("listings")}
+        />
+        <MetricCard
+          size="sm"
+          label="Out of Stock"
+          value={stats ? stats.outOfStockCount : "—"}
+          subLabel={stats ? (hasOutOfStock ? "Reorders needed" : "All stock levels healthy") : undefined}
+          icon={<TriangleAlert className="h-4 w-4" />}
+          tone={hasOutOfStock ? "danger" : "ok"}
+          loading={statsLoading}
+          onClick={hasOutOfStock ? () => goToStockFilter("out_of_stock") : undefined}
+        />
+        <MetricCard
+          size="sm"
+          label="Average Price"
+          value={stats ? formatCurrency(stats.avgPrice) : "—"}
+          subLabel={stats && stats.avgMarginPct !== null ? `~${Math.round(stats.avgMarginPct)}% avg margin` : "Add cost prices to see margin"}
+          icon={<Tag className="h-4 w-4" />}
+          loading={statsLoading}
+        />
+      </div>
 
       {isLoading ? (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -138,7 +202,7 @@ export default function CataloguePage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as CatalogueTab)}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ProductsPageTab)}>
         <TabsList>
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="listings">Listings</TabsTrigger>

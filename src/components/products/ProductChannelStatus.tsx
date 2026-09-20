@@ -5,7 +5,7 @@ import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GroupedListingSummary } from "@/types/marketplace";
 
 // Extracted from ListingsPage.tsx's own per-product expand pattern so the
-// Catalogue page's Products tab (channel status per product, collapsed dot
+// Products page's Products tab (channel status per product, collapsed dot
 // row + expandable detail) and the Listings tab's grouped fallback don't
 // each reimplement it. Takes `channels` from GET /channels (never a
 // hardcoded platform list) so a newly-registered adapter shows up here

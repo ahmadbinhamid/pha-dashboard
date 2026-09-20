@@ -46,7 +46,7 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
-// Catalogue page's "Products" tab — product CRUD (grid/list, status/stock/
+// Products page's "Products" tab — product CRUD (grid/list, status/stock/
 // category filters, publish toggle, delete) merged with the per-channel
 // status view that used to be ListingsPage.tsx's default grouped-by-product
 // table. Channel SET comes from `channels` (GET /channels), never a

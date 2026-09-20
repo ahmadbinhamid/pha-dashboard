@@ -4,10 +4,10 @@
 // separate semantic-token dot/badge, and the two never share one element.
 // Kept as its own component rather than reusing that one directly — its
 // tinted rounded-xl treatment is dashboard-specific styling, not something
-// to force onto the Catalogue page (or vice-versa).
+// to force onto the Products page (or vice-versa).
 //
 // Deliberately carries no status meaning. Mixing "which channel" and "is it
-// healthy" into one colored dot was exactly what made the Catalogue page's
+// healthy" into one colored dot was exactly what made the Products page's
 // channel status confusing: the same visual meant one thing collapsed and a
 // different thing once expanded. This chip only ever answers "which
 // channel"; color here never implies health.

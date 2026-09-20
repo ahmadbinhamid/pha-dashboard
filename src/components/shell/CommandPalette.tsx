@@ -226,7 +226,7 @@ export function CommandPalette({
               <div className="grid grid-cols-1 gap-2 p-1 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => { close(); navigate("/catalogue"); }}
+                  onClick={() => { close(); navigate("/products"); }}
                   className="flex items-center gap-2.5 rounded-xl border border-border px-3.5 py-3 text-left transition-colors hover:bg-bg-2/60"
                 >
                   <Package className="h-4 w-4 shrink-0 text-accent" />

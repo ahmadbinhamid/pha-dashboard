@@ -14,7 +14,7 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
-import CataloguePage from "@/pages/erp/CataloguePage";
+import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
@@ -105,13 +105,13 @@ export default function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/catalogue" element={<CataloguePage />} />
-            {/* Redirects — /products and /listings merged into one
-                Catalogue page with Products/Listings tabs. Kept as
-                redirects (not removed) so any existing bookmark/deep link
-                still lands somewhere correct. */}
-            <Route path="/products" element={<Navigate to="/catalogue?tab=products" replace />} />
-            <Route path="/listings" element={<Navigate to="/catalogue?tab=listings" replace />} />
+            <Route path="/products" element={<ProductsPage />} />
+            {/* Redirects — /catalogue was this page's old name; /listings
+                merged into its Listings tab. Kept as redirects (not
+                removed) so any existing bookmark/deep link still lands
+                somewhere correct. */}
+            <Route path="/catalogue" element={<Navigate to="/products" replace />} />
+            <Route path="/listings" element={<Navigate to="/products?tab=listings" replace />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
             <Route path="/categories" element={<CategoriesPage />} />

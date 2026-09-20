@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { ManageColumns } from "@/components/ui/ManageColumns";
+import { StatCard } from "@/components/ui/StatCard";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -13,12 +14,12 @@ import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
-import { getOrders } from "@/lib/api/orders";
+import { getOrders, getOrderStats } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
-import { Search, ShoppingCart } from "lucide-react";
+import { Search, ShoppingCart, Banknote, Clock, CreditCard } from "lucide-react";
 
 // Order lifecycle — independent of payment status (see PAYMENT_STATUS_FILTERS
 // below and OrderStatusSelect for the same 5-state split on the detail page).
@@ -190,12 +191,30 @@ export default function OrdersPage() {
   const total = data?.data?.total ?? 0;
   const totalPages = data?.data?.totalPages ?? 1;
 
+  const { data: statsRes } = useQuery({
+    queryKey: ["orders", "stats"],
+    queryFn: getOrderStats,
+  });
+  const stats = statsRes?.data;
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Orders"
-        description={total > 0 ? `${total} order${total !== 1 ? "s" : ""}` : "Orders from your storefront and eBay"}
-      />
+      <PageHeader title="Orders" />
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={ShoppingCart} label="Total Orders">
+          {total}
+        </StatCard>
+        <StatCard icon={Clock} label="Pending Fulfillment">
+          {stats ? stats.pendingFulfillmentCount : "—"}
+        </StatCard>
+        <StatCard icon={CreditCard} label="Unpaid Orders">
+          {stats ? stats.unpaidCount : "—"}
+        </StatCard>
+        <StatCard icon={Banknote} label="Total Revenue">
+          {stats ? formatCurrencyFromCents(stats.totalRevenueCents) : "—"}
+        </StatCard>
+      </div>
 
       <Card className="overflow-hidden">
         {/* Filter bar — search, selects, and Manage Columns all in one row above the table */}
