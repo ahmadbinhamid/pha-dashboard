@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Package, ShoppingCart } from "lucide-react";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Package, Search } from "lucide-react";
+import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/Select";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
-import { CartItemRow } from "@/components/pos/CartItemRow";
-import { useCart } from "@/context/cart";
 import { getProducts } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { formatCurrency } from "@/utils/format";
 
-// Continuing to step 2 needs no validation beyond "cart isn't empty" — the
-// page header's Next button checks that directly, so this step doesn't need
-// its own bottom button or an onContinue prop.
+// Product picker for step 1. The running basket is NOT here — it's the
+// wizard's own summary panel (OrderSummaryPanel), which stays put across
+// steps 1 and 2 instead of disappearing when you move on.
+//
+// Continuing to step 2 needs no validation beyond "cart isn't empty", which
+// the page header's Next button checks directly.
 export function AddProductsStep() {
-  const { items, totalPrice } = useCart();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -26,7 +27,7 @@ export function AddProductsStep() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data: productsRes, isFetching } = useQuery({
+  const { data: productsRes, isLoading } = useQuery({
     queryKey: ["pos-products", debouncedSearch, category],
     queryFn: () => getProducts({ search: debouncedSearch, categories: category, limit: 20 }),
   });
@@ -40,12 +41,14 @@ export function AddProductsStep() {
   const categories = categoriesRes?.data?.items ?? [];
 
   return (
-    <div className="grid gap-5 lg:grid-cols-3">
-      <Card className="lg:col-span-2">
-        <CardHeader title="Product List" description="Search and add products to this order" />
-        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center">
+    <Card className="flex flex-col overflow-hidden">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-fg">Add Products</h2>
+        <p className="mt-0.5 text-xs text-fg/50">Search the catalogue and add lines to this order.</p>
+
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40" />
             <Input
               placeholder="Search by product name or SKU…"
               value={search}
@@ -53,7 +56,7 @@ export function AddProductsStep() {
               className="pl-9"
             />
           </div>
-          <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)} className="sm:w-48">
+          <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)} className="sm:w-52">
             <option value="">All categories</option>
             {categories.map((c) => (
               <option key={c._id} value={c._id}>
@@ -62,68 +65,61 @@ export function AddProductsStep() {
             ))}
           </NativeSelect>
         </div>
-
-        <div className="max-h-112 divide-y divide-border overflow-y-auto">
-          {isFetching && products.length === 0 ? (
-            <div className="py-10 text-center text-sm text-fg/50">Loading products…</div>
-          ) : products.length === 0 ? (
-            <div className="py-10 text-center text-sm text-fg/50">No products found.</div>
-          ) : (
-            products.map((product) => (
-              <div key={product._id} className="flex items-center gap-3 px-5 py-3">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
-                  {product.attachments?.[0]?.url ? (
-                    <img
-                      src={product.attachments[0].url}
-                      alt={product.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Package className="h-4 w-4 text-fg/25" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="truncate font-medium text-fg">{product.title}</div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">{product.title}</TooltipContent>
-                  </Tooltip>
-                  {product.has_variants && <span className="text-xs text-fg/45">Has variants</span>}
-                </div>
-                <div className="w-20 shrink-0 text-right text-sm text-fg/70">{formatCurrency(product.price)}</div>
-                <AddToCartButton product={product} display="icon-solid" className="shrink-0" />
-              </div>
-            ))
-          )}
-        </div>
-      </Card>
-
-      <div>
-        <Card>
-          <CardHeader title="Basket" description={`${items.length} item${items.length !== 1 ? "s" : ""}`} />
-          {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <ShoppingCart className="h-8 w-8 text-fg/25" />
-              <p className="text-sm text-fg/50">No products added yet.</p>
-            </div>
-          ) : (
-            <div className="max-h-96 divide-y divide-border overflow-y-auto">
-              {items.map((item) => (
-                <CartItemRow key={item.key} item={item} />
-              ))}
-            </div>
-          )}
-          <div className="border-t border-border px-5 py-4">
-            <div className="flex justify-between text-sm font-semibold text-fg">
-              <span>Total</span>
-              <span>{formatCurrency(totalPrice)}</span>
-            </div>
-          </div>
-        </Card>
       </div>
-    </div>
+
+      {/* Scrolls inside the card rather than growing the page, so the search
+          row and the summary panel beside it both stay in view. */}
+      <div className="min-h-[22rem] divide-y divide-border/60 overflow-y-auto lg:max-h-[calc(100vh-22rem)]">
+        {isLoading ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-5 py-3">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+              <Skeleton className="h-3.5 flex-1" />
+              <Skeleton className="h-3.5 w-16" />
+              <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            </div>
+          ))
+        ) : products.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
+            <Package className="h-7 w-7 text-fg/20" />
+            <p className="text-sm text-fg/55">No products match those filters</p>
+            <p className="text-xs text-fg/40">Try a different search term or category.</p>
+          </div>
+        ) : (
+          products.map((product) => (
+            <div key={product._id} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                {product.attachments?.[0]?.url ? (
+                  <img src={product.attachments[0].url} alt={product.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Package className="h-4 w-4 text-fg/25" />
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="truncate text-sm font-medium text-fg">{product.title}</div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{product.title}</TooltipContent>
+                </Tooltip>
+                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-fg/45">
+                  {product.sku ? <span className="font-mono">{product.sku}</span> : null}
+                  {product.sku && product.has_variants ? <span aria-hidden>·</span> : null}
+                  {product.has_variants ? <span>Has variants</span> : null}
+                </div>
+              </div>
+
+              <div className="shrink-0 text-right text-sm font-semibold text-fg tabular-nums">
+                {formatCurrency(product.price)}
+              </div>
+              <AddToCartButton product={product} display="icon-solid" className="shrink-0" />
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
   );
 }

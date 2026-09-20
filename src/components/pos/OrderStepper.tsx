@@ -11,41 +11,67 @@ interface OrderStepperProps {
   current: number;
 }
 
+// Progress through the order wizard.
+//
+// Below `md` the rail is replaced by "Step 2 of 4 · Customer & Delivery": four
+// labelled circles don't fit a phone without truncating to initials, which
+// tells the operator less than the sentence does.
 export function OrderStepper({ steps, current }: OrderStepperProps) {
+  const activeLabel = steps[current - 1]?.label;
+
   return (
-    <div className="flex items-center">
-      {steps.map((step, i) => {
-        const stepNumber = i + 1;
-        const isComplete = stepNumber < current;
-        const isCurrent = stepNumber === current;
-        return (
-          <div key={step.label} className="flex flex-1 items-center last:flex-none">
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition",
-                  isComplete && "bg-[hsl(var(--ok))] text-white",
-                  isCurrent && "bg-accent text-accent-fg ring-4 ring-accent/20",
-                  !isComplete && !isCurrent && "bg-bg-2 text-fg/40 ring-1 ring-inset ring-border",
-                )}
-              >
-                {isComplete ? <Check className="h-3.5 w-3.5" /> : stepNumber}
+    <>
+      <div className="md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-fg">{activeLabel}</span>
+          <span className="shrink-0 text-xs font-medium text-fg/45">
+            Step {current} of {steps.length}
+          </span>
+        </div>
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-accent transition-all duration-300"
+            style={{ width: `${(current / steps.length) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="hidden items-center md:flex">
+        {steps.map((step, i) => {
+          const stepNumber = i + 1;
+          const isComplete = stepNumber < current;
+          const isCurrent = stepNumber === current;
+          return (
+            <div key={step.label} className="flex flex-1 items-center last:flex-none">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                    isComplete && "bg-ok text-ok-fg",
+                    isCurrent && "bg-accent text-accent-fg",
+                    !isComplete && !isCurrent && "bg-muted text-fg/40",
+                  )}
+                >
+                  {isComplete ? <Check className="h-3.5 w-3.5" /> : stepNumber}
+                </span>
+                {/* Labels sit beside their number rather than under it: the
+                    stacked version made the rail twice as tall for no gain. */}
+                <span
+                  className={cn(
+                    "whitespace-nowrap text-xs font-semibold transition-colors",
+                    isCurrent ? "text-fg" : isComplete ? "text-fg/70" : "text-fg/40",
+                  )}
+                >
+                  {step.label}
+                </span>
               </div>
-              <span
-                className={cn(
-                  "whitespace-nowrap text-xs font-medium",
-                  isCurrent ? "text-fg" : isComplete ? "text-fg/70" : "text-fg/40",
-                )}
-              >
-                {step.label}
-              </span>
+              {stepNumber < steps.length && (
+                <div className={cn("mx-3 h-px flex-1", isComplete ? "bg-ok" : "bg-border")} />
+              )}
             </div>
-            {stepNumber < steps.length && (
-              <div className={cn("mx-3 h-px flex-1", isComplete ? "bg-[hsl(var(--ok))]" : "bg-border")} />
-            )}
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

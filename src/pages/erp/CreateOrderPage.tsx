@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { OrderStepper } from "@/components/pos/OrderStepper";
+import { OrderSummaryPanel } from "@/components/pos/OrderSummaryPanel";
 import { AddProductsStep } from "@/components/pos/steps/AddProductsStep";
 import { CustomerDeliveryStep } from "@/components/pos/steps/CustomerDeliveryStep";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
@@ -20,6 +22,19 @@ const STEPS = [
   { label: "Review Order" },
   { label: "Order Confirmation" },
 ];
+
+// What the header says beneath the title, so the operator is told what this
+// screen wants from them rather than what the page is called.
+const STEP_DESCRIPTION: Record<number, string> = {
+  1: "Search the catalogue and build the order's lines.",
+  2: "Choose who this order is for and how it reaches them.",
+  3: "Check the lines, apply discounts and take payment.",
+  4: "Order created — print, email or start another.",
+};
+
+// Steps 1 and 2 run beside the live order summary; 3 and 4 own the full width
+// (Review has its own totals column, Confirmation is a receipt).
+const SUMMARY_STEPS = new Set([1, 2]);
 
 const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
 
@@ -163,42 +178,60 @@ export default function CreateOrderPage() {
 
   const nextDisabled = step === 1 ? items.length === 0 : step === 3 ? reviewPending : false;
 
+  const showSummary = SUMMARY_STEPS.has(step);
+
   return (
-    <div className="space-y-6 pb-24">
-      <div className="sticky top-0 z-30 -mx-6 space-y-3 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
-        <PageHeader title="Create Order" description="Build a manual/in-person sale for a customer">
+    <div className="space-y-6">
+      {/* Title, actions and the step rail travel together as one sticky block.
+          The negative margins cancel AppShell's page gutter so the opaque
+          background reaches the edges instead of letting cards show through
+          beside it — same pattern as SettingsPage, and matching the shell's
+          own px-4 / sm:px-6 / lg:px-10 rather than a single hardcoded -mx-6. */}
+      <div className="sticky top-0 z-30 -mx-4 space-y-4 border-b border-border bg-bg/95 px-4 pb-4 pt-section backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <PageHeader title="Create Order" description={STEP_DESCRIPTION[step]}>
           {step < 4 && (
-            <Button variant="ghost" size="md" onClick={handleCancel}>
+            <Button variant="ghost" size="sm" onClick={handleCancel}>
               Cancel
             </Button>
           )}
           {step > 1 && step < 4 && (
-            <Button variant="secondary" size="md" onClick={handleBack} disabled={reviewPending}>
+            <Button variant="secondary" size="sm" onClick={handleBack} disabled={reviewPending}>
               Back
             </Button>
           )}
           {step < 4 && (
-            <Button variant="primary" size="md" onClick={handleNext} disabled={nextDisabled}>
-              {step === 3 ? (reviewPending ? "Creating…" : "Create") : "Next"}
+            <Button variant="primary" size="sm" onClick={handleNext} disabled={nextDisabled}>
+              {step === 3 ? (reviewPending ? "Creating…" : "Create Order") : "Next"}
             </Button>
           )}
         </PageHeader>
 
-        <div className="rounded-xs border border-border bg-card px-4 py-3.5 shadow-card">
+        <Card className="px-5 py-3.5">
           <OrderStepper steps={STEPS} current={step} />
-        </div>
+        </Card>
       </div>
 
-      {step === 1 && <AddProductsStep />}
+      {showSummary ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            {step === 1 && <AddProductsStep />}
+            {step === 2 && (
+              <CustomerDeliveryStep
+                ref={customerDeliveryRef}
+                state={customerDelivery}
+                onChange={patchCustomerDelivery}
+                onContinue={() => setStep(3)}
+              />
+            )}
+          </div>
 
-      {step === 2 && (
-        <CustomerDeliveryStep
-          ref={customerDeliveryRef}
-          state={customerDelivery}
-          onChange={patchCustomerDelivery}
-          onContinue={() => setStep(3)}
-        />
-      )}
+          {/* Sticky under the header block, so the total stays visible while
+              the product list scrolls. */}
+          <div className="lg:sticky lg:top-44 lg:self-start">
+            <OrderSummaryPanel />
+          </div>
+        </div>
+      ) : null}
 
       {step === 3 && (
         <ReviewOrderStep
@@ -221,19 +254,6 @@ export default function CreateOrderPage() {
 
       {step === 4 && createdOrder && (
         <OrderConfirmationStep order={createdOrder} paymentMethod={paymentChoice} onStartNewOrder={startNewOrder} />
-      )}
-
-      {/* A direct visit with an empty cart has nothing to build an order
-          from — bounce back to product browsing rather than showing a wizard
-          with nothing in it. */}
-      {step === 1 && items.length === 0 && (
-        <p className="text-center text-sm text-fg/50">
-          Your cart is empty.{" "}
-          <button type="button" className="font-medium text-accent hover:underline" onClick={() => navigate("/products")}>
-            Browse products
-          </button>{" "}
-          to get started.
-        </p>
       )}
     </div>
   );
