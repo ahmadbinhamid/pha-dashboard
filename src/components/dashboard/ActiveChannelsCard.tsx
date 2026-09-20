@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Store } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
+import { getChannelLogo } from "@/components/channels/channelLogos";
 import { cn } from "@/utils/cn";
 import { formatRelativeTime } from "@/utils/formatRelativeTime";
 import type { ChannelHealth } from "@/types/dashboard";
@@ -58,7 +59,53 @@ function channelDetail(channel: ChannelHealth) {
   return relative ? `Synced ${relative}` : "Not yet synced";
 }
 
-export function ActiveChannelsCard({ channels, loading }: { channels: ChannelHealth[]; loading?: boolean }) {
+// eBay/Google get their real logo; "storefront" gets the tenant's own
+// uploaded logo (Branding settings) if they've set one; anything else falls
+// back to the categorical-color initials chip below. Kept as this card's
+// own chip (rounded-xl, not ChannelAvatar's rounded-full) per this file's
+// own header comment — both just call into the same getChannelLogo() so
+// eBay/Google are never drawn twice.
+function ChannelIdentityChip({ channel, index, tenantLogoUrl }: { channel: ChannelHealth; index: number; tenantLogoUrl?: string | null }) {
+  const BrandLogo = getChannelLogo(channel.key);
+  const isStorefront = channel.key === "storefront";
+
+  if (BrandLogo || isStorefront) {
+    return (
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-bg-2 ring-1 ring-inset ring-border transition-transform duration-200 group-hover:scale-105">
+        {BrandLogo ? (
+          <BrandLogo className="h-5 w-5" />
+        ) : tenantLogoUrl ? (
+          <img src={tenantLogoUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Store className="h-4.5 w-4.5 text-fg/50" />
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-transform duration-200 group-hover:scale-105"
+      style={{
+        color: AVATAR_COLOR_VARS[index % AVATAR_COLOR_VARS.length],
+        backgroundColor: `color-mix(in srgb, ${AVATAR_COLOR_VARS[index % AVATAR_COLOR_VARS.length]} 14%, transparent)`,
+      }}
+    >
+      {initials(channel.name)}
+    </span>
+  );
+}
+
+export function ActiveChannelsCard({
+  channels,
+  loading,
+  tenantLogoUrl,
+}: {
+  channels: ChannelHealth[];
+  loading?: boolean;
+  /** Tenant's own uploaded logo (Branding settings) — shown for the "storefront" channel. */
+  tenantLogoUrl?: string | null;
+}) {
   const navigate = useNavigate();
   const connectedCount = channels.filter((c) => c.status !== "not_connected").length;
 
@@ -87,15 +134,7 @@ export function ActiveChannelsCard({ channels, loading }: { channels: ChannelHea
               )}
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-transform duration-200 group-hover:scale-105"
-                  style={{
-                    color: AVATAR_COLOR_VARS[i % AVATAR_COLOR_VARS.length],
-                    backgroundColor: `color-mix(in srgb, ${AVATAR_COLOR_VARS[i % AVATAR_COLOR_VARS.length]} 14%, transparent)`,
-                  }}
-                >
-                  {initials(channel.name)}
-                </span>
+                <ChannelIdentityChip channel={channel} index={i} tenantLogoUrl={tenantLogoUrl} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-fg">{channel.name}</div>
                   <div className="truncate text-xs text-fg/50">{channelDetail(channel)}</div>

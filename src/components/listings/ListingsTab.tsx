@@ -12,6 +12,7 @@ import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMe
 import { GoogleListingEditModal } from "@/components/listings/GoogleListingEditModal";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
+import { getChannelLogo } from "@/components/channels/channelLogos";
 import { getListing, getListings, updateListing, pushListing, deleteListing } from "@/lib/api/listings";
 import { updateGoogleListing } from "@/lib/api/googleListings";
 import { listingToForm, getListingFallbackImageUrl } from "@/lib/marketplace/listingToForm";
@@ -235,11 +236,15 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
               <TableBody>
                 {listings.map((listing) => {
                   const productTitle = typeof listing.product === "object" && listing.product ? listing.product.title : "—";
+                  const PlatformLogo = getChannelLogo(listing.platform);
                   return (
                     <TableRow key={listing._id}>
                       <TableCell className="max-w-64 truncate font-medium text-fg">{productTitle}</TableCell>
                       <TableCell className="whitespace-nowrap text-fg/70">
-                        {PLATFORM_LABEL[listing.platform] ?? listing.platform}
+                        <span className="inline-flex items-center gap-1.5">
+                          {PlatformLogo ? <PlatformLogo className="h-3.5 w-3.5 shrink-0" /> : null}
+                          {PLATFORM_LABEL[listing.platform] ?? listing.platform}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <SyncBadge status={listing.sync_status} />

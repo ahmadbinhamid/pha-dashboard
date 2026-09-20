@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { cn } from "@/utils/cn";
 
 export type IntegrationStatus = "connected" | "not_connected" | "error" | "unknown";
 
@@ -19,12 +20,18 @@ export function IntegrationCard({
   name,
   description,
   icon,
+  // Brand logos (eBay/Google/a tenant's own uploaded storefront logo) sit on
+  // a neutral chip instead of the accent-tinted circle — a partner's logo
+  // (or a tenant's own) tinted orange would read as broken branding, not
+  // "on theme".
+  logoTile = false,
   status = "unknown",
   onManage,
 }: {
   name: string;
   description: string;
   icon: React.ReactNode;
+  logoTile?: boolean;
   status?: IntegrationStatus;
   onManage: () => void;
 }) {
@@ -33,7 +40,14 @@ export function IntegrationCard({
   return (
     <Card className="flex h-full flex-col p-5">
       <div className="flex items-start justify-between gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">{icon}</span>
+        <span
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl",
+            logoTile ? "bg-bg-2 ring-1 ring-inset ring-border p-2" : "bg-accent/10 text-accent",
+          )}
+        >
+          {icon}
+        </span>
         <Badge variant={badge.variant}>{badge.label}</Badge>
       </div>
 

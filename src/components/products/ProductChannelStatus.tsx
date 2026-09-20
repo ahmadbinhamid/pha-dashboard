@@ -118,7 +118,7 @@ export function ProductChannelDetail({
         return (
           <div key={channel.key} className="flex items-center gap-3 py-2.5">
             <span className="flex w-36 shrink-0 items-center gap-2 truncate text-sm text-fg/80">
-              <ChannelAvatar name={channel.name} index={index} />
+              <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} />
               <span className="truncate">{channel.name}</span>
             </span>
             {/* Same dot/color the collapsed row uses for this exact status —

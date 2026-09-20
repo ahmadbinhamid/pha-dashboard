@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/Card";
 import { ViewToggle, type ViewMode } from "@/components/ui/ViewToggle";
+import { getChannelLogo } from "@/components/channels/channelLogos";
 import { cn } from "@/utils/cn";
 import type { ChannelSummary } from "@/types/channel";
 
@@ -41,6 +42,7 @@ export function ChannelFilterBar({
           <ChannelPill
             key={channel.key}
             label={channel.name}
+            channelKey={channel.key}
             count={Object.values(channel.listing_counts).reduce((a, b) => a + b, 0)}
             active={value === channel.key}
             onClick={() => onChange(channel.key)}
@@ -56,15 +58,20 @@ export function ChannelFilterBar({
 
 function ChannelPill({
   label,
+  channelKey,
   count,
   active,
   onClick,
 }: {
   label: string;
+  /** Real channel key ("ebay", "google", ...) — shows that brand's own logo before the label. */
+  channelKey?: string;
   count?: number;
   active: boolean;
   onClick: () => void;
 }) {
+  const BrandLogo = channelKey ? getChannelLogo(channelKey) : null;
+
   return (
     <button
       type="button"
@@ -75,6 +82,7 @@ function ChannelPill({
         active ? "bg-fg text-bg" : "text-fg/60 hover:bg-bg-2 hover:text-fg",
       )}
     >
+      {BrandLogo ? <BrandLogo className="h-3.5 w-3.5 shrink-0" /> : null}
       {label}
       {count !== undefined ? (
         <span

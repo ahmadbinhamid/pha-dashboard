@@ -135,18 +135,32 @@ export function IntegrationsTab({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {INTEGRATION_CATALOGUE.map((integration) => (
-        <IntegrationCard
-          key={integration.id}
-          name={integration.name}
-          description={integration.description}
-          icon={integration.icon({ className: "h-5 w-5" })}
-          status={
-            integration.id === "stripe" ? stripeStatus : integration.id === "email" ? smtpStatus : "unknown"
-          }
-          onManage={() => onSelectProvider(integration.id)}
-        />
-      ))}
+      {INTEGRATION_CATALOGUE.map((integration) => {
+        // "Custom Domains" stands in for the tenant's own storefront — once
+        // they've uploaded a logo (Branding settings), show that instead of
+        // the generic Globe fallback, same idea as eBay/Google showing their
+        // own mark rather than a placeholder shopping-bag icon.
+        const icon =
+          integration.id === "domains" && settings?.logo_url ? (
+            <img src={settings.logo_url} alt="" className="h-full w-full object-contain" />
+          ) : (
+            integration.icon({ className: "h-5 w-5" })
+          );
+
+        return (
+          <IntegrationCard
+            key={integration.id}
+            name={integration.name}
+            description={integration.description}
+            icon={icon}
+            logoTile={integration.logoTile}
+            status={
+              integration.id === "stripe" ? stripeStatus : integration.id === "email" ? smtpStatus : "unknown"
+            }
+            onManage={() => onSelectProvider(integration.id)}
+          />
+        );
+      })}
     </div>
   );
 }

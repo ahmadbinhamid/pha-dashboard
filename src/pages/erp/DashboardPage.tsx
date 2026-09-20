@@ -17,6 +17,7 @@ import {
   getRecentActivity,
   getCriticalStock,
 } from "@/lib/api/dashboard";
+import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { formatCurrency } from "@/utils/format";
 import { PAGE_REFETCH_MS } from "@/config/refresh";
 import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
@@ -43,6 +44,14 @@ export default function DashboardPage() {
     queryKey: ["dashboard", "channels"],
     queryFn: getActiveChannels,
     refetchInterval: PAGE_REFETCH_MS,
+  });
+
+  // Shared ["tenant-settings"] query key — same one AppearanceTab.tsx/
+  // ProductEditPage.tsx already use — just here for the "storefront" row's
+  // logo in ActiveChannelsCard below.
+  const { data: tenantSettingsRes } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: getTenantSettings,
   });
 
   // Single query for the whole date-range-filtered section of the dashboard
@@ -154,7 +163,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <OrderVolumeChart points={volumePoints} loading={volumeLoading} />
         </div>
-        <ActiveChannelsCard channels={channels} loading={channelsLoading} />
+        <ActiveChannelsCard channels={channels} loading={channelsLoading} tenantLogoUrl={tenantSettingsRes?.data?.logo_url} />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
