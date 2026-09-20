@@ -64,7 +64,16 @@ const auth =
       if (active) {
         req.membership = active;
         req.tenantId = active.tenant_id?._id ?? active.tenant_id;
-        req.tenant = active.tenant_id?._id ? active.tenant_id : await Tenant.findById(req.tenantId);
+        // Always the FULL tenant document, never the membership's populated
+        // copy: listUserMemberships projects tenant_id down to the handful of
+        // fields an organisation switcher needs, and handing that partial
+        // (and lean) object to the app broke everything reading a field
+        // outside it — generateNextSku crashed on `tenant.code`, order and
+        // invoice numbering lost their prefixes, and payment links silently
+        // ignored payment_domain_mode. It also matches what
+        // middlewares/tenant.js assigns for guest routes, so req.tenant is
+        // one shape everywhere.
+        req.tenant = await Tenant.findById(req.tenantId);
         req.permissions = active.role_id?.permissions ?? [];
       } else {
         // No membership row yet — a user created before memberships existed,
