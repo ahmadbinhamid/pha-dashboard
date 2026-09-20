@@ -48,8 +48,35 @@ export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
   { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
   { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  { id: "users", label: "User Management", icon: (p) => <Users {...p} />, available: true },
-  { id: "roles", label: "Roles & Permissions", icon: (p) => <Shield {...p} />, available: true },
+  // Both fully built end-to-end (Membership/Role/Invitation models, invite
+  // email flow, permission matrix) but pulled behind Coming Soon for now —
+  // see SettingsPage.tsx for the matching fallback. The backend routes,
+  // services and UsersTab/RolesTab components are untouched and still work;
+  // this only stops the UI from being reachable.
+  {
+    id: "users",
+    label: "User Management",
+    icon: (p) => <Users {...p} />,
+    available: false,
+    summary: "Invite teammates to your store and manage who has access.",
+    planned: [
+      "Invite people by email, with a role assigned on acceptance",
+      "See everyone's status — active, pending invite, suspended",
+      "Move someone to a different role, or remove their access",
+    ],
+  },
+  {
+    id: "roles",
+    label: "Roles & Permissions",
+    icon: (p) => <Shield {...p} />,
+    available: false,
+    summary: "Define what each role on your team can see and do.",
+    planned: [
+      "Built-in roles (Admin, Staff) plus custom roles you define",
+      "Per-permission toggles across orders, inventory, reports and settings",
+      "See which teammates hold each role before changing it",
+    ],
+  },
   {
     id: "taxes",
     label: "Taxes & Shipping",

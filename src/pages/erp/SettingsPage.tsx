@@ -9,8 +9,9 @@ import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
 import { ActivityTab } from "@/components/settings/tabs/ActivityTab";
-import { UsersTab } from "@/components/settings/tabs/UsersTab";
-import { RolesTab } from "@/components/settings/tabs/RolesTab";
+// UsersTab/RolesTab are fully built but not wired up right now — see
+// config/settingsTabs.tsx's comment on "users"/"roles" for why. Both tabs
+// fall through to the generic `available: false` branch below instead.
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
   DEFAULT_SETTINGS_TAB,
@@ -88,10 +89,6 @@ export default function SettingsPage() {
             onSelectProvider={(id) => navigate(id ? `/settings/integrations/${id}` : "/settings/integrations")}
             settings={settings}
           />
-        ) : activeTab.id === "users" ? (
-          <UsersTab />
-        ) : activeTab.id === "roles" ? (
-          <RolesTab />
         ) : activeTab.id === "activity" ? (
           <ActivityTab />
         ) : (
