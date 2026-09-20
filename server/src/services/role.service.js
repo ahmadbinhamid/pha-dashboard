@@ -12,6 +12,7 @@
 const { Types } = require("mongoose");
 const Role = require("../models/Role");
 const Membership = require("../models/Membership");
+const inviteService = require("./invite.service");
 const { SYSTEM_ROLE } = require("../constants/access.constants");
 const { ALL_PERMISSIONS, unknownPermissions, groupPermissions } = require("../config/permissions");
 
@@ -143,8 +144,11 @@ async function updateRole(roleId, tenantId, { name, description, permissions }) 
 }
 
 /**
- * Refused for system roles, and for any role still held by a member — the
- * alternative is silently stranding people with no permissions.
+ * Refused for system roles, for any role still held by a member, and for any
+ * role a pending invite still promises — the alternative is silently
+ * stranding people with no permissions (a member who is demoted away from a
+ * deleted role, or an invitee who accepts one, would resolve to no role at
+ * all).
  */
 async function deleteRole(roleId, tenantId) {
   const role = await Role.findOne({ _id: roleId, tenant_id: tenantId });
@@ -158,6 +162,12 @@ async function deleteRole(roleId, tenantId) {
   const inUse = await Membership.countDocuments({ tenant_id: tenantId, role_id: roleId });
   if (inUse > 0) {
     const err = new Error(`This role is assigned to ${inUse} member${inUse === 1 ? "" : "s"}. Move them to another role first.`);
+    err.status = 409;
+    throw err;
+  }
+
+  if (await inviteService.hasOpenInviteForRole(tenantId, roleId)) {
+    const err = new Error("This role is assigned to a pending invitation. Revoke it or reassign it to another role first.");
     err.status = 409;
     throw err;
   }

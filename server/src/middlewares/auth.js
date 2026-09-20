@@ -111,9 +111,11 @@ const requireRoles =
  *
  * Checks the role held through the ACTIVE membership for the current
  * organisation (see membership.service.js#hasPermission — Super Admin
- * short-circuits to true). Falls back to the legacy User.role for accounts
- * that have no membership row yet, so routes can move onto permissions before
- * every account has been migrated.
+ * short-circuits to true). Queried live rather than read off req.membership,
+ * so a role change takes effect on the very next request without needing the
+ * token reissued (see auth.membership.test.js). Falls back to the legacy
+ * User.role for accounts that have no membership row yet, so routes can move
+ * onto permissions before every account has been migrated.
  */
 const requirePermission =
   (...permissions) =>

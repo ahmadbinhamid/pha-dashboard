@@ -164,6 +164,19 @@ async function getPermissions(userId, tenantId) {
   return membership?.role_id?.permissions ?? [];
 }
 
+/**
+ * Pure check against an already-loaded membership (role_id populated with at
+ * least `name`/`permissions`). Exported so callers that already hold a
+ * membership — the auth layer resolves one on every request via
+ * listUserMemberships — can check permissions without a second query.
+ */
+function membershipHasPermission(membership, permission) {
+  if (!membership) return false;
+  // Short-circuit, so Super Admin keeps working as the catalogue grows.
+  if (membership.role_id?.name === SYSTEM_ROLE.SUPER_ADMIN) return true;
+  return (membership.role_id?.permissions ?? []).includes(permission);
+}
+
 /** Does this user hold `permission` in this organisation right now? */
 async function hasPermission(userId, tenantId, permission) {
   const membership = await Membership.findOne({
@@ -174,10 +187,7 @@ async function hasPermission(userId, tenantId, permission) {
     .populate("role_id", "name permissions")
     .lean();
 
-  if (!membership) return false;
-  // Short-circuit, so Super Admin keeps working as the catalogue grows.
-  if (membership.role_id?.name === SYSTEM_ROLE.SUPER_ADMIN) return true;
-  return (membership.role_id?.permissions ?? []).includes(permission);
+  return membershipHasPermission(membership, permission);
 }
 
 /** Stamped by the auth layer, so "last active" on the members table is real. */
@@ -207,6 +217,7 @@ module.exports = {
   setDefaultMembership,
   getPermissions,
   hasPermission,
+  membershipHasPermission,
   touchLastActive,
   countMembersByRole,
 };

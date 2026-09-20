@@ -81,6 +81,21 @@ function isOpen(invite) {
 }
 
 /**
+ * Is a role still promised to anyone through a redeemable invite? Deleting a
+ * role that a pending invite points at would let that invite later create a
+ * Membership whose role_id resolves to nothing — the person joins with no
+ * permissions and nothing surfaces an error. role.service.js#deleteRole
+ * checks this the same way it already checks for existing Memberships.
+ */
+async function hasOpenInviteForRole(tenantId, roleId) {
+  const openInvites = await Invitation.find({ tenant_id: tenantId, role_id: roleId, status: INVITE_STATUS.PENDING })
+    .select("status expires_at +token_hash")
+    .lean();
+
+  return openInvites.some(isOpen);
+}
+
+/**
  * Invite an address to an organisation. If that address already has a row
  * here — pending, declined, revoked or expired — it is reopened with the new
  * role and a fresh link rather than a second row appearing.
@@ -295,6 +310,7 @@ module.exports = {
   listInvitations,
   getInvitationById,
   findOpenInviteByToken,
+  hasOpenInviteForRole,
   getInvitePreview,
   acceptInvite,
   declineInvite,

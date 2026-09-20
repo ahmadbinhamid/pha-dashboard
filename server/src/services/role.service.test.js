@@ -16,8 +16,10 @@ const User = require("../models/User");
 const Tenant = require("../models/Tenant");
 const Role = require("../models/Role");
 const Membership = require("../models/Membership");
+const Invitation = require("../models/Invitation");
 const roleService = require("./role.service");
 const membershipService = require("./membership.service");
+const inviteService = require("./invite.service");
 const { SYSTEM_ROLE } = require("../constants/access.constants");
 const { ALL_PERMISSIONS } = require("../config/permissions");
 
@@ -123,6 +125,37 @@ test("roles: a custom role only accepts permissions from the catalogue, and can'
     await Membership.deleteMany({ user_id: user._id });
     await Role.deleteMany({ tenant_id: tenant._id });
     await User.deleteOne({ _id: user._id });
+    await Tenant.deleteOne({ _id: tenant._id });
+    await mongoose.disconnect();
+  }
+});
+
+test("roles: can't be deleted while a pending invitation still promises it", async () => {
+  await mongoose.connect(config.mongoUri);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const tenant = await makeTenant(suffix);
+
+  try {
+    const role = await roleService.createRole(tenant._id, {
+      name: "Warehouse Lead",
+      permissions: ["inventory.view"],
+    });
+
+    await inviteService.sendInvite({ tenantId: tenant._id, email: `invitee-${suffix}@example.test`, roleId: role._id });
+
+    await assert.rejects(
+      () => roleService.deleteRole(role._id, tenant._id),
+      /pending invitation/,
+      "a role a pending invite points at can't be deleted out from under it",
+    );
+
+    // Revoking the invite frees the role up again — no orphaned reference left behind.
+    const invite = await Invitation.findOne({ tenant_id: tenant._id, role_id: role._id });
+    await inviteService.revokeInvite({ invitationId: invite._id, tenantId: tenant._id });
+    assert.ok(await roleService.deleteRole(role._id, tenant._id));
+  } finally {
+    await Invitation.deleteMany({ tenant_id: tenant._id });
+    await Role.deleteMany({ tenant_id: tenant._id });
     await Tenant.deleteOne({ _id: tenant._id });
     await mongoose.disconnect();
   }
