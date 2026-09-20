@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { SyncBadge } from "@/components/listings/SyncBadge";
 import { ListingForm } from "@/components/listings/listing-form";
 import { useToast } from "@/context";
 import { getListing, updateListing, pushListing } from "@/lib/api/listings";
@@ -13,7 +14,6 @@ import type { EbayListingErrors } from "@/lib/validation/ebayListing";
 
 export default function ListingEditPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -98,9 +98,21 @@ export default function ListingEditPage() {
         ]}
       />
 
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Edit eBay Listing</h1>
-        <p className="mt-1 text-sm text-fg/70">{productTitle}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {fallbackImageUrl && (
+            <img
+              src={fallbackImageUrl}
+              alt=""
+              className="h-11 w-11 shrink-0 rounded-lg border border-border object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold tracking-tight text-fg">{productTitle}</h1>
+            <p className="mt-0.5 text-sm text-fg/60">Edit eBay Listing</p>
+          </div>
+        </div>
+        {listing && <SyncBadge status={listing.sync_status} />}
       </div>
 
       <ListingForm
