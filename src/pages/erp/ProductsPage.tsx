@@ -1,45 +1,24 @@
-import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
-import { ChannelSummaryCard } from "@/components/channels/ChannelSummaryCard";
+import { ChannelFilterBar } from "@/components/channels/ChannelFilterBar";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ProductPickerModal } from "@/components/listings/ProductPickerModal";
+import type { ViewMode } from "@/components/ui/ViewToggle";
 import { ProductsTab } from "@/components/products/ProductsTab";
-import { ListingsTab } from "@/components/listings/ListingsTab";
 import { getChannels } from "@/lib/api/channels";
 import { getProductStats } from "@/lib/api/products";
-import { useToast } from "@/context";
 import { formatCurrency } from "@/utils/format";
-import type { Product } from "@/types/product";
-import { ArrowRight, Blocks, Layers, Plus, RefreshCw, Tag, TriangleAlert } from "lucide-react";
+import { ArrowRight, Blocks, Layers, Plus, Tag, TriangleAlert } from "lucide-react";
 
-type ProductsPageTab = "products" | "listings";
-
-// The merged Products + Listings page. Fetches GET /channels ONCE here
-// (shared ["channels"] query key — same one GoogleConnectCard.tsx/
-// ProductEditPage.tsx already use) and passes it down to both tabs, so
-// there's a single source of truth for "which channels exist" driving the
-// summary cards, the Products tab's per-channel columns, and the Listings
-// tab's sidebar/counts — none of them hardcode a platform list.
+// Fetches GET /channels here (shared ["channels"] query key — same one
+// ListingsPage.tsx/GoogleConnectCard.tsx/ProductEditPage.tsx already use) so
+// the stat cards and the channel filter bar both drive off a single source
+// of truth for "which channels exist" — never a hardcoded platform list.
 export default function ProductsPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const activeTab: ProductsPageTab = searchParams.get("tab") === "listings" ? "listings" : "products";
-  const setActiveTab = (tab: ProductsPageTab) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("tab", tab);
-      return next;
-    }, { replace: true });
-  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["channels"],
@@ -60,49 +39,39 @@ export default function ProductsPage() {
   );
   const hasOutOfStock = !!stats && stats.outOfStockCount > 0;
 
-  function goToStockFilter(stock: string) {
+  // Same p_channel/view query params ProductsTab itself reads — this bar and
+  // that tab just share the URL, no prop plumbing needed between them.
+  const channelFilter = searchParams.get("p_channel") ?? "";
+  const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
+
+  function setChannelFilter(val: string) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("tab", "products");
-      next.set("stock", stock);
+      if (val) next.set("p_channel", val);
+      else next.delete("p_channel");
       next.set("p_page", "1");
       return next;
     });
   }
 
-  function handleProductSelected(product: Product) {
-    setPickerOpen(false);
-    navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`);
-  }
-
-  function openChannel(channel: (typeof channels)[number]) {
-    if (channel.connection.status !== "connected") {
-      navigate(`/settings/integrations/${channel.key}`);
-      return;
-    }
-    // Same URL param ListingsTab already reads (l_platform) — clicking a
-    // channel card is now a real shortcut into "show me just this channel's
-    // listings", not a purely decorative status strip.
+  function setView(mode: ViewMode) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("tab", "listings");
-      next.set("l_platform", channel.key);
+      if (mode === "grid") next.set("view", "grid");
+      else next.delete("view");
+      next.delete("p_limit");
+      next.set("p_page", "1");
       return next;
     });
   }
 
-  function syncAll() {
-    // NOTE: "Sync all" re-queues every listing already known to need
-    // attention (error/price_locked) by re-invalidating the listings query
-    // after nudging the user to the Needs-attention view — there's no
-    // dedicated bulk-resync endpoint on the backend today, and adding one
-    // is out of scope for this UI pass. Judgment call: rather than silently
-    // do nothing or fake a bulk action, this surfaces exactly what a real
-    // "sync all" would need to act on.
-    setActiveTab("listings");
-    queryClient.invalidateQueries({ queryKey: ["listings"] });
-    queryClient.invalidateQueries({ queryKey: ["channels"] });
-    toast({ title: "Showing listings that need a resync", tone: "success" });
+  function goToStockFilter(stock: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("stock", stock);
+      next.set("p_page", "1");
+      return next;
+    });
   }
 
   return (
@@ -111,21 +80,10 @@ export default function ProductsPage() {
         title="Products"
         description="Auto parts inventory, multi-channel feeds, and specifications."
       >
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="md" className="gap-2" onClick={syncAll}>
-            <RefreshCw className="h-4 w-4" />
-            Sync all
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            className="gap-2"
-            onClick={() => (activeTab === "products" ? navigate("/products/new") : setPickerOpen(true))}
-          >
-            <Plus className="h-4 w-4" />
-            {activeTab === "products" ? "New Product" : "New Listing"}
-          </Button>
-        </div>
+        <Button variant="primary" size="md" className="gap-2" onClick={() => navigate("/products/new")}>
+          <Plus className="h-4 w-4" />
+          New Product
+        </Button>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -144,7 +102,7 @@ export default function ProductsPage() {
           subLabel={`Across ${connectedChannelCount || channels.length} channel${(connectedChannelCount || channels.length) !== 1 ? "s" : ""}`}
           icon={<Blocks className="h-4 w-4" />}
           loading={isLoading}
-          onClick={() => setActiveTab("listings")}
+          onClick={() => navigate("/listings")}
         />
         <MetricCard
           size="sm"
@@ -167,14 +125,12 @@ export default function ProductsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
-        </div>
+        <Skeleton className="h-11 w-full rounded-2xl" />
       ) : channels.length === 0 ? (
-        // A blank strip here (the old behaviour — the grid rendered zero
-        // children with nothing to explain why) reads as a bug, not as "you
-        // haven't connected anything yet". This is the one place on the page
-        // that says so and points at where to fix it.
+        // A blank strip here (the old behaviour — nothing rendered, with
+        // nothing to explain why) reads as a bug, not as "you haven't
+        // connected anything yet". This is the one place on this page that
+        // says so and points at where to fix it.
         <button
           type="button"
           onClick={() => navigate("/settings/integrations")}
@@ -190,32 +146,17 @@ export default function ProductsPage() {
           <ArrowRight className="h-4 w-4 shrink-0 text-fg/30" />
         </button>
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {channels.map((channel, i) => (
-            <ChannelSummaryCard
-              key={channel.key}
-              channel={channel}
-              index={i}
-              onClick={() => openChannel(channel)}
-            />
-          ))}
-        </div>
+        <ChannelFilterBar
+          channels={channels}
+          totalProducts={stats?.totalSkus ?? 0}
+          value={channelFilter}
+          onChange={setChannelFilter}
+          view={view}
+          onViewChange={setView}
+        />
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ProductsPageTab)}>
-        <TabsList>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="listings">Listings</TabsTrigger>
-        </TabsList>
-        <TabsContent value="products">
-          <ProductsTab channels={channels} />
-        </TabsContent>
-        <TabsContent value="listings">
-          <ListingsTab channels={channels} />
-        </TabsContent>
-      </Tabs>
-
-      <ProductPickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={handleProductSelected} />
+      <ProductsTab channels={channels} />
     </div>
   );
 }

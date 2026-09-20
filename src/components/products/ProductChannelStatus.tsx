@@ -5,9 +5,9 @@ import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GroupedListingSummary } from "@/types/marketplace";
 
 // Extracted from ListingsPage.tsx's own per-product expand pattern so the
-// Products page's Products tab (channel status per product, collapsed dot
-// row + expandable detail) and the Listings tab's grouped fallback don't
-// each reimplement it. Takes `channels` from GET /channels (never a
+// Products page (channel status per product, collapsed dot row + expandable
+// detail) and the Listings page's grouped fallback don't each reimplement
+// it. Takes `channels` from GET /channels (never a
 // hardcoded platform list) so a newly-registered adapter shows up here
 // automatically, with no changes to this component.
 //

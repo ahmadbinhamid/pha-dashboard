@@ -17,6 +17,7 @@ import DashboardPage from "@/pages/erp/DashboardPage";
 import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
+import ListingsPage from "@/pages/erp/ListingsPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
 import CustomersPage from "@/pages/erp/CustomersPage";
@@ -106,14 +107,14 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            {/* Redirects — /catalogue was this page's old name; /listings
-                merged into its Listings tab. Kept as redirects (not
-                removed) so any existing bookmark/deep link still lands
+            {/* Redirect — /catalogue was this page's old name (Products and
+                Listings merged into one tabbed page). Kept as a redirect
+                (not removed) so any existing bookmark/deep link still lands
                 somewhere correct. */}
             <Route path="/catalogue" element={<Navigate to="/products" replace />} />
-            <Route path="/listings" element={<Navigate to="/products?tab=listings" replace />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
+            <Route path="/listings" element={<ListingsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/customers" element={<CustomersPage />} />

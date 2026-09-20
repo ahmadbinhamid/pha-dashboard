@@ -5,15 +5,17 @@
     d="M 92.94 59.60 L 79.78 82.39 L 67.00 79.44 L 63.16 91.99 L 36.84 91.99 L 33.00 79.44 L 20.22 82.39 L 7.06 59.60 L 16.00 50.00 L 7.06 40.40 L 20.22 17.61 L 33.00 20.56 L 36.84 8.01 L 63.16 8.01 L 67.00 20.56 L 79.78 17.61 L 92.94 40.40 L 84.00 50.00 Z
        M 25.00 50.00 A 25.00 25.00 0 1 0 75.00 50.00 A 25.00 25.00 0 1 0 25.00 50.00 Z"
   />
-  <rect x="37" y="59" width="8" height="10" rx="2" fill="#1A1A1A" />
-  <rect x="50" y="47" width="8" height="22" rx="2" fill="#1A1A1A" />
+  <rect x="31" y="51" width="7" height="12" rx="1.4" fill="#1A1A1A" />
+  <rect x="41" y="43" width="8" height="20" rx="1.4" fill="#1A1A1A" />
+  <rect x="52" y="35" width="8" height="28" rx="1.4" fill="#1A1A1A" />
+  <circle cx="31" cy="62" r="3.2" fill="none" stroke="#1A1A1A" stroke-width="3" />
   <path
-    d="M 33 59 L 49 44 L 60 34"
+    d="M 31 62 L 37 52 L 46 40 L 56 28"
     fill="none"
     stroke="#1A1A1A"
     stroke-width="6"
     stroke-linecap="round"
     stroke-linejoin="round"
   />
-  <path d="M 53 32 L 63 32 L 63 42 Z" fill="#1A1A1A" />
+  <path d="M 59.52 23.77 L 58.46 31.61 L 52.01 26.23 Z" fill="#1A1A1A" />
 </svg>

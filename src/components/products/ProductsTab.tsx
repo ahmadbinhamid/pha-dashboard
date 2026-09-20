@@ -19,7 +19,7 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
-import { ViewToggle, type ViewMode } from "@/components/ui/ViewToggle";
+import type { ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
@@ -46,7 +46,7 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
-// Products page's "Products" tab — product CRUD (grid/list, status/stock/
+// ProductsPage's main content — product CRUD (grid/list, status/stock/
 // category filters, publish toggle, delete) merged with the per-channel
 // status view that used to be ListingsPage.tsx's default grouped-by-product
 // table. Channel SET comes from `channels` (GET /channels), never a
@@ -82,12 +82,6 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
       else next.add(id);
       return next;
     });
-
-  const CHANNEL_FILTERS = [
-    { label: "All Channels", value: "" },
-    ...channels.map((c) => ({ label: c.name, value: c.key })),
-    { label: "Not Listed", value: "none" },
-  ];
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -130,19 +124,6 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     [setSearchParams],
   );
 
-  const setChannelFilter = useCallback(
-    (val: string) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (val) next.set("p_channel", val);
-        else next.delete("p_channel");
-        next.set("p_page", "1");
-        return next;
-      }, { replace: true });
-    },
-    [setSearchParams],
-  );
-
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
@@ -172,20 +153,6 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
         const next = new URLSearchParams(prev);
         if (ids.length) next.set("categories", ids.join(","));
         else next.delete("categories");
-        next.set("p_page", "1");
-        return next;
-      }, { replace: true });
-    },
-    [setSearchParams],
-  );
-
-  const setView = useCallback(
-    (mode: ViewMode) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (mode === "grid") next.set("view", "grid");
-        else next.delete("view");
-        next.delete("p_limit");
         next.set("p_page", "1");
         return next;
       }, { replace: true });
@@ -313,7 +280,6 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
             )}
             <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
             <FilterSelect options={STOCK_FILTERS} value={stock} onChange={setStock} />
-            <FilterSelect options={CHANNEL_FILTERS} value={channelFilter} onChange={setChannelFilter} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}
@@ -322,7 +288,6 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
               searchPlaceholder="Search categories…"
               className="w-48"
             />
-            <ViewToggle value={view} onChange={setView} />
           </div>
         </div>
 

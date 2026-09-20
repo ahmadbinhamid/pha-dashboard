@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Package,
+  Rss,
   Layers,
   Users,
   ShoppingCart,
@@ -16,17 +17,16 @@ export type NavItem = {
   href: string;
   icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
   // Extra path prefixes that should also count as "this nav item is
-  // active" — Listings' own create/edit sub-routes stayed at their
-  // original /listings paths (not moved under /products) when
-  // Products+Listings merged into one tabbed page, so the plain
-  // startsWith(href) check below wouldn't highlight Products while on
-  // e.g. /listings/:id/edit without this.
+  // active" — for a page whose own create/edit sub-routes live outside its
+  // own href prefix, so the plain startsWith(href) check below wouldn't
+  // highlight it on those sub-routes without this.
   activeMatch?: string[];
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: (p) => <LayoutDashboard {...p} /> },
-  { label: "Products", href: "/products", icon: (p) => <Package {...p} />, activeMatch: ["/listings"] },
+  { label: "Products", href: "/products", icon: (p) => <Package {...p} /> },
+  { label: "Listings", href: "/listings", icon: (p) => <Rss {...p} /> },
   { label: "Categories", href: "/categories", icon: (p) => <Layers {...p} /> },
   { label: "Inventory", href: "/inventory", icon: (p) => <Boxes {...p} /> },
   { label: "Customers", href: "/customers", icon: (p) => <Users {...p} /> },

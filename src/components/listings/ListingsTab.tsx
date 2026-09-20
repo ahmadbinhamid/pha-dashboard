@@ -35,11 +35,11 @@ const SYNC_STATUS_FILTERS = [
   { label: "Not listed", value: "not_listed" },
 ];
 
-// Products page's "Listings" tab — the flat, listing-centric view (every
-// real MarketplaceListing row, one per row), as opposed to the Products
-// tab's product-centric grouped view. Reuses the exact mutations
+// ListingsPage's content — the flat, listing-centric view (every real
+// MarketplaceListing row, one per row), as opposed to the Products page's
+// product-centric grouped view. Reuses the exact mutations the old
 // ListingsPage.tsx already had (push/edit/delete) — only the presentation
-// (flat table instead of grouped-by-product) is new; the filter toolbar
+// (flat table instead of grouped-by-product) changed; the filter toolbar
 // itself is the app's standard pattern, unchanged in spirit from before.
 export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
