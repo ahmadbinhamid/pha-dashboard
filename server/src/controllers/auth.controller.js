@@ -119,6 +119,25 @@ function issueLoginToken(user) {
   });
 }
 
+// Shared by login() (single-match branch) and selectOrganization() — an
+// account with two_factor_enabled set sends an OTP and defers issuing a
+// token until it's verified via verifyOTP; everyone else logs straight in,
+// same as before 2FA existed.
+async function maybeIssueOtpOrToken(res, user) {
+  if (user.two_factor_enabled) {
+    const otp = generateOTP();
+    user.otp = hashOTP(otp);
+    user.otp_expiry = generateOTPExpiry();
+    await saveUser(user);
+
+    await sendOTP({ to: user.email, name: fullName(user), otp });
+
+    return success(res, { email: user.email }, "OTP sent to your email. Please verify to complete login.");
+  }
+
+  return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
+}
+
 // email is unique per-tenant, not globally (User.js's compound index
 // deliberately allows the same person to hold a separate account under more
 // than one tenant — e.g. staff at more than one of our clients). Previously
@@ -156,8 +175,7 @@ exports.login = async (req, res) => {
     }
 
     if (active.length === 1) {
-      const user = active[0];
-      return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
+      return await maybeIssueOtpOrToken(res, active[0]);
     }
 
     const tenants = await tenantService.findTenantsByIds(active.map((u) => u.tenant_id));
@@ -219,7 +237,7 @@ exports.selectOrganization = async (req, res) => {
       );
     }
 
-    return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
+    return await maybeIssueOtpOrToken(res, user);
   } catch (err) {
     return systemfailure(res, err);
   }

@@ -10,6 +10,7 @@ export function SettingsSection({
   description,
   right,
   footer,
+  footerDivider = true,
   className,
   children,
 }: {
@@ -19,6 +20,9 @@ export function SettingsSection({
   right?: React.ReactNode;
   /** Action row, divided off at the foot of the card (usually Reset + Save). */
   footer?: React.ReactNode;
+  /** Set false to drop the hairline above `footer` — for a card whose footer
+   * reads as its own block rather than a divided action row. */
+  footerDivider?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -34,7 +38,11 @@ export function SettingsSection({
 
       <div className="mt-5">{children}</div>
 
-      {footer ? <div className="mt-6 flex items-center justify-end gap-3 border-t border-border pt-4">{footer}</div> : null}
+      {footer ? (
+        <div className={cn("mt-6 flex items-center justify-end gap-3", footerDivider && "border-t border-border pt-4")}>
+          {footer}
+        </div>
+      ) : null}
     </Card>
   );
 }

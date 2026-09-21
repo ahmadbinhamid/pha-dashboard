@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 export type SwitchProps = {
@@ -8,6 +9,10 @@ export type SwitchProps = {
   label?: string;
   description?: string;
   disabled?: boolean;
+  /** Shows a spinner in place of the knob and blocks interaction — for a
+   * toggle that fires straight off onCheckedChange (no surrounding form/Save
+   * button) while its mutation is in flight. */
+  loading?: boolean;
   className?: string;
 };
 
@@ -18,6 +23,7 @@ export function Switch({
   label,
   description,
   disabled,
+  loading,
   className,
 }: SwitchProps) {
   const innerId = React.useId();
@@ -42,7 +48,8 @@ export function Switch({
         id={switchId}
         role="switch"
         aria-checked={checked}
-        disabled={disabled}
+        aria-busy={loading}
+        disabled={disabled || loading}
         onClick={() => onCheckedChange(!checked)}
         className={cn(
           "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
@@ -51,12 +58,16 @@ export function Switch({
           checked ? "bg-accent" : "bg-fg/20",
         )}
       >
-        <span
-          className={cn(
-            "absolute top-0.5 left-0 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200",
-            checked ? "translate-x-4.5" : "translate-x-0.5",
-          )}
-        />
+        {loading ? (
+          <Loader2 className="absolute inset-0 m-auto h-3 w-3 animate-spin text-white" />
+        ) : (
+          <span
+            className={cn(
+              "absolute top-0.5 left-0 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200",
+              checked ? "translate-x-4.5" : "translate-x-0.5",
+            )}
+          />
+        )}
       </button>
     </div>
   );

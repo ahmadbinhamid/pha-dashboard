@@ -50,6 +50,10 @@ const userSchema = buildSchema({
     type: Date,
     default: null,
   },
+  two_factor_enabled: {
+    type: Boolean,
+    default: false,
+  },
   password_reset_token: {
     type: String,
     default: null,

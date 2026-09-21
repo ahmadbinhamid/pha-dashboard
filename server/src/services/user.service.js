@@ -23,6 +23,14 @@ async function updateUserProfile(id, { first_name, last_name }) {
   );
 }
 
+async function setTwoFactorEnabled(id, enabled) {
+  return User.findByIdAndUpdate(
+    id,
+    { two_factor_enabled: enabled },
+    { new: true, runValidators: true, select: PUBLIC_SELECT },
+  );
+}
+
 async function deleteUser(id, tenantId) {
   const user = await User.findOne({ _id: id, tenant_id: tenantId });
   if (!user) return null;
@@ -100,6 +108,7 @@ module.exports = {
   listUsers,
   getPublicUserById,
   updateUserProfile,
+  setTwoFactorEnabled,
   deleteUser,
   findUserByEmail,
   createUser,

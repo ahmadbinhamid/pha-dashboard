@@ -25,6 +25,9 @@ router.get(
 // update current user's profile
 router.put("/", upload.none(), validate(V.updateUser), asyncHandler(ctrl.updateUser));
 
+// toggle current user's two-factor authentication
+router.patch("/two-factor", upload.none(), validate(V.setTwoFactor), asyncHandler(ctrl.setTwoFactor));
+
 // get current user's profile
 router.get("/profile", asyncHandler(ctrl.getProfile));
 

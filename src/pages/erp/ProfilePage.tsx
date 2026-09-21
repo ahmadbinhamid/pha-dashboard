@@ -1,7 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { ProfileIdentityCard } from "@/components/profile/ProfileIdentityCard";
 import { ProfileInformationForm } from "@/components/profile/ProfileInformationForm";
+import { SecuritySettingsCard } from "@/components/profile/SecuritySettingsCard";
 import { ChangePasswordForm } from "@/components/profile/ChangePasswordForm";
 import {
   ProfileSectionNav,
@@ -57,8 +57,8 @@ export default function ProfilePage() {
             <ChangePasswordForm />
           ) : (
             <>
-              <ProfileIdentityCard user={user} />
               <ProfileInformationForm user={user} />
+              <SecuritySettingsCard user={user} />
             </>
           )}
         </div>

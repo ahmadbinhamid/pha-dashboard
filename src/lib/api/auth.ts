@@ -23,9 +23,13 @@ export interface RegisterTenantPayload {
   password: string;
 }
 
+// A 2FA-enabled account resolves to just { email } (no token) — the caller
+// verifies the OTP separately via verifyOtp — while everyone else gets the
+// full AuthUser + token in one step, same as before 2FA existed.
+export type LoginResponseData = AuthUser | { email: string };
+
 export async function login(payload: LoginPayload) {
-  // OTP DISABLED — login now returns user + token directly (same shape as verifyOtp)
-  const { data } = await apiClient.post<BeResponse<AuthUser>>(
+  const { data } = await apiClient.post<BeResponse<LoginResponseData>>(
     "/auth/login",
     payload,
   );
@@ -62,6 +66,11 @@ export async function getProfile() {
 
 export async function updateProfile(payload: { first_name: string; last_name: string }) {
   const { data } = await apiClient.put<BeResponse<AuthUser>>("/user", payload);
+  return data;
+}
+
+export async function setTwoFactor(payload: { enabled: boolean }) {
+  const { data } = await apiClient.patch<BeResponse<AuthUser>>("/user/two-factor", payload);
   return data;
 }
 

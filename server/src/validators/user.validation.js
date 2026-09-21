@@ -27,4 +27,10 @@ const updateUser = {
   }),
 };
 
-module.exports = { listUsers, byIdParam, updateUser };
+const setTwoFactor = {
+  body: Joi.object({
+    enabled: Joi.boolean().required(),
+  }),
+};
+
+module.exports = { listUsers, byIdParam, updateUser, setTwoFactor };

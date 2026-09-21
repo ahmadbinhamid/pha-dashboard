@@ -9,6 +9,7 @@ export interface AuthUser {
   role: "user" | "admin" | "superadmin";
   status: number;
   verified_at: string | null;
+  two_factor_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

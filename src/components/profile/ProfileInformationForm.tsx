@@ -47,6 +47,7 @@ export function ProfileInformationForm({ user }: { user: AuthUser }) {
     <SettingsSection
       title="Personal Information"
       description="The name shown on your account, in the activity log and on anything you send to customers."
+      footerDivider={false}
       footer={
         <>
           <Button
@@ -91,7 +92,6 @@ export function ProfileInformationForm({ user }: { user: AuthUser }) {
             label="Email Address"
             htmlFor="email"
             className="sm:col-span-2"
-            hint="Your email is how you sign in, so it can't be changed here — ask an admin to move your account."
           >
             <Input id="email" type="email" value={user.email} readOnly disabled />
           </FormField>

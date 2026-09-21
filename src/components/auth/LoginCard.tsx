@@ -4,14 +4,16 @@ import { useMutation } from "@tanstack/react-query";
 
 import { login, verifyOtp, resendOtp } from "@/lib/api/auth";
 import { useAuth } from "@/context/auth";
+import { cn } from "@/utils/cn";
 
 import { ArrowRight } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import Link from "@/components/ui/Link";
 import { LoginCheckbox } from "@/components/auth/LoginCheckbox";
+import { OtpInput } from "@/components/auth/OtpInput";
 
 type Step = "credentials" | "otp";
 
@@ -49,18 +51,19 @@ export function LoginCard() {
 
   const loginMutation = useMutation({
     mutationFn: login,
-    // OTP DISABLED — authenticate directly on login success
     onSuccess: (res) => {
-      if (!res.token || !res.data) {
-        setErrorMsg("Unexpected server response. Please try again.");
+      if (res.token && res.data && "_id" in res.data) {
+        setAuth(res.data, res.token);
+        navigate(redirectTo, { replace: true });
         return;
       }
-      setAuth(res.data, res.token);
-      navigate(redirectTo, { replace: true });
-      // OTP flow (re-enable when OTP is back):
-      // setErrorMsg("");
-      // setStep("otp");
-      // startCooldown();
+      if (!res.token && res.data && "email" in res.data) {
+        setErrorMsg("");
+        setStep("otp");
+        startCooldown();
+        return;
+      }
+      setErrorMsg("Unexpected server response. Please try again.");
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });
@@ -233,12 +236,12 @@ export function LoginCard() {
           </>
         )}
 
-        {/* OTP DISABLED — OTP step hidden, login goes straight to dashboard
         {step === "otp" && (
           <>
             <CardHeader
+              className="border-b-0"
               title="Check your email"
-              description={`We sent a 6-digit code to ${email}. Enter it below to complete sign in.`}
+              description={`We sent a 6 digit code to ${email}. Enter it below to complete sign in.`}
             />
             <CardContent>
               <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -246,13 +249,7 @@ export function LoginCard() {
                   <label className="text-xs font-semibold text-fg/75" htmlFor="otp">
                     Verification code
                   </label>
-                  <Input
-                    id="otp" type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                    placeholder="000000" autoComplete="one-time-code" value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    required disabled={isLoadingVerify}
-                    className="text-center tracking-[0.4em] text-lg font-semibold"
-                  />
+                  <OtpInput id="otp" value={otp} onChange={setOtp} disabled={isLoadingVerify} autoFocus />
                 </div>
                 {errorMsg && (
                   <p className="rounded-lg border border-[hsl(var(--danger)/0.3)] bg-[hsl(var(--danger)/0.08)] px-3 py-2 text-xs text-[hsl(var(--danger))]">
@@ -261,12 +258,23 @@ export function LoginCard() {
                 )}
                 <Button type="submit" className="w-full" disabled={isLoadingVerify || otp.length < 6}>
                   {isLoadingVerify ? "Verifying…" : "Verify & Sign in"}
-                  <span className="ml-2 opacity-80"><Icons.ArrowRight /></span>
+                  <span className="ml-2 opacity-80">
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
                 </Button>
                 <div className="flex items-center justify-between pt-1 text-xs text-fg/55">
-                  <button type="button" onClick={handleBack} className="hover:text-fg transition-colors">← Back</button>
-                  <button type="button" onClick={handleResend} disabled={resendCooldown > 0 || isLoadingResend}
-                    className={cn("transition-colors", resendCooldown > 0 || isLoadingResend ? "cursor-not-allowed opacity-40" : "text-accent hover:underline")}>
+                  <button type="button" onClick={handleBack} className="hover:text-fg transition-colors">
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resendCooldown > 0 || isLoadingResend}
+                    className={cn(
+                      "transition-colors",
+                      resendCooldown > 0 || isLoadingResend ? "cursor-not-allowed opacity-40" : "text-accent hover:underline",
+                    )}
+                  >
                     {isLoadingResend ? "Sending…" : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
                   </button>
                 </div>
@@ -274,7 +282,6 @@ export function LoginCard() {
             </CardContent>
           </>
         )}
-        */}
       </Card>
     </div>
   );

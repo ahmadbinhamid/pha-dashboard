@@ -2,6 +2,7 @@ const {
   listUsers,
   getPublicUserById,
   updateUserProfile,
+  setTwoFactorEnabled,
   deleteUser,
 } = require("../services/user.service");
 const { success, notFound, unauthorized, systemfailure } = require("../utils/http/response");
@@ -50,6 +51,20 @@ exports.updateUser = async (req, res) => {
     if (!user) return notFound(res, "User not found");
 
     return success(res, user, "Profile updated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.setTwoFactor = async (req, res) => {
+  try {
+    const id = req.user?._id || req.user?.sub;
+    const { enabled } = req.body;
+
+    const user = await setTwoFactorEnabled(id, enabled);
+    if (!user) return notFound(res, "User not found");
+
+    return success(res, user, enabled ? "Two-factor authentication enabled" : "Two-factor authentication disabled");
   } catch (err) {
     return systemfailure(res, err);
   }
