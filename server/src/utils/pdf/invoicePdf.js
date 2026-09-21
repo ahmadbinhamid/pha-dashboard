@@ -679,8 +679,9 @@ function drawRichText(doc, blocks, x, y, { width, size, lineGap, color }) {
 }
 
 // Warranty & Returns / Legal Disclaimer, set as two plain hairline-topped
-// columns — matching InvoicePrintView.tsx's footer, which pins itself to the
-// bottom of the sheet with `mt-auto`.
+// columns. Flows in normal document order right after payment/totals, like
+// every other section — it is not pinned to the foot of the page (unlike
+// InvoicePrintView.tsx's on-screen footer, which uses `mt-auto`).
 function drawFooter(doc, companyProfile, topY) {
   // pdfkit's .text() auto-paginates against the page's own bottom margin
   // even when given an explicit y below it (the same quirk drawPageRule
@@ -709,17 +710,14 @@ function drawFooter(doc, companyProfile, topY) {
   );
   const blockHeight = 11 + 6 + bodyHeight;
 
-  // Always pinned to the foot of whichever page it lands on, like
-  // InvoicePrintView.tsx's `mt-auto` footer — including a page added just
-  // for it, which it would otherwise start at the top of, leaving the rest
-  // of the sheet blank beneath it. It only sits higher than the foot when
-  // the preceding content reaches that far down the page itself.
-  let anchorY = topY + 26;
-  if (anchorY + blockHeight > BOTTOM_LIMIT) {
+  // Flows immediately after the preceding content, like every other section
+  // on the sheet — not pinned to the page's bottom margin. Only breaks to a
+  // new page when it genuinely doesn't fit in what's left of the current one.
+  let ruleY = topY + 26;
+  if (ruleY + blockHeight > BOTTOM_LIMIT) {
     doc.addPage();
-    anchorY = PAGE_MARGIN;
+    ruleY = PAGE_MARGIN;
   }
-  const ruleY = Math.max(anchorY, BOTTOM_LIMIT - blockHeight);
 
   drawRule(doc, ruleY);
   const textY = ruleY + 10;
