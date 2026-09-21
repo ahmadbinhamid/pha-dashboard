@@ -123,8 +123,11 @@ export function LoginCard() {
           `lg` it's LoginPage's full-bleed sheet (rounded top only, pulled up
           over its own compact brand header); at `lg` and up the rounding
           stays for the corners but there's nothing drawing a boundary
-          around it. */}
-      <Card className="overflow-hidden rounded-b-none rounded-t-3xl border-0 shadow-none lg:rounded-2xl">
+          around it. `bg-bg` (not Card's default `bg-card`) so it matches the
+          page background exactly — `--card` is lighter than `--bg` in dark
+          mode, which otherwise reads as a boundary even with the border and
+          shadow stripped. */}
+      <Card className="overflow-hidden rounded-b-none rounded-t-3xl border-0 bg-bg shadow-none lg:rounded-2xl">
         {step === "credentials" && (
           <>
             {/* A bespoke header instead of the shared CardHeader — that one's
