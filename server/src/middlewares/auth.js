@@ -34,8 +34,14 @@ const auth =
         return unauthorized(res, "Invalid or expired token");
       }
 
-      // soft-delete plugin hides deleted users by default
-      const user = await User.findById(decoded.sub).select("-password");
+      // soft-delete plugin hides deleted users by default. Loaded alongside
+      // the membership list rather than after it — both only depend on
+      // decoded.sub, so running them serially was a wasted round trip on
+      // every authenticated request.
+      const [user, memberships] = await Promise.all([
+        User.findById(decoded.sub).select("-password"),
+        membershipService.listUserMemberships(decoded.sub),
+      ]);
       if (!user) return forbidden(res, "Account not found or disabled");
 
       req.auth = decoded;
@@ -51,7 +57,6 @@ const auth =
       // Sourced per-request rather than from the JWT so joining, leaving or
       // switching organisations takes effect immediately instead of waiting
       // for the token to expire.
-      const memberships = await membershipService.listUserMemberships(user._id);
       const requestedTenantId = req.header("x-tenant-id");
       const active = requestedTenantId
         ? memberships.find((m) => String(m.tenant_id?._id ?? m.tenant_id) === String(requestedTenantId))

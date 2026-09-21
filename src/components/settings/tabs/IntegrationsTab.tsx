@@ -14,12 +14,32 @@ import { EbaySettingsForm, EBAY_SETTINGS_FORM_ID } from "@/components/ebay-setti
 import { GoogleConnectCard } from "@/components/google-settings/GoogleConnectCard";
 import DomainsPage from "@/pages/erp/settings/DomainsPage";
 import { getEbaySettings } from "@/lib/api/ebay";
+import { getChannels } from "@/lib/api/channels";
+import { getDomains } from "@/lib/api/domains";
 import { getSmtpStatus } from "@/lib/api/tenantSettings";
 import { INTEGRATION_CATALOGUE, findIntegration, type IntegrationId } from "@/config/integrations";
 import type { TenantSettings } from "@/types/tenantSettings";
+import type { EbayConnectionStatus } from "@/types/ebaySettings";
+import type { ChannelConnectionStatus } from "@/types/channel";
 
 type MutationState = { isPending: boolean; isSuccess: boolean; error: string | null };
 const IDLE: MutationState = { isPending: false, isSuccess: false, error: null };
+
+const EBAY_STATUS_MAP: Record<EbayConnectionStatus, IntegrationStatus> = {
+  connected: "connected",
+  not_connected: "not_connected",
+  token_expired: "error",
+  revoked: "error",
+  error: "error",
+};
+
+const CHANNEL_STATUS_MAP: Record<ChannelConnectionStatus, IntegrationStatus> = {
+  connected: "connected",
+  disconnected: "not_connected",
+  degraded: "error",
+  error: "error",
+  pending: "error",
+};
 
 function EbayPanel() {
   const { data, isLoading } = useQuery({ queryKey: ["ebay-settings"], queryFn: getEbaySettings });
@@ -97,9 +117,28 @@ export function IntegrationsTab({
 }) {
   // Stripe's status rides along on tenant settings; SMTP has its own endpoint.
   const { data: smtpRes } = useQuery({ queryKey: ["smtp-status"], queryFn: getSmtpStatus });
+  // Shared queryKeys with EbayConnectCard/GoogleConnectCard/DomainsPage, so
+  // visiting a detail panel warms the cache the overview grid reads from.
+  const { data: ebayRes } = useQuery({ queryKey: ["ebay-settings"], queryFn: getEbaySettings });
+  const { data: channelsRes } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
+  const { data: domainsRes } = useQuery({ queryKey: ["domains"], queryFn: getDomains });
 
   const stripeStatus: IntegrationStatus = settings?.stripe_connection_status ?? "unknown";
   const smtpStatus: IntegrationStatus = smtpRes?.data?.connection_status ?? "unknown";
+  const ebayStatus: IntegrationStatus = ebayRes?.data
+    ? EBAY_STATUS_MAP[ebayRes.data.connection_status]
+    : "unknown";
+  const googleChannel = channelsRes?.data?.find((c) => c.key === "google");
+  const googleStatus: IntegrationStatus = googleChannel
+    ? CHANNEL_STATUS_MAP[googleChannel.connection.status]
+    : "unknown";
+  const domainsStatus: IntegrationStatus = domainsRes?.data
+    ? domainsRes.data.some((d) => d.status === "active")
+      ? "connected"
+      : "not_connected"
+    : "unknown";
+  const paymentLinksStatus: IntegrationStatus =
+    settings?.payment_domain_mode === "vendor_slug" ? "connected" : "not_connected";
 
   if (providerId) {
     const label = findIntegration(providerId)?.name ?? "Integration";
@@ -155,7 +194,17 @@ export function IntegrationsTab({
             icon={icon}
             logoTile={integration.logoTile}
             status={
-              integration.id === "stripe" ? stripeStatus : integration.id === "email" ? smtpStatus : "unknown"
+              integration.id === "stripe"
+                ? stripeStatus
+                : integration.id === "email"
+                  ? smtpStatus
+                  : integration.id === "ebay"
+                    ? ebayStatus
+                    : integration.id === "google"
+                      ? googleStatus
+                      : integration.id === "domains"
+                        ? domainsStatus
+                        : paymentLinksStatus
             }
             onManage={() => onSelectProvider(integration.id)}
           />
