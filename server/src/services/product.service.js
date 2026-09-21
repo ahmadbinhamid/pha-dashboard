@@ -265,6 +265,51 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   };
 }
 
+// Summary tiles for the admin Products page header. Reuses buildStockStages
+// so "out of stock" here means exactly what the Stock filter dropdown means
+// (getProducts above) — one $facet pass rather than separate count queries.
+async function getProductStats(tenantId) {
+  const [result] = await Product.aggregate([
+    { $match: { tenant_id: tenantId } },
+    ...buildStockStages(),
+    {
+      $facet: {
+        totals: [
+          {
+            $group: {
+              _id: null,
+              totalSkus: { $sum: 1 },
+              totalStockUnits: { $sum: { $cond: ["$stock_control", "$stock_count", 0] } },
+              avgPrice: { $avg: "$price" },
+              avgMarginPct: {
+                $avg: {
+                  $cond: [
+                    { $and: [{ $gt: ["$price", 0] }, { $ne: ["$cost_price", null] }] },
+                    { $multiply: [{ $divide: [{ $subtract: ["$price", "$cost_price"] }, "$price"] }, 100] },
+                    null,
+                  ],
+                },
+              },
+            },
+          },
+        ],
+        outOfStock: [
+          { $match: { stock_control: true, stock_count: { $lte: 0 } } },
+          { $count: "count" },
+        ],
+      },
+    },
+  ]);
+
+  return {
+    totalSkus: result.totals[0]?.totalSkus ?? 0,
+    totalStockUnits: result.totals[0]?.totalStockUnits ?? 0,
+    outOfStockCount: result.outOfStock[0]?.count ?? 0,
+    avgPrice: result.totals[0]?.avgPrice ?? 0,
+    avgMarginPct: result.totals[0]?.avgMarginPct ?? null,
+  };
+}
+
 // Search-driven listing: `ids` is a relevance-ordered candidate set already
 // produced by Typesense (see product.search.service.js#searchProducts) and
 // already scoped to tenant/published/structured filters — this only adds the
@@ -505,6 +550,7 @@ module.exports = {
   generateVariantsForProduct,
   ensureInventoryForProduct,
   getProducts,
+  getProductStats,
   getProductsByIds,
   getProductSuggestions,
   findProductById,

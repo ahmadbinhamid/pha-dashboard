@@ -20,6 +20,7 @@ const config = require("../config");
 const InventorySettings = require("../models/InventorySettings");
 const inventoryService = require("./inventory.service");
 const { getCompanyProfile } = require("./tenantSettings.service");
+const { buildLowStockReportPdfBuffer } = require("../utils/pdf/lowStockReportPdf");
 const emailService = require("./email/email.service");
 
 function startOfUtcDay(d) {
@@ -118,11 +119,16 @@ async function maybeSendDigest(settings, nowMinutes, today) {
   }
 
   const companyProfile = await getCompanyProfile(tenantId);
+  const pdfBuffer = await buildLowStockReportPdfBuffer(items, {
+    companyProfile,
+    threshold: settings.low_stock_threshold,
+  });
   await emailService.sendLowStockDigest({
     to: settings.notification_email,
     items,
     companyProfile,
-    tenantId,
+    pdfBase64: pdfBuffer.toString("base64"),
+    pdfFilename: `low-stock-report-${today.toISOString().slice(0, 10)}.pdf`,
   });
 
   settings.last_digest_sent_at = new Date();

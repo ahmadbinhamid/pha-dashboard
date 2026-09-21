@@ -28,7 +28,6 @@ import {
 import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
 import type { ProductVehicle } from "@/types/product";
-import { Textarea } from "@/components/ui/Textarea";
 import { AlertCircle, Cloud } from "lucide-react";
 import { Section } from "@/components/listings/listing-form/Section";
 import {
@@ -232,20 +231,7 @@ export function ListingForm({
 
       {/* 6 — Item Description */}
       <Section number={6} title="Item Description">
-        <div className="space-y-4">
-          <FormField
-            label="Custom Description Override"
-            hint="Optional — leave blank to use the auto-generated description below."
-          >
-            <Textarea
-              value={form.description_override ?? ""}
-              onChange={(e) => onChange({ description_override: e.target.value })}
-              placeholder="Paste or write a fully custom HTML or plain-text description. Overrides the auto-generated preview."
-              rows={6}
-            />
-          </FormField>
-          <EbayDescriptionSection form={form} vehicle={productVehicle} fallbackAttachments={fallbackAttachments} />
-        </div>
+        <EbayDescriptionSection form={form} vehicle={productVehicle} fallbackAttachments={fallbackAttachments} />
       </Section>
 
       {/* 7 — Pricing & Format */}

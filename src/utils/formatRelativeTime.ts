@@ -1,5 +1,5 @@
 // Extracted from ActiveChannelsCard.tsx (dashboard) so ChannelSummaryCard
-// (Catalogue page) doesn't reimplement the same "Nm/h/d ago" logic.
+// (Products page) doesn't reimplement the same "Nm/h/d ago" logic.
 export function formatRelativeTime(iso: string | null): string | null {
   if (!iso) return null;
   const diffMs = Date.now() - new Date(iso).getTime();

@@ -55,6 +55,15 @@ exports.listOrders = async (req, res) => {
   }
 };
 
+exports.getOrderStats = async (req, res) => {
+  try {
+    const stats = await orderService.getOrderStats(req.tenantId);
+    return success(res, stats);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
 exports.createManualOrder = async (req, res) => {
   try {
     const order = await orderService.createManualOrder(req.body, req.tenant);

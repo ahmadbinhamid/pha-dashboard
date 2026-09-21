@@ -24,10 +24,15 @@ router.use("/listings", require("./listing.routes"));
 router.use("/channels", require("./channel.routes"));
 router.use("/inquiry", require("./inquiry.routes"));
 router.use("/newsletter", require("./newsletter.routes"));
+router.use("/demo-request", require("./demoRequest.routes"));
 router.use("/vehicle-model", require("./vehicle-model.routes"));
 router.use("/dashboard", require("./dashboard.routes"));
+router.use("/reports", require("./reports.routes"));
 router.use("/tenant-settings", require("./tenantSettings.routes"));
 router.use("/domains", require("./domain.routes"));
 router.use("/notification", require("./notification.routes"));
+router.use("/members", require("./member.routes"));
+router.use("/roles", require("./role.routes"));
+router.use("/invitations", require("./invitation.routes"));
 
 module.exports = router;

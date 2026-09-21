@@ -872,6 +872,41 @@ async function listOrders(
   };
 }
 
+// Summary tiles for the admin orders list page. One $facet round-trip
+// rather than three separate queries — revenue excludes cancelled orders,
+// matching getOrderVolumeTrend's convention above.
+async function getOrderStats(tenantId) {
+  const [result] = await Order.aggregate([
+    { $match: { tenant_id: tenantId } },
+    {
+      $facet: {
+        revenue: [
+          { $match: { status: { $ne: ORDER_STATUS.CANCELLED } } },
+          { $group: { _id: null, totalRevenueCents: { $sum: "$total" } } },
+        ],
+        pending: [
+          { $match: { fulfillment_status: ORDER_FULFILLMENT_STATUS.PENDING } },
+          { $count: "count" },
+        ],
+        unpaid: [
+          {
+            $match: {
+              payment_status: { $in: [ORDER_PAYMENT_STATUS.PENDING_PAYMENT, ORDER_PAYMENT_STATUS.PARTIALLY_PAID] },
+            },
+          },
+          { $count: "count" },
+        ],
+      },
+    },
+  ]);
+
+  return {
+    totalRevenueCents: result.revenue[0]?.totalRevenueCents ?? 0,
+    pendingFulfillmentCount: result.pending[0]?.count ?? 0,
+    unpaidCount: result.unpaid[0]?.count ?? 0,
+  };
+}
+
 // Full order record for the admin detail/invoice view — unlike
 // getOrderForGuest, this isn't token-gated (route requires admin JWT auth
 // instead) and includes the order's full payment + refund history, rather
@@ -1059,6 +1094,7 @@ module.exports = {
   updateEbayOrderStatus,
   updateOrderStatus,
   listOrders,
+  getOrderStats,
   getOrderDetailForAdmin,
   sendOrderNotification,
   sendPaymentLinkEmail,

@@ -6,12 +6,13 @@ import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { Input } from "@/components/ui/Input";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { ActivityTrendChart } from "@/components/activity/ActivityTrendChart";
-import { ActivityEventRow } from "@/components/activity/ActivityEventRow";
+import { ActivityLogTable } from "@/components/activity/ActivityLogTable";
 import { listActivityLog, getActivityAnalytics } from "@/lib/api/dashboard";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import type { DateRangeValue } from "@/utils/dateRange";
 import type { ActivityEventType } from "@/types/dashboard";
 
 const TYPE_FILTERS: { label: string; value: ActivityEventType | "" }[] = [
@@ -55,6 +56,23 @@ export default function ActivityLogPage() {
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        next.set("page", "1");
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  // Sets from/to together in one history entry — two sequential updateFilter
+  // calls would each replace the URL independently and could race.
+  const updateDateRange = useCallback(
+    (range: DateRangeValue) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (range.from) next.set("from", range.from);
+        else next.delete("from");
+        if (range.to) next.set("to", range.to);
+        else next.delete("to");
         next.set("page", "1");
         return next;
       }, { replace: true });
@@ -122,55 +140,52 @@ export default function ActivityLogPage() {
           label="Total Events"
           value={analytics?.totalEvents ?? 0}
           subLabel={from || to ? "In selected range" : "Last 14 days"}
-          icon={<Activity className="h-4 w-4" />}
+          icon={<Activity className="h-3.5 w-3.5" />}
+          size="sm"
           loading={analyticsLoading}
         />
         <MetricCard
           label="Orders"
           value={analytics?.orderEvents ?? 0}
-          icon={<ShoppingCart className="h-4 w-4" />}
+          icon={<ShoppingCart className="h-3.5 w-3.5" />}
+          size="sm"
           loading={analyticsLoading}
         />
         <MetricCard
           label="Stock Changes"
           value={analytics?.stockEvents ?? 0}
-          icon={<Boxes className="h-4 w-4" />}
+          icon={<Boxes className="h-3.5 w-3.5" />}
+          size="sm"
           loading={analyticsLoading}
         />
       </div>
 
-      <ActivityTrendChart points={analytics?.dailyTrend ?? []} loading={analyticsLoading} />
-
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <FilterSelect options={TYPE_FILTERS} value={type} onChange={(v) => updateFilter("type", v)} />
             <Input
               type="search"
               placeholder="Search order #, customer, product…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-56"
+              className="h-9 w-64 sm:w-80 lg:w-96"
             />
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => updateFilter("from", e.target.value)}
-                className="h-9 w-auto"
-                aria-label="From date"
-              />
-              <span className="text-xs text-fg/40">to</span>
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => updateFilter("to", e.target.value)}
-                className="h-9 w-auto"
-                aria-label="To date"
-              />
-            </div>
+            <FilterSelect options={TYPE_FILTERS} value={type} onChange={(v) => updateFilter("type", v)} />
           </div>
-          {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
+
+          {/* Date range sits opposite the text filters, so the row reads
+              "what am I looking for" on the left and "over what period" on
+              the right. The fetch hint rides with it rather than shifting the
+              picker sideways when it appears. */}
+          <div className="flex items-center gap-3">
+            {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
+            <DateRangePicker
+              value={{ from: from || undefined, to: to || undefined }}
+              onChange={updateDateRange}
+              placeholder="Last 14 days"
+              allowClear
+            />
+          </div>
         </div>
 
         {isLoading ? (
@@ -178,13 +193,7 @@ export default function ActivityLogPage() {
         ) : events.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="divide-y divide-border/60 px-5">
-            {events.map((event) => (
-              <div key={event.id} className="py-3.5">
-                <ActivityEventRow event={event} showDate />
-              </div>
-            ))}
-          </div>
+          <ActivityLogTable events={events} />
         )}
 
         <Pagination
@@ -203,10 +212,11 @@ export default function ActivityLogPage() {
 
 function LoadingSkeleton() {
   return (
-    <div className="divide-y divide-border/60 px-5">
+    <div className="divide-y divide-border/60">
       {[220, 260, 180, 240, 200, 150].map((w, i) => (
-        <div key={i} className="flex items-center gap-3 py-3.5">
-          <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-bg-2" />
+        <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+          <div className="h-3.5 w-28 animate-pulse rounded-xs bg-bg-2" />
+          <div className="h-7 w-7 shrink-0 animate-pulse rounded-lg bg-bg-2" />
           <div className="h-3.5 animate-pulse rounded-xs bg-bg-2" style={{ width: w }} />
         </div>
       ))}

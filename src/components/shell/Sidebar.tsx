@@ -25,14 +25,20 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         )}
       >
         {isLoading ? (
-          <Skeleton className={cn("shrink-0 rounded-xs", collapsed ? "h-6 w-6" : "h-7 w-7")} />
+          <Skeleton className={cn("shrink-0 rounded-xl", collapsed ? "h-7 w-7" : "h-8 w-8")} />
         ) : (
-          <div className="shrink-0 overflow-hidden rounded-xs ring-1 ring-[hsl(var(--accent)/0.28)]">
+          <div
+            className={cn(
+              "relative shrink-0 overflow-hidden rounded-xl ring-1 ring-[hsl(var(--accent)/0.28)]",
+              collapsed ? "h-7 w-7" : "h-8 w-8",
+            )}
+          >
             <TenantLogo
               logoUrl={settings.logoUrl}
               name={settings.storeName}
-              sizeClass={collapsed ? "h-6" : "h-7"}
-              maxWidthClass={collapsed ? "max-w-6" : "max-w-7"}
+              sizeClass={collapsed ? "h-7" : "h-8"}
+              maxWidthClass={collapsed ? "max-w-7" : "max-w-8"}
+              objectFit="cover"
               priority
             />
           </div>

@@ -3,20 +3,21 @@ import { AppProviders } from "@/components/providers/AppProviders";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { GuestRoute } from "@/components/auth/GuestRoute";
 import { ErpLayout } from "@/components/layouts/ErpLayout";
-import { SettingsLayout } from "@/components/layouts/SettingsLayout";
 import { useAuth } from "@/context/auth";
 
 // Auth pages
 import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+// Only imported by the commented-out /register route below.
+// import RegisterPage from "@/pages/RegisterPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
-import CataloguePage from "@/pages/erp/CataloguePage";
+import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
+import ListingsPage from "@/pages/erp/ListingsPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
 import CustomersPage from "@/pages/erp/CustomersPage";
@@ -25,17 +26,13 @@ import OrdersPage from "@/pages/erp/OrdersPage";
 import OrderDetailPage from "@/pages/erp/OrderDetailPage";
 import CreateOrderPage from "@/pages/erp/CreateOrderPage";
 import PaymentsPage from "@/pages/erp/PaymentsPage";
+import ReportsPage from "@/pages/erp/ReportsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import ProfilePage from "@/pages/erp/ProfilePage";
-import BusinessInfoPage from "@/pages/erp/settings/BusinessInfoPage";
-import PaymentAccountPage from "@/pages/erp/settings/PaymentAccountPage";
-import PaymentSettingsPage from "@/pages/erp/settings/PaymentSettingsPage";
-import EmailSettingsPage from "@/pages/erp/settings/EmailSettingsPage";
-import EbaySettingsPage from "@/pages/erp/settings/EbaySettingsPage";
-import GoogleSettingsPage from "@/pages/erp/settings/GoogleSettingsPage";
-import DomainsPage from "@/pages/erp/settings/DomainsPage";
+import SettingsPage from "@/pages/erp/SettingsPage";
+import InvitePage from "@/pages/InvitePage";
 import PayOrderPage from "@/pages/PayOrderPage";
 
 function HomeRedirect() {
@@ -61,6 +58,12 @@ export default function App() {
               token in the URL. Shared across every tenant's payment links. */}
           <Route path="/pay/:orderId" element={<PayOrderPage />} />
 
+          {/* Invite landing page. Deliberately NOT behind GuestRoute: the
+              link is equally valid for someone already signed in (they accept)
+              and for someone with no account yet (they sign up and join in one
+              step) — see InvitePage. The token in the URL is the credential. */}
+          <Route path="/invite" element={<InvitePage />} />
+
           <Route
             path="/login"
             element={
@@ -70,6 +73,10 @@ export default function App() {
             }
           />
 
+          {/* Public self-signup is disabled — every account now comes in
+              through an invite (see InvitePage) or is provisioned directly.
+              Route and import kept, not deleted, so re-enabling this is a
+              one-line uncomment rather than rebuilding the page.
           <Route
             path="/register"
             element={
@@ -78,6 +85,7 @@ export default function App() {
               </GuestRoute>
             }
           />
+          */}
 
           <Route
             path="/auth/forgot-password"
@@ -98,15 +106,15 @@ export default function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/catalogue" element={<CataloguePage />} />
-            {/* Redirects — /products and /listings merged into one
-                Catalogue page with Products/Listings tabs. Kept as
-                redirects (not removed) so any existing bookmark/deep link
-                still lands somewhere correct. */}
-            <Route path="/products" element={<Navigate to="/catalogue?tab=products" replace />} />
-            <Route path="/listings" element={<Navigate to="/catalogue?tab=listings" replace />} />
+            <Route path="/products" element={<ProductsPage />} />
+            {/* Redirect — /catalogue was this page's old name (Products and
+                Listings merged into one tabbed page). Kept as a redirect
+                (not removed) so any existing bookmark/deep link still lands
+                somewhere correct. */}
+            <Route path="/catalogue" element={<Navigate to="/products" replace />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
+            <Route path="/listings" element={<ListingsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/customers" element={<CustomersPage />} />
@@ -115,21 +123,26 @@ export default function App() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
             <Route path="/listings/new" element={<ListingCreatePage />} />
             <Route path="/listings/:id/edit" element={<ListingEditPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />
             <Route path="/profile" element={<ProfilePage />} />
 
-            <Route path="/settings" element={<SettingsLayout />}>
-              <Route index element={<Navigate to="/settings/business-info" replace />} />
-              <Route path="business-info" element={<BusinessInfoPage />} />
-              <Route path="payment-account" element={<PaymentAccountPage />} />
-              <Route path="payment-settings" element={<PaymentSettingsPage />} />
-              <Route path="email" element={<EmailSettingsPage />} />
-              <Route path="ebay" element={<EbaySettingsPage />} />
-              <Route path="google" element={<GoogleSettingsPage />} />
-              <Route path="domains" element={<DomainsPage />} />
-            </Route>
+            {/* Settings is one page with URL-driven tabs (/settings/:tab) and,
+                where a tab has a second level, /settings/:tab/:section. The
+                pre-redesign URLs below still resolve so existing links and
+                bookmarks land on the tab that replaced them. */}
+            <Route path="/settings" element={<Navigate to="/settings/store" replace />} />
+            <Route path="/settings/business-info" element={<Navigate to="/settings/store/general" replace />} />
+            <Route path="/settings/payment-account" element={<Navigate to="/settings/integrations/stripe" replace />} />
+            <Route path="/settings/payment-settings" element={<Navigate to="/settings/integrations/payment-links" replace />} />
+            <Route path="/settings/email" element={<Navigate to="/settings/integrations/email" replace />} />
+            <Route path="/settings/ebay" element={<Navigate to="/settings/integrations/ebay" replace />} />
+            <Route path="/settings/google" element={<Navigate to="/settings/integrations/google" replace />} />
+            <Route path="/settings/domains" element={<Navigate to="/settings/integrations/domains" replace />} />
+            <Route path="/settings/:tab" element={<SettingsPage />} />
+            <Route path="/settings/:tab/:section" element={<SettingsPage />} />
           </Route>
 
           <Route path="/" element={<HomeRedirect />} />

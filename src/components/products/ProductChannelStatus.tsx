@@ -1,23 +1,29 @@
 import { cn } from "@/utils/cn";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GroupedListingSummary } from "@/types/marketplace";
 
 // Extracted from ListingsPage.tsx's own per-product expand pattern so the
-// Catalogue page's Products tab (channel status per product, collapsed dot
-// row + expandable detail) and the Listings tab's grouped fallback don't
-// each reimplement it. Takes `channels` from GET /channels (never a
+// Products page (channel status per product, collapsed dot row + expandable
+// detail) and the Listings page's grouped fallback don't each reimplement
+// it. Takes `channels` from GET /channels (never a
 // hardcoded platform list) so a newly-registered adapter shows up here
 // automatically, with no changes to this component.
+//
+// A colored dot means ONE thing everywhere on this page: sync status/health
+// (ok=live, warn=needs a push, danger=error, dim=not listed) — the same
+// mapping the collapsed row and the expanded panel both use below, and the
+// same one the page's top channel-summary cards use. Earlier, the expanded
+// panel colored its dot by CHANNEL IDENTITY instead (a categorical palette,
+// unrelated to status), so the same visual read as "health" one line and
+// "which channel" the next — that's what made this confusing. Identity is
+// now its own separate element (ChannelAvatar), which never carries a
+// status color, so the two questions ("which channel" / "is it OK") never
+// compete for the same pixel.
 
 type ListingLike = Pick<AnyMarketplaceListing | GroupedListingSummary, "platform" | "sync_status" | "synced_at">;
 
-// Collapsed summary row's dots are colored by STATUS (so several channels
-// sharing a status visually group together at a glance) — this map is only
-// for that row. The expanded detail panel below uses a different, per-
-// CHANNEL-IDENTITY color instead (see CAT_DOT_COLORS) — deliberately not
-// the same scheme, since its job is "which channel is this row", not "is
-// this one healthy".
 const DOT_COLOR: Record<string, string> = {
   synced: "bg-ok",
   pending: "bg-warn",
@@ -38,12 +44,6 @@ const STATUS_TEXT_COLOR: Record<string, string> = {
   price_locked: "text-warn",
   error: "text-danger",
 };
-
-// Categorical palette (globals.css --cat-1..6) — identifies WHICH channel a
-// detail row is for, cycling if there are ever more than 6 registered
-// adapters. Never reuse the semantic ok/warn/danger tokens for this: those
-// mean something (healthy/attention/broken), this is pure identity.
-const CAT_DOT_COLORS = ["bg-cat-1", "bg-cat-2", "bg-cat-3", "bg-cat-4", "bg-cat-5", "bg-cat-6"];
 
 // Collapsed row's "Channels" cell — a dot per registered channel (colored by
 // that channel's listing status, dim if not listed) plus a short summary
@@ -111,18 +111,27 @@ export function ProductChannelDetail({
       {channels.map((channel, index) => {
         const listing = byPlatform.get(channel.key);
         const isListed = !!listing;
+        const status = listing?.sync_status;
         const statusLabel = listing ? (LISTING_SYNC_STATUS_CONFIG[listing.sync_status]?.label ?? listing.sync_status) : "Not listed";
         const statusColor = listing ? (STATUS_TEXT_COLOR[listing.sync_status] ?? "text-fg/70") : "text-fg/40";
 
         return (
-          <div key={channel.key} className="flex items-center gap-4 py-2.5">
-            <span className="flex w-36 shrink-0 items-center gap-2 truncate text-sm text-fg/80">
-              <span
-                className={cn("h-1.5 w-1.5 shrink-0 rounded-full", CAT_DOT_COLORS[index % CAT_DOT_COLORS.length])}
-                aria-hidden="true"
-              />
-              <span className="truncate">{channel.name}</span>
+          <div key={channel.key} className="flex items-center gap-3 py-2.5">
+            {/* Icon only, no name label — the brand mark itself (eBay's
+                wordmark, Google Merchant Center's icon) already identifies
+                the channel at a glance, so repeating it as text next to an
+                icon built to say the same thing was redundant. Sized up to
+                "md" now that it doesn't have to share the row with text. */}
+            <span className="flex w-10 shrink-0 items-center" title={channel.name}>
+              <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="md" />
             </span>
+            {/* Same dot/color the collapsed row uses for this exact status —
+                see this file's header comment for why that consistency is
+                the point. */}
+            <span
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_COLOR[status ?? "not_listed"])}
+              aria-hidden="true"
+            />
             <span className={cn("w-20 shrink-0 text-xs font-medium", statusColor)}>{statusLabel}</span>
             <span className="flex-1 truncate text-xs text-fg/45">
               {listing?.synced_at

@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { TenantLogo } from "@/components/branding/TenantLogo";
+import { InvoiceRichText } from "@/components/orders/InvoiceRichText";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
-import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst, formatOrderNumber, formatInvoiceNumber } from "@/utils/format";
+import {
+  formatCurrencyFromCents,
+  getExclusiveUnitPrice,
+  getLineGst,
+  formatInvoiceNumber,
+  stripEbayAddressPrefix,
+} from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
@@ -126,7 +133,11 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   });
   const billingAddress = order.billing_address ?? order.shipping_address;
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
-  const orderNumberValue = order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number);
+  // "Order Number" is the customer's OWN reference, typed on the order detail
+  // page — optional, and omitted from the strip entirely when it's blank
+  // rather than falling back to our internal ORD-000xx (the invoice already
+  // carries its own number, so printing a second house number under a label
+  // the buyer reads as "yours" just looked like their PO had been ignored).
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
@@ -136,14 +147,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const sellerContactLine = [tenant?.phone, tenant?.email, tenant?.abn ? `ABN ${tenant.abn}` : null]
     .filter(Boolean)
     .join(" · ");
-  // Free-text fields are authored as separate lines in Settings; the footer
-  // sets them as a single flowing paragraph (no bullets), so the lines are
-  // rejoined rather than rendered as a list.
-  const warrantyText = (tenant?.warranty_text || "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join(" ");
+
+  const metaCells = [
+    { label: "Invoice Date", value: orderDate },
+    { label: "Due Date", value: "Upon receipt" },
+    ...(order.reference_number ? [{ label: "Order Number", value: order.reference_number }] : []),
+    { label: "Sales Channel", value: channelLabel },
+  ];
 
   return (
     <div
@@ -187,11 +197,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
       {/* Heavy rule closing the letterhead, then the four transaction facts. */}
       <div className="mt-5 border-t-[3px]" style={{ borderColor: INK }} />
-      <div className="grid grid-cols-4 gap-5 border-b py-3.5" style={{ borderColor: BORDER }}>
-        <MetaCell label="Invoice Date" value={orderDate} first />
-        <MetaCell label="Due Date" value="Upon receipt" />
-        <MetaCell label="Order Number" value={orderNumberValue} />
-        <MetaCell label="Sales Channel" value={channelLabel} />
+      <div
+        className={`grid gap-5 border-b py-3.5 ${metaCells.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}
+        style={{ borderColor: BORDER }}
+      >
+        {metaCells.map((cell, i) => (
+          <MetaCell key={cell.label} label={cell.label} value={cell.value} first={i === 0} />
+        ))}
       </div>
 
       {/* Ship To / Bill To pushed to opposite edges of the sheet. */}
@@ -204,7 +216,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               <div>Collecting in-store, see seller address above.</div>
             ) : (
               <>
-                <div>{order.shipping_address.address}</div>
+                <div>{stripEbayAddressPrefix(order.shipping_address.address)}</div>
                 <div>
                   {order.shipping_address.suburb} {order.shipping_address.state} {order.shipping_address.postcode}
                 </div>
@@ -217,7 +229,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <SectionLabel>Bill To</SectionLabel>
           <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
           <div className="mt-2 space-y-0.5 font-mono text-[10px] leading-relaxed" style={{ color: MUTED }}>
-            {billingAddress && <div>{billingAddress.address}</div>}
+            {billingAddress && <div>{stripEbayAddressPrefix(billingAddress.address)}</div>}
             {billingAddress && (
               <div>
                 {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
@@ -421,18 +433,22 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
           >
             <SectionLabel>Warranty &amp; Returns</SectionLabel>
-            <p className="mt-2 font-mono text-[9.5px] leading-relaxed" style={{ color: MUTED }}>
-              {warrantyText || "—"}
-            </p>
+            <InvoiceRichText
+              value={tenant?.warranty_text}
+              className="mt-2 font-mono text-[9.5px] leading-relaxed"
+              style={{ color: MUTED }}
+            />
           </div>
           <div
             className="print:inline-block print:w-[48%] print:ml-[4%] print:align-top"
             style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
           >
             <SectionLabel>Legal Disclaimer</SectionLabel>
-            <p className="mt-2 font-mono text-[9.5px] leading-relaxed" style={{ color: MUTED }}>
-              {tenant?.legal_disclaimer_text || "—"}
-            </p>
+            <InvoiceRichText
+              value={tenant?.legal_disclaimer_text}
+              className="mt-2 font-mono text-[9.5px] leading-relaxed"
+              style={{ color: MUTED }}
+            />
           </div>
         </div>
 

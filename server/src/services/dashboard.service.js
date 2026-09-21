@@ -15,7 +15,7 @@ const InventoryHistory = require("../models/InventoryHistory");
 const MarketplaceListing = require("../models/MarketplaceListing");
 const InventorySettings = require("../models/InventorySettings");
 const Tenant = require("../models/Tenant");
-const { ORDER_STATUS } = require("../constants/order.constants");
+const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
@@ -36,6 +36,67 @@ async function getInventoryValue(tenantId) {
     { $group: { _id: null, totalValue: { $sum: { $multiply: ["$stock_count", "$product.price"] } } } },
   ]);
   return result?.totalValue || 0;
+}
+
+// Real (not fabricated) trend figure for the Total Inventory Value card —
+// the % the value has moved over the last `days` days, derived from actual
+// InventoryHistory adjustments (each one's stock delta × the product's
+// price) rather than a snapshot history this app doesn't keep. Returns null
+// when there isn't enough history to establish a baseline (division by
+// zero, or a brand-new tenant) — the frontend shows "no trend yet" rather
+// than a misleading 0%/Infinity.
+//
+// Also returns null when the baseline was near-zero — a tenant going from
+// $1 of stock to $500 is a real 49900% "increase" but not a meaningful
+// trend figure, and rendering it verbatim is what blew out the MetricCard
+// layout in production (a 5-character badge assumption baked into the
+// component). MAX_MEANINGFUL_CHANGE_PCT draws the line: past it, "no
+// baseline to compare against" is the more honest read than the number.
+const MAX_MEANINGFUL_CHANGE_PCT = 500;
+
+/**
+ * Current stock value broken down by the product's FIRST category (the same
+ * one reports.service.js attributes a line to), keyed by category id as a
+ * string. Products with no category are grouped under "" so the caller can
+ * account for them rather than silently losing their value.
+ *
+ * Returned in dollars, like getInventoryValue — Product.price is dollars.
+ */
+async function getInventoryValueByCategory(tenantId) {
+  const rows = await Inventory.aggregate([
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+    { $unwind: "$product" },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
+    {
+      $group: {
+        _id: { $ifNull: [{ $arrayElemAt: ["$product.categories", 0] }, null] },
+        totalValue: { $sum: { $multiply: ["$stock_count", "$product.price"] } },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((r) => [r._id ? String(r._id) : "", r.totalValue || 0]));
+}
+
+async function getInventoryValueChangePct(tenantId, currentValue, days = 7) {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+
+  const [result] = await InventoryHistory.aggregate([
+    { $match: { created_at: { $gte: since } } },
+    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+    { $unwind: "$product" },
+    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
+    { $group: { _id: null, netValueChange: { $sum: { $multiply: ["$adjustment", "$product.price"] } } } },
+  ]);
+
+  const netValueChange = result?.netValueChange || 0;
+  const baselineValue = currentValue - netValueChange;
+  if (baselineValue <= 0) return null;
+
+  const changePct = (netValueChange / baselineValue) * 100;
+  if (Math.abs(changePct) > MAX_MEANINGFUL_CHANGE_PCT) return null;
+  return changePct;
 }
 
 // Rolls locations up to one row per product+variant first — "low on stock"
@@ -142,8 +203,12 @@ async function getChannelHealth(tenantId) {
 
 async function getStats(tenantId) {
   const settings = await InventorySettings.getOrCreate(tenantId);
-  const [totalInventoryValue, stockCounts, pendingOrders, channelHealth] = await Promise.all([
-    getInventoryValue(tenantId),
+  // getInventoryValueChangePct needs the current total as its baseline
+  // reference point, so it can't join the Promise.all below — the other
+  // three are still fetched concurrently with it.
+  const totalInventoryValue = await getInventoryValue(tenantId);
+  const [inventoryValueChangePct, stockCounts, pendingOrders, channelHealth] = await Promise.all([
+    getInventoryValueChangePct(tenantId, totalInventoryValue),
     getStockCounts(tenantId, settings.low_stock_threshold),
     getPendingOrdersStats(tenantId),
     getChannelHealth(tenantId),
@@ -151,6 +216,7 @@ async function getStats(tenantId) {
 
   return {
     totalInventoryValue,
+    inventoryValueChangePct,
     lowStockCount: stockCounts.lowStockCount,
     outOfStockCount: stockCounts.outOfStockCount,
     pendingOrdersCount: pendingOrders.count,
@@ -161,54 +227,112 @@ async function getStats(tenantId) {
   };
 }
 
-// ── Order volume trend ───────────────────────────────────────────────────────
+// ── Dashboard trend (order volume + revenue, by channel) ───────────────────
 
-// One bucket per calendar day for the last `days` days (including today),
-// always returning a fully-populated series (zero-filled) so the chart never
-// has to guess about missing days.
-async function getOrderVolumeTrend(tenantId, days = 7) {
-  const since = new Date();
-  since.setDate(since.getDate() - (days - 1));
-  since.setHours(0, 0, 0, 0);
+// Single source of truth for the whole dashboard's date-range filter — one
+// bucket per calendar day across the requested window, always returning a
+// fully-populated series (zero-filled) so a chart never has to guess about
+// missing days. Two ways to specify the window: `days` (last N days ending
+// today — the default) or an explicit `from`/`to` pair (an arbitrary custom
+// range, which doesn't have to end today). `from`/`to` take precedence when
+// both are given. Every known ORDER_CHANNEL value is pre-seeded at 0 on
+// every bucket (not just channels that happened to have an order that day)
+// so a multi-line "by channel" chart never has to treat a zero-order day as
+// a missing data point and break the line.
+//
+// Also returns previousPeriodRevenueCents — real revenue for the
+// same-length window immediately before the requested one — so the
+// dashboard can show a genuine "+X% vs prior period" figure instead of a
+// fabricated target. Fetched in the same query (one wider $gte down to the
+// start of the prior period) rather than a second round trip.
+//
+// Every boundary here is built with Date.UTC(...) rather than the local-time
+// setters (setDate/setHours) that used to be here — those construct a LOCAL
+// midnight, which toISOString() (used for the bucket key and for matching
+// order.created_at) then renders as the PREVIOUS UTC calendar day on any
+// server whose local timezone is ahead of UTC. That silently dropped today
+// and shifted the entire window a day into the past. Found by running this
+// against real data on a UTC+5 box — every bucket came back one calendar
+// day earlier than intended. Since order.created_at is a real timestamp
+// compared with the same toISOString() slice, bucketing everything through
+// UTC from construction onward is what keeps the two sides consistent.
+function startOfUtcDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
+  let sinceUtc, untilUtc;
+  if (from && to) {
+    sinceUtc = startOfUtcDay(new Date(from));
+    untilUtc = startOfUtcDay(new Date(to));
+  } else {
+    untilUtc = startOfUtcDay(new Date());
+    sinceUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() - (days - 1)));
+  }
+  // "to" is a whole day, not an instant — the upper query bound is the start
+  // of the day AFTER it, so orders placed any time during that last day are
+  // still included.
+  const exclusiveUntilUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() + 1));
+  const dayCount = Math.round((exclusiveUntilUtc - sinceUtc) / 86_400_000);
+  const previousSinceUtc = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth(), sinceUtc.getUTCDate() - dayCount));
 
   const orders = await Order.find({
     tenant_id: tenantId,
-    created_at: { $gte: since },
+    created_at: { $gte: previousSinceUtc, $lt: exclusiveUntilUtc },
     status: { $ne: ORDER_STATUS.CANCELLED },
   })
-    .select("created_at total items")
+    .select("created_at total items channel")
     .lean();
 
+  const channelKeys = Object.values(ORDER_CHANNEL);
   const byDate = new Map();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(since);
-    d.setDate(d.getDate() + i);
+  for (let i = 0; i < dayCount; i++) {
+    const d = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth(), sinceUtc.getUTCDate() + i));
     const key = d.toISOString().slice(0, 10);
-    byDate.set(key, { date: key, orders: 0, revenueCents: 0, items: 0 });
+    const byChannel = {};
+    for (const channel of channelKeys) byChannel[channel] = 0;
+    byDate.set(key, { date: key, orders: 0, revenueCents: 0, items: 0, byChannel });
   }
 
+  let previousPeriodRevenueCents = 0;
   for (const order of orders) {
-    const key = new Date(order.created_at).toISOString().slice(0, 10);
+    const createdAt = new Date(order.created_at);
+    if (createdAt < sinceUtc) {
+      previousPeriodRevenueCents += order.total;
+      continue;
+    }
+    const key = createdAt.toISOString().slice(0, 10);
     const bucket = byDate.get(key);
     if (!bucket) continue; // order.created_at rounding edge case — ignore rather than crash
     bucket.orders += 1;
     bucket.revenueCents += order.total;
     bucket.items += order.items.reduce((sum, i) => sum + i.quantity, 0);
+    bucket.byChannel[order.channel] = (bucket.byChannel[order.channel] || 0) + order.total;
   }
 
-  return Array.from(byDate.values());
+  return { points: Array.from(byDate.values()), previousPeriodRevenueCents };
 }
 
 // ── Recent activity — synthesized from Orders + InventoryHistory ───────────
 // No dedicated activity/audit log exists in this system; this merges the two
 // event sources this app actually has, newest first.
 
+// Same "A$1,234.56" convention as invoicePdf.js#formatMoney — kept as its
+// own copy rather than a shared import since that one lives under utils/pdf
+// for a PDF-rendering context, while this is a plain activity-feed string.
+function formatOrderTotal(cents) {
+  return `A$${(cents / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function mapOrderEvent(o) {
   return {
     id: `order_${o._id}`,
     type: "order",
-    title: `New order — ${o.customer.name}`,
-    description: `${formatOrderNumber(o.order_number_prefix, o.order_number)} via ${o.channel}`,
+    title: `New Order ${formatOrderNumber(o.order_number_prefix, o.order_number)}`,
+    // Channel isn't folded into this string — tags[0] carries the raw
+    // channel value (see below) so the frontend renders it as its own
+    // OrderChannelBadge pill instead of plain "via storefront" text.
+    description: formatOrderTotal(o.total),
     timestamp: o.created_at,
     tags: [o.channel, o.status],
   };
@@ -259,7 +383,7 @@ async function getRecentActivity(tenantId, limit = 10) {
     Order.find({ tenant_id: tenantId })
       .sort({ created_at: -1 })
       .limit(limit)
-      .select("order_number order_number_prefix channel status created_at customer")
+      .select("order_number order_number_prefix channel status total created_at customer")
       .lean(),
     findRecentStockEvents(tenantId, limit),
   ]);
@@ -327,7 +451,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
       ? Order.find(orderFilter)
           .sort({ created_at: -1 })
           .limit(fetchCount)
-          .select("order_number order_number_prefix channel status created_at customer")
+          .select("order_number order_number_prefix channel status total created_at customer")
           .lean()
       : [],
     includeOrders ? Order.countDocuments(orderFilter) : 0,
@@ -456,4 +580,9 @@ module.exports = {
   listActivity,
   getActivityAnalytics,
   getCriticalStock,
+  // Exported so reports.service.js can reuse the same inventory-value
+  // aggregation instead of duplicating it (the Reports page's Inventory
+  // Insights card and its turnover-ratio denominator both need it).
+  getInventoryValue,
+  getInventoryValueByCategory,
 };

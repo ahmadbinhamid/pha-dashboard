@@ -36,10 +36,16 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
         <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {isLoading ? (
-              <Skeleton className="h-11 w-11 shrink-0 rounded-xs" />
+              <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
             ) : (
-              <div className="shrink-0 overflow-hidden rounded-xs ring-1 ring-[hsl(var(--accent)/0.28)]">
-                <TenantLogo logoUrl={settings.logoUrl} name={settings.storeName} sizeClass="h-11" maxWidthClass="max-w-11" />
+              <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl ring-1 ring-[hsl(var(--accent)/0.28)]">
+                <TenantLogo
+                  logoUrl={settings.logoUrl}
+                  name={settings.storeName}
+                  sizeClass="h-11"
+                  maxWidthClass="max-w-11"
+                  objectFit="cover"
+                />
               </div>
             )}
             <div className="min-w-0">

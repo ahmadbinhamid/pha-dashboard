@@ -39,14 +39,11 @@ export default function DomainsPage() {
   });
 
   return (
-    // Negative margins cancel out SettingsLayout's <main> padding (p-4
-    // sm:p-6) so this panel reaches the dialog's edges — without that, the
-    // gray dialog background (bg-bg) shows as a gutter around the header and
-    // table, which read as two separate surfaces instead of one white
-    // section. bg-card (not bg-bg) so the whole panel matches the design
-    // system's surface token — it already resolves to pure white in the
-    // light theme.
-    <div className="-m-4 space-y-6 bg-card p-4 sm:-m-6 sm:p-6">
+    // Rendered inside Settings → Integrations → Custom Domains, which
+    // supplies its own page padding — this used to bleed to the edges of the
+    // settings bottom sheet with negative margins, which now have nothing to
+    // cancel out.
+    <div className="space-y-6">
       <PageHeader
         title="Domains"
         description="Verify a domain you own to use it for your storefront and, later, for accepting payments on it directly."

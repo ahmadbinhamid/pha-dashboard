@@ -1,9 +1,7 @@
 import {
   createContext,
-  startTransition,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -81,14 +79,16 @@ function clamp(quantity: number, max: number | null) {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, _setItems] = useState<CartItem[]>([]);
+  // Read during initialization, NOT in a mount effect. Effects run children
+  // first, so an effect here would leave every consumer seeing an empty cart
+  // on its own first render — which silently broke CreateOrderPage's resume:
+  // its "restored step 2/3 but the cart is empty, go back to step 1" guard is
+  // a mount effect, so it always fired, and reloading mid-wizard dropped you
+  // back to the product list. There's no SSR here, so reading localStorage
+  // during render is safe and removes the empty-then-filled flash for the
+  // Topbar's cart badge too.
+  const [items, _setItems] = useState<CartItem[]>(readStored);
   const { toast } = useToast();
-
-  useEffect(() => {
-    startTransition(() => {
-      _setItems(readStored());
-    });
-  }, []);
 
   const addItem = useCallback(
     (item: AddCartItemInput) => {

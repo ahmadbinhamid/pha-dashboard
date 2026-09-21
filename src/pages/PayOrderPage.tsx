@@ -26,6 +26,29 @@ function getStripeForKey(publishableKey: string) {
 // admin-generated "payment link" orders (see stripe.payment.service.js#createPaymentLinkForOrder).
 // No login, no tenant branding: just enough to show what's owed and collect
 // a card payment. Security is the guest `token` in the URL, not a session.
+// One message for every failure hid the actual cause: a rotated token, a
+// suspended tenant, an unreachable API and a blocked CORS origin all read as
+// "invalid or expired link". Only a real 404 means the link is dead —
+// anything else is our side failing, and telling a customer to chase a new
+// link for a transport error is the worst version of that.
+//
+// Reads `.status`, not axios internals: the client's response interceptor
+// (lib/api/client.ts) rejects with a plain Error carrying `status`, so
+// isAxiosError() is never true by the time an error reaches a page. No
+// status at all means the request never got a response — wrong API base URL,
+// CORS refusal, DNS, or the server being down.
+function payLinkErrorMessage(error: unknown) {
+  const status = (error as { status?: number } | null | undefined)?.status;
+
+  if (status === 404) {
+    return "We couldn't find this order — the link may be invalid or expired.";
+  }
+  if (status === undefined) {
+    return "We couldn't reach the payment service. Please check your connection and try again.";
+  }
+  return "Something went wrong loading this order. Please try again, or contact the seller.";
+}
+
 export default function PayOrderPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
@@ -56,7 +79,7 @@ export default function PayOrderPage() {
   }
 
   if (error || !order) {
-    return <StatusShell message="We couldn't find this order — the link may be invalid or expired." />;
+    return <StatusShell message={payLinkErrorMessage(error)} />;
   }
 
   const amountDue = order.total - (order.payment?.amount ?? 0);

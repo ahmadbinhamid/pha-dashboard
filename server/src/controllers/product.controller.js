@@ -5,6 +5,7 @@ const {
   generateVariantsForProduct,
   ensureInventoryForProduct,
   getProducts,
+  getProductStats,
   getProductsByIds,
   getProductSuggestions,
   findProductById,
@@ -266,6 +267,15 @@ exports.getProducts = async (req, res) => {
       pageSize: limit,
       totalPages: Math.ceil(total / limit),
     });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.getProductStats = async (req, res) => {
+  try {
+    const stats = await getProductStats(req.tenantId);
+    return success(res, stats);
   } catch (err) {
     return systemfailure(res, err);
   }

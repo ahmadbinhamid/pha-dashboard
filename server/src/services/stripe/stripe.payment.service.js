@@ -115,7 +115,14 @@ async function createPaymentIntentForOrder(order) {
 // (local dev) or the tenant somehow has no slug yet.
 function buildPaymentBaseUrl(tenant) {
   const domain = config.payment.linkDomain;
-  if (!domain) return config.emailBrand.clientUrl;
+  // The payment host only ever serves the DEPLOYED build against the DEPLOYED
+  // database. Minting a link with it outside production points the customer
+  // at a site that has never heard of the order — the page then reports "We
+  // couldn't find this order", which reads like a broken/expired link rather
+  // than a local order that simply doesn't exist there. Dev and test keep
+  // their links on whatever dashboard is actually running (CLIENT_URL), so
+  // PAYMENT_LINK_DOMAIN can stay set in a local .env without side effects.
+  if (!domain || config.env !== "production") return config.emailBrand.clientUrl;
 
   // tenant.slug keeps its hyphens everywhere else (DB, tenant_slug login,
   // etc) — stripped only here, since a subdomain like

@@ -19,7 +19,9 @@
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
-const { formatOrderNumber, formatInvoiceNumber } = require("../orderNumberFormat");
+const { formatInvoiceNumber } = require("../orderNumberFormat");
+const { richTextToBlocks } = require("../richText");
+const { stripEbayAddressPrefix } = require("../addressFormat");
 
 const PAGE_WIDTH = 595.28; // A4 points
 const PAGE_HEIGHT = 841.89; // A4 points
@@ -43,6 +45,16 @@ const FONT_BOLD = "Helvetica-Bold";
 // ui-monospace stack in InvoicePrintView.tsx.
 const MONO = "Courier";
 const MONO_BOLD = "Courier-Bold";
+// The rich-text policy fields can carry italic and bold-italic runs too. All
+// four Courier faces share one advance width, which is what lets
+// measureRichText below size a mixed-weight block using a single font.
+const MONO_ITALIC = "Courier-Oblique";
+const MONO_BOLD_ITALIC = "Courier-BoldOblique";
+
+// List markers come from the parser ("•" or "3."). U+2022 is in WinAnsi, the
+// encoding the standard-14 faces are written with — anything outside it would
+// come out blank or substituted.
+const markerRun = (marker) => ({ text: `${marker} `, bold: false, italic: false });
 
 // Same hex values as InvoicePrintView.tsx's INK/MUTED/ACCENT/BORDER/GREEN,
 // plus the lighter gold that the grand-total figure uses on the ink bar
@@ -236,13 +248,18 @@ function drawLetterhead(doc, order, companyProfile) {
   return ruleY;
 }
 
-// The four facts a reader actually looks up, in equal hairline-divided
-// cells directly under the letterhead rule.
+// The facts a reader actually looks up, in equal hairline-divided cells
+// directly under the letterhead rule.
+//
+// "Order Number" is the customer's OWN reference, typed on the order detail
+// page. It's optional, so the cell is dropped when it's blank rather than
+// falling back to our internal ORD-000xx — the strip then splits three ways
+// instead of four, since every width here is derived from cells.length.
 function drawMetaStrip(doc, order, topY) {
   const cells = [
     ["Invoice Date", formatDate(order.created_at)],
     ["Due Date", "Upon receipt"],
-    ["Order Number", order.reference_number || formatOrderNumber(order.order_number_prefix, order.order_number)],
+    ...(order.reference_number ? [["Order Number", order.reference_number]] : []),
     ["Sales Channel", channelLabelFor(order)],
   ];
   const cellWidth = CONTENT_WIDTH / cells.length;
@@ -280,11 +297,11 @@ function drawPartiesBlock(doc, order, topY) {
     isPickup || !order.shipping_address
       ? ["Collecting in-store, see seller address above."]
       : [
-          order.shipping_address.address,
+          stripEbayAddressPrefix(order.shipping_address.address),
           `${order.shipping_address.suburb} ${order.shipping_address.state} ${order.shipping_address.postcode}`,
         ];
   const billLines = [
-    billingAddress ? billingAddress.address : null,
+    billingAddress ? stripEbayAddressPrefix(billingAddress.address) : null,
     billingAddress ? `${billingAddress.suburb} ${billingAddress.state} ${billingAddress.postcode}, Australia` : null,
     order.customer.phone ? `PH: ${order.customer.phone}` : null,
     order.customer.email ? `EMAIL: ${order.customer.email}` : null,
@@ -606,6 +623,61 @@ function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents, co
   return Math.max(leftBottom, rightBottom);
 }
 
+// ── Rich text ──────────────────────────────────────────────────────────────
+// The policy fields are authored in a rich-text editor and stored as HTML.
+// richTextToBlocks parses that into lines of styled runs (see
+// utils/richText.js, mirrored by the frontend's richText.ts), and these two
+// draw/measure it: one line per block, bold and italic honoured by swapping
+// Courier faces, list items prefixed with a bullet character.
+
+function runFont(run) {
+  if (run.bold && run.italic) return MONO_BOLD_ITALIC;
+  if (run.bold) return MONO_BOLD;
+  if (run.italic) return MONO_ITALIC;
+  return MONO;
+}
+
+/**
+ * Height the blocks will occupy, measured in one face. All four Courier
+ * variants share the same advance width (294pt for the same string at 7pt,
+ * checked), so a bold run wraps at exactly the same character as a regular
+ * one. Their line heights differ by a hair — the bold faces are ~0.08pt
+ * shorter per line — so measuring in regular slightly OVER-estimates a bold
+ * block, which is the safe direction for something pinned to the page bottom.
+ */
+function measureRichText(doc, blocks, { width, size, lineGap }) {
+  doc.font(MONO).fontSize(size);
+  return blocks.reduce((total, block) => {
+    const line = (block.marker ? `${block.marker} ` : "") + block.runs.map((run) => run.text).join("");
+    return total + doc.heightOfString(line, { width, lineGap });
+  }, 0);
+}
+
+/** Draws the blocks from (x, y) and returns the y it finished at. */
+function drawRichText(doc, blocks, x, y, { width, size, lineGap, color }) {
+  doc.fillColor(color);
+  let cursor = y;
+
+  blocks.forEach((block) => {
+    const runs = block.marker ? [markerRun(block.marker), ...block.runs] : block.runs;
+
+    runs.forEach((run, index) => {
+      const last = index === runs.length - 1;
+      const options = { width, lineGap, continued: !last };
+      doc.font(runFont(run)).fontSize(size);
+      // Only the first run of a line is positioned; the rest continue from
+      // wherever that one left off, which is what keeps a bold word inline
+      // instead of starting its own line.
+      if (index === 0) doc.text(run.text, x, cursor, options);
+      else doc.text(run.text, options);
+    });
+
+    cursor = doc.y;
+  });
+
+  return cursor;
+}
+
 // Warranty & Returns / Legal Disclaimer, set as two plain hairline-topped
 // columns — matching InvoicePrintView.tsx's footer, which pins itself to the
 // bottom of the sheet with `mt-auto`.
@@ -622,21 +694,18 @@ function drawFooter(doc, companyProfile, topY) {
   const colGap = 26;
   const colWidth = (CONTENT_WIDTH - colGap) / 2;
   const lineGap = 1.4;
-  // Free-text fields are authored as separate lines in Settings; the footer
-  // sets them as a single flowing paragraph, so the lines are rejoined
-  // rather than rendered as a list (same as InvoicePrintView.tsx).
-  const warrantyText =
-    (companyProfile.warranty_text || "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .join(" ") || "—";
-  const legalText = companyProfile.legal_disclaimer_text || "—";
+  const bodySize = 7;
+  // Same parsed blocks InvoiceRichText.tsx renders on screen, so the printed
+  // sheet and the preview carry identical formatting.
+  const emptyBlock = [{ marker: null, runs: [{ text: "—", bold: false, italic: false }] }];
+  const warrantyBlocks = richTextToBlocks(companyProfile.warranty_text);
+  const legalBlocks = richTextToBlocks(companyProfile.legal_disclaimer_text);
+  const warranty = warrantyBlocks.length ? warrantyBlocks : emptyBlock;
+  const legal = legalBlocks.length ? legalBlocks : emptyBlock;
 
-  doc.font(MONO).fontSize(7);
   const bodyHeight = Math.max(
-    doc.heightOfString(warrantyText, { width: colWidth, lineGap }),
-    doc.heightOfString(legalText, { width: colWidth, lineGap }),
+    measureRichText(doc, warranty, { width: colWidth, size: bodySize, lineGap }),
+    measureRichText(doc, legal, { width: colWidth, size: bodySize, lineGap }),
   );
   const blockHeight = 11 + 6 + bodyHeight;
 
@@ -657,8 +726,9 @@ function drawFooter(doc, companyProfile, topY) {
   const col2X = PAGE_MARGIN + colWidth + colGap;
   drawSectionLabel(doc, "Warranty & Returns", PAGE_MARGIN, textY, { width: colWidth });
   drawSectionLabel(doc, "Legal Disclaimer", col2X, textY, { width: colWidth });
-  doc.font(MONO).fontSize(7).fillColor(COLORS.muted).text(warrantyText, PAGE_MARGIN, textY + 13, { width: colWidth, lineGap });
-  doc.font(MONO).fontSize(7).fillColor(COLORS.muted).text(legalText, col2X, textY + 13, { width: colWidth, lineGap });
+  const bodyOpts = { width: colWidth, size: bodySize, lineGap, color: COLORS.muted };
+  drawRichText(doc, warranty, PAGE_MARGIN, textY + 13, bodyOpts);
+  drawRichText(doc, legal, col2X, textY + 13, bodyOpts);
 
   doc.fillColor(COLORS.text);
   doc.page.margins.bottom = originalBottomMargin;

@@ -23,6 +23,8 @@
   --color-ring: hsl(var(--ring));
   --color-accent: hsl(var(--accent));
   --color-accent-fg: hsl(var(--accent-fg));
+  --color-primary: hsl(var(--primary));
+  --color-primary-fg: hsl(var(--primary-fg));
   --color-surface: hsl(var(--surface));
   --color-surface-elevated: hsl(var(--surface-elevated));
   --color-gold: hsl(var(--gold));
@@ -88,13 +90,13 @@
 
   /* Box shadows */
   --shadow-soft: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-    0 10px 30px rgba(0, 0, 0, 0.12);
+    0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 1px 1px rgba(0, 0, 0, 0.1), 0 12px 28px rgba(0, 0, 0, 0.14);
+    0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 20px rgba(0, 0, 0, 0.05);
   --shadow-glow: 0 0 0 1px rgba(59, 130, 246, 0.15),
     0 20px 50px -20px rgba(59, 130, 246, 0.25);
-  --shadow-glow-gold: 0 0 0 1px rgba(200, 162, 74, 0.2),
-    0 20px 40px -24px rgba(200, 162, 74, 0.15);
+  --shadow-glow-gold: 0 0 0 1px rgba(249, 112, 21, 0.2),
+    0 20px 40px -24px rgba(249, 112, 21, 0.15);
   --shadow-input: 0 1px 2px 0 hsl(var(--fg) / 0.05);
   --shadow-input-focus: 0 0 0 3px hsl(var(--accent) / 0.16), 0 1px 2px 0 hsl(var(--fg) / 0.05);
 
@@ -143,28 +145,43 @@
 /* hsl(var(--accent) / 0.15) works in arbitrary Tailwind classes.            */
 
 :root {
-  /* Surfaces */
-  --bg: 220 14% 98%;
-  --bg-2: 220 12% 94%;
+  /* Surfaces — matched to parthub.shop's HSL tokens (background/card/
+     secondary from their compiled CSS: hsl(0 0% 97%) / hsl(0 0% 100%) /
+     hsl(220 14% 96%)), except --bg itself, bumped to pure white per request. */
+  --bg: 0 0% 100%;
+  --bg-2: 220 14% 96%;
   --surface: 220 14% 96%;
   --surface-elevated: 0 0% 100%;
   --card: 0 0% 100%;
 
-  /* Foreground */
-  --fg: 222 47% 11%;
-  --fg-2: 215 16% 42%;
+  /* Foreground — parthub's foreground / muted-foreground. */
+  --fg: 220 20% 10%;
+  --fg-2: 220 10% 46%;
 
-  /* Structural */
-  --border: 220 13% 88%;
-  --ring: 43 68% 52%;
+  /* Structural — parthub's border. */
+  --border: 220 13% 91%;
+  --ring: 24 95% 53%;
 
-  /* Brand — Parts Hub Australia gold */
-  --accent: 43 68% 52%;
-  --accent-fg: 222 47% 8%;
-  --gold: 43 68% 52%;
-  --gold-muted: 39 42% 42%;
+  /* Brand — Parts Hub Australia burnt orange, matched to parthub.shop's
+     primary/accent (hsl(24 95% 53%) = #F97015). accent-fg is white (not a
+     dark tone the way the old gold needed) since this orange is saturated/
+     mid-bright enough for white text to read on top of it — same choice
+     parthub's own accent-foreground makes. */
+  --accent: 24 95% 53%;
+  --accent-fg: 0 0% 100%;
+  --gold: 24 95% 53%;
+  --gold-muted: 22 45% 40%;
 
-  /* Semantic */
+  /* Primary action color (buttons, active tabs) — deliberately the app's
+     own ink color, not the brand accent: aliased to --fg/--bg rather than a
+     fixed black/white pair so it inverts automatically in dark mode, the
+     same way --muted below aliases --bg-2 instead of repeating its value. */
+  --primary: var(--fg);
+  --primary-fg: var(--bg);
+
+  /* Semantic — --danger and --ok already matched parthub's destructive/
+     badge-new almost exactly, so left as-is; --warn has no parthub
+     equivalent to port. */
   --danger: 0 84% 60%;
   --danger-fg: 0 0% 100%;
   --warn: 38 92% 50%;
@@ -203,35 +220,52 @@
 }
 
 .dark {
-  /* Surfaces */
-  --bg: 222 22% 8%;
+  /* Surfaces — matched to parthub.shop's dark background/card
+     (hsl(220 20% 6%) / hsl(220 20% 10%)). */
+  --bg: 220 20% 6%;
   /* Was identical to --card (both 11%) — every bg-2-filled element sitting
      on a card (Skeleton, muted badges, field-hover, tag-neutral-bg) was
      rendering at zero contrast against its own container, effectively
      invisible regardless of the animate-pulse animation actually running.
      Bumped to match --surface-elevated's tier so it's a genuinely distinct,
      visible fill. Found live: dark-mode loading skeletons looked like
-     nothing was there at all. */
-  --bg-2: 222 18% 15%;
-  --surface: 222 20% 11%;
-  --surface-elevated: 222 18% 14%;
-  --card: 222 20% 11%;
+     nothing was there at all. Kept that same distinct-from-card relationship
+     here (parthub's own dark secondary is 220 14% 16%, one step up from
+     their 220 20% 10% card, which is the same shape). */
+  --bg-2: 220 14% 16%;
+  --surface: 220 20% 10%;
+  --surface-elevated: 220 18% 14%;
+  --card: 220 20% 10%;
 
-  /* Foreground */
+  /* Foreground — --fg already matched parthub's dark foreground exactly
+     (hsl(210 40% 98%)); --fg-2 matched to their dark muted-foreground. */
   --fg: 210 40% 98%;
-  --fg-2: 217 10% 72%;
+  --fg-2: 215 20% 65%;
 
-  /* Structural */
-  --border: 217 16% 20%;
-  --ring: 43 70% 58%;
+  /* Structural — parthub's dark border. */
+  --border: 220 14% 20%;
+  --ring: 24 95% 53%;
 
-  /* Brand */
-  --accent: 43 70% 58%;
-  --accent-fg: 222 47% 8%;
-  --gold: 43 70% 58%;
-  --gold-muted: 39 42% 42%;
+  /* Brand — parthub keeps the same primary/accent value in both light and
+     dark mode rather than brightening it for dark-mode contrast (unlike the
+     old gold, which shifted 52%->58% lightness) — matched that here too. */
+  --accent: 24 95% 53%;
+  --accent-fg: 0 0% 100%;
+  --gold: 24 95% 53%;
+  --gold-muted: 22 45% 40%;
 
-  /* Semantic */
+  /* Primary action color — dark mode only, aliased to the brand accent
+     instead of --fg/--bg: a light-on-dark button read as flat/washed out
+     next to the app's own orange, and the accent already has the contrast
+     to work as a fill here. Light mode intentionally keeps --primary on
+     --fg (see above) — this divergence is deliberate, not an oversight. */
+  --primary: var(--accent);
+  --primary-fg: var(--accent-fg);
+
+  /* Semantic — kept our own --danger value here rather than parthub's dark
+     destructive (hsl(0 62% 30%)): that's tuned as a button-fill color in
+     their app, but ours renders as text/badges directly on a dark card, so
+     copying a 30%-lightness red would have made it barely legible. */
   --danger: 0 72% 60%;
   --danger-fg: 0 0% 100%;
   --warn: 38 92% 50%;
@@ -350,6 +384,19 @@
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+/* A horizontally-scrolling strip of controls (the Settings tab bar, its
+   sub-tab pills) sits directly above its own content, so the 6px thumb below
+   reads as a stray border rather than as a scrollbar — and it's redundant
+   there, since the cut-off tab already shows there's more to reach. Scrolling
+   itself (wheel, trackpad, keyboard) is untouched. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

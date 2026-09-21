@@ -108,6 +108,30 @@ async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
 }
 
 /**
+ * Notify the platform's own inbox (config.smtp.alertsTo, same address
+ * utils/emailSender.js#sendErrorAlert uses) of a "Request a Demo" submission
+ * from the marketing site. Unlike sendInquiryNotification/
+ * sendNewsletterSignupNotification, this has no tenant to resolve `to` from —
+ * a demo request is someone who doesn't have an account yet, asking about the
+ * product itself.
+ */
+async function sendDemoRequestNotification({ fullName, businessName, phone, workEmail, message }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to: config.smtp.alertsTo,
+    subject: `[Demo Request] ${businessName} — ${fullName}`,
+    template: "demoRequest",
+    variables: {
+      full_name: fullName,
+      business_name: businessName,
+      phone: phone || null,
+      work_email: workEmail,
+      message: message || null,
+    },
+  });
+}
+
+/**
  * Notify a customer that their DELIVERY order has shipped, with tracking
  * details and the tax invoice attached as a PDF (base64-encoded — Bull job
  * payloads are JSON over Redis, so a raw Buffer wouldn't round-trip to the
@@ -305,11 +329,18 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
  * services/inventory-digest.service.js. Always called with at least one
  * item; the sweep never calls this for an empty digest (see that service's
  * own comment on why — an empty "0 items low" email is just noise).
+ *
+ * `to` is the tenant's OWN inbox (this is an alert about their own store,
+ * not customer-facing), so unlike the order emails above this always sends
+ * from the platform mailbox — never the tenant's own BYOK SMTP — same as
+ * sendInquiryNotification/sendNewsletterSignupNotification. `pdfBase64` is
+ * the full item list built by utils/pdf/lowStockReportPdf.js — base64 since
+ * Bull job payloads are JSON over Redis, same reasoning as the order emails'
+ * invoice PDFs.
  */
-async function sendLowStockDigest({ to, items, companyProfile, tenantId }) {
+async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFilename }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    from: defaultFrom(),
     to,
     subject: `Low Stock Alert — ${items.length} item${items.length === 1 ? "" : "s"} need attention`,
     template: "lowStockDigest",
@@ -320,17 +351,51 @@ async function sendLowStockDigest({ to, items, companyProfile, tenantId }) {
         stock: i.stock,
       })),
       item_count: items.length,
+      item_word: items.length === 1 ? "item" : "items",
+      ...tenantBrandVars(companyProfile),
+    },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
+  });
+}
+
+/**
+ * Invite someone into a tenant's organisation. Sent from the tenant's own
+ * brand (not the platform's) via tenantBrandVars, same as the order emails —
+ * the recipient is being asked to join *that business*, not this product.
+ */
+async function sendTeamInvite({ to, organisationName, inviterName, roleName, inviteUrl, expiresAt, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    fromName: tenantFromName(companyProfile),
+    tenantId,
+    to,
+    subject: `You've been invited to ${organisationName}`,
+    template: "teamInvite",
+    variables: {
+      email: to,
+      organisation_name: organisationName,
+      inviter_name: inviterName,
+      role_name: roleName,
+      invite_url: inviteUrl,
+      expires_on: expiresAt ? new Date(expiresAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : null,
       ...tenantBrandVars(companyProfile),
     },
   });
 }
 
 module.exports = {
+  sendTeamInvite,
   sendOTP,
   accountVerified,
   sendPasswordReset,
   sendInquiryNotification,
   sendNewsletterSignupNotification,
+  sendDemoRequestNotification,
   sendOrderShipped,
   sendOrderReadyForPickup,
   sendOrderConfirmation,

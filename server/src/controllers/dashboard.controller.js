@@ -23,8 +23,9 @@ exports.getChannels = async (req, res) => {
 
 exports.getOrderVolume = async (req, res) => {
   try {
-    const points = await dashboardService.getOrderVolumeTrend(req.tenantId, req.query.days);
-    return success(res, points);
+    const { days, from, to } = req.query;
+    const trend = await dashboardService.getOrderVolumeTrend(req.tenantId, { days, from, to });
+    return success(res, trend);
   } catch (err) {
     return systemfailure(res, err);
   }

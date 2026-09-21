@@ -171,9 +171,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   if (!customer) return null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           <Card>
             <CardHeader title="Product List" description={`${items.length} line${items.length !== 1 ? "s" : ""}`} />
             <div className="divide-y divide-border">
@@ -286,7 +286,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
           </Card>
         </div>
 
-        <div className="space-y-5">
+        {/* Reference only — who and where. Sticks under the wizard header
+            so it stays readable while the editable column scrolls. */}
+        <div className="space-y-6 lg:sticky lg:top-44 lg:self-start">
           <Card>
             <CardHeader title="Customer" />
             <CardContent className="space-y-2 text-sm">

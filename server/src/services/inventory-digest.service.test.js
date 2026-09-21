@@ -136,8 +136,13 @@ test("inventory-digest.service: due now, has low stock — sends once with the r
   assert.equal(sendSpy.mock.calls.length, 1);
   const callArgs = sendSpy.mock.calls[0].arguments[0];
   assert.equal(callArgs.to, "owner@example.com");
-  assert.equal(callArgs.tenantId.toString(), tenantId.toString());
   assert.ok(callArgs.items.some((i) => i.title === product.title));
+  // Sent from the platform mailbox, never the tenant's own BYOK SMTP — this
+  // is an alert about the tenant's own store, not customer-facing — so the
+  // call must NOT carry a tenantId for mailer.js to route through.
+  assert.equal(callArgs.tenantId, undefined);
+  assert.ok(callArgs.pdfBase64, "must attach the low-stock report PDF");
+  assert.match(callArgs.pdfFilename, /^low-stock-report-\d{4}-\d{2}-\d{2}\.pdf$/);
 
   const fresh = await InventorySettings.findById(settings._id);
   assert.ok(fresh.last_digest_sent_at, "last_digest_sent_at must be stamped after a real send");

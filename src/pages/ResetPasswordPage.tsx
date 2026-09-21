@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { resetPassword } from "@/lib/api/auth";
-import { AppLogoMark, APP_NAME } from "@/components/branding/AppLogoMark";
+import { AppLogoMark } from "@/components/branding/AppLogoMark";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
@@ -42,12 +42,11 @@ export default function ResetPasswordPage() {
   return (
     <div className="grid min-h-dvh place-items-center bg-bg px-4">
       <div className="w-full max-w-105">
-        <div className="mb-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <AppLogoMark className="h-20 w-20 shadow-soft ring-1 ring-inset ring-[hsl(var(--accent)/0.28)]" />
-          <div className="text-left">
-            <div className="text-sm font-semibold tracking-tight">{APP_NAME}</div>
-            <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
-          </div>
+        <div className="mb-6 flex flex-col items-center justify-center gap-2">
+          {/* The lockup already spells out the app name — no separate text label
+              beside it, or the name would show up twice. */}
+          <AppLogoMark className="h-12" />
+          <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
         </div>
 
         <Card className="overflow-hidden bg-bg/80 backdrop-blur supports-backdrop-filter:bg-bg/65">

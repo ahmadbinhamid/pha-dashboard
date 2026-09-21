@@ -36,6 +36,19 @@ export const getProducts = async (params: ProductListParams = {}) => {
   return data;
 };
 
+export interface ProductStats {
+  totalSkus: number;
+  totalStockUnits: number;
+  outOfStockCount: number;
+  avgPrice: number;
+  avgMarginPct: number | null;
+}
+
+export const getProductStats = async () => {
+  const { data } = await apiClient.get<BeResponse<ProductStats>>("/product/stats");
+  return data;
+};
+
 export const getProduct = async (slug: string) => {
   const { data } = await apiClient.get<BeResponse<Product>>(`/product/${slug}`);
   return data;

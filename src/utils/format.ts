@@ -51,3 +51,14 @@ export function formatOrderNumber(prefix: string, raw: string) {
 export function formatInvoiceNumber(prefix: string, raw: string) {
   return `${prefix}-${raw}`;
 }
+
+// eBay orders store the buyer's masked eBay identifier as a literal
+// "ebay:<code>, " prefix on address line 1 (e.g. "ebay:znb2cfa, 26A Lynesta
+// Avenue") — useful internally, but meaningless (and unprofessional-
+// looking) on a customer-facing invoice/receipt. Strips it when present; a
+// no-op on any other address, so it's safe to call unconditionally rather
+// than gating it on order.channel === "ebay". Backend-rendered invoice PDFs
+// use the equivalent server/src/utils/addressFormat.js instead.
+export function stripEbayAddressPrefix(address: string) {
+  return address.replace(/^ebay:[^,]*,\s*/i, "");
+}

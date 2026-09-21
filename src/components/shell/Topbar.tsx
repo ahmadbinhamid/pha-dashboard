@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/Button";
-import { UserMenu } from "@/components/shell/UserMenu";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { NotificationBell } from "@/components/shell/NotificationBell";
+import { UserMenu } from "@/components/shell/UserMenu";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/context/cart";
-import { usePathname } from "@/hooks";
-import { Menu, Search, Settings, ShoppingCart } from "lucide-react";
+import { Menu, Search, ShoppingCart } from "lucide-react";
 
 export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
   const navigate = useNavigate();
-  const pathname = usePathname();
   const { totalItems } = useCart();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -65,7 +62,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
             </kbd>
           </button>
 
-          <div className="flex shrink-0 items-center justify-end gap-0.5 ml-auto">
+          <div className="flex shrink-0 items-center justify-end gap-1.5 ml-auto">
             <Button
               type="button"
               variant="ghost"
@@ -94,19 +91,11 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
               )}
             </Button>
             <NotificationBell />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => navigate("/settings", { state: { from: pathname } })}
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
+            {/* Settings and the theme toggle used to be their own icons
+                here — both now live inside the account dropdown (see
+                UserMenu), so the icon row is just Search / Create Order /
+                Notifications, set off from the account menu by this rule. */}
             <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
-            <ThemeToggle />
             <UserMenu />
           </div>
         </div>
