@@ -1,6 +1,5 @@
 // services/marketplace/adapters/google.adapter.pure.test.js
-// TASK 4: the Google adapter is a pure translator — resolved data in, Merchant API call out.
-// Runs WITHOUT Mongo: stock/URL/identifiers arrive pre-hydrated on `resolved`.
+// Google adapter as a pure translator: pre-hydrated data in, API call out. No Mongo.
 
 const test = require("node:test");
 const { mock, beforeEach } = require("node:test");

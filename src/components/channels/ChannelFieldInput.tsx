@@ -10,13 +10,13 @@ interface ChannelFieldInputProps {
   value: unknown;
   onChange: (value: unknown) => void;
   error?: string;
-  // Dynamic options for descriptor.optionsSource (static ones come on the descriptor).
+  // Dynamic options; static ones come on the descriptor.
   options?: ChannelFieldOption[];
-  // What a blank value resolves to server-side; shown instead of "required" when present.
+  // Server-side fallback for a blank value (makes the field optional).
   fallback?: string | null;
 }
 
-// Generic renderer for one fieldSchema descriptor; custom types go through channelFieldRegistry.
+// Generic fieldSchema field; custom types use channelFieldRegistry.
 export function ChannelFieldInput({ descriptor, value, onChange, error, options, fallback }: ChannelFieldInputProps) {
   const { label, type, helpText } = descriptor;
   const required = descriptor.required && !fallback;
@@ -33,7 +33,7 @@ export function ChannelFieldInput({ descriptor, value, onChange, error, options,
     control = (
       <NativeSelect value={stringValue} onChange={(e) => onChange(e.target.value)}>
         <option value="">{fallbackLabel ? `Default — ${fallbackLabel}` : "Select…"}</option>
-        {/* Keep a stored value outside the list selectable instead of rendering it blank. */}
+        {/* Keep a stored value outside the list selectable instead of blank. */}
         {stringValue && !list.some((o) => o.value === stringValue) && <option value={stringValue}>{stringValue}</option>}
         {list.map((o) => (
           <option key={o.value} value={o.value}>

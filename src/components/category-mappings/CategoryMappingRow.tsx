@@ -26,7 +26,7 @@ function draftFrom(platforms: Props["platforms"], mappings: Props["mappings"]): 
   );
 }
 
-// One tenant category mapped to each channel's own taxonomy; saved explicitly per row.
+// One tenant category mapped per channel; saved explicitly per row.
 export function CategoryMappingRow({ category, platforms, mappings, googleCategories }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -75,7 +75,7 @@ export function CategoryMappingRow({ category, platforms, mappings, googleCatego
             onChange={(e) => setPlatform(key, e.target.value, googleCategories.find((c) => c.id === e.target.value)?.name ?? null)}
           >
             <option value="">Not mapped</option>
-            {/* Keep a saved id outside the default list selectable rather than showing it blank. */}
+            {/* Keep a saved id outside the list selectable instead of blank. */}
             {value && !googleCategories.some((c) => c.id === value) && (
               <option value={value}>{draft[key]?.name || `Category ${value}`}</option>
             )}

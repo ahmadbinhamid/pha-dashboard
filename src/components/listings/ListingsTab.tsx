@@ -139,8 +139,7 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
     mutationFn: async (listing: AnyMarketplaceListing) => {
       if (listing.platform === "ebay") {
         const { data: fresh } = await getListing(listing._id);
-        // Re-save through listingToForm so a legacy stored description template is cleared
-        // and re-rendered server-side from live data.
+        // Re-save so a legacy stored description is cleared and re-rendered server-side.
         if (fresh.platform === "ebay") await updateListing(listing._id, listingToForm(fresh));
       }
       await pushListing(listing._id);

@@ -1,7 +1,5 @@
 // services/marketplace/channel.service.fieldSchema.test.js
-// GET /api/v1/channels (listChannelsForTenant) serves each adapter's fieldSchema — additively,
-// with static option lists attached — which the product form's channel panels render from.
-// Needs a live Mongo connection.
+// GET /channels serves each fieldSchema additively, with static options. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

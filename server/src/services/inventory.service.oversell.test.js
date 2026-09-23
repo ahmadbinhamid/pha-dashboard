@@ -11,8 +11,7 @@ const mongoose = require("mongoose");
 const crypto = require("node:crypto");
 const config = require("../config");
 
-// Mock the channel job enqueue (fans out on every stock change) so no live Redis is needed.
-// TASK 5a: was ebay.queue.js#enqueueEbayJob (shim removed); queues are lazy, so nothing to close.
+// Mock the fan-out enqueue so no Redis is needed.
 const channelQueue = require("../queues/channel.queue");
 mock.method(channelQueue, "enqueueChannelJob", async () => {});
 

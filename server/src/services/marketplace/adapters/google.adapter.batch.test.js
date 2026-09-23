@@ -138,7 +138,7 @@ test("publishBatch: a per-item failure is isolated — the rest of the batch sti
     ),
   );
 
-  // TASK 4: stock/URL lookups now happen in hydration, not inside publishBatch.
+  // Stock/URL lookups now happen in hydration, not in the adapter.
   await hydrateResolved(resolvedList, googleAdapter, tenantId);
   const results = await googleAdapter.publishBatch(resolvedList, settings);
   assert.equal(results.length, 3);

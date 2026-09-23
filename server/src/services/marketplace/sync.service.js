@@ -65,10 +65,7 @@ async function skipSync(listing, reason) {
   return { skipped: true, reason };
 }
 
-// Stamps the sync baseline after an adapter confirms a quantity push (hooks.onQuantityPushed),
-// plus any adapter-specific baseline fields (e.g. eBay's dual-written ebay_synced_quantity).
-// updateMany: every duplicate (tenant, product, variant, platform) row keeps a consistent
-// baseline even if the unique index is ever missing (found live once).
+// Stamps the sync baseline after a confirmed push; updateMany keeps duplicates consistent.
 async function recordQuantityPushed(listing, adapter, quantity, seq) {
   await MarketplaceListing.updateMany(
     { tenant_id: listing.tenant_id, product: listing.product._id, variant: listing.variant || null, platform: listing.platform },
@@ -80,7 +77,7 @@ async function recordQuantityPushed(listing, adapter, quantity, seq) {
         ...(seq != null ? { last_pushed_seq: seq } : {}),
       },
     },
-    // Discriminator-only fields (ebay_*) are dropped by a base-model update under strict mode.
+    // strict:false, or base-model updates drop discriminator-only ebay_* fields.
     { strict: false },
   );
 }
@@ -174,7 +171,7 @@ async function syncListing(listingId, seq = null) {
 
   const startedAt = Date.now();
   try {
-    // Inside the try so an I/O failure here is recorded like any other sync failure.
+    // Inside the try so a lookup failure is recorded like any sync failure.
     await hydrateResolved([resolved], adapter, listing.tenant_id);
     const hooks = {
       // Persist the offer ID as soon as it's known, not just at the end of
@@ -290,9 +287,7 @@ async function syncListing(listingId, seq = null) {
   }
 }
 
-// What adapter.end() needs, resolved here so adapters never query the DB. Product lookups
-// honour soft-delete like the old in-adapter findById did; settings only load once there's
-// something to withdraw (eBay's getSettings can lazily migrate legacy settings).
+// Resolves adapter.end()'s context; settings load only when there's something to withdraw.
 async function loadEndContext(listing, adapter) {
   const productId = listing.product?._id || listing.product;
   const [product, variant] = await Promise.all([
@@ -475,7 +470,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   try {
     await hydrateResolved(resolvedChunk, adapter, toPush[0].listing.tenant_id);
   } catch (err) {
-    // Lookups used to run per item inside publishBatch; keep a failure per-item, not chunk-wide.
+    // Keep failures per item, as the old in-adapter lookups were.
     for (const resolved of resolvedChunk) resolved.hydrationError = err;
   }
   const results = await adapter.publishBatch(resolvedChunk, settings);

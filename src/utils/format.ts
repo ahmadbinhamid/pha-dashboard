@@ -43,7 +43,7 @@ export function stripEbayAddressPrefix(address: string) {
   return address.replace(/^ebay:[^,]*,\s*/i, "");
 }
 
-// "just now", "5m ago", "2h ago", "3d ago", then a date — for sync timestamps.
+// Relative time ("5m ago", "2h ago"), falling back to a date.
 export function formatRelativeTime(iso: string | null | undefined): string {
   if (!iso) return "never";
   const diffMs = Date.now() - new Date(iso).getTime();

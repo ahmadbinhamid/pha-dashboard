@@ -1,6 +1,5 @@
 // models/ChannelProcessedEvent.js
-// Idempotency ledger for inbound marketplace order events (one row per platform+order+SKU+action).
-// Formerly the EbayProcessedOrder model; it was already platform-generic in substance.
+// Idempotency ledger for inbound marketplace order events (formerly EbayProcessedOrder).
 
 const mongoose = require("mongoose");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
@@ -23,9 +22,7 @@ const schema = new mongoose.Schema(
 // Atomic uniqueness: one deduction + one restock per platform+orderId+SKU, so a 2-SKU order gets independent slots instead of racing.
 schema.index({ platform: 1, orderId: 1, sku: 1, action: 1 }, { unique: true });
 
-// NOTE: the collection name is INTENTIONALLY LEGACY ("ebayprocessedorders", Mongoose's default
-// for the old EbayProcessedOrder model). Pinned explicitly so the rename needs no data
-// migration — do not change it without migrating the existing documents.
+// NOTE: intentionally legacy collection name — renaming it would need a data migration.
 const LEGACY_COLLECTION = "ebayprocessedorders";
 
 module.exports = mongoose.model("ChannelProcessedEvent", schema, LEGACY_COLLECTION);

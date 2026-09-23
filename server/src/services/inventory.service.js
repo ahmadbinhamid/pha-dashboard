@@ -5,7 +5,7 @@ const Inventory = require("../models/Inventory");
 const InventoryHistory = require("../models/InventoryHistory");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
-// Module reference (not destructured) so a test's mock.method() applies whenever it's installed.
+// Not destructured, so test mocks apply whenever they're installed.
 const channelQueue = require("../queues/channel.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
@@ -373,8 +373,7 @@ async function getTotalStockForProductVariant(productId, variantId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
-// Batched getTotalStockForProductVariant: one aggregate for many (product, variant) pairs,
-// summed identically. Returns Map("<productId>:<variantId|''>" -> total); missing pairs are 0.
+// Batched getTotalStockForProductVariant: Map(stockKey -> total), missing pairs are 0.
 function stockKey(productId, variantId) {
   return `${productId}:${variantId || ""}`;
 }

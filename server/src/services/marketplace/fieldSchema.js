@@ -1,11 +1,9 @@
 // services/marketplace/fieldSchema.js
-// Generic enforcement of an adapter's fieldSchema (manifest.fieldSchema). Each descriptor:
-//   { key, label, type, required, helpText, optionsSource?, group? }
-// The browser validates the same schema for UX; this is where correctness lives.
+// Server-side enforcement of adapter fieldSchema rules (the UI only mirrors them).
 
 const { FIELD_TYPE, STATIC_FIELD_OPTIONS, ENFORCED_OPTION_SOURCES } = require("../../constants/channelField.constants");
 
-// status 400 => circuitBreaker.js treats it as a per-item data problem, never a transport failure.
+// status 400 so the circuit breaker treats it as a data problem.
 class ChannelFieldValidationError extends Error {
   constructor(platform, errors, sku = null) {
     super(`[${platform}] ${sku ? `${sku}: ` : ""}${errors.map((e) => e.message).join(" ")}`);
@@ -31,10 +29,7 @@ function checkDescriptor(descriptor, value) {
   return null;
 }
 
-/**
- * Checks effective `values` against `schema`; `keys` limits the check to those fields.
- * @returns {{ field: string, message: string }[]}
- */
+/** Errors for effective `values`; `keys` limits which fields are checked. */
 function validateFieldValues(schema, values, { keys = null } = {}) {
   const errors = [];
   for (const descriptor of schema) {
@@ -50,7 +45,7 @@ function assertFieldValues(platform, schema, values, { keys = null, sku = null }
   if (errors.length) throw new ChannelFieldValidationError(platform, errors, sku);
 }
 
-// manifest.productConstraints, e.g. { title: { maxLength: 80 } }, checked on the EFFECTIVE value.
+// Checks manifest.productConstraints against the effective title.
 function assertProductConstraints(platform, constraints, resolved) {
   const maxTitle = constraints?.title?.maxLength;
   if (maxTitle && (resolved.title || "").length > maxTitle) {
@@ -63,7 +58,7 @@ function assertProductConstraints(platform, constraints, resolved) {
   }
 }
 
-// Schema as served to the frontend: static option lists attached so it can render selects.
+// Schema for the UI, with static option lists attached.
 function withStaticOptions(schema = []) {
   return schema.map((d) => (STATIC_FIELD_OPTIONS[d.optionsSource] ? { ...d, options: STATIC_FIELD_OPTIONS[d.optionsSource] } : d));
 }

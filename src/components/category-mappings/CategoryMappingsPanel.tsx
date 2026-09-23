@@ -5,8 +5,7 @@ import { CategoryMappingRow } from "@/components/category-mappings/CategoryMappi
 import { getCategoryMappingOverview } from "@/lib/api/categoryMappings";
 import type { CategoryMapping } from "@/types/categoryMapping";
 
-// Settings > Integrations > Channel Categories: each product category's default channel category.
-// A listing uses its own category if set, else this default (see categoryMapping.service.js).
+// Each product category's default channel category (a listing's own value still wins).
 export function CategoryMappingsPanel() {
   const { data, isLoading } = useQuery({ queryKey: ["category-mappings"], queryFn: getCategoryMappingOverview });
   const overview = data?.data;
@@ -32,7 +31,7 @@ export function CategoryMappingsPanel() {
         ) : (
           overview.categories.map((category) => (
             <CategoryMappingRow
-              // Remount when saved values change so the row's draft resets to the server state.
+              // Remount on save so the row's draft resets to server state.
               key={`${category._id}:${overview.platforms.map((p) => byCategory.get(category._id)?.[p.key]?.updated_at ?? "").join("|")}`}
               category={category}
               platforms={overview.platforms}

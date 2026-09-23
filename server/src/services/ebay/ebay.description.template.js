@@ -1,14 +1,12 @@
 // services/ebay/ebay.description.template.js
-// Server-side mirror of src/components/listings/platforms/ebay/ebayDescriptionGenerator.ts.
-// Renders the eBay listing HTML at push time from live product/listing data, so a
-// listing with no description_override never carries a frozen copy. Keep both in step.
+// Server mirror of ebayDescriptionGenerator.ts, rendered at push time. Keep in step.
 
 const CONDITION_LABEL = {
   NEW: "Brand New · Sealed",
   USED: "Used",
 };
 
-// Stable marker present in every generated description (see .pha-wrap below).
+// Marker present in every generated description.
 const GENERATED_MARKER = 'class="pha-wrap"';
 
 function esc(s) {
@@ -23,13 +21,12 @@ function str(v) {
   return v == null ? "" : String(v);
 }
 
-/** True when `html` is this app's generated template rather than hand-written copy. */
+/** True when `html` is our generated template, not hand-written copy. */
 function isGeneratedEbayDescription(html) {
   return typeof html === "string" && html.includes(GENERATED_MARKER);
 }
 
-// Maps a resolved listing onto the generator's inputs, matching what the old
-// client-side form held: listing-level eBay fields, product-level vehicle.
+// Maps a resolved listing onto the inputs the old client form held.
 function descriptionInputFromResolved(resolved) {
   const { listing = {}, product = {}, photos = [] } = resolved;
   const specs = listing.item_specifics || {};
@@ -38,7 +35,7 @@ function descriptionInputFromResolved(resolved) {
     title: str(resolved.title),
     vehicle: product.vehicle || null,
     mpn: str(specs.mpn),
-    // NOTE: client used store_sku || product.sku (never the variant sku) — kept identical.
+    // NOTE: client ignored the variant SKU here; kept identical.
     stockNumber: str(listing.store_sku || product.sku),
     supersededPartNumbers: (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : []).map(str),
     authenticity: str(specs.authenticity),
@@ -53,7 +50,7 @@ function descriptionInputFromResolved(resolved) {
 function renderEbayDescription(input, { businessName, logoUrl } = {}) {
   const business = esc(businessName?.trim() || "Your Store");
   const businessNameSpan = `<span style="display:inline-block;vertical-align:middle;font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</span>`;
-  // Flat (no nested <table>) — eBay's sanitizer has dropped doubly-nested table content before.
+  // Flat markup: eBay's sanitizer drops doubly-nested tables.
   const headerLogo = logoUrl?.startsWith("https://")
     ? `<div style="white-space:nowrap;">
         <img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:200px;vertical-align:middle;display:inline-block;margin-right:16px;">
@@ -102,7 +99,7 @@ function renderEbayDescription(input, { businessName, logoUrl } = {}) {
         <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
       </tr>`;
 
-  // Only real HTTPS photos embed (same rule the client applied with embedImages: true).
+  // Only HTTPS photos embed (same rule as the client).
   const firstImage = input.imageUrl.startsWith("https://") ? input.imageUrl : "";
   const imageCell = firstImage
     ? `<img src="${firstImage}" alt="${title}" style="width:100%;height:auto;display:block;">`

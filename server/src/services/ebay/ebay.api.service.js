@@ -436,7 +436,7 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 
 function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const { sku, price, description, title, listing } = resolved;
-  // Effective category: listing value, else the tenant's mapping (listing.resolver.js).
+  // Listing category, else the tenant's mapping.
   const categoryId = resolved.category?.id || listing.ebay_category_id;
 
   // Policy IDs: listing-level override ?? this tenant's EbaySettings default

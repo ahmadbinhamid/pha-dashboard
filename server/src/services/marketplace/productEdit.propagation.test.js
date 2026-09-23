@@ -1,8 +1,5 @@
 // services/marketplace/productEdit.propagation.test.js
-// End-to-end guard for the single-source-of-truth goal: editing a product's title (with no
-// listing override) must reach BOTH real adapters' outbound payloads. Drives the real chain:
-// product.controller#updateProduct -> fan-out enqueue -> sync.service#syncListing -> adapter,
-// with only the platform HTTP layer stubbed. Needs a live Mongo connection.
+// A product title edit reaches both real adapters (only platform HTTP stubbed). Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
@@ -11,7 +8,7 @@ const mongoose = require("mongoose");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
-// Queue + HTTP stubs must be installed before the modules that destructure them load.
+// Stubs must be installed before the modules that destructure them load.
 const channelQueue = require("../../queues/channel.queue");
 const enqueueSpy = mock.method(channelQueue, "enqueueChannelJob", async () => ({ id: "fake-job" }));
 mock.method(require("../../queues/search.queue"), "enqueueSearchJob", async () => ({ id: "fake-search" }));
@@ -93,7 +90,7 @@ async function makeFixture() {
     target_country: "AU",
     consecutive_failures: 0,
   });
-  // No overrides on either listing; eBay has no category so update() stops after the item write.
+  // No overrides; no eBay category, so update() stops after the item write.
   await MarketplaceListing.create({
     tenant_id: tenantId, product: product._id, platform: "ebay", state: "active",
     condition: "NEW", external_listing_id: `L-${suffix}`, external_offer_id: `O-${suffix}`,

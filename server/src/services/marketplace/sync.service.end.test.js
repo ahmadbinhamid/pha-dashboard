@@ -1,7 +1,5 @@
 // services/marketplace/sync.service.end.test.js
-// TASK 4: endListing resolves the product/variant/SKU/settings context the adapters used to
-// query themselves. Guards that each adapter still withdraws exactly what it did before.
-// Needs a live Mongo connection.
+// endListing's resolved context keeps each adapter withdrawing the same thing. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");

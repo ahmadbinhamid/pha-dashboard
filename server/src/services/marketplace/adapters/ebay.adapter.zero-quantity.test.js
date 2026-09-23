@@ -1,23 +1,5 @@
 // services/marketplace/adapters/ebay.adapter.zero-quantity.test.js
-//
-// Regression guard: a manual stock correction to 0 must actually reach
-// eBay. Before this fix, publish()/update() both had an early
-// `if (quantity === 0) return { skipped: true, reason: "out_of_stock" }`
-// BEFORE any write — and a manual dashboard stock correction reaches eBay
-// ONLY via fan-out -> sync_listing -> update(). The result: correcting stock
-// to 0 in the dashboard silently never told eBay, which kept selling stock
-// that didn't exist. eBay must now receive the real 0.
-//
-// TASK 4: the adapter is now a pure translator — quantity arrives on
-// resolved.stock and the sync baseline is stamped by sync.service.js via
-// hooks.onQuantityPushed. So this file runs WITHOUT Mongo and asserts the
-// hook call; the DB baseline itself is asserted end to end in
-// sync.service.baseline.test.js (same two scenarios).
-//
-// Mocks ebay.api.service's credentialsConfigured/getAccessToken/
-// upsertInventoryItem (destructured by ebay.adapter.js at require time, so
-// installed BEFORE it is first required). buildInventoryItemFromResolved is
-// left real, so this also exercises its null-quantity omission logic.
+// A stock correction to 0 must reach eBay (it used to be skipped). No Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -32,8 +14,7 @@ const ebayAdapter = require("./ebay.adapter");
 
 const SETTINGS = { sandbox: true, marketplace_id: "EBAY_AU" };
 
-// ebay_category_id deliberately unset — update() then returns right after the
-// inventory-item write (the part this test cares about).
+// No category, so update() returns right after the inventory-item write.
 function resolvedFor({ stockControl, quantity }) {
   return {
     sku: "ZEROQ-1",

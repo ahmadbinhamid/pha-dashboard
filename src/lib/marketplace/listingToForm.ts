@@ -10,8 +10,7 @@ function normaliseSpn(raw: unknown): string[] {
   return [""];
 }
 
-// Shared by every place that resaves a listing before pushing to eBay (ListingEditPage, ListingsTab's row-level push).
-// Overrides are never prefilled from the product: an empty field means "use the product value".
+// Listing -> form for re-saves; overrides are never prefilled from the product.
 export function listingToForm(listing: EbayListing): EbayListingFormState {
   const productId =
     typeof listing.product === "object" ? listing.product._id : listing.product;
@@ -31,7 +30,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
     product_id: productId,
     variant_id: variantId,
     title_override: listing.title_override || "",
-    // A stored generated template is not a user choice: blank it so the next save lets the server re-render it.
+    // Blank a stored generated template so the server re-renders it.
     description_override: isGeneratedEbayDescription(listing.description_override) ? "" : listing.description_override || "",
     price_override: listing.price_override != null ? String(listing.price_override) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
@@ -77,8 +76,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   };
 }
 
-// Values the listing inherits when an override is empty, same variant->product precedence as
-// the backend's listing.resolver.js. Requires product/variant populated (listing.query.service.js#getListingById).
+// Values an empty override inherits (variant, then product), from a populated listing.
 export function getListingProductDefaults(listing: EbayListing): ListingProductDefaults {
   const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
   const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;

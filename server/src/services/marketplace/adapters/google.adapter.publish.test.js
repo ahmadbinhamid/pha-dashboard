@@ -1,9 +1,6 @@
 // services/marketplace/adapters/google.adapter.publish.test.js
 //
-// Exercises hydration + publish()/loadSettings() end to end against real Mongo fixtures, with fetch stubbed.
-// TASK 4: URL/quantity resolution moved out of the adapter into listing.resolver.js#hydrateResolved,
-// so resolveFor now hydrates before publish (same assertions). Pure adapter cases: google.adapter.pure.test.js.
-// Needs a live Mongo connection to run.
+// Hydration + publish() end to end on real Mongo fixtures, fetch stubbed. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");

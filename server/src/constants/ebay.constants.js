@@ -49,7 +49,7 @@ function currencyForMarketplace(marketplaceId) {
   return EBAY_MARKETPLACE_CURRENCY[marketplaceId] || "AUD";
 }
 
-// eBay's hard limit on an item title (Inventory API product.title).
+// eBay's hard item-title limit.
 const EBAY_TITLE_MAX_LENGTH = 80;
 
 module.exports = {

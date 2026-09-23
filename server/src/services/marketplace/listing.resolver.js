@@ -28,8 +28,7 @@ function resolvePrice(listing, product, variant) {
   return product.price ?? 0;
 }
 
-// The listing's own channel category (adapter.categoryField), or null so hydrateResolved can
-// fall back to the tenant's CategoryMapping. Null for an unregistered/unmapped platform.
+// The listing's own channel category, or null (hydration may fill in the mapping).
 function resolveListingCategory(listing) {
   const registry = require("./registry");
   if (!listing.platform || !registry.has(listing.platform)) return null;
@@ -56,7 +55,7 @@ function resolveListing(listing, product, variant = null) {
     brand,
     photos: resolvePhotos(listing, product, variant),
     identifiers: resolveIdentifiers(listing, product),
-    // { id, name, source: "listing" | "mapping" } | null — mapping filled in by hydrateResolved.
+    // { id, name, source: "listing" | "mapping" } | null
     category: resolveListingCategory(listing),
     // Pass raw documents through so adapters can read platform-specific fields
     listing: listing.toObject ? listing.toObject() : listing,
@@ -144,8 +143,7 @@ function buildProductUrl(host, productSlug) {
   return `https://${host}/product/${productSlug}`;
 }
 
-// The storefront host half of resolveProductUrl (same order and errors) — per tenant, so a
-// batch resolves it once rather than per product.
+// Host half of resolveProductUrl (same errors); per tenant, so batches resolve it once.
 async function resolveStorefrontHost(tenantId, platform) {
   const Domain = require("../../models/Domain");
   const Tenant = require("../../models/Tenant");
@@ -209,15 +207,14 @@ function resolveIdentifiers(listing, product) {
   return { gtin, mpn, brand };
 }
 
-// Tenant branding (company name/logo) for adapters that render it, e.g. eBay's description.
+// Tenant branding for adapters that render it (eBay description).
 async function resolveBranding(tenantId) {
   const { getCompanyProfile } = require("../tenantSettings.service");
   const { company_name, logo_url } = await getCompanyProfile(tenantId);
   return { company_name, logo_url };
 }
 
-// Adds the I/O-backed data an adapter declares in `adapter.needs`, in place, so adapters
-// never query the DB themselves. All items share one tenant (callers are per-tenant).
+// Adds the I/O data declared in adapter.needs, in place; items share one tenant.
 async function hydrateResolved(resolvedList, adapter, tenantId) {
   const needs = adapter?.needs || {};
   if (!resolvedList.length) return resolvedList;
@@ -231,12 +228,8 @@ async function hydrateResolved(resolvedList, adapter, tenantId) {
   return resolvedList;
 }
 
-// resolved.stock = { stock_control, quantity }. quantity is looked up whenever stock_control
-// isn't strictly false, which covers both adapters' existing semantics:
-//   eBay:   falsy stock_control (incl. undefined) => don't send a quantity (null)
-//   Google: only stock_control === false => excluded as untracked; undefined still tracked
-// NOTE: the two genuinely differ for stock_control === undefined; each adapter keeps its own
-// rule on top of this shared lookup rather than being silently unified.
+// Looks up quantity unless stock_control === false, covering both adapters' rules.
+// NOTE: eBay treats unset stock_control as untracked, Google doesn't; both are kept.
 async function applyStock(resolvedList) {
   const tracked = resolvedList.filter((r) => r.product?.stock_control !== false);
   const pairs = tracked.map((r) => ({ productId: r.product._id, variantId: r.variant?._id || null }));
@@ -250,8 +243,7 @@ async function applyStock(resolvedList) {
   }
 }
 
-// resolved.productUrl, or resolved.productUrlError — captured, not thrown, so the adapter
-// raises it at the same point it always did (e.g. after Google's untracked-stock skip).
+// Captures URL errors so the adapter raises them at its original point.
 async function applyProductUrls(resolvedList, platform, tenantId) {
   let hostResult = null;
   for (const resolved of resolvedList) {
@@ -266,7 +258,7 @@ async function applyProductUrls(resolvedList, platform, tenantId) {
   }
 }
 
-// Category order: per-listing value -> tenant mapping for the product's category -> unset.
+// Category order: listing value -> tenant mapping -> unset.
 async function applyMappedCategories(resolvedList, platform, tenantId) {
   const missing = resolvedList.filter((r) => !r.category?.id && r.product);
   if (!missing.length) return;

@@ -4,15 +4,14 @@ import type { ChannelFieldOption } from "@/types/channel";
 import type { MappedCategory } from "@/types/categoryMapping";
 
 export interface ChannelFieldSources {
-  // Dynamic option lists keyed by descriptor.optionsSource (static ones ride on the descriptor).
+  // Dynamic options keyed by optionsSource.
   options: Record<string, ChannelFieldOption[]>;
-  // What a blank field resolves to server-side, keyed by field key.
+  // Server-side fallback per field key.
   fallbacks: Record<string, string | null | undefined>;
   loading: boolean;
 }
 
-// Per-platform data a schema can't carry: the tenant's eBay business policies and their
-// defaults, plus the product's mapped category. Queries only run for the platform that needs them.
+// Options and fallbacks a schema can't carry (eBay policies, mapped category).
 export function useChannelFieldSources(
   platform: string,
   categoryField: string | undefined,

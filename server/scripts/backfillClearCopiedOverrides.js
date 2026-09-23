@@ -1,21 +1,5 @@
-// scripts/backfillClearCopiedOverrides.js
-//
-// Nulls listing overrides (title/description/price/photos) that are copies of the current
-// product/variant value — artifacts of the old listing form prefilling them — so product
-// edits reach the channel again. An override that differs from the product is never touched.
-// Logic lives in services/marketplace/listingOverride.service.js.
-//
-// Usage:
-//   node scripts/backfillClearCopiedOverrides.js [--dry-run] [--tenant=<tenantId>]
-//                                                [--include-generated-descriptions]
-//
-//   --dry-run                          Report what would change; writes nothing.
-//   --tenant=<id>                      Only this tenant's listings.
-//   --include-generated-descriptions   Also clear eBay descriptions that are the app's own
-//                                      generated template (users never author these); eBay
-//                                      then re-renders them from live data on next sync.
-//
-// Idempotent: each write re-checks the stored value, so re-runs and concurrent edits are safe.
+// Clears listing overrides that just copy the product value; real overrides are kept.
+// Usage: [--dry-run] [--tenant=<id>] [--include-generated-descriptions]
 
 const { clearCopiedOverrides, OVERRIDE_FIELDS } = require("../src/services/marketplace/listingOverride.service");
 

@@ -12,11 +12,11 @@ interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   vehicle: ProductVehicle | null | undefined;
-  // Effective-value fallbacks for the preview — display only, never saved.
+  // Preview-only fallbacks, never saved.
   productDefaults: ListingProductDefaults;
 }
 
-// Preview mirrors the template the server renders at push time (ebay.description.template.js).
+// Preview of the template the server renders at push time.
 export function EbayDescriptionSection({ form, onChange, vehicle, productDefaults }: Props) {
   const { data: tenantSettingsData } = useQuery({
     queryKey: ["tenant-settings"],

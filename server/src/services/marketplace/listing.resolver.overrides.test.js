@@ -1,6 +1,5 @@
 // services/marketplace/listing.resolver.overrides.test.js
-// resolveListing's override semantics: null/empty overrides fall through to the product
-// (or variant) value; a set override wins. Pure — no Mongo needed.
+// Empty overrides fall through to the product/variant value; set ones win. No Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -11,7 +11,7 @@ const mappingParams = {
   }),
 };
 
-// eBay and Google category ids are both numeric in their taxonomies.
+// eBay and Google category ids are both numeric.
 const upsertMapping = {
   ...mappingParams,
   body: Joi.object({

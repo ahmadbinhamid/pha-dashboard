@@ -1,12 +1,11 @@
 // services/marketplace/fieldSchema.test.js
-// Adapter fieldSchema contract: descriptors are well-formed, name only real listing fields,
-// and their rules are enforced server-side in each adapter's mapper. Pure — no Mongo.
+// fieldSchema contract: real fields only, and rules enforced in the mappers. No Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 
-// ebay.adapter.js destructures these at require time.
+// Must be mocked before ebay.adapter.js is required.
 const ebayApi = require("../ebay/ebay.api.service");
 mock.method(ebayApi, "credentialsConfigured", () => true);
 mock.method(ebayApi, "getAccessToken", async () => "tok");

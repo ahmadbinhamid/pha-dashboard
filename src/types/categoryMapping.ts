@@ -1,4 +1,4 @@
-// Shapes from /category-mappings (server/src/services/categoryMapping.service.js).
+// Shapes from /category-mappings.
 
 export interface CategoryMapping {
   _id: string;
@@ -15,7 +15,7 @@ export interface ChannelCategoryOption {
 }
 
 export interface CategorySuggestion extends ChannelCategoryOption {
-  // false => generic fallback, not a keyword match on the category name.
+  // false => generic fallback, not a keyword match.
   matched: boolean;
 }
 
@@ -33,7 +33,7 @@ export interface CategoryMappingOverview {
   google_categories: ChannelCategoryOption[];
 }
 
-// A listing's effective category and where it came from (listing.resolver.js order).
+// Where a listing's effective category came from.
 export type CategorySource = "listing" | "mapping";
 
 export interface MappedCategory {
@@ -43,5 +43,5 @@ export interface MappedCategory {
   product_category_id: string;
 }
 
-// Per-platform default for one product; null when its categories have no mapping.
+// Per-platform default for one product (null when unmapped).
 export type ProductMappedCategories = Record<string, MappedCategory | null>;

@@ -16,8 +16,7 @@ export const createGoogleListing = async (productId: string, variantId: string |
   return data;
 };
 
-// Overrides are sent only when the form carries them (the product form's Google panel); an
-// empty override is sent as null so the product value is used.
+// Sends overrides only when the form has them; empty becomes null (product value).
 export const updateGoogleListing = async (id: string, form: GoogleListingFormState | GoogleChannelFormState) => {
   const overrides =
     "title_override" in form

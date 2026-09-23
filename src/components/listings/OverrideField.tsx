@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/Label";
 interface OverrideFieldProps {
   label: string;
   htmlFor?: string;
-  // true when the listing holds its own value; false means the product value is used.
+  // false means the product value is used.
   overridden: boolean;
-  // Nulls the override so the field falls back to the product again.
+  // Clears the override back to the product value.
   onReset: () => void;
   required?: boolean;
   error?: string;
@@ -16,7 +16,7 @@ interface OverrideFieldProps {
   children: React.ReactNode;
 }
 
-// A per-channel override input: shows "using product value" vs "overridden", plus a reset.
+// Override input with "using product value" / "overridden" state and a reset.
 export function OverrideField({ label, htmlFor, overridden, onReset, required, error, hint, children }: OverrideFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">

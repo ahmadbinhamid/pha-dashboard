@@ -4,8 +4,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { getListing } from "@/lib/api/listings";
 import { productChannelsPath } from "@/config/salesChannels";
 
-// Retired: a listing is edited in its product's Sales Channels section. The route stays so
-// existing bookmarks/links (/listings/:id/edit) land on that channel's panel instead of 404ing.
+// Retired page: redirects old links to the product's channel panel.
 export default function ListingEditPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError } = useQuery({ queryKey: ["listing", id], queryFn: () => getListing(id!), enabled: !!id });

@@ -8,7 +8,7 @@ interface Props {
   error?: string;
 }
 
-// Package dimensions + weight (sent to eBay as packageWeightAndSize).
+// Package dimensions and weight.
 export function EbayPackageFields({ value, onChange, error }: Props) {
   function patch(p: Partial<EbayListingFormState["package"]>) {
     onChange({ ...value, ...p });

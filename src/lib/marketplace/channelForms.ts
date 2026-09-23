@@ -11,25 +11,22 @@ import { createListing, pushListing, updateListing } from "@/lib/api/listings";
 import { createGoogleListing, updateGoogleListing } from "@/lib/api/googleListings";
 import { listingToForm } from "@/lib/marketplace/listingToForm";
 
-// Per-channel glue between the product form's schema-driven panel and each platform's own
-// listing endpoints (there is no generic create route). A channel with no adapter here is
-// shown in Sales Channels but can't be ticked from the product form yet.
+// Per-channel create/save glue for the product form (there's no generic create route).
 
 export type ChannelFormState = EbayListingFormState | GoogleChannelFormState;
 
 export interface ChannelFormAdapter {
-  // Seed for a first listing. Overrides stay empty so every product field stays live.
+  // First-listing seed; overrides stay empty so product fields stay live.
   initialForm(product: Product): ChannelFormState;
   fromListing(listing: AnyMarketplaceListing): ChannelFormState;
-  // The same calls the old per-channel "list" action made; resolves to the new listing id.
+  // Same calls as the old "list" action; resolves to the new listing id.
   create(product: Product, form: ChannelFormState): Promise<string>;
-  // Save the panel, then queue a sync through the existing push endpoint.
+  // Save, then queue a sync via the existing push endpoint.
   saveAndSync(listingId: string, form: ChannelFormState): Promise<void>;
   supportsPhotoOverrides: boolean;
 }
 
-// Carries the created listing's id when the follow-up push is rejected (e.g. a 422), so the
-// UI can show the listing as created-but-not-live instead of losing track of it.
+// Keeps the created listing's id when the follow-up push is rejected.
 export type ChannelApiError = Error & { status?: number; errors?: Array<{ field: string; message: string }> };
 
 export class ChannelPushError extends Error {
@@ -52,8 +49,7 @@ async function pushOrThrow(listingId: string) {
 }
 
 const ebayAdapter: ChannelFormAdapter = {
-  // NOTE: seeds the eBay-only fields exactly as the old ListingCreatePage did (SKU, condition,
-  // MPN, authenticity). The category is left empty so the tenant's mapping stays live.
+  // NOTE: seeds eBay fields like the old create page; category left empty for the mapping.
   initialForm: (product) => ({
     ...EBAY_LISTING_FORM_INITIAL,
     product_id: product._id,
@@ -66,7 +62,7 @@ const ebayAdapter: ChannelFormAdapter = {
     },
   }),
   fromListing: (listing) => listingToForm(listing as EbayListing),
-  // Old flow: POST /ebay/listings (DRAFT) then POST /listings/:id/push (validates + queues).
+  // Old flow: create a DRAFT, then push (validates + queues).
   create: async (_product, form) => {
     const { data } = await createListing(form as EbayListingFormState);
     await pushOrThrow(data._id);
@@ -98,8 +94,7 @@ const googleAdapter: ChannelFormAdapter = {
           price_override: listing.price_override != null ? String(listing.price_override) : "",
         }
       : { ...GOOGLE_CHANNEL_FORM_INITIAL },
-  // Old flow: POST /google/listings creates AND queues the first sync. Its create body takes
-  // no overrides, so any set before ticking are saved right after (and re-queued).
+  // Create also queues a sync; overrides aren't accepted on create, so save them after.
   create: async (product, form) => {
     const googleForm = form as GoogleChannelFormState;
     const { data } = await createGoogleListing(product._id, null, googleForm);

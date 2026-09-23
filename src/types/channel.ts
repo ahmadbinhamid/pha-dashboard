@@ -24,9 +24,7 @@ export interface ChannelCapabilities {
   variants: boolean;
 }
 
-// One channel-only form field from the adapter's manifest.fieldSchema
-// (server/src/services/marketplace/adapters/*.fieldSchema.js). `options` is attached server-side
-// for static option sources; dynamic ones (e.g. eBay business policies) are fetched by the UI.
+// A channel-only form field from manifest.fieldSchema (static options attached).
 export type ChannelFieldType = "text" | "textarea" | "number" | "boolean" | "select" | "category" | "policy" | "custom";
 
 export interface ChannelFieldOption {
@@ -58,7 +56,7 @@ export interface ChannelSummary {
   authType: string;
   setupSteps: string[];
   requiredTenantData: string[];
-  // Channel-only fields for the product form's panel; empty/absent for an adapter without one.
+  // Channel-only fields for the product form's panel.
   fieldSchema?: ChannelFieldDescriptor[];
   productConstraints?: ChannelProductConstraints;
   // True unless this channel needs something the tenant doesn't have yet (Google Shopping: a verified storefront domain). `unavailable_reason` is a ready-to-show string whenever this is false.

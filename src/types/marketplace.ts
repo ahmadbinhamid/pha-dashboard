@@ -170,8 +170,7 @@ export const GOOGLE_LISTING_FORM_INITIAL: GoogleListingFormState = {
   shipping_label: "",
 };
 
-// Google panel state in the product form: channel fields plus optional overrides (empty =
-// use the product value). Google's API takes no photo override, so none is offered.
+// Google panel state: channel fields plus overrides (no photos; Google's API lacks them).
 export interface GoogleChannelFormState extends GoogleListingFormState {
   title_override: string;
   description_override: string;
@@ -185,8 +184,7 @@ export const GOOGLE_CHANNEL_FORM_INITIAL: GoogleChannelFormState = {
   price_override: "",
 };
 
-// The product (or variant) values a listing inherits when an override is empty — shown as
-// placeholders and used to validate the effective value, never copied into form state.
+// Product values an empty override inherits (placeholders only, never copied).
 export interface ListingProductDefaults {
   title: string;
   price: number | null;

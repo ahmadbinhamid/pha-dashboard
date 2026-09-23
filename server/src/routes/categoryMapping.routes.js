@@ -1,6 +1,5 @@
 // routes/categoryMapping.routes.js
-// Tenant category -> channel category defaults. Reads for any staff user; writes admin-only,
-// matching category.routes.js.
+// Category mapping settings: reads for staff, writes admin-only.
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");

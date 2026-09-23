@@ -18,7 +18,6 @@ const Refund = require("../models/Refund");
 const Location = require("../models/Location");
 const Inventory = require("../models/Inventory");
 const MarketplaceListing = require("../models/MarketplaceListing");
-// TASK 5a: ebay.queue.js shim removed — same Bull queue ("ebay") via channel.queue.js.
 const ebayQueue = require("../queues/channel.queue").getQueue("ebay");
 const refundService = require("./refund.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");

@@ -228,7 +228,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
   });
 
-  // Every channel is managed in the product form's Sales Channels section now.
+  // Channels are managed in the product form's Sales Channels section.
   function handleOpenChannel(product: Product, platform: string) {
     navigate(productChannelsPath(product.slug, platform));
   }

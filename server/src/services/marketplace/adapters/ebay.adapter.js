@@ -16,9 +16,7 @@
 //   publish(resolved, settings, hooks?, seq?)      -> { external_listing_id, external_offer_id, quantity }
 //   update(resolved, settings, hooks?, seq?)       -> { external_listing_id, external_offer_id, quantity }
 //   end(listing, { product, variant, settings, sku }) -> void
-//
-// Pure translator: everything it needs (stock, branding, category, end() context) arrives
-// pre-resolved from sync.service.js / listing.resolver.js. No model or inventory access here.
+// Pure translator: all I/O is resolved beforehand by sync.service/listing.resolver.
 //
 // There is no separate lightweight "just push a quantity" entry point
 // anymore (the old pushInventory/push_quantity job) — every quantity push,
@@ -31,8 +29,7 @@
 // hooks.onOfferCreated(offerId) is invoked as soon as an offer ID is known,
 // before the (separate, failure-prone) publish call — lets the caller persist
 // it immediately so a later failure doesn't cause a retry to recreate the offer.
-// hooks.onQuantityPushed(quantity) is invoked right after a confirmed inventory write so the
-// caller can stamp the sync baseline (fields from syncBaselineFields below).
+// hooks.onQuantityPushed(quantity) fires after a confirmed write to stamp the baseline.
 
 const { logger } = require("../../../loaders/logging");
 const {
@@ -75,15 +72,15 @@ const manifest = {
     "Choose default fulfillment/payment/return business policies",
   ],
   requiredTenantData: ["marketplace_id", "warehouse_address", "business_policies"],
-  // Channel-only fields the product form's eBay panel renders (see ebay.fieldSchema.js).
+  // Channel-only fields for the product form's eBay panel.
   fieldSchema,
   productConstraints,
 };
 
-// I/O-backed data sync.service hydrates onto `resolved` before calling us (listing.resolver.js).
+// I/O the resolver hydrates onto `resolved` before calling us.
 const needs = { branding: true, stock: true };
 
-// Listing field holding this channel's category; falls back to the tenant's CategoryMapping.
+// Listing field for the channel category (falls back to the tenant mapping).
 const categoryField = "ebay_category_id";
 
 const capabilities = {
@@ -112,11 +109,8 @@ async function loadSettings(tenantId) {
   return getEbaySettings(tenantId);
 }
 
-// Extra eBay-only fields stamped alongside the generic baseline (synced_quantity/synced_at/
-// last_pushed_seq) whenever WE push a quantity, so ebay.inventory-sync.service.js can tell
-// "eBay changed since we last touched it" from "we just changed it". Written by
-// sync.service.js#recordQuantityPushed via hooks.onQuantityPushed — only after a confirmed write.
-// TODO(dual-write): drop once ebay_synced_quantity is backfilled from synced_quantity.
+// eBay-only baseline fields, so the inventory poller can tell our pushes from eBay edits.
+// TODO(dual-write): drop once ebay_synced_quantity is backfilled.
 function syncBaselineFields(quantity) {
   return { ebay_synced_quantity: quantity, ebay_synced_at: new Date(), ebay_pending_reconcile_qty: null };
 }
@@ -288,10 +282,8 @@ function resolveQuantity(resolved) {
   return resolved.stock.quantity;
 }
 
-// No description_override => render the branded template from live data at push time,
-// replacing the copy the client used to generate and store on every save.
-// NOTE: a legacy listing with a null override used to push plain product.description;
-// it now gets the same template every UI-created listing has always had.
+// No override => render the template from live data (was a stored client-side copy).
+// NOTE: legacy null-override listings now get the template instead of plain text.
 function withRenderedDescription(resolved) {
   if (resolved.listing?.description_override) return resolved;
   const branding = resolved.branding || {};
@@ -302,18 +294,18 @@ function withRenderedDescription(resolved) {
   return { ...resolved, description: html };
 }
 
-// Listing value, else the tenant's category mapping (set by listing.resolver.js#hydrateResolved).
+// Listing category, else the tenant's mapping.
 function effectiveCategoryId(resolved) {
   return resolved.category?.id || resolved.listing?.ebay_category_id || null;
 }
 
-// Server-side enforcement of fieldSchema rules; `keys` picks which rules apply at this step.
+// Enforces fieldSchema rules; `keys` picks which apply at this step.
 function assertEbayFields(resolved, settings, keys) {
   const values = fieldValues(resolved.listing, { categoryId: effectiveCategoryId(resolved), settings });
   assertFieldValues(key, fieldSchema, values, { keys, sku: resolved.sku });
 }
 
-// Rules checked before any eBay write: effective title length plus UPFRONT_KEYS.
+// Checked before any eBay write.
 function assertUpfrontFields(resolved, settings) {
   assertProductConstraints(key, productConstraints, resolved);
   assertEbayFields(resolved, settings, UPFRONT_KEYS);
@@ -349,9 +341,9 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
   // for — see resolveQuantity's comment.
   if (quantity != null) await hooks.onQuantityPushed?.(quantity);
 
-  // Same point as before (after the item write); now a ChannelFieldValidationError (status 400).
+  // Same point as the old category check (after the item write).
   assertEbayFields(resolved, settings, ["ebay_category_id"]);
-  // eBay's publishOffer requires all three business policies (listing value or tenant default).
+  // publishOffer needs all three policies (listing or tenant default).
   assertEbayFields(resolved, settings, POLICY_KEYS);
 
   // Step 2 — ensure merchant location exists (creates it from this tenant's
@@ -408,8 +400,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
   if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
 
   const { listing } = resolved;
-  // NOTE: policies aren't enforced on update — a live offer may rely on eBay-side policy
-  // state we can't see, and a missing category here keeps today's "skip the offer" path.
+  // NOTE: policies not enforced on update; a live offer may rely on eBay-side state.
   assertUpfrontFields(resolved, settings);
   const quantity = resolveQuantity(resolved);
 
@@ -471,8 +462,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
   };
 }
 
-// context comes from sync.service.js#endListing: the listing's product/variant (null when
-// deleted), this tenant's settings, and the SKU (store_sku, else resolveSku's rule).
+// Context from sync.service#endListing (product is null when deleted).
 async function end(listing, { product, settings, sku } = {}) {
   const offerId = listing.external_offer_id || null;
 

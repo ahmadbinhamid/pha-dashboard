@@ -41,7 +41,7 @@ interface ListingFormProps {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   listing?: EbayListing | null;
-  // What each empty override falls back to — shown as placeholders, never copied into `form`.
+  // Product values shown as placeholders, never copied into `form`.
   productDefaults: ListingProductDefaults;
   // Product's own vehicle data, fetched live by the page — read directly, never copied into form state, so it can't drift from the Product page.
   productVehicle?: ProductVehicle | null;

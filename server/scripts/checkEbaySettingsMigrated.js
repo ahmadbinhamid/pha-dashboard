@@ -1,16 +1,5 @@
-// scripts/checkEbaySettingsMigrated.js
-//
-// READ-ONLY. Reports tenants that still have a legacy EbaySettings doc with no live eBay
-// ChannelConnection. EbaySettings (models/EbaySettings.js) may only be deleted once this
-// reports 0 — until then the lazy read-through in ebay.settings.service.js still needs it.
-// Migrate stragglers with scripts/migrateEbaySettingsToChannelConnection.js.
-//
-// Usage:
-//   node scripts/checkEbaySettingsMigrated.js [--tenant=<tenantId>] [--dry-run]
-//
-//   --dry-run   Accepted for consistency with the other scripts; this script never writes.
-//
-// Exit code: 0 when every tenant is migrated, 2 when some are not (usable as a CI/deploy gate).
+// Read-only: tenants with EbaySettings but no eBay ChannelConnection (exit 2 if any).
+// Usage: [--tenant=<id>] [--dry-run (no-op)]
 
 const { listUnmigratedLegacyTenants } = require("../src/services/ebay/ebay.settings.service");
 

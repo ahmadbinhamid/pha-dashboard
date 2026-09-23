@@ -1,6 +1,5 @@
 // services/categoryMapping.service.test.js
-// Category resolution order (listing value -> tenant mapping -> unset), multi-category
-// precedence, tenant isolation, and name-based Google suggestions. Needs a live Mongo connection.
+// Category resolution order, tenant isolation and Google suggestions. Needs Mongo.
 
 const test = require("node:test");
 const { before, after } = require("node:test");

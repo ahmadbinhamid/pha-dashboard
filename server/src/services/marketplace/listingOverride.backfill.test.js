@@ -1,7 +1,5 @@
 // services/marketplace/listingOverride.backfill.test.js
-// scripts/backfillClearCopiedOverrides.js: copies of the product value are cleared, genuine
-// overrides are preserved, --dry-run writes nothing, and a re-run is a no-op.
-// Needs a live Mongo connection.
+// Backfill clears copies, keeps real overrides, honours --dry-run. Needs Mongo.
 
 const test = require("node:test");
 const { before, after } = require("node:test");

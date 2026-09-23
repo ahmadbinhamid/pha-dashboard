@@ -10,7 +10,7 @@ import { cn } from "@/utils/cn";
 import type { Attachment } from "@/types/product";
 import type { ListingProductDefaults } from "@/types/marketplace";
 
-// The override fields every channel form state shares (EbayListingFormState / GoogleChannelFormState).
+// Override fields shared by every channel form state.
 export interface OverrideValues {
   title_override: string;
   description_override: string;
@@ -27,7 +27,7 @@ interface Props {
   errors: Record<string, string>;
 }
 
-// "Advanced" disclosure: per-channel overrides, empty by default so the product value is used.
+// "Advanced" per-channel overrides; empty means the product value is used.
 export function ChannelOverridesSection({ values, onChange, productDefaults, supportsPhotos, titleMaxLength, errors }: Props) {
   const photos = values.photo_overrides ?? [];
   const overriddenCount = [

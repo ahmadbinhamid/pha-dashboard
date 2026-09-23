@@ -19,9 +19,7 @@ const ebayTenant = require("./ebay.tenant");
 const ebaySettingsService = require("./ebay.settings.service");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 
-// Stock adjustments fan out via channel.queue.js#enqueueChannelJob; mocked so no real Redis is
-// needed. Also the spy the "accept does not push" test reads (eBay-bound calls only).
-// TASK 5a: was ebay.queue.js#enqueueEbayJob (shim removed); queues are lazy, so nothing to close.
+// Mocked so no Redis is needed; also the spy for "accept does not push" (eBay calls only).
 const channelQueue = require("../../queues/channel.queue");
 const enqueueChannelJobSpy = mock.method(channelQueue, "enqueueChannelJob", async () => {});
 const ebayEnqueueCount = () => enqueueChannelJobSpy.mock.calls.filter((c) => c.arguments[0] === MARKETPLACE_PLATFORM.EBAY).length;

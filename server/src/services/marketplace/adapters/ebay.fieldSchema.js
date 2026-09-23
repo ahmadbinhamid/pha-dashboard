@@ -1,12 +1,6 @@
 // services/marketplace/adapters/ebay.fieldSchema.js
-// What eBay needs beyond the product — ONLY listing fields the eBay payload actually reads
-// (ebay.api.service.js builders, ebay.description.template.js, resolveSku). Pure data, shared
-// by ebay.adapter.js (manifest + mapper enforcement) and validators/ebay.listing.validation.js.
-//
-// NOTE: deliberately omitted because nothing sends them to eBay today: store_category_id,
-// quantity_available (quantity always comes from live stock), listing_duration (never put on
-// the offer), require_immediate_payment (governed by the payment policy), item_location_zip.
-// They stay on the model and API untouched.
+// eBay fields beyond the product — only what the eBay payload actually reads.
+// NOTE: omits fields never sent to eBay (store category, duration, quantity, zip).
 
 const { FIELD_TYPE } = require("../../../constants/channelField.constants");
 const { EBAY_TITLE_MAX_LENGTH } = require("../../../constants/ebay.constants");
@@ -41,8 +35,7 @@ const fieldSchema = Object.freeze([
     optionsSource: "ebay.categoryAspects",
     group: "specifics",
   },
-  // Read by the description template's fitment table (and the storefront), not by aspects:
-  // Make/Model/Year aspects come from product.vehicle — see ebay.api.service.js#buildVehicleAspects.
+  // Used by the description's fitment table; aspects use product.vehicle.
   {
     key: "fitment",
     label: "Vehicle fitment",
@@ -99,11 +92,10 @@ const fieldSchema = Object.freeze([
   },
 ]);
 
-// Limits eBay applies to product-derived values, checked on the effective value.
+// Limits on product-derived values (checked on the effective value).
 const productConstraints = Object.freeze({ title: { maxLength: EBAY_TITLE_MAX_LENGTH } });
 
-// Effective value per schema key: listing value, falling back where eBay itself would
-// (category -> tenant mapping, policies -> tenant eBay default).
+// Effective value per key (category -> mapping, policies -> tenant default).
 function fieldValues(listing, { categoryId = listing.ebay_category_id, settings = null } = {}) {
   return {
     ebay_category_id: categoryId,
@@ -122,7 +114,7 @@ function fieldValues(listing, { categoryId = listing.ebay_category_id, settings 
   };
 }
 
-// Rule groups by when the adapter enforces them (see ebay.adapter.js).
+// Rule groups by when the adapter enforces them.
 const UPFRONT_KEYS = Object.freeze(["condition", "format", "accept_best_offer", "min_best_offer"]);
 const POLICY_KEYS = Object.freeze(["fulfillment_policy_id", "payment_policy_id", "return_policy_id"]);
 

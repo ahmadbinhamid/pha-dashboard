@@ -17,14 +17,11 @@ const listListings = {
   }),
 };
 
-// Validates a fully-populated listing document before enqueuing for eBay sync.
-// `categoryId` is the effective category (listing value, else the tenant's mapping);
-// `settings` supplies the tenant's default business policies.
+// Validates a populated listing before an eBay push, using effective category/policies.
 function validateListingForPush(listing, product, { categoryId = listing.ebay_category_id, settings = null } = {}) {
   const errors = [];
 
-  // Validates the EFFECTIVE title (override, else product), so an over-long product title
-  // is caught here rather than rejected by eBay.
+  // Checks the effective title, so an over-long product title is caught here.
   const usingOverride = !!listing.title_override;
   const title = usingOverride ? listing.title_override : product?.title;
   if (!title?.trim()) {
@@ -38,8 +35,7 @@ function validateListingForPush(listing, product, { categoryId = listing.ebay_ca
     });
   }
 
-  // Category + business policies come from the shared fieldSchema (same rules the adapter enforces).
-  // NOTE: a tenant default policy now satisfies this, matching what the adapter actually sends.
+  // NOTE: shared fieldSchema rules; a tenant default policy now satisfies this.
   errors.push(
     ...validateFieldValues(fieldSchema, fieldValues(listing, { categoryId, settings }), {
       keys: ["ebay_category_id", ...POLICY_KEYS],

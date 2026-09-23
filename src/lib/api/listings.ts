@@ -21,8 +21,7 @@ export interface ListingListParams {
   search?: string;
 }
 
-// Empty override => null => the server uses the live product value. The eBay description is
-// rendered server-side at push time (services/ebay/ebay.description.template.js), not stored here.
+// Empty override => null (use the product value); eBay's description renders server-side.
 function formStateToPayload(form: EbayListingFormState) {
   return {
     product: form.product_id,

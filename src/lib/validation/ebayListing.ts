@@ -7,8 +7,7 @@ export type EbayListingErrors = Partial<Record<keyof EbayListingFormState | "min
 // Auction durations allowed by eBay (GTC is Fixed Price only)
 const AUCTION_DURATIONS = ["DAYS_1", "DAYS_3", "DAYS_5", "DAYS_7", "DAYS_10"];
 
-// Overrides are optional: every check below runs on the EFFECTIVE value (override, else the
-// product's), mirroring server validators/ebay.listing.validation.js#validateListingForPush.
+// Checks run on effective values (override, else product), like the server.
 export function validateEbayListing(form: EbayListingFormState, defaults: ListingProductDefaults): EbayListingErrors {
   const errors: EbayListingErrors = {};
 

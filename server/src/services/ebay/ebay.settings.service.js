@@ -347,8 +347,7 @@ async function listConfiguredTenants() {
   return results;
 }
 
-// Read-only: tenants with a legacy EbaySettings row but no live eBay ChannelConnection yet.
-// EbaySettings can be deleted once this is empty (scripts/checkEbaySettingsMigrated.js).
+// Tenants with EbaySettings but no live eBay ChannelConnection (read-only).
 async function listUnmigratedLegacyTenants({ tenantId = null } = {}) {
   return EbaySettings.aggregate([
     { $match: tenantId ? { tenant_id: new mongoose.Types.ObjectId(String(tenantId)) } : {} },

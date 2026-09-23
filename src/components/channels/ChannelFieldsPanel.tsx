@@ -20,7 +20,7 @@ const GROUP_LABELS: Record<string, string> = {
   advanced: "Listing settings",
 };
 
-// Types that need a full row rather than half of the two-column grid.
+// Types that span the full grid row.
 const FULL_WIDTH_TYPES: ChannelFieldDescriptor["type"][] = ["custom", "category", "textarea"];
 
 interface Props {
@@ -34,7 +34,7 @@ interface Props {
   supportsPhotos: boolean;
 }
 
-// Groups descriptors in schema order, keeping each group together.
+// Groups descriptors, preserving schema order.
 function groupSchema(schema: ChannelFieldDescriptor[]) {
   const groups = new Map<string, ChannelFieldDescriptor[]>();
   for (const d of schema) {
@@ -44,7 +44,7 @@ function groupSchema(schema: ChannelFieldDescriptor[]) {
   return [...groups.entries()];
 }
 
-// One channel's panel, rendered from its adapter's fieldSchema (server/.../adapters/*.fieldSchema.js).
+// One channel's panel, rendered from its adapter's fieldSchema.
 export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, mappedCategory, productDefaults, supportsPhotos }: Props) {
   const schema = channel.fieldSchema ?? [];
   const values = form as unknown as Record<string, unknown>;

@@ -1,10 +1,6 @@
 // services/marketplace/adapters/google.fieldSchema.js
-// What Google needs beyond the product — ONLY listing fields google.adapter.js reads.
-//
-// NOTE: feed_label/content_language are omitted: the adapter reads them from the tenant's
-// ChannelConnection (chosen once at connect), never the listing. custom_label_0..4 are read
-// but no route can set them (google.listing.validation.js strips them), so they aren't offered.
-// Identifiers: gtin wins; else mpn + brand (brand always comes from the product/eBay listing).
+// Google fields beyond the product — only what google.adapter.js reads.
+// NOTE: feed_label/content_language come from the connection; custom labels aren't settable.
 
 const { FIELD_TYPE } = require("../../../constants/channelField.constants");
 

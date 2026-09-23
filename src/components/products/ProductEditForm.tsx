@@ -129,7 +129,7 @@ export function ProductEditForm({
   const [imagesUploading, setImagesUploading] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
 
-  // Redirected listing links land here with ?channel=<key>#sales-channels (config/salesChannels.ts).
+  // Redirected listing links land here with ?channel=<key>#sales-channels.
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const focusChannel = searchParams.get("channel");
@@ -278,7 +278,7 @@ export function ProductEditForm({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {/* Listing now lives in the Sales channels section below (replaces the old per-channel pages). */}
+            {/* Listing now lives in the Sales channels section below. */}
             <Button
               type="button"
               variant="secondary"
@@ -474,7 +474,7 @@ export function ProductEditForm({
             notes={product.internal_notes}
           />
 
-          {/* 7. Sales channels — the single place a product is listed on eBay/Google/... */}
+          {/* 7. Sales channels */}
           <ProductSalesChannelsSection number={7} product={product} focusChannel={focusChannel} focus={focusChannels} />
 
         </div>

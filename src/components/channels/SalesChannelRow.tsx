@@ -25,7 +25,7 @@ interface Props {
   index: number;
   product: Product;
   productDefaults: ListingProductDefaults;
-  // This product's base (non-variant) listing on the channel, from GET /listings?product=.
+  // The product's base (non-variant) listing on this channel.
   listingSummary: AnyMarketplaceListing | null;
   mappedCategory: MappedCategory | null | undefined;
   defaultOpen?: boolean;
@@ -36,7 +36,7 @@ function fieldErrorsFrom(err: unknown): Record<string, string> {
   return Object.fromEntries((source?.errors ?? []).map(({ field, message }) => [field, message]));
 }
 
-// One channel in the product form's Sales Channels section: tick to list, untick to end.
+// One Sales Channels row: tick to list, untick to end the listing.
 export function SalesChannelRow({ channel, index, product, productDefaults, listingSummary, mappedCategory, defaultOpen = false }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -51,7 +51,7 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<ChannelFormState | null>(() => (adapter && !listed ? adapter.initialForm(product) : null));
 
-  // Full listing (populated photos/policies) — the list row alone can't round-trip a save.
+  // Full listing: the list row's photos aren't populated, so it can't round-trip a save.
   const { data: listingRes } = useQuery({
     queryKey: ["listing", listingSummary?._id],
     queryFn: () => getListing(listingSummary!._id),
@@ -98,7 +98,7 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
     onError: onMutationError,
   });
 
-  // Same DELETE /listings/:id the Listings page uses: ends it on the platform, then soft-deletes.
+  // Same delete flow as the Listings page (ends on the platform, then soft-deletes).
   const removeMutation = useMutation({
     mutationFn: () => deleteListing(listingSummary!._id),
     onSuccess: () => {
@@ -134,7 +134,7 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
   }
 
   const connected = channel.connection.status === "connected";
-  // NOTE: an unconnected channel is only blocked for NEW listings; an existing one stays manageable.
+  // NOTE: not-connected only blocks NEW listings; existing ones stay manageable.
   const blockedReason = !channel.available
     ? channel.unavailable_reason
     : !adapter

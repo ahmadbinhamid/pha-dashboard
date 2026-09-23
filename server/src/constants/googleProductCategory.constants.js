@@ -1,8 +1,5 @@
 // constants/googleProductCategory.constants.js
-// Auto-parts subset of Google's product taxonomy, verified against
-// taxonomy-with-ids.en-US.txt (Google_Product_Taxonomy_Version: 2021-09-21).
-// Offered as the default pick-list and as name-based suggestions; never auto-applied.
-// `keywords` drive suggestGoogleCategory — order matters: more specific entries first win.
+// Auto-parts subset of Google's taxonomy (2021-09-21); first keyword match wins.
 
 const GOOGLE_AUTO_PARTS_CATEGORIES = Object.freeze([
   { id: "5613", name: "Vehicles & Parts > Vehicle Parts & Accessories", keywords: [] },
@@ -30,7 +27,7 @@ const GOOGLE_AUTO_PARTS_CATEGORIES = Object.freeze([
   { id: "2534", name: "Vehicles & Parts > Vehicle Parts & Accessories > Motor Vehicle Parts > Motor Vehicle Window Parts & Accessories", keywords: ["window", "wiper", "windscreen", "glass"] },
 ]);
 
-// General fallback suggestion when no keyword matches (Motor Vehicle Parts).
+// Fallback suggestion: Motor Vehicle Parts.
 const GOOGLE_DEFAULT_PARTS_CATEGORY_ID = "899";
 
 module.exports = { GOOGLE_AUTO_PARTS_CATEGORIES, GOOGLE_DEFAULT_PARTS_CATEGORY_ID };

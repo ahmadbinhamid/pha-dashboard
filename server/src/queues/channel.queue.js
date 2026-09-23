@@ -1,8 +1,7 @@
 // src/queues/channel.queue.js
 // Channel-agnostic job queues, keyed by platform — each gets its own Bull queue so a slow
 // platform never head-of-line blocks another's jobs. eBay's queue must keep its exact Bull
-// queue/job names ("ebay"; sync_listing/poll_orders/poll_inventory) so already-queued Redis
-// jobs aren't orphaned on deploy.
+// queue/job names so already-queued Redis jobs aren't orphaned on deploy.
 
 const Queue = require("bull");
 const config = require("../config");
@@ -53,7 +52,7 @@ const DEFAULT_JOB_OPTS = {
   timeout: 60_000,
 };
 
-// The real enqueue. Exported separately so a test mocking enqueueChannelJob can still reach Bull.
+// Real enqueue; exported so tests mocking enqueueChannelJob can still reach Bull.
 // opts.bypassDebounce: true skips the debounce jobId/delay so a manual retry always enqueues,
 // never collapsing into whatever debounced job already exists for that listing.
 async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {

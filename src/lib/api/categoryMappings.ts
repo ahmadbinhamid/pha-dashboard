@@ -21,7 +21,7 @@ export const deleteCategoryMapping = async (categoryId: string, platform: string
   return data;
 };
 
-// Category defaults the product form's channel panels fall back to.
+// A product's mapped category per platform.
 export const getProductMappedCategories = async (productId: string) => {
   const { data } = await apiClient.get<BeResponse<ProductMappedCategories>>(`/category-mappings/products/${productId}`);
   return data;

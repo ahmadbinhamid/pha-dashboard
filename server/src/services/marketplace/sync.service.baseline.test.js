@@ -1,7 +1,5 @@
 // services/marketplace/sync.service.baseline.test.js
-// End-to-end half of ebay.adapter.zero-quantity.test.js after TASK 4: through syncListing, a
-// confirmed 0 push stamps the eBay baseline (ebay_synced_quantity + generic synced_quantity),
-// and an untracked-stock product never does. Needs a live Mongo connection.
+// syncListing stamps the baseline on a confirmed push, never for untracked stock. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");

@@ -1,7 +1,5 @@
 // services/marketplace/listingOverride.service.js
-// Finds and clears listing overrides that are copies of the product/variant value (prefill
-// artifacts of the old listing form), leaving genuine user choices untouched. Backs
-// scripts/backfillClearCopiedOverrides.js.
+// Clears listing overrides that just copy the product value (old form prefill).
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const Product = require("../../models/Product");
@@ -13,7 +11,7 @@ const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants"
 
 const OVERRIDE_FIELDS = ["title_override", "description_override", "price_override", "photo_overrides"];
 
-// "Is this override set?" per field, as a Mongo filter.
+// Mongo filter for "override is set", per field.
 const SET_FILTERS = {
   title_override: { title_override: { $nin: [null, ""] } },
   description_override: { description_override: { $nin: [null, ""] } },
@@ -21,7 +19,7 @@ const SET_FILTERS = {
   photo_overrides: { "photo_overrides.0": { $exists: true } },
 };
 
-// Value that clears each field (the schema defaults).
+// Schema default that clears each field.
 const CLEARED_VALUE = { title_override: null, description_override: null, price_override: null, photo_overrides: [] };
 
 function idsOf(list) {
@@ -32,14 +30,14 @@ function sameIds(a, b) {
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
-// What the resolver pushes with every override removed — the "product value" to compare against.
+// What the resolver would push with no overrides at all.
 function valuesWithoutOverrides(listing, product, variant) {
   const bare = { ...listing, ...CLEARED_VALUE };
   const resolved = resolveListing(bare, product, variant);
   return { title: resolved.title, description: resolved.description, price: resolved.price, photoIds: idsOf(resolved.photos) };
 }
 
-// Fields whose override is a copy, i.e. clearing it leaves what the channel receives unchanged.
+// Overrides whose removal leaves the pushed value unchanged.
 function findCopiedFields(listing, product, variant, { includeGeneratedDescriptions = false } = {}) {
   const base = valuesWithoutOverrides(listing, product, variant);
   const copied = [];
@@ -52,10 +50,7 @@ function findCopiedFields(listing, product, variant, { includeGeneratedDescripti
 
   const description = listing.description_override;
   if (description) {
-    // NOTE: eBay's no-override description is the server-rendered template, not
-    // product.description, so an eBay copy of product.description isn't a no-op to clear.
-    // The generated template itself is always app-made (never user-typed), but clearing
-    // it re-renders from live data, so that is opt-in only.
+    // NOTE: eBay renders a template when unset; clearing it is opt-in only.
     if (listing.platform === MARKETPLACE_PLATFORM.EBAY) {
       if (includeGeneratedDescriptions && isGeneratedEbayDescription(description)) copied.push("description_override");
     } else if (description === base.description) {
@@ -73,7 +68,7 @@ async function countOverrides(tenantId) {
   return Object.fromEntries(OVERRIDE_FIELDS.map((field, i) => [field, counts[i]]));
 }
 
-// One batched product + variant lookup per chunk, instead of per listing.
+// One batched product + variant lookup per chunk.
 async function loadChunkSources(chunk) {
   const productIds = [...new Set(chunk.map((l) => String(l.product)))];
   const variantIds = [...new Set(chunk.filter((l) => l.variant).map((l) => String(l.variant)))];
@@ -89,8 +84,7 @@ async function loadChunkSources(chunk) {
   };
 }
 
-// Guarded update: the filter re-checks the override still holds the value we compared,
-// so a concurrent real edit is never clobbered and re-runs are no-ops.
+// Filter re-checks the stored value, so concurrent edits and re-runs are safe.
 function buildClearOp(listing, fields) {
   const filter = { _id: listing._id };
   const $set = {};
@@ -117,10 +111,7 @@ async function processChunk(chunk, opts, totals) {
   return ops.length;
 }
 
-/**
- * Clears copied overrides. Idempotent; with dryRun nothing is written and "after" is projected.
- * @returns {{ before, after, cleared, listingsTouched }}
- */
+/** Clears copied overrides; dryRun writes nothing and projects "after". */
 async function clearCopiedOverrides({
   dryRun = false,
   tenantId = null,

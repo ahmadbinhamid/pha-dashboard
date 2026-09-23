@@ -1,10 +1,9 @@
 // controllers/categoryMapping.controller.js
-// Thin HTTP layer over services/categoryMapping.service.js.
 
 const categoryMappingService = require("../services/categoryMapping.service");
 const { success, notFound, systemfailure } = require("../utils/http/response");
 
-// Service errors carry .status (404 unknown category/platform); anything else is a 500.
+// Service 404s (unknown category/platform) pass through; everything else is a 500.
 function handleError(res, err) {
   if (err.status === 404) return notFound(res, err.message);
   return systemfailure(res, err);

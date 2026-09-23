@@ -1,8 +1,7 @@
 // services/marketplace/adapters/google.adapter.js
 // Marketplace adapter for Google Shopping (Merchant API); mirrors ebay.adapter.js's shape.
 // Google is feed-shaped: publish()/update() are both just productInputs.insert (upsert).
-// Pure translator: stock, product URL, identifiers and category arrive pre-resolved (see
-// listing.resolver.js#hydrateResolved); end() gets its context from sync.service.js.
+// Pure translator: all I/O is resolved beforehand by sync.service/listing.resolver.
 // Migrated v1beta -> v1 after v1beta's 2026-02-28 discontinuation; some ProductAttributes
 // field names (price, condition, shippingLabel, etc.) are still unverified against a live call.
 
@@ -56,7 +55,7 @@ const manifest = {
   // Merchant Center requires a claimed, verified website; a tenant with no verified default
   // Domain would get every product disapproved. Read by channel.service.js and google.controller.js.
   requiresStorefront: true,
-  // Channel-only fields the product form's Google panel renders (see google.fieldSchema.js).
+  // Channel-only fields for the product form's Google panel.
   fieldSchema,
 };
 
@@ -70,10 +69,10 @@ const capabilities = {
   variants: true,
 };
 
-// Listing field holding this channel's category; falls back to the tenant's CategoryMapping.
+// Listing field for the channel category (falls back to the tenant mapping).
 const categoryField = "google_product_category";
 
-// I/O-backed data sync.service hydrates onto `resolved` before calling us.
+// I/O the resolver hydrates onto `resolved` before calling us.
 const needs = { stock: true, productUrl: true };
 
 // Google expires a product not refreshed within 30 days; defaults under that cap for headroom.
@@ -139,7 +138,7 @@ function applyIdentifiers(attributes, identifiers, sku) {
 // image is just dropped with a warning; the product can still list on its primary photo alone.
 function buildProductInputFromResolved(resolved, settings, quantity, identifiers, productUrl) {
   const { sku, title, description, price, photos, listing, product } = resolved;
-  // Effective category: listing value, else the tenant's mapping (listing.resolver.js).
+  // Listing category, else the tenant's mapping.
   const googleProductCategory = resolved.category?.id || listing.google_product_category;
 
   const rawUrls = (photos || []).map((p) => (typeof p === "string" ? p : p?.url)).filter(Boolean);
@@ -213,7 +212,7 @@ function currencyForCountry(countryCode) {
   return COUNTRY_CURRENCY[countryCode] || "USD";
 }
 
-// Server-side enforcement of every fieldSchema rule, on effective values.
+// Enforces fieldSchema rules on effective values.
 function assertGoogleFields(resolved) {
   const categoryId = resolved.category?.id || resolved.listing.google_product_category;
   assertFieldValues(key, fieldSchema, fieldValues(resolved.listing, { categoryId }), { sku: resolved.sku });
@@ -225,14 +224,14 @@ function isUntrackedStock(resolved) {
   return resolved.product?.stock_control === false;
 }
 
-// Tracked-stock quantity from hydration; a batch-wide hydration failure surfaces here, per item.
+// Hydrated quantity; a batch hydration failure surfaces here, per item.
 function resolveQuantity(resolved) {
   if (resolved.hydrationError) throw resolved.hydrationError;
   if (!resolved.stock) throw new Error(`[GoogleAdapter] ${resolved.sku}: resolved.stock missing — hydrate via listing.resolver#hydrateResolved`);
   return resolved.stock.quantity;
 }
 
-// Throws the captured URL-resolution error at the same point the old inline lookup did.
+// Raises a captured URL error at the same point the old lookup did.
 function resolveProductUrl(resolved) {
   if (resolved.productUrlError) throw resolved.productUrlError;
   return resolved.productUrl;
@@ -273,7 +272,7 @@ async function update(resolved, _settings, _hooks, _seq) {
   return publishOrUpdate(resolved, _settings);
 }
 
-// context comes from sync.service.js#endListing (product null when deleted/missing).
+// Context from sync.service#endListing (product is null when deleted).
 async function end(listing, { product, settings } = {}) {
   if (!listing.product) {
     logger.warn("[GoogleAdapter] end called with no resolvable product — nothing to withdraw");
@@ -288,8 +287,7 @@ async function end(listing, { product, settings } = {}) {
     return;
   }
 
-  // NOTE: ignores the variant SKU, unlike publish (resolveSku) — pre-existing behaviour, kept
-  // as-is; a variant listing may need its own SKU here (flagged, not silently changed).
+  // NOTE: ignores the variant SKU unlike publish — pre-existing, kept as-is.
   const sku = listing.store_sku || product.sku || `ph-${product._id}`;
   const token = await googleOauthService.getValidAccessToken(settings);
   if (!token) throw new Error(`[GoogleAdapter] end: could not obtain a valid Google access token for tenant ${product.tenant_id}`);

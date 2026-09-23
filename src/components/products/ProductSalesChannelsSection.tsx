@@ -13,16 +13,16 @@ import { SALES_CHANNELS_ANCHOR } from "@/config/salesChannels";
 interface Props {
   number: number;
   product: Product;
-  // Channel key to open on arrival, e.g. from a redirected /listings/:id/edit link.
+  // Channel panel to open on arrival (from a redirected listing link).
   focusChannel?: string | null;
   focus?: boolean;
 }
 
-// The product is the source of truth: each channel only adds what it can't derive from it.
+// Lists the product on each channel; channels only add what they can't derive.
 export function ProductSalesChannelsSection({ number, product, focusChannel, focus = false }: Props) {
   const anchorRef = useRef<HTMLDivElement>(null);
 
-  // Same queryKey as the Listings/Settings pages, so this shares their cache.
+  // Shares the Listings/Settings cache.
   const { data: channelsRes, isLoading: channelsLoading } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
   const { data: listingsRes, isLoading: listingsLoading } = useQuery({
     queryKey: ["listings", "product", product._id],
@@ -39,7 +39,7 @@ export function ProductSalesChannelsSection({ number, product, focusChannel, foc
 
   const channels = channelsRes?.data ?? [];
   const listings: AnyMarketplaceListing[] = listingsRes?.data?.items ?? [];
-  // The product form manages each channel's base listing; variant listings stay on the Listings page.
+  // Base listings only; variant listings stay on the Listings page.
   const baseListing = (platform: string) => listings.find((l) => l.platform === platform && !l.variant) ?? null;
   const variantListingCount = listings.filter((l) => l.variant).length;
 

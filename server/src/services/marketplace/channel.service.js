@@ -89,7 +89,7 @@ async function listChannelsForTenant(tenantId) {
 
     return {
       ...manifest,
-      // Additive: channel-only form fields, with static option lists attached.
+      // Additive: channel-only form fields with static options.
       fieldSchema: withStaticOptions(manifest.fieldSchema),
       capabilities: adapter.capabilities,
       available: storefrontOk,

@@ -1,7 +1,5 @@
 // services/categoryMapping.service.js
-// Tenant category -> channel category defaults (models/CategoryMapping.js). A listing's
-// category resolves: per-listing value -> this mapping (first product category that has
-// one) -> unset. Only platforms whose adapter declares `categoryField` take part.
+// Tenant category -> channel category defaults (listing value > mapping > unset).
 
 const CategoryMapping = require("../models/CategoryMapping");
 const Product = require("../models/Product");
@@ -36,7 +34,7 @@ const KEYWORD_PATTERNS = GOOGLE_AUTO_PARTS_CATEGORIES.map((category) => ({
   patterns: category.keywords.map((kw) => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`, "i")),
 }));
 
-/** Best-guess Google category for a tenant category name — a suggestion, never auto-applied. */
+/** Suggested Google category for a category name; never auto-applied. */
 function suggestGoogleCategory(name) {
   const match = KEYWORD_PATTERNS.find(({ patterns }) => patterns.some((re) => re.test(name || "")));
   const category = match?.category || GOOGLE_AUTO_PARTS_CATEGORIES.find((c) => c.id === GOOGLE_DEFAULT_PARTS_CATEGORY_ID);
@@ -79,15 +77,14 @@ async function deleteMapping(tenantId, productCategoryId, platform) {
   return deletedCount > 0;
 }
 
-// One query for every category id across a batch; callers pick per product.
+// One query for a whole batch's category ids.
 async function findMappingsByCategory(tenantId, platform, categoryIds) {
   if (!categoryIds.length) return new Map();
   const rows = await CategoryMapping.find({ tenant_id: tenantId, platform, product_category_id: { $in: categoryIds } }).lean();
   return new Map(rows.map((row) => [String(row.product_category_id), row]));
 }
 
-// NOTE: a product can have several categories; the first one (in the product's own order)
-// that has a mapping wins, so reordering categories is how a tenant picks between them.
+// NOTE: first mapped category in the product's own order wins.
 function pickMapping(productCategoryIds, mappingsByCategory) {
   for (const id of productCategoryIds || []) {
     const row = mappingsByCategory.get(String(id?._id ?? id));
@@ -102,7 +99,7 @@ function toResolvedCategory(row) {
     : null;
 }
 
-/** Category defaults for each product in a batch: Map(productId -> resolved category|null). */
+/** Map(productId -> mapped category | null) for a batch of products. */
 async function resolveMappedCategories(tenantId, platform, products) {
   const categoryIds = [...new Set(products.flatMap((p) => (p.categories || []).map((c) => String(c?._id ?? c))))];
   const mappings = await findMappingsByCategory(tenantId, platform, categoryIds);
@@ -116,7 +113,7 @@ async function resolveEffectiveCategoryId(tenantId, platform, listingValue, prod
   return (await resolveMappedCategories(tenantId, platform, [product])).get(String(product._id))?.id || null;
 }
 
-/** Per-platform category default for one product, for the product form's channel panels. */
+/** Per-platform category default for one product. */
 async function getMappedCategoriesForProduct(tenantId, productId) {
   const product = await Product.findOne({ _id: productId, tenant_id: tenantId }).select("categories").lean();
   if (!product) return null;

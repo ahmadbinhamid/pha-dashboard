@@ -3,13 +3,13 @@ import Link from "@/components/ui/Link";
 import type { MappedCategory } from "@/types/categoryMapping";
 
 interface Props {
-  // The listing's own category, if one is set on this product.
+  // The listing's own category, if set.
   listingValue: string | null | undefined;
   mapped: MappedCategory | null | undefined;
   required: boolean;
 }
 
-// Where a channel's effective category comes from (listing value -> tenant mapping -> unset).
+// Shows where the effective category comes from (listing, mapping or unset).
 export function ChannelCategorySource({ listingValue, mapped, required }: Props) {
   if (listingValue) {
     return (

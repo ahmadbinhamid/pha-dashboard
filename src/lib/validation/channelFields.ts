@@ -1,13 +1,12 @@
 import type { ChannelFieldDescriptor, ChannelProductConstraints } from "@/types/channel";
 import type { ListingProductDefaults } from "@/types/marketplace";
 
-// UX mirror of server/src/services/marketplace/fieldSchema.js — the server re-checks
-// everything, this just catches it before a round trip.
+// UX mirror of the server's fieldSchema rules (the server re-checks everything).
 
 export type ChannelFieldErrors = Record<string, string>;
 
 export interface ChannelFieldContext {
-  // Values a blank field falls back to server-side (mapped category, tenant default policy).
+  // Server-side fallbacks for blank fields.
   fallbacks: Record<string, string | null | undefined>;
   constraints?: ChannelProductConstraints;
   productDefaults: ListingProductDefaults;
@@ -33,7 +32,7 @@ export function validateChannelFields(
     if (d.type === "number" && !Number.isFinite(Number(value))) errors[d.key] = `${d.label} must be a number.`;
   }
 
-  // Product-derived limits apply to the EFFECTIVE value (override, else product).
+  // Limits apply to the effective value.
   const maxTitle = constraints?.title?.maxLength;
   const override = typeof form.title_override === "string" ? form.title_override.trim() : "";
   const title = override || productDefaults.title;

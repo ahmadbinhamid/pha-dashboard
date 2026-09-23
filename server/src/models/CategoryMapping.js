@@ -1,7 +1,5 @@
 // models/CategoryMapping.js
-// A tenant's default channel category for one of its product categories, e.g. "Brake Discs"
-// -> eBay 33564 / Google 2977. Channel taxonomies are unrelated, so this can't be derived.
-// Used when a listing has no category of its own (see categoryMapping.service.js).
+// Tenant's default channel category per product category (taxonomies can't be derived).
 
 const { Schema, model } = require("mongoose");
 const { buildSchema } = require("./base.model");
@@ -14,7 +12,7 @@ const categoryMappingSchema = buildSchema(
     external_category_id: { type: String, required: true, trim: true },
     external_category_name: { type: String, default: null, trim: true },
   },
-  // Hard delete: removing a mapping must free its unique slot.
+  // Hard delete so a removed mapping frees its unique slot.
   { softDelete: false },
 );
 

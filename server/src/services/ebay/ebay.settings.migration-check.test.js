@@ -1,6 +1,5 @@
 // services/ebay/ebay.settings.migration-check.test.js
-// scripts/checkEbaySettingsMigrated.js: reports a legacy EbaySettings tenant with no live eBay
-// ChannelConnection, and never one that has been migrated. Read-only. Needs a live Mongo connection.
+// checkEbaySettingsMigrated reports only unmigrated tenants. Needs Mongo.
 
 const test = require("node:test");
 const { before, after } = require("node:test");
@@ -33,7 +32,7 @@ test("checkEbaySettingsMigrated: an unmigrated tenant is reported; a migrated or
   const tenants = { $in: [pending, migrated, softDeleted] };
   assert.equal(await EbaySettings.countDocuments({ tenant_id: tenants }), 3, "read-only: nothing is created or deleted");
 
-  // Shared dev/test DB: leftover rows would show up in the real operator report.
+  // Clean up: leftovers would pollute the real report (shared dev DB).
   await EbaySettings.collection.deleteMany({ tenant_id: tenants });
   await ChannelConnection.collection.deleteMany({ tenant_id: tenants });
 });

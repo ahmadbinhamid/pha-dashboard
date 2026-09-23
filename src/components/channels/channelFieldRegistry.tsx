@@ -12,15 +12,13 @@ export interface ChannelCustomFieldProps {
   form: ChannelFormState;
   onChange: (patch: Partial<ChannelFormState>) => void;
   error?: string;
-  // What a blank value resolves to server-side (e.g. the mapped category).
+  // Server-side fallback for a blank value (e.g. mapped category).
   fallback?: string | null;
-  // The channel's effective category (listing value, else mapping) — eBay aspects key off it.
+  // Effective category; eBay aspects depend on it.
   effectiveCategoryId?: string | null;
 }
 
-// Fields a generic renderer can't express, keyed "<platform>.<fieldKey>". Everything else in
-// an adapter's fieldSchema renders through ChannelFieldInput. eBay's live aspects API stays in
-// EbayItemSpecificsSection rather than being squeezed into a generic schema.
+// Custom components for fields the generic renderer can't express ("<platform>.<key>").
 export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCustomFieldProps>> = {
   "ebay.ebay_category_id": ({ descriptor, form, onChange, error, fallback }) => (
     <EbayCategoryInput
@@ -36,7 +34,7 @@ export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCusto
     return (
       <EbayItemSpecificsSection
         form={{ ...ebayForm, ebay_category_id: effectiveCategoryId ?? ebayForm.ebay_category_id }}
-        // Never let the aspects view write the mapped category back onto the listing.
+        // Don't write the mapped category back onto the listing.
         onChange={({ ebay_category_id: _ignored, ...patch }) => onChange(patch)}
       />
     );
