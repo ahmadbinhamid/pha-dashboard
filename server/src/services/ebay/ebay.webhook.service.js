@@ -5,7 +5,7 @@ const crypto = require("crypto");
 const { getAppToken, apiBaseUrlFor } = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { updateEbayOrderStatus } = require("../order.service");
-const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
+const ChannelProcessedEvent = require("../../models/ChannelProcessedEvent");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
@@ -39,7 +39,7 @@ function verifySignature(rawBody, signatureHeader, verificationToken) {
 // delivery). Keyed per-SKU, not per-order, since eBay sends one notification per line item.
 async function claimEvent(orderId, sku, action, quantity) {
   try {
-    await EbayProcessedOrder.create({
+    await ChannelProcessedEvent.create({
       platform: MARKETPLACE_PLATFORM.EBAY,
       orderId,
       sku,
@@ -125,7 +125,7 @@ async function processNotification(payload, tenant) {
         logger.error(`[ebay.webhook] Failed to update order status for ${orderId}: ${err.message}`);
       }
 
-      await EbayProcessedOrder.updateOne(
+      await ChannelProcessedEvent.updateOne(
         { platform: MARKETPLACE_PLATFORM.EBAY, orderId, action: "restock" },
         { $set: { lineItems: [{ sku, quantity: qty }] } },
       );

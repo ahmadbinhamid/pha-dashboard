@@ -143,7 +143,7 @@ async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate({
       path: "product",
-      select: "title slug sku price brand mpn attachments vehicle",
+      select: "title slug sku price brand mpn attachments vehicle categories",
       populate: { path: "attachments" },
     })
     .populate({

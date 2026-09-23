@@ -19,15 +19,22 @@ exports:
 ```js
 {
   key,            // platform key, e.g. "ebay"
-  manifest,       // { key, name, logo, description, status, authType, setupSteps, requiredTenantData }
+  manifest,       // { key, name, logo, description, status, authType, setupSteps, requiredTenantData,
+                  //   requiresStorefront?, fieldSchema, productConstraints? }   — see §13
   capabilities,   // { publish, inventory, batch, orders, webhooks, inboundInventory, variants }
+  needs,          // optional { branding?, stock?, productUrl? } — I/O the resolver hydrates (§13)
+  categoryField,  // optional listing field holding the channel category (§13)
   loadSettings(tenantId), // -> resolved connection/settings object, or null if not connected
   publish(resolved, settings, hooks?, seq?),
   update(resolved, settings, hooks?, seq?),
-  end(listing),
+  end(listing, { product, variant, settings, sku }),
   publishBatch(...), // optional — omitted by eBay
+  syncBaselineFields(quantity), // optional — extra fields stamped with the sync baseline
 }
 ```
+
+Adapters are **pure translators** (§13): no model imports, no `inventory.service`,
+no mid-function `require`s.
 
 `registry.js` (`services/marketplace/registry.js`) holds every registered
 adapter:
@@ -209,19 +216,12 @@ happened to win the dedup, so this is safe. The old job-payload shape
 (`{ listingId, seq }`) is unchanged and still processed correctly by the
 worker.
 
-`queues/ebay.queue.js` is now a thin shim: `enqueueEbayJob` calls
-`channel.queue.js`'s `enqueueChannelJobDirect("ebay", ...)` (the real
-implementation, bypassing override-checking), and the module registers
-itself as the `"ebay"` override on `channel.queue.js` so a caller of the
-generic `enqueueChannelJob("ebay", ...)` (e.g.
-`inventory.service.js#fanOutMarketplaceInventory`) is transparently routed
-through the exact same function object several **pre-existing tests**
-already mock directly (`ebay.inventory-sync.service.test.js`,
-`inventory.service.oversell.test.js` both patch
-`ebay.queue.js#enqueueEbayJob`). This indirection exists purely so those
-tests keep intercepting real eBay-bound enqueue calls without being edited
-— it has no effect on production behavior (both paths hit the identical Bull
-queue with identical job options either way).
+`queues/ebay.queue.js` (the backward-compat shim) and
+`channel.queue.js#registerEnqueueOverride` have been **removed** (§13). Every
+caller uses `enqueueChannelJob(platform, ...)`; the Bull queue name for eBay is
+still exactly `"ebay"` (`QUEUE_NAMES` untouched) and job names are unchanged.
+`inventory.service.js` calls `channelQueue.enqueueChannelJob(...)` through the
+module object, so a test's `mock.method()` applies whenever it is installed.
 
 Per-queue rate limiting (`limiter: { max, duration }`) is read from
 `config.channels.rateLimits[platform]`; eBay's has never had one, so it
@@ -868,54 +868,39 @@ adapter — that's the entire point of the generic layer built in §1–§8.
 
 ## 10. What a third channel (e.g. Meta Shop) would need
 
-Everything in §1–§8 (queues, `ChannelSyncLog`, circuit breaker, generic
-routes) — nothing there is eBay- or Google-specific, and needs zero changes.
-A third adapter needs to actually build:
+Queues, `ChannelSyncLog`, circuit breaker, generic routes, category mappings,
+the resolver's hydration and the product form's Sales Channels section are all
+generic. A third channel needs:
 
-1. **The adapter itself** — `key`, `manifest`, `capabilities`,
-   `loadSettings`, `publish`/`update`/`end`, optionally `publishBatch`. Use
-   whichever generic contract fits: eBay's (`loadSettings` never `null`) if
-   there's a legacy pre-`ChannelConnection` source to stay compatible with;
-   Google's (`loadSettings` returns `null` for "not connected") otherwise —
-   Google's is the one to default to for a genuinely new integration.
-2. **Its own OAuth/credential flow** — reuse
-   `utils/crypto/tokenCipher.js#packCiphertext`/`unpackCiphertext` for the
-   single-string `*_ct` slots on `ChannelConnection`; do NOT hardcode a base
-   URL inside any function that receives a tenant-scoped token/settings if
-   the platform has more than one real environment (see
-   `ebay.environment-invariants.test.js` for the eBay incident this guards
-   against, and `google.environment-invariants.test.js` for the adapted
-   version covering "token cached in a bare module-level variable" instead,
-   for a platform with no separate environments).
-3. **A `ChannelConnection` discriminator** — remember the naming-collision
-   fix: register it as `"ChannelConnection<Name>"` (not the bare platform
-   key), with the platform value as the 3rd argument to `.discriminator()`
-   — see §8's 3rd bullet and `models/ChannelConnection.js`'s own comment.
-   Same for a `MarketplaceListing` discriminator if the platform has its own
-   listing-level fields.
-4. **Attach `.status` to every thrown error** from the platform's own HTTP
-   layer, following `circuitBreaker.js#isTransportOrAuthFailure`'s existing
-   rule (>=500/401/403 counts; everything else, including no status at all
-   from a well-formed rejection, doesn't) — this is what makes the breaker
-   and `ChannelSyncLog` classification work correctly with zero
-   platform-specific code in the generic layer.
-5. **Error out loudly, never guess**, for anything the platform requires
-   that this app can't currently resolve with confidence (see
-   `resolveProductUrl`'s own reasoning) — a wrong/guessed value pushed live
-   is worse than a clear, actionable failure.
-6. Register it in `registerAdapters.js`, add its routes (OAuth + whatever
-   metadata lookups it actually needs — never duplicate the generic
-   `/api/v1/channels` routes), and its own `config.<platform>` block.
-7. **Opt into the refresh sweep, only if this platform actually expires
-   stale listings** (see §9's "Refresh sweep" subsection) — export a
-   `refreshIntervalDays: <number>` field from the adapter (a sensible
-   default, configurable via your own `config.<platform>` block, kept
-   comfortably under whatever cadence the platform's own docs require).
-   That single field is the entire integration: `refresh.service.js` and
-   `channel.worker.js#attachRefreshStaleScheduler` both already key off it
-   generically. Leave it unset entirely if the platform has no such
-   concept (most won't) — absent/null is a real, first-class opt-out, not
-   a TODO.
+1. **The adapter** — `key`, `manifest` (including `fieldSchema`; see §13),
+   `capabilities`, `loadSettings` (via `channelConnection.service.js`, returning
+   `null` when not connected), `publish`/`update`/`end`, optionally
+   `publishBatch`. Keep it a **pure translator**: declare I/O in `needs` and read
+   it from `resolved` (`stock`, `productUrl`, `branding`, `category`,
+   `identifiers`). If a lookup you need isn't hydrated yet, add it to
+   `listing.resolver.js#hydrateResolved` behind a new `needs` flag, batched per
+   chunk, rather than querying from the adapter.
+2. **`fieldSchema`** in its own `adapters/<platform>.fieldSchema.js` — only fields
+   the adapter actually reads, plus a `fieldValues(listing, ctx)` mapping to
+   effective values. Enforce it in the mapper with `fieldSchema.js#assertFieldValues`.
+   Declare `categoryField` if the channel has a category taxonomy; category
+   mappings then work with no further code.
+3. **Its own OAuth/credential flow** — reuse `utils/crypto/tokenCipher.js`; never
+   hardcode an environment base URL (see the `*.environment-invariants.test.js` files).
+4. **A `ChannelConnection` discriminator** named `"ChannelConnection<Name>"`, and a
+   `MarketplaceListing` discriminator for its listing-level fields.
+5. **Attach `.status` to every thrown error** from its HTTP layer
+   (`circuitBreaker.js#isTransportOrAuthFailure`).
+6. **Error out loudly, never guess**, for anything it can't resolve with confidence.
+7. Register it in `registerAdapters.js`; add its OAuth routes and a listing
+   CREATE/UPDATE route pair (there is still no generic create route).
+8. **Frontend:** one entry in `src/lib/marketplace/channelForms.ts`
+   (`CHANNEL_FORM_ADAPTERS`) wiring its create/update calls. Its panel then renders
+   from `fieldSchema` automatically; add a component to
+   `src/components/channels/channelFieldRegistry.tsx` only for a field the generic
+   renderer can't express.
+9. **Opt into the refresh sweep** with `refreshIntervalDays` only if the platform
+   expires stale listings.
 
 ## 11. Generic-layer changes made for Google (eBay impact, file by file)
 
@@ -1039,3 +1024,105 @@ node scripts/registerGoogleGcp.js --account=<merchant center id> --email=<develo
   **best-effort**, not confirmed exact error strings for each case (this
   app has only ever seen `GCP_NOT_REGISTERED`/`ALREADY_REGISTERED` live).
   Google's raw error is always printed alongside, never replaced by it.
+
+## 13. Product as the single source of truth (overrides, category mappings, fieldSchema, adapter purity)
+
+### Overrides mean override
+
+`title_override` / `description_override` / `price_override` / `photo_overrides`
+default to empty and are never prefilled from the product. Empty means "use the
+live product value" (`listing.resolver.js#resolveListing`). The product form shows
+the product value as a placeholder, with a per-field "Using product value" /
+"Overridden" state and a reset (`src/components/listings/OverrideField.tsx`).
+
+eBay's HTML description used to be generated **in the browser** on every save and
+stored as `description_override`, which froze a copy of the title, MPN, fitment and
+so on. It is now rendered **server-side at push time**
+(`services/ebay/ebay.description.template.js`, a byte-identical mirror of the
+frontend generator, which is kept only for the preview) whenever there is no
+override. A real custom description can still be set as an override.
+
+Title limits are validated on the **effective** title (override, else product):
+`validators/ebay.listing.validation.js`, `manifest.productConstraints`
+(checked by `fieldSchema.js#assertProductConstraints` in the mapper) and the frontend.
+
+Migration: `scripts/backfillClearCopiedOverrides.js [--dry-run] [--tenant=<id>]
+[--include-generated-descriptions]` clears an override only when removing it
+leaves the pushed value unchanged (it compares against `resolveListing` with the
+override removed). Every write re-checks the stored value, so the script is
+idempotent and race-safe. Generated eBay descriptions are cleared only with the
+opt-in flag.
+
+### Category mappings
+
+`CategoryMapping { tenant_id, product_category_id, platform, external_category_id,
+external_category_name }`, unique on `{ tenant_id, product_category_id, platform }`.
+Managed at Settings › Integrations › Channel Categories (`/api/v1/category-mappings`).
+
+Resolution order (`listing.resolver.js#hydrateResolved` → `applyMappedCategories`):
+
+1. the listing's own value (`adapter.categoryField`), shown as "Set on this product";
+2. the tenant's mapping for the **first** product category, in the product's own
+   order, that has one, shown as "From category default";
+3. unset: the panel asks for a value (required for eBay, optional for Google).
+
+Mappings are **not** copied onto listings, so editing a mapping moves every listing
+that relies on it. A verified auto-parts subset of Google's taxonomy
+(`constants/googleProductCategory.constants.js`, version 2021-09-21) is the default
+pick-list, and name-based suggestions are shown, never auto-applied. No eBay
+category ids are shipped; they must come from eBay's live category search.
+
+### fieldSchema contract
+
+`manifest.fieldSchema`: an ordered list of
+`{ key, label, type, required, helpText, optionsSource?, group? }` covering **only**
+what the channel needs beyond the product. `type` is one of `text | textarea |
+number | boolean | select | category | policy | custom`. `GET /api/v1/channels`
+serves it with static option lists attached as `options`; dynamic sources (eBay
+business policies) are fetched by the UI. `required` means the **effective** value
+(listing value, else mapping or tenant default).
+
+Enforced server-side in the mapper (`services/marketplace/fieldSchema.js`,
+`ChannelFieldValidationError`, status 400, code `FIELD_VALIDATION`):
+
+| Rule | Where |
+|---|---|
+| eBay effective title ≤ 80 | `ebay.adapter.js#assertUpfrontFields`, before any write; also `validateListingForPush` |
+| eBay condition required; format enum; best-offer number | `assertUpfrontFields` (publish + update) |
+| eBay category required | `publish()`, same point as before (after the inventory-item write); `update()` keeps its "skip the offer" path; also `validateListingForPush` |
+| eBay business policies required (listing value or tenant default) | `publish()` before the offer is created; `validateListingForPush` |
+| Google condition enum | `google.adapter.js#assertGoogleFields` (publish, update, per batch item) |
+
+### Adapter purity
+
+Adapters take data in, call the platform API and return a result. Everything
+I/O-backed is resolved beforehand by `sync.service.js` / `listing.resolver.js`:
+
+- `resolved.stock = { stock_control, quantity }`: one batched aggregate per chunk
+  (`inventory.service.js#getTotalStockForProductVariants`). eBay and Google
+  genuinely differ here and both behaviours are kept. eBay treats a falsy
+  `stock_control` (including unset) as "send no quantity"; Google excludes only
+  `stock_control === false`.
+- `resolved.productUrl` / `productUrlError`: the storefront host is resolved once
+  per chunk, and the error is raised by the adapter at its original point.
+- `resolved.branding`, `resolved.category`, `resolved.identifiers`.
+- The sync baseline is written by `sync.service.js#recordQuantityPushed` via
+  `hooks.onQuantityPushed`, at the exact point the adapter used to write it.
+- `end(listing, context)` receives product/variant/settings/SKU from
+  `sync.service.js#loadEndContext`.
+- In `sync_batch`, a hydration failure becomes a per-item failure
+  (`resolved.hydrationError`), matching the old per-item lookups.
+
+### Retired / renamed
+
+- `queues/ebay.queue.js` and `registerEnqueueOverride`: removed (see §4).
+- `models/EbayProcessedOrder.js` → `models/ChannelProcessedEvent.js`, pinned to the
+  legacy collection `ebayprocessedorders` (no data migration).
+- `workers/ebay.worker.js`: **kept**. `server/package.json#worker:ebay` still
+  references it, and it is the documented target of the old `worker-ebay` compose
+  service (§6), so deleting it is blocked until production is confirmed on
+  `worker-channels`.
+- `EbaySettings`: kept. `scripts/checkEbaySettingsMigrated.js` (read-only; exits 2
+  while any tenant is unmigrated) gates its deletion.
+- The frontend's `ListingCreatePage` / `ListingEditPage` now redirect to the
+  product's Sales Channels section (`/products/:slug/edit?channel=<key>#sales-channels`).

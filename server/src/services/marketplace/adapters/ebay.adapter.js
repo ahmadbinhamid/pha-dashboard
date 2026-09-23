@@ -15,7 +15,10 @@
 //   loadSettings(tenantId)                          -> resolved eBay settings, or null if never connected
 //   publish(resolved, settings, hooks?, seq?)      -> { external_listing_id, external_offer_id, quantity }
 //   update(resolved, settings, hooks?, seq?)       -> { external_listing_id, external_offer_id, quantity }
-//   end(listing)                                   -> void
+//   end(listing, { product, variant, settings, sku }) -> void
+//
+// Pure translator: everything it needs (stock, branding, category, end() context) arrives
+// pre-resolved from sync.service.js / listing.resolver.js. No model or inventory access here.
 //
 // There is no separate lightweight "just push a quantity" entry point
 // anymore (the old pushInventory/push_quantity job) — every quantity push,
@@ -28,6 +31,8 @@
 // hooks.onOfferCreated(offerId) is invoked as soon as an offer ID is known,
 // before the (separate, failure-prone) publish call — lets the caller persist
 // it immediately so a later failure doesn't cause a retry to recreate the offer.
+// hooks.onQuantityPushed(quantity) is invoked right after a confirmed inventory write so the
+// caller can stamp the sync baseline (fields from syncBaselineFields below).
 
 const { logger } = require("../../../loaders/logging");
 const {
@@ -46,12 +51,10 @@ const {
 } = require("../../ebay/ebay.api.service");
 const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
 const { getSettings: getEbaySettings } = require("../../ebay/ebay.settings.service");
+const { renderEbayDescription, descriptionInputFromResolved } = require("../../ebay/ebay.description.template");
+const { assertFieldValues, assertProductConstraints } = require("../fieldSchema");
+const { fieldSchema, productConstraints, fieldValues, UPFRONT_KEYS, POLICY_KEYS } = require("./ebay.fieldSchema");
 const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
-const { getTotalStockForProductVariant } = require("../../inventory.service");
-const { resolveSku } = require("../listing.resolver");
-const Product = require("../../../models/Product");
-const ProductVariant = require("../../../models/ProductVariant");
-const MarketplaceListing = require("../../../models/MarketplaceListing");
 
 const key = "ebay";
 
@@ -72,7 +75,16 @@ const manifest = {
     "Choose default fulfillment/payment/return business policies",
   ],
   requiredTenantData: ["marketplace_id", "warehouse_address", "business_policies"],
+  // Channel-only fields the product form's eBay panel renders (see ebay.fieldSchema.js).
+  fieldSchema,
+  productConstraints,
 };
+
+// I/O-backed data sync.service hydrates onto `resolved` before calling us (listing.resolver.js).
+const needs = { branding: true, stock: true };
+
+// Listing field holding this channel's category; falls back to the tenant's CategoryMapping.
+const categoryField = "ebay_category_id";
 
 const capabilities = {
   publish: true,
@@ -100,49 +112,13 @@ async function loadSettings(tenantId) {
   return getEbaySettings(tenantId);
 }
 
-// Keeps MarketplaceListing.ebay_synced_quantity current whenever WE push a
-// quantity to eBay, so the inventory-sync poller (ebay.inventory-sync.service.js)
-// can tell "eBay changed since we last touched it" apart from "we're the ones
-// who just changed it" — without this, our own push would look identical to
-// a manual edit on eBay's side and get redundantly (and confusingly) diffed.
-// Called ONLY after the eBay write has confirmed success — see publish()/
-// update() below — never preemptively.
-//
-// updateMany, not updateOne — reconcileEbayInventoryForTenant's own comment
-// documents that duplicate listings CAN share one {tenant_id, product,
-// variant, platform} combo if the unique index protecting that is ever
-// missing (found live once already). With updateOne, only whichever
-// duplicate the query happens to match first gets its baseline stamped and
-// the other silently drifts forever, undetected. updateMany keeps every
-// duplicate's baseline consistent even in that degraded state — belt and
-// suspenders on top of the index actually being correct.
-async function updateSyncBaseline(productId, variantId, quantity, tenantId, seq = null) {
-  await MarketplaceListing.updateMany(
-    { tenant_id: tenantId, product: productId, variant: variantId || null, platform: key },
-    {
-      $set: {
-        // TODO(dual-write): remove ebay_synced_quantity/ebay_synced_at after
-        // backfill — synced_quantity/synced_at (base schema, generic) are
-        // the replacement. Both are written during the transition so a
-        // rollback to pre-migration code (which only reads
-        // ebay_synced_quantity) keeps working.
-        ebay_synced_quantity: quantity,
-        ebay_synced_at: new Date(),
-        ebay_pending_reconcile_qty: null,
-        synced_quantity: quantity,
-        synced_at: new Date(),
-        ...(seq != null ? { last_pushed_seq: seq } : {}),
-      },
-    },
-    // ebay_synced_quantity/ebay_synced_at/ebay_pending_reconcile_qty are
-    // eBay-discriminator-only fields (declared on ebaySchema, not
-    // MarketplaceListing's base schema) — a base-model update casts against
-    // the base schema only and silently drops anything it doesn't recognize
-    // under Mongoose's default strict mode. synced_quantity/synced_at/
-    // last_pushed_seq no longer need this (moved to the base schema), but
-    // the still-discriminator-only fields above do.
-    { strict: false },
-  );
+// Extra eBay-only fields stamped alongside the generic baseline (synced_quantity/synced_at/
+// last_pushed_seq) whenever WE push a quantity, so ebay.inventory-sync.service.js can tell
+// "eBay changed since we last touched it" from "we just changed it". Written by
+// sync.service.js#recordQuantityPushed via hooks.onQuantityPushed — only after a confirmed write.
+// TODO(dual-write): drop once ebay_synced_quantity is backfilled from synced_quantity.
+function syncBaselineFields(quantity) {
+  return { ebay_synced_quantity: quantity, ebay_synced_at: new Date(), ebay_pending_reconcile_qty: null };
 }
 
 // Preferred fallback order when the stored condition isn't accepted for the
@@ -306,13 +282,45 @@ async function createOrRecoverOffer(token, settings, offerBody, sku) {
 // buildOfferFromResolved in ebay.api.service.js) and must not call
 // updateSyncBaseline, since there is no expected-eBay-quantity to track for
 // an untracked-stock product.
-async function resolveQuantity(resolved) {
-  const { product, variant } = resolved;
-  if (!product.stock_control) return null;
-  return getTotalStockForProductVariant(product._id, variant ? variant._id : null);
+function resolveQuantity(resolved) {
+  if (!resolved.product.stock_control) return null;
+  if (!resolved.stock) throw new Error(`[EbayAdapter] ${resolved.sku}: resolved.stock missing — hydrate via listing.resolver#hydrateResolved`);
+  return resolved.stock.quantity;
 }
 
-async function publish(resolved, settings, hooks = {}, seq = null) {
+// No description_override => render the branded template from live data at push time,
+// replacing the copy the client used to generate and store on every save.
+// NOTE: a legacy listing with a null override used to push plain product.description;
+// it now gets the same template every UI-created listing has always had.
+function withRenderedDescription(resolved) {
+  if (resolved.listing?.description_override) return resolved;
+  const branding = resolved.branding || {};
+  const html = renderEbayDescription(descriptionInputFromResolved(resolved), {
+    businessName: branding.company_name,
+    logoUrl: branding.logo_url,
+  });
+  return { ...resolved, description: html };
+}
+
+// Listing value, else the tenant's category mapping (set by listing.resolver.js#hydrateResolved).
+function effectiveCategoryId(resolved) {
+  return resolved.category?.id || resolved.listing?.ebay_category_id || null;
+}
+
+// Server-side enforcement of fieldSchema rules; `keys` picks which rules apply at this step.
+function assertEbayFields(resolved, settings, keys) {
+  const values = fieldValues(resolved.listing, { categoryId: effectiveCategoryId(resolved), settings });
+  assertFieldValues(key, fieldSchema, values, { keys, sku: resolved.sku });
+}
+
+// Rules checked before any eBay write: effective title length plus UPFRONT_KEYS.
+function assertUpfrontFields(resolved, settings) {
+  assertProductConstraints(key, productConstraints, resolved);
+  assertEbayFields(resolved, settings, UPFRONT_KEYS);
+}
+
+async function publish(resolved, settings, hooks = {}, _seq = null) {
+  resolved = withRenderedDescription(resolved);
   if (!credentialsConfigured(settings)) {
     throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
@@ -321,7 +329,8 @@ async function publish(resolved, settings, hooks = {}, seq = null) {
   if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
 
   const { listing } = resolved;
-  const quantity = await resolveQuantity(resolved);
+  assertUpfrontFields(resolved, settings);
+  const quantity = resolveQuantity(resolved);
 
   // Push 0 normally — an item genuinely out of stock still gets its true
   // quantity written to eBay. Refusing to write here (the old behavior)
@@ -331,19 +340,19 @@ async function publish(resolved, settings, hooks = {}, seq = null) {
   // visibility, but only after this write succeeds — see its own comment.
 
   // Step 1 — inventory item
-  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings, resolved.sku);
+  const categoryId = effectiveCategoryId(resolved);
+  const condition = await resolveCategoryCondition(listing.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
   // null quantity (stock_control=false) has nothing to track a baseline
   // for — see resolveQuantity's comment.
-  if (quantity != null) {
-    await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id, seq);
-  }
+  if (quantity != null) await hooks.onQuantityPushed?.(quantity);
 
-  if (!listing.ebay_category_id) {
-    throw new Error(`[EbayAdapter] ${resolved.sku}: ebay_category_id is required to publish`);
-  }
+  // Same point as before (after the item write); now a ChannelFieldValidationError (status 400).
+  assertEbayFields(resolved, settings, ["ebay_category_id"]);
+  // eBay's publishOffer requires all three business policies (listing value or tenant default).
+  assertEbayFields(resolved, settings, POLICY_KEYS);
 
   // Step 2 — ensure merchant location exists (creates it from this tenant's
   // warehouse address if missing)
@@ -351,7 +360,7 @@ async function publish(resolved, settings, hooks = {}, seq = null) {
 
   // Step 4 — create/update offer (recover from 25002 if it already exists,
   // or from the stored offerId being dead on eBay's side — see isOfferMissingError)
-  logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
+  logger.info(`[EbayAdapter] using categoryId: "${categoryId}" (${resolved.category?.source || "listing"})`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
   let priceLocked = false;
@@ -389,7 +398,8 @@ async function publish(resolved, settings, hooks = {}, seq = null) {
   };
 }
 
-async function update(resolved, settings, hooks = {}, seq = null) {
+async function update(resolved, settings, hooks = {}, _seq = null) {
+  resolved = withRenderedDescription(resolved);
   if (!credentialsConfigured(settings)) {
     throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
   }
@@ -398,20 +408,22 @@ async function update(resolved, settings, hooks = {}, seq = null) {
   if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
 
   const { listing } = resolved;
-  const quantity = await resolveQuantity(resolved);
+  // NOTE: policies aren't enforced on update — a live offer may rely on eBay-side policy
+  // state we can't see, and a missing category here keeps today's "skip the offer" path.
+  assertUpfrontFields(resolved, settings);
+  const quantity = resolveQuantity(resolved);
 
   // Push 0 normally — see the matching comment in publish() above.
 
   // Step 1 — sync inventory item
-  const condition = await resolveCategoryCondition(listing.condition, listing.ebay_category_id, settings, resolved.sku);
+  const categoryId = effectiveCategoryId(resolved);
+  const condition = await resolveCategoryCondition(listing.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
-  if (quantity != null) {
-    await updateSyncBaseline(resolved.product._id, resolved.variant?._id, quantity, listing.tenant_id, seq);
-  }
+  if (quantity != null) await hooks.onQuantityPushed?.(quantity);
 
-  if (!listing.ebay_category_id) {
+  if (!categoryId) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);
     return {
       external_listing_id: listing.external_listing_id || null,
@@ -459,17 +471,10 @@ async function update(resolved, settings, hooks = {}, seq = null) {
   };
 }
 
-async function end(listing) {
+// context comes from sync.service.js#endListing: the listing's product/variant (null when
+// deleted), this tenant's settings, and the SKU (store_sku, else resolveSku's rule).
+async function end(listing, { product, settings, sku } = {}) {
   const offerId = listing.external_offer_id || null;
-
-  let sku = listing.store_sku || null;
-  const productId = listing.product?._id || listing.product;
-  const variantId = listing.variant?._id || listing.variant || null;
-  const [product, variant] = await Promise.all([
-    Product.findById(productId).select("_id sku tenant_id").lean(),
-    variantId ? ProductVariant.findById(variantId).select("_id sku").lean() : Promise.resolve(null),
-  ]);
-  if (!sku && product) sku = resolveSku(listing, product, variant);
 
   if (!sku) {
     logger.warn("[EbayAdapter] end called with no resolvable SKU — nothing to withdraw");
@@ -480,7 +485,6 @@ async function end(listing) {
     return;
   }
 
-  const settings = await getEbaySettings(product.tenant_id);
   const result = await deleteProduct(settings, sku, offerId);
   if (result.error) throw new Error(result.error);
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
@@ -490,10 +494,13 @@ module.exports = {
   key,
   manifest,
   capabilities,
+  needs,
+  categoryField,
   loadSettings,
   publish,
   update,
   end,
+  syncBaselineFields,
   // Exported for tests (ebay.adapter.condition.test.js) — not part of the
   // generic adapter contract.
   resolveCategoryCondition,

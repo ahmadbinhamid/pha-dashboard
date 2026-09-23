@@ -12,6 +12,7 @@ import { PaymentDomainForm, PAYMENT_DOMAIN_FORM_ID } from "@/components/tenant-s
 import { EbayConnectCard } from "@/components/ebay-settings/EbayConnectCard";
 import { EbaySettingsForm, EBAY_SETTINGS_FORM_ID } from "@/components/ebay-settings/EbaySettingsForm";
 import { GoogleConnectCard } from "@/components/google-settings/GoogleConnectCard";
+import { CategoryMappingsPanel } from "@/components/category-mappings/CategoryMappingsPanel";
 import DomainsPage from "@/pages/erp/settings/DomainsPage";
 import { getEbaySettings } from "@/lib/api/ebay";
 import { getChannels } from "@/lib/api/channels";
@@ -158,6 +159,8 @@ export function IntegrationsTab({
           <EbayPanel />
         ) : providerId === "google" ? (
           <GoogleConnectCard />
+        ) : providerId === "channel-categories" ? (
+          <CategoryMappingsPanel />
         ) : providerId === "stripe" ? (
           <StripePanel />
         ) : providerId === "email" ? (
@@ -198,6 +201,8 @@ export function IntegrationsTab({
                     ? ebayStatus
                     : integration.id === "google"
                       ? googleStatus
+                      : integration.id === "channel-categories"
+                        ? "unknown"
                       : integration.id === "domains"
                         ? domainsStatus
                         : paymentLinksStatus

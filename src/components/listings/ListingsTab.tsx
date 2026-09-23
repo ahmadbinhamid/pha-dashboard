@@ -15,7 +15,8 @@ import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import { getChannelLogo } from "@/components/channels/channelLogos";
 import { getListing, getListings, updateListing, pushListing, deleteListing } from "@/lib/api/listings";
 import { updateGoogleListing } from "@/lib/api/googleListings";
-import { listingToForm, getListingFallbackImageUrl } from "@/lib/marketplace/listingToForm";
+import { listingToForm } from "@/lib/marketplace/listingToForm";
+import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GoogleListing, GoogleListingFormState } from "@/types/marketplace";
@@ -138,10 +139,9 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
     mutationFn: async (listing: AnyMarketplaceListing) => {
       if (listing.platform === "ebay") {
         const { data: fresh } = await getListing(listing._id);
-        if (fresh.platform === "ebay") {
-          const vehicle = fresh.product !== null && typeof fresh.product === "object" ? fresh.product.vehicle ?? null : null;
-          await updateListing(listing._id, listingToForm(fresh), vehicle, getListingFallbackImageUrl(fresh));
-        }
+        // Re-save through listingToForm so a legacy stored description template is cleared
+        // and re-rendered server-side from live data.
+        if (fresh.platform === "ebay") await updateListing(listing._id, listingToForm(fresh));
       }
       await pushListing(listing._id);
     },
@@ -181,7 +181,8 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
         .catch((err: Error) => toast({ title: err.message, tone: "danger" }));
       return;
     }
-    navigate(`/listings/${listing._id}/edit`);
+    const slug = typeof listing.product === "object" && listing.product ? listing.product.slug : null;
+    navigate(slug ? productChannelsPath(slug, listing.platform) : `/listings/${listing._id}/edit`);
   }
 
   const deleteListingName =

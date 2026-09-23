@@ -436,6 +436,8 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 
 function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const { sku, price, description, title, listing } = resolved;
+  // Effective category: listing value, else the tenant's mapping (listing.resolver.js).
+  const categoryId = resolved.category?.id || listing.ebay_category_id;
 
   // Policy IDs: listing-level override ?? this tenant's EbaySettings default
   const fulfillmentPolicyId = listing.fulfillment_policy_id || settings.fulfillment_policy_id;
@@ -454,7 +456,7 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
     format: listing.format || "FIXED_PRICE",
     // See buildInventoryItemFromResolved — null means don't touch eBay's quantity for untracked stock.
     ...(quantity != null ? { availableQuantity: quantity } : {}),
-    ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
+    ...(categoryId ? { categoryId } : {}),
     listingDescription: description || title,
     pricingSummary: {
       price: { value: String(price || 0), currency },

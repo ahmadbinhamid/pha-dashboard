@@ -58,6 +58,11 @@ async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {},
   return { items: withCounts, total };
 }
 
+// Lean id/name/parent list for pickers and mapping screens — no counts, no populate.
+async function listCategoryOptions(tenantId) {
+  return Category.find({ tenant_id: tenantId }).select("name parent sort_order").sort({ sort_order: 1, name: 1 }).lean();
+}
+
 async function getCategoryById(id, tenantId) {
   return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
@@ -128,4 +133,4 @@ async function deleteCategory(id, tenantId) {
   return category;
 }
 
-module.exports = { listCategories, getCategoryById, createCategory, updateCategory, deleteCategory };
+module.exports = { listCategories, listCategoryOptions, getCategoryById, createCategory, updateCategory, deleteCategory };

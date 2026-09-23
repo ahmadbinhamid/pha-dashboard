@@ -49,4 +49,14 @@ function currencyForMarketplace(marketplaceId) {
   return EBAY_MARKETPLACE_CURRENCY[marketplaceId] || "AUD";
 }
 
-module.exports = { EBAY_SCOPES, EBAY_ERROR_CODE, EBAY_CONNECTION_STATUS, EBAY_MARKETPLACE_CURRENCY, currencyForMarketplace };
+// eBay's hard limit on an item title (Inventory API product.title).
+const EBAY_TITLE_MAX_LENGTH = 80;
+
+module.exports = {
+  EBAY_SCOPES,
+  EBAY_ERROR_CODE,
+  EBAY_CONNECTION_STATUS,
+  EBAY_MARKETPLACE_CURRENCY,
+  EBAY_TITLE_MAX_LENGTH,
+  currencyForMarketplace,
+};

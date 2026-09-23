@@ -42,3 +42,17 @@ export function formatInvoiceNumber(prefix: string, raw: string) {
 export function stripEbayAddressPrefix(address: string) {
   return address.replace(/^ebay:[^,]*,\s*/i, "");
 }
+
+// "just now", "5m ago", "2h ago", "3d ago", then a date — for sync timestamps.
+export function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "never";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-AU");
+}

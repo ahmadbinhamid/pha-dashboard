@@ -13,10 +13,11 @@
 const { logger } = require("../../loaders/logging");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ChannelSyncLog = require("../../models/ChannelSyncLog");
+const Product = require("../../models/Product");
 const ProductVariant = require("../../models/ProductVariant");
 const config = require("../../config");
 const { getAdapter } = require("./registry");
-const { resolveListing } = require("./listing.resolver");
+const { resolveListing, resolveSku, hydrateResolved } = require("./listing.resolver");
 const circuitBreaker = require("./circuitBreaker");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
@@ -62,6 +63,26 @@ async function skipSync(listing, reason) {
     errorCode: reason,
   });
   return { skipped: true, reason };
+}
+
+// Stamps the sync baseline after an adapter confirms a quantity push (hooks.onQuantityPushed),
+// plus any adapter-specific baseline fields (e.g. eBay's dual-written ebay_synced_quantity).
+// updateMany: every duplicate (tenant, product, variant, platform) row keeps a consistent
+// baseline even if the unique index is ever missing (found live once).
+async function recordQuantityPushed(listing, adapter, quantity, seq) {
+  await MarketplaceListing.updateMany(
+    { tenant_id: listing.tenant_id, product: listing.product._id, variant: listing.variant || null, platform: listing.platform },
+    {
+      $set: {
+        ...(adapter.syncBaselineFields?.(quantity) || {}),
+        synced_quantity: quantity,
+        synced_at: new Date(),
+        ...(seq != null ? { last_pushed_seq: seq } : {}),
+      },
+    },
+    // Discriminator-only fields (ebay_*) are dropped by a base-model update under strict mode.
+    { strict: false },
+  );
 }
 
 // seq is the fencing token claimed at enqueue time (see
@@ -153,11 +174,14 @@ async function syncListing(listingId, seq = null) {
 
   const startedAt = Date.now();
   try {
+    // Inside the try so an I/O failure here is recorded like any other sync failure.
+    await hydrateResolved([resolved], adapter, listing.tenant_id);
     const hooks = {
       // Persist the offer ID as soon as it's known, not just at the end of
       // the whole call chain — otherwise a failure downstream (e.g. publish)
       // leaves this listing looking un-synced and a retry recreates the offer.
       onOfferCreated: (offerId) => listing.updateOne({ external_offer_id: offerId }),
+      onQuantityPushed: (quantity) => recordQuantityPushed(listing, adapter, quantity, seq),
     };
     const ids = isUpdate
       ? await adapter.update(resolved, settings, hooks, seq)
@@ -266,9 +290,22 @@ async function syncListing(listingId, seq = null) {
   }
 }
 
+// What adapter.end() needs, resolved here so adapters never query the DB. Product lookups
+// honour soft-delete like the old in-adapter findById did; settings only load once there's
+// something to withdraw (eBay's getSettings can lazily migrate legacy settings).
+async function loadEndContext(listing, adapter) {
+  const productId = listing.product?._id || listing.product;
+  const [product, variant] = await Promise.all([
+    productId ? Product.findById(productId).select("_id sku slug tenant_id").lean() : null,
+    listing.variant ? ProductVariant.findById(listing.variant).select("_id sku").lean() : null,
+  ]);
+  const sku = product ? resolveSku(listing, product, variant) : listing.store_sku || null;
+  const settings = product && sku ? await adapter.loadSettings(product.tenant_id) : null;
+  return { product, variant, settings, sku };
+}
+
 async function endListing(listingId) {
-  const listing = await MarketplaceListing.findById(listingId)
-    .populate("product", "_id sku");
+  const listing = await MarketplaceListing.findById(listingId);
 
   if (!listing) return { error: "Listing not found" };
 
@@ -279,7 +316,7 @@ async function endListing(listingId) {
   const adapter = getAdapter(listing.platform);
 
   try {
-    await adapter.end(listing);
+    await adapter.end(listing, await loadEndContext(listing, adapter));
     logger.info(`[marketplace.sync] listing ${listingId} ended on ${listing.platform}`);
     await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
     await logSyncEvent({
@@ -434,7 +471,14 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   }
   if (!toPush.length) return;
 
-  const results = await adapter.publishBatch(toPush.map((c) => c.resolved), settings);
+  const resolvedChunk = toPush.map((c) => c.resolved);
+  try {
+    await hydrateResolved(resolvedChunk, adapter, toPush[0].listing.tenant_id);
+  } catch (err) {
+    // Lookups used to run per item inside publishBatch; keep a failure per-item, not chunk-wide.
+    for (const resolved of resolvedChunk) resolved.hydrationError = err;
+  }
+  const results = await adapter.publishBatch(resolvedChunk, settings);
 
   for (let i = 0; i < toPush.length; i++) {
     const { listing, seq } = toPush[i];

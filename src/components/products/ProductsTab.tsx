@@ -24,6 +24,7 @@ import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { createGoogleListing } from "@/lib/api/googleListings";
+import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { AnyMarketplaceListing } from "@/types/marketplace";
@@ -227,21 +228,16 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
   });
 
+  // Every channel is managed in the product form's Sales Channels section now.
   function handleOpenChannel(product: Product, platform: string) {
-    const listing = listingsByProduct.get(product._id)?.find((l) => l.platform === platform);
-    if (!listing) return;
-    if (listing.platform === "google") {
-      navigate(`/products/${product.slug}/edit`);
-      return;
-    }
-    navigate(`/listings/${listing._id}/edit`);
+    navigate(productChannelsPath(product.slug, platform));
   }
 
   function handleListChannel(product: Product, platform: string) {
     if (platform === "google") {
       listOnGoogleMutation.mutate(product._id);
     } else {
-      navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`);
+      navigate(productChannelsPath(product.slug, platform));
     }
   }
 

@@ -15,3 +15,6 @@ export const LISTING_DURATIONS_AUCTION = [
   { value: "DAYS_7", label: "7 Days" },
   { value: "DAYS_10", label: "10 Days" },
 ];
+
+// eBay's hard item-title limit; mirrors server EBAY_TITLE_MAX_LENGTH (constants/ebay.constants.js).
+export const EBAY_TITLE_MAX_LENGTH = 80;

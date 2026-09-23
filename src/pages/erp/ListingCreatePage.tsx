@@ -1,114 +1,12 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
-import { ListingForm } from "@/components/listings/listing-form";
-import { useToast } from "@/context";
-import { createListing, pushListing } from "@/lib/api/listings";
-import { getProduct } from "@/lib/api/products";
-import { EBAY_LISTING_FORM_INITIAL } from "@/types/marketplace";
-import type { EbayListingFormState } from "@/types/marketplace";
+import { Navigate, useSearchParams } from "react-router-dom";
+import { productChannelsPath } from "@/config/salesChannels";
 
+// Retired: listing now happens in the product form's Sales Channels section. The route stays
+// so existing bookmarks/links (/listings/new?product=…&productSlug=…) redirect instead of 404ing.
 export default function ListingCreatePage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const productId = searchParams.get("product") || "";
-  const productSlug = searchParams.get("productSlug") || "";
-
-  const [form, setForm] = useState<EbayListingFormState>({
-    ...EBAY_LISTING_FORM_INITIAL,
-    product_id: productId,
-  });
-
-  const { data: productData } = useQuery({
-    queryKey: ["product-prefill", productSlug],
-    queryFn: () => getProduct(productSlug),
-    enabled: !!productSlug,
-  });
-
-  useEffect(() => {
-    const p = productData?.data;
-    if (!p) return;
-    setForm((prev) => ({
-      ...prev,
-      product_id: p._id,
-      title_override: p.title,
-      store_sku: p.sku || "",
-      price_override: p.price != null ? String(p.price) : "",
-      photo_overrides: p.attachments ?? [],
-      condition: p.condition || prev.condition,
-      item_specifics: {
-        ...prev.item_specifics,
-        mpn: p.mpn || prev.item_specifics.mpn,
-        authenticity: p.authenticity || prev.item_specifics.authenticity,
-      },
-    }));
-  }, [productData]);
-
-  function patchForm(patch: Partial<EbayListingFormState>) {
-    setForm((prev) => ({ ...prev, ...patch }));
-  }
-
-  const productVehicle = productData?.data?.vehicle ?? null;
-
-  const createMutation = useMutation({
-    mutationFn: (f: EbayListingFormState) => createListing(f, productVehicle),
-    onSuccess: (res) => {
-      toast({ title: "Listing saved", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      navigate(`/listings/${res.data._id}/edit`);
-    },
-    onError: (err: Error) => {
-      toast({ title: err.message, tone: "danger" });
-    },
-  });
-
-  const pushMutation = useMutation({
-    mutationFn: async () => {
-      const res = await createListing(form, productVehicle);
-      await pushListing(res.data._id);
-      return res;
-    },
-    onSuccess: (res) => {
-      toast({ title: "Listing queued for eBay sync", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      navigate(`/listings/${res.data._id}/edit`);
-    },
-    onError: (err: Error) => {
-      toast({ title: err.message, tone: "danger" });
-    },
-  });
-
-  return (
-    <div className="space-y-6">
-      <BreadcrumbNav
-        items={[
-          { label: "Listings", href: "/listings" },
-          { label: "New eBay Listing" },
-        ]}
-      />
-
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">New eBay Listing</h1>
-        <p className="mt-1 text-sm text-fg/70">
-          Create a new eBay listing and optionally push it live.
-        </p>
-      </div>
-
-      <ListingForm
-        form={form}
-        onChange={patchForm}
-        listing={null}
-        productVehicle={productVehicle}
-        onSaveDraft={() => createMutation.mutate(form)}
-        onPush={() => pushMutation.mutate()}
-        saving={createMutation.isPending}
-        pushing={pushMutation.isPending}
-        isEdit={false}
-      />
-    </div>
-  );
+  const productSlug = searchParams.get("productSlug");
+  // NOTE: every link this app ever generated carried productSlug; a bare ?product=<id> has no
+  // slug lookup endpoint, so it falls back to the Products list rather than guessing.
+  return <Navigate to={productSlug ? productChannelsPath(productSlug) : "/products"} replace />;
 }

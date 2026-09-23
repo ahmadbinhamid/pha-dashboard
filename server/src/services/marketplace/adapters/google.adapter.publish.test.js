@@ -1,6 +1,9 @@
 // services/marketplace/adapters/google.adapter.publish.test.js
 //
-// Exercises publish()/loadSettings() end to end against real Mongo fixtures (URL/quantity resolution need real data), with fetch stubbed; needs a live Mongo connection to run.
+// Exercises hydration + publish()/loadSettings() end to end against real Mongo fixtures, with fetch stubbed.
+// TASK 4: URL/quantity resolution moved out of the adapter into listing.resolver.js#hydrateResolved,
+// so resolveFor now hydrates before publish (same assertions). Pure adapter cases: google.adapter.pure.test.js.
+// Needs a live Mongo connection to run.
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -20,7 +23,7 @@ const ChannelSyncLog = require("../../../models/ChannelSyncLog");
 const { encrypt } = require("../../../utils/crypto/tokenCipher");
 const { packCiphertext } = require("../../../utils/crypto/tokenCipher");
 const { DOMAIN_STATUS } = require("../../../constants/domain.constants");
-const { resolveListing } = require("../listing.resolver");
+const { resolveListing, hydrateResolved } = require("../listing.resolver");
 const registry = require("../registry");
 
 const googleAdapter = require("./google.adapter");
@@ -120,7 +123,9 @@ const VALID_HTTPS_IMAGE_URL = "https://cdn.example.com/photo.jpg";
 
 async function resolveFor(listing, product, { photos = [{ type: "image", url: VALID_HTTPS_IMAGE_URL }] } = {}) {
   const populatedProduct = { ...product.toObject(), attachments: photos };
-  return resolveListing(listing, populatedProduct, null);
+  const resolved = resolveListing(listing, populatedProduct, null);
+  await hydrateResolved([resolved], googleAdapter, listing.tenant_id);
+  return resolved;
 }
 
 test("google adapter: publish() with gtin sends only gtin, no mpn/brand/identifierExists", async (t) => {

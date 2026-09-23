@@ -1,5 +1,5 @@
 // models/StripeProcessedEvent.js
-// Idempotency ledger for incoming Stripe webhooks, mirroring EbayProcessedOrder's atomic
+// Idempotency ledger for incoming Stripe webhooks, mirroring ChannelProcessedEvent's atomic
 // create() + catch duplicate-key pattern instead of a read-then-write check.
 
 const { model, Schema } = require("mongoose");

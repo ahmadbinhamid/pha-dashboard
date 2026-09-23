@@ -5,6 +5,7 @@
 // upsert; writes go to ChannelConnection only, after ensureMigrated. EbaySettings stays as legacy source.
 
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 const ChannelConnection = require("../../models/ChannelConnection");
 const EbaySettings = require("../../models/EbaySettings");
 const { logger } = require("../../loaders/logging");
@@ -346,7 +347,29 @@ async function listConfiguredTenants() {
   return results;
 }
 
+// Read-only: tenants with a legacy EbaySettings row but no live eBay ChannelConnection yet.
+// EbaySettings can be deleted once this is empty (scripts/checkEbaySettingsMigrated.js).
+async function listUnmigratedLegacyTenants({ tenantId = null } = {}) {
+  return EbaySettings.aggregate([
+    { $match: tenantId ? { tenant_id: new mongoose.Types.ObjectId(String(tenantId)) } : {} },
+    {
+      $lookup: {
+        from: ChannelConnection.collection.collectionName,
+        let: { tenant: "$tenant_id" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$tenant_id", "$$tenant"] }, platform: MARKETPLACE_PLATFORM.EBAY, deleted_at: null } },
+          { $project: { _id: 1 } },
+        ],
+        as: "connection",
+      },
+    },
+    { $match: { connection: { $size: 0 } } },
+    { $project: { _id: 0, tenant_id: 1, connection_status: 1, updated_at: 1 } },
+  ]);
+}
+
 module.exports = {
+  listUnmigratedLegacyTenants,
   getSettings,
   upsertSettings,
   markConnectionError,

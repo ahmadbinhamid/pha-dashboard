@@ -10,6 +10,7 @@ import {
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
 import type { EbayListingErrors } from "@/lib/validation/ebayListing";
+import { EbayPackageFields } from "./EbayPackageFields";
 
 interface Props {
   form: EbayListingFormState;
@@ -29,11 +30,6 @@ export function EbayShippingSection({
   onClearError,
 }: Props) {
   const pkg = form.package;
-
-  function patchPkg(patch: Partial<EbayListingFormState["package"]>) {
-    onChange({ package: { ...pkg, ...patch } });
-    onClearError?.("package");
-  }
 
   return (
     <div className="space-y-4">
@@ -80,53 +76,14 @@ export function EbayShippingSection({
         </FormField>
       </div>
 
-      <div>
-        <p className={["mb-2 text-sm font-medium", errors.package ? "text-danger" : "text-fg"].join(" ")}>
-          Package Dimensions &amp; Weight
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <FormField label="Length (cm)">
-            <Input
-              type="number"
-              min="0"
-              value={pkg.length}
-              onChange={(e) => patchPkg({ length: e.target.value })}
-              placeholder="30"
-            />
-          </FormField>
-          <FormField label="Width (cm)">
-            <Input
-              type="number"
-              min="0"
-              value={pkg.width}
-              onChange={(e) => patchPkg({ width: e.target.value })}
-              placeholder="20"
-            />
-          </FormField>
-          <FormField label="Height (cm)">
-            <Input
-              type="number"
-              min="0"
-              value={pkg.height}
-              onChange={(e) => patchPkg({ height: e.target.value })}
-              placeholder="10"
-            />
-          </FormField>
-          <FormField label="Weight (kg)">
-            <Input
-              type="number"
-              min="0"
-              step="0.1"
-              value={pkg.weight}
-              onChange={(e) => patchPkg({ weight: e.target.value })}
-              placeholder="1.5"
-            />
-          </FormField>
-        </div>
-        {errors.package && (
-          <p className="mt-1.5 text-xs text-danger">{errors.package}</p>
-        )}
-      </div>
+      <EbayPackageFields
+        value={pkg}
+        onChange={(next) => {
+          onChange({ package: next });
+          onClearError?.("package");
+        }}
+        error={errors.package}
+      />
     </div>
   );
 }

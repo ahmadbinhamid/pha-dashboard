@@ -1,7 +1,7 @@
 // services/ebay/ebay.orders.service.js
 // Polls eBay Fulfillment API for new orders, imports them, and deducts stock; one tenant's failure never blocks another's.
 
-const EbayProcessedOrder = require("../../models/EbayProcessedOrder");
+const ChannelProcessedEvent = require("../../models/ChannelProcessedEvent");
 const ebayApi = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { createOrderFromEbayOrder } = require("../order.service");
@@ -49,7 +49,7 @@ async function pollOrdersForTenant(tenant, settings) {
       }
 
       try {
-        await EbayProcessedOrder.create({
+        await ChannelProcessedEvent.create({
           platform: MARKETPLACE_PLATFORM.EBAY,
           orderId,
           sku,

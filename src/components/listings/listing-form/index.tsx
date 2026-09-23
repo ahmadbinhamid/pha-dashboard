@@ -19,13 +19,14 @@ import { EbayDescriptionSection } from "@/components/listings/platforms/ebay/Eba
 import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
 import { EbayShippingSection } from "@/components/listings/platforms/ebay/EbayShippingSection";
 import { EbaySyncStatusSection } from "@/components/listings/platforms/ebay/EbaySyncStatusSection";
+import { OverrideField } from "@/components/listings/OverrideField";
 import { getBusinessPolicies } from "@/lib/api/ebay";
 import {
   validateEbayListing,
   hasEbayErrors,
   type EbayListingErrors,
 } from "@/lib/validation/ebayListing";
-import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { EbayListing, EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
 import type { BusinessPolicy } from "@/types/ebay";
 import type { ProductVehicle } from "@/types/product";
 import { AlertCircle, Cloud } from "lucide-react";
@@ -33,12 +34,15 @@ import { Section } from "@/components/listings/listing-form/Section";
 import {
   LISTING_DURATIONS_FIXED,
   LISTING_DURATIONS_AUCTION,
+  EBAY_TITLE_MAX_LENGTH,
 } from "@/config/ebayListingOptions";
 
 interface ListingFormProps {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   listing?: EbayListing | null;
+  // What each empty override falls back to — shown as placeholders, never copied into `form`.
+  productDefaults: ListingProductDefaults;
   // Product's own vehicle data, fetched live by the page — read directly, never copied into form state, so it can't drift from the Product page.
   productVehicle?: ProductVehicle | null;
   onSaveDraft: () => void;
@@ -53,6 +57,7 @@ export function ListingForm({
   form,
   onChange,
   listing,
+  productDefaults,
   productVehicle,
   onSaveDraft,
   onPush,
@@ -75,17 +80,11 @@ export function ListingForm({
     }
   }, [externalErrors]);
 
-  const titleLen = (form.title_override || "").length;
-  const photoImages = form.photo_overrides || [];
-
-  // Display-only fallback for the preview when this listing has no photo_overrides; mirrors the backend's variant->product fallback (listing.resolver.js#resolvePhotos). Never saved.
-  const listingVariant = listing && typeof listing.variant === "object" ? listing.variant : null;
-  const listingProductForFallback =
-    listing && listing.product !== null && typeof listing.product === "object" ? listing.product : null;
-  const fallbackAttachments =
-    (listingVariant?.attachments && listingVariant.attachments.length > 0
-      ? listingVariant.attachments
-      : listingProductForFallback?.attachments) || [];
+  const titleOverridden = form.title_override.trim() !== "";
+  const effectiveTitle = titleOverridden ? form.title_override : productDefaults.title;
+  const titleLen = effectiveTitle.length;
+  const photosOverridden = form.photo_overrides.length > 0;
+  const priceOverridden = form.price_override !== "";
 
   const { data: policiesData, isLoading: policiesLoading } = useQuery({
     queryKey: ["ebay-business-policies"],
@@ -106,7 +105,7 @@ export function ListingForm({
   }
 
   function handlePush() {
-    const errs = validateEbayListing(form);
+    const errs = validateEbayListing(form, productDefaults);
     setValidated(true);
     if (hasEbayErrors(errs)) {
       setErrors(errs);
@@ -150,20 +149,31 @@ export function ListingForm({
       {/* 1 — Title & Category */}
       <Section number={1} title="Listing Title & Category" hasError={sec1Error}>
         <div className="space-y-4">
-          <FormField label="Listing Title" required error={errors.title_override}>
+          <OverrideField
+            label="Listing Title"
+            required
+            overridden={titleOverridden}
+            onReset={() => { onChange({ title_override: "" }); clearError("title_override"); }}
+            error={errors.title_override}
+          >
             <Input
               value={form.title_override}
               onChange={(e) => {
                 onChange({ title_override: e.target.value });
                 clearError("title_override");
               }}
-              placeholder="e.g. OEM Front Brake Pad Set for 2018-2022 Honda Accord"
-              maxLength={80}
+              placeholder={productDefaults.title || "e.g. OEM Front Brake Pad Set for 2018-2022 Honda Accord"}
+              maxLength={EBAY_TITLE_MAX_LENGTH}
             />
-            <p className={["mt-1 text-xs", titleLen > 70 ? "text-warn" : "text-fg/50"].join(" ")}>
-              {titleLen}/80 characters (eBay max 80)
+            <p
+              className={[
+                "text-xs",
+                titleLen > EBAY_TITLE_MAX_LENGTH ? "text-danger" : titleLen > EBAY_TITLE_MAX_LENGTH - 10 ? "text-warn" : "text-fg/50",
+              ].join(" ")}
+            >
+              {titleLen}/{EBAY_TITLE_MAX_LENGTH} characters {titleOverridden ? "" : "(product title) "}· eBay max {EBAY_TITLE_MAX_LENGTH}
             </p>
-          </FormField>
+          </OverrideField>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <EbayCategoryInput
@@ -193,10 +203,32 @@ export function ListingForm({
 
       {/* 2 — Photos */}
       <Section number={2} title="Photos" hasError={sec2Error}>
-        <ProductImages
-          images={photoImages}
-          onChange={(imgs) => { onChange({ photo_overrides: imgs }); clearError("photo_overrides"); }}
-        />
+        <OverrideField
+          label="Listing Photos"
+          overridden={photosOverridden}
+          onReset={() => { onChange({ photo_overrides: [] }); clearError("photo_overrides"); }}
+        >
+          {photosOverridden ? (
+            <ProductImages
+              images={form.photo_overrides}
+              onChange={(imgs) => { onChange({ photo_overrides: imgs }); clearError("photo_overrides"); }}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xs border border-dashed border-border px-4 py-3">
+              <p className="text-sm text-fg/60">
+                Using the product&apos;s {productDefaults.photos.length} photo{productDefaults.photos.length === 1 ? "" : "s"} — updates when the product&apos;s photos change.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange({ photo_overrides: [...productDefaults.photos] })}
+              >
+                Customise for eBay
+              </Button>
+            </div>
+          )}
+        </OverrideField>
         {errors.photo_overrides && (
           <p className="mt-2 text-xs text-danger" data-ebay-error>{errors.photo_overrides}</p>
         )}
@@ -225,7 +257,12 @@ export function ListingForm({
 
       {/* 6 — Item Description */}
       <Section number={6} title="Item Description">
-        <EbayDescriptionSection form={form} vehicle={productVehicle} fallbackAttachments={fallbackAttachments} />
+        <EbayDescriptionSection
+          form={form}
+          onChange={onChange}
+          vehicle={productVehicle}
+          productDefaults={productDefaults}
+        />
       </Section>
 
       {/* 7 — Pricing & Format */}
@@ -262,9 +299,11 @@ export function ListingForm({
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField
+            <OverrideField
               label={form.format === "AUCTION" ? "Starting Bid (AUD)" : "Buy It Now Price (AUD)"}
               required
+              overridden={priceOverridden}
+              onReset={() => { onChange({ price_override: "" }); clearError("price_override"); }}
               error={errors.price_override}
             >
               <div className="relative">
@@ -276,10 +315,10 @@ export function ListingForm({
                   className="pl-7"
                   value={form.price_override}
                   onChange={(e) => { onChange({ price_override: e.target.value }); clearError("price_override"); }}
-                  placeholder="0.00"
+                  placeholder={productDefaults.price != null ? String(productDefaults.price) : "0.00"}
                 />
               </div>
-            </FormField>
+            </OverrideField>
 
             <FormField label="Quantity Available" error={errors.quantity_available}>
               <Input

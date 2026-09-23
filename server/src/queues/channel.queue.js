@@ -1,7 +1,8 @@
 // src/queues/channel.queue.js
 // Channel-agnostic job queues, keyed by platform — each gets its own Bull queue so a slow
 // platform never head-of-line blocks another's jobs. eBay's queue must keep its exact Bull
-// queue/job names (see ebay.queue.js) so already-queued Redis jobs aren't orphaned on deploy.
+// queue/job names ("ebay"; sync_listing/poll_orders/poll_inventory) so already-queued Redis
+// jobs aren't orphaned on deploy.
 
 const Queue = require("bull");
 const config = require("../config");
@@ -52,8 +53,7 @@ const DEFAULT_JOB_OPTS = {
   timeout: 60_000,
 };
 
-// The actual enqueue implementation, always adding to the real Bull queue, ignoring any
-// registered override. ebay.queue.js calls this directly so its own override can't recurse.
+// The real enqueue. Exported separately so a test mocking enqueueChannelJob can still reach Bull.
 // opts.bypassDebounce: true skips the debounce jobId/delay so a manual retry always enqueues,
 // never collapsing into whatever debounced job already exists for that listing.
 async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
@@ -98,18 +98,8 @@ async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
   return Promise.race([job, deadline]);
 }
 
-// Lets a platform's own queue module supply its own enqueue function instead of the generic
-// one above, while every caller still goes through enqueueChannelJob. Exists purely for
-// eBay's backward-compatibility shim, since existing tests mock enqueueEbayJob directly.
-const enqueueOverrides = new Map();
-function registerEnqueueOverride(platform, fn) {
-  enqueueOverrides.set(platform, fn);
-}
-
 async function enqueueChannelJob(platform, jobName, payload, opts = {}) {
-  const override = enqueueOverrides.get(platform);
-  if (override) return override(jobName, payload, opts);
   return enqueueChannelJobDirect(platform, jobName, payload, opts);
 }
 
-module.exports = { queues, getQueue, enqueueChannelJob, enqueueChannelJobDirect, registerEnqueueOverride };
+module.exports = { queues, getQueue, enqueueChannelJob, enqueueChannelJobDirect };

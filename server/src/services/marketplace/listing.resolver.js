@@ -28,6 +28,16 @@ function resolvePrice(listing, product, variant) {
   return product.price ?? 0;
 }
 
+// The listing's own channel category (adapter.categoryField), or null so hydrateResolved can
+// fall back to the tenant's CategoryMapping. Null for an unregistered/unmapped platform.
+function resolveListingCategory(listing) {
+  const registry = require("./registry");
+  if (!listing.platform || !registry.has(listing.platform)) return null;
+  const field = registry.get(listing.platform).categoryField;
+  const id = field ? listing[field] : null;
+  return id ? { id: String(id), name: null, source: "listing" } : null;
+}
+
 /**
  * Returns the resolved object that adapters use to build their publish payloads.
  *
@@ -45,6 +55,9 @@ function resolveListing(listing, product, variant = null) {
     price: resolvePrice(listing, product, variant),
     brand,
     photos: resolvePhotos(listing, product, variant),
+    identifiers: resolveIdentifiers(listing, product),
+    // { id, name, source: "listing" | "mapping" } | null — mapping filled in by hydrateResolved.
+    category: resolveListingCategory(listing),
     // Pass raw documents through so adapters can read platform-specific fields
     listing: listing.toObject ? listing.toObject() : listing,
     product,
@@ -64,6 +77,8 @@ function getPlatformManifest(platform) {
   if (!platform || !registry.has(platform)) return null;
   return registry.get(platform).manifest;
 }
+
+const { getTotalStockForProductVariants, stockKey } = require("../inventory.service");
 
 // Resolves a product's public, canonical storefront URL — needed by any
 // feed-shaped channel that requires a `link` field (Google Shopping today;
@@ -112,13 +127,26 @@ function getPlatformManifest(platform) {
 // with none fails loudly, naming the SKU, rather than building a URL with
 // an empty/undefined path segment.
 async function resolveProductUrl(tenantId, productSlug, sku, platform) {
-  if (!productSlug) {
-    throw new Error(`Product (SKU ${sku ?? "unknown"}) has no slug — cannot build a public product URL`);
-  }
+  assertProductSlug(productSlug, sku);
   if (!platform) {
     throw new Error("resolveProductUrl: platform is required (needed to check requiresStorefront before allowing the linkDomain fallback)");
   }
+  return buildProductUrl(await resolveStorefrontHost(tenantId, platform), productSlug);
+}
 
+function assertProductSlug(productSlug, sku) {
+  if (!productSlug) {
+    throw new Error(`Product (SKU ${sku ?? "unknown"}) has no slug — cannot build a public product URL`);
+  }
+}
+
+function buildProductUrl(host, productSlug) {
+  return `https://${host}/product/${productSlug}`;
+}
+
+// The storefront host half of resolveProductUrl (same order and errors) — per tenant, so a
+// batch resolves it once rather than per product.
+async function resolveStorefrontHost(tenantId, platform) {
   const Domain = require("../../models/Domain");
   const Tenant = require("../../models/Tenant");
   const config = require("../../config");
@@ -155,7 +183,7 @@ async function resolveProductUrl(tenantId, productSlug, sku, platform) {
     );
   }
 
-  return `https://${host}/product/${productSlug}`;
+  return host;
 }
 
 // Resolves which product identifier(s) to send a channel that requires them
@@ -181,4 +209,70 @@ function resolveIdentifiers(listing, product) {
   return { gtin, mpn, brand };
 }
 
-module.exports = { resolveListing, resolveSku, resolveProductUrl, resolveIdentifiers };
+// Tenant branding (company name/logo) for adapters that render it, e.g. eBay's description.
+async function resolveBranding(tenantId) {
+  const { getCompanyProfile } = require("../tenantSettings.service");
+  const { company_name, logo_url } = await getCompanyProfile(tenantId);
+  return { company_name, logo_url };
+}
+
+// Adds the I/O-backed data an adapter declares in `adapter.needs`, in place, so adapters
+// never query the DB themselves. All items share one tenant (callers are per-tenant).
+async function hydrateResolved(resolvedList, adapter, tenantId) {
+  const needs = adapter?.needs || {};
+  if (!resolvedList.length) return resolvedList;
+  if (needs.branding) {
+    const branding = await resolveBranding(tenantId);
+    for (const resolved of resolvedList) resolved.branding = branding;
+  }
+  if (adapter?.categoryField) await applyMappedCategories(resolvedList, adapter.key, tenantId);
+  if (needs.stock) await applyStock(resolvedList);
+  if (needs.productUrl) await applyProductUrls(resolvedList, adapter.key, tenantId);
+  return resolvedList;
+}
+
+// resolved.stock = { stock_control, quantity }. quantity is looked up whenever stock_control
+// isn't strictly false, which covers both adapters' existing semantics:
+//   eBay:   falsy stock_control (incl. undefined) => don't send a quantity (null)
+//   Google: only stock_control === false => excluded as untracked; undefined still tracked
+// NOTE: the two genuinely differ for stock_control === undefined; each adapter keeps its own
+// rule on top of this shared lookup rather than being silently unified.
+async function applyStock(resolvedList) {
+  const tracked = resolvedList.filter((r) => r.product?.stock_control !== false);
+  const pairs = tracked.map((r) => ({ productId: r.product._id, variantId: r.variant?._id || null }));
+  const totals = await getTotalStockForProductVariants(pairs);
+  for (const resolved of resolvedList) {
+    const trackedItem = resolved.product?.stock_control !== false;
+    resolved.stock = {
+      stock_control: resolved.product?.stock_control,
+      quantity: trackedItem ? totals.get(stockKey(resolved.product._id, resolved.variant?._id)) ?? 0 : null,
+    };
+  }
+}
+
+// resolved.productUrl, or resolved.productUrlError — captured, not thrown, so the adapter
+// raises it at the same point it always did (e.g. after Google's untracked-stock skip).
+async function applyProductUrls(resolvedList, platform, tenantId) {
+  let hostResult = null;
+  for (const resolved of resolvedList) {
+    try {
+      assertProductSlug(resolved.product?.slug, resolved.sku);
+      hostResult ??= await resolveStorefrontHost(tenantId, platform).then((host) => ({ host }), (error) => ({ error }));
+      if (hostResult.error) throw hostResult.error;
+      resolved.productUrl = buildProductUrl(hostResult.host, resolved.product.slug);
+    } catch (err) {
+      resolved.productUrlError = err;
+    }
+  }
+}
+
+// Category order: per-listing value -> tenant mapping for the product's category -> unset.
+async function applyMappedCategories(resolvedList, platform, tenantId) {
+  const missing = resolvedList.filter((r) => !r.category?.id && r.product);
+  if (!missing.length) return;
+  const { resolveMappedCategories } = require("../categoryMapping.service");
+  const byProduct = await resolveMappedCategories(tenantId, platform, missing.map((r) => r.product));
+  for (const resolved of missing) resolved.category = byProduct.get(String(resolved.product._id)) || null;
+}
+
+module.exports = { resolveListing, resolveSku, resolveProductUrl, resolveIdentifiers, hydrateResolved };

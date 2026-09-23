@@ -11,14 +11,10 @@ const mongoose = require("mongoose");
 const crypto = require("node:crypto");
 const config = require("../config");
 
-// Mock the eBay job enqueue (fans out on every stock change) so no live Redis is needed, same pattern as other inventory.service.js suites.
-const ebayQueueModule = require("../queues/ebay.queue");
-mock.method(ebayQueueModule, "enqueueEbayJob", async () => {});
-
-// Bull's ioredis client stays open by design — must close it or the process never exits.
-test.after(async () => {
-  await ebayQueueModule.ebayQueue.close();
-});
+// Mock the channel job enqueue (fans out on every stock change) so no live Redis is needed.
+// TASK 5a: was ebay.queue.js#enqueueEbayJob (shim removed); queues are lazy, so nothing to close.
+const channelQueue = require("../queues/channel.queue");
+mock.method(channelQueue, "enqueueChannelJob", async () => {});
 
 test("oversell: deducting more than available stock clamps to 0 but records the true adjustment and clamped_shortfall", async (t) => {
   await mongoose.connect(config.mongoUri);

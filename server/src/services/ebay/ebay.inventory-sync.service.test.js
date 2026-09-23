@@ -19,15 +19,12 @@ const ebayTenant = require("./ebay.tenant");
 const ebaySettingsService = require("./ebay.settings.service");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 
-// Installed before inventory.service.js is first required, so stock adjustments (which fan out to
-// enqueueEbayJob) don't need a real Redis connection. Also the spy the "accept does not push" test reads.
-const ebayQueueModule = require("../../queues/ebay.queue");
-const enqueueEbayJobSpy = mock.method(ebayQueueModule, "enqueueEbayJob", async () => {});
-
-// Bull's ioredis client auto-reconnects and stays open; close it or the test process never exits.
-test.after(async () => {
-  await ebayQueueModule.ebayQueue.close();
-});
+// Stock adjustments fan out via channel.queue.js#enqueueChannelJob; mocked so no real Redis is
+// needed. Also the spy the "accept does not push" test reads (eBay-bound calls only).
+// TASK 5a: was ebay.queue.js#enqueueEbayJob (shim removed); queues are lazy, so nothing to close.
+const channelQueue = require("../../queues/channel.queue");
+const enqueueChannelJobSpy = mock.method(channelQueue, "enqueueChannelJob", async () => {});
+const ebayEnqueueCount = () => enqueueChannelJobSpy.mock.calls.filter((c) => c.arguments[0] === MARKETPLACE_PLATFORM.EBAY).length;
 
 async function makeFixture() {
   const suffix = crypto.randomUUID();
@@ -155,7 +152,7 @@ test("sync loop: accepting a flagged reconciliation applies the delta to stock a
   const { upsertPending, acceptReconciliation } = require("../pendingReconciliation.service");
   await upsertPending({ tenantId: fixture.tenantId, listingId: fixture.listing._id, sku: fixture.sku, localQty: 1, ebayQty: 5 });
 
-  const callsBefore = enqueueEbayJobSpy.mock.callCount();
+  const callsBefore = ebayEnqueueCount();
 
   const row = await PendingReconciliation.findOne({ tenant_id: fixture.tenantId, status: "pending" });
   await acceptReconciliation(row._id, fixture.tenantId, null);
@@ -168,7 +165,7 @@ test("sync loop: accepting a flagged reconciliation applies the delta to stock a
 
   // fanOutMarketplaceInventory is skipped via skipMarketplaceFanOut — a number that came from eBay has nothing to push back.
   assert.equal(
-    enqueueEbayJobSpy.mock.callCount(),
+    ebayEnqueueCount(),
     callsBefore,
     "accepting a reconciliation must not push a quantity back to eBay",
   );

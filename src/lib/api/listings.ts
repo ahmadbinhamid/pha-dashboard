@@ -7,9 +7,6 @@ import type {
   MarketplacePlatform,
   ProductListingGroup,
 } from "@/types/marketplace";
-import type { ProductVehicle } from "@/types/product";
-import { generateListingHtml } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
-import { getTenantSettings } from "@/lib/api/tenantSettings";
 
 export interface ListingListParams {
   page?: number;
@@ -24,21 +21,14 @@ export interface ListingListParams {
   search?: string;
 }
 
-async function formStateToPayload(
-  form: EbayListingFormState,
-  vehicle: ProductVehicle | null | undefined,
-  // Product/variant photo to embed when this listing has no photo_overrides, mirroring the backend's own fallback (listing.resolver.js#resolvePhotos) so the description isn't left imageless.
-  fallbackImageUrl?: string | null,
-) {
-  const { data: tenant } = await getTenantSettings();
+// Empty override => null => the server uses the live product value. The eBay description is
+// rendered server-side at push time (services/ebay/ebay.description.template.js), not stored here.
+function formStateToPayload(form: EbayListingFormState) {
   return {
     product: form.product_id,
     variant: form.variant_id || null,
-    title_override: form.title_override || null,
-    description_override: generateListingHtml(form, vehicle, tenant.company_name, tenant.logo_url, {
-      embedImages: true,
-      fallbackImageUrl: fallbackImageUrl || undefined,
-    }),
+    title_override: form.title_override.trim() || null,
+    description_override: form.description_override.trim() || null,
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
@@ -82,24 +72,13 @@ async function formStateToPayload(
 }
 
 // eBay's own rich-form CREATE/UPDATE, staying on /ebay/listings since its fields (category, fitment, business policies) are eBay-specific. See lib/api/googleListings.ts for Google's smaller version.
-export const createListing = async (
-  form: EbayListingFormState,
-  vehicle?: ProductVehicle | null,
-  fallbackImageUrl?: string | null,
-) => {
-  const payload = await formStateToPayload(form, vehicle, fallbackImageUrl);
-  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", payload);
+export const createListing = async (form: EbayListingFormState) => {
+  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", formStateToPayload(form));
   return data;
 };
 
-export const updateListing = async (
-  id: string,
-  form: Partial<EbayListingFormState>,
-  vehicle?: ProductVehicle | null,
-  fallbackImageUrl?: string | null,
-) => {
-  const payload = await formStateToPayload(form as EbayListingFormState, vehicle, fallbackImageUrl);
-  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, payload);
+export const updateListing = async (id: string, form: EbayListingFormState) => {
+  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, formStateToPayload(form));
   return data;
 };
 

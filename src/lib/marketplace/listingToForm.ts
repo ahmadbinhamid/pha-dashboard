@@ -1,4 +1,5 @@
-import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { EbayListing, EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
+import { isGeneratedEbayDescription } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 function normaliseSpn(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -9,7 +10,8 @@ function normaliseSpn(raw: unknown): string[] {
   return [""];
 }
 
-// Shared by every place that resaves a listing before pushing to eBay (ListingEditPage, ListingsPage's row-level push) — description_override is generated client-side, so skipping this resends stale stored HTML.
+// Shared by every place that resaves a listing before pushing to eBay (ListingEditPage, ListingsTab's row-level push).
+// Overrides are never prefilled from the product: an empty field means "use the product value".
 export function listingToForm(listing: EbayListing): EbayListingFormState {
   const productId =
     typeof listing.product === "object" ? listing.product._id : listing.product;
@@ -28,11 +30,10 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   return {
     product_id: productId,
     variant_id: variantId,
-    title_override: listing.title_override || p?.title || "",
-    description_override: listing.description_override || "",
-    price_override: listing.price_override != null
-      ? String(listing.price_override)
-      : p?.price != null ? String(p.price) : "",
+    title_override: listing.title_override || "",
+    // A stored generated template is not a user choice: blank it so the next save lets the server re-render it.
+    description_override: isGeneratedEbayDescription(listing.description_override) ? "" : listing.description_override || "",
+    price_override: listing.price_override != null ? String(listing.price_override) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
@@ -73,6 +74,20 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
       height: listing.package?.height != null ? String(listing.package.height) : "",
       weight: listing.package?.weight != null ? String(listing.package.weight) : "",
     },
+  };
+}
+
+// Values the listing inherits when an override is empty, same variant->product precedence as
+// the backend's listing.resolver.js. Requires product/variant populated (listing.query.service.js#getListingById).
+export function getListingProductDefaults(listing: EbayListing): ListingProductDefaults {
+  const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
+  const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+  const variantPrice = (variant as { price?: number | null } | null)?.price;
+  const variantPhotos = variant?.attachments ?? [];
+  return {
+    title: product?.title ?? "",
+    price: variantPrice ?? product?.price ?? null,
+    photos: variantPhotos.length > 0 ? variantPhotos : (product?.attachments ?? []),
   };
 }
 

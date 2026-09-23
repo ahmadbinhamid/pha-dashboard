@@ -1,8 +1,8 @@
-import { CreditCard, Globe, Link2, Mail } from "lucide-react";
+import { CreditCard, FolderTree, Globe, Link2, Mail } from "lucide-react";
 import { EbayLogo, GoogleLogo } from "@/components/channels/channelLogos";
 
 // The integrations Settings can configure, in catalogue order. Lives in config/ rather than the rendering tab because the id is also the URL segment SettingsPage routes on — two files need this list.
-export type IntegrationId = "ebay" | "google" | "stripe" | "email" | "domains" | "payment-links";
+export type IntegrationId = "ebay" | "google" | "channel-categories" | "stripe" | "email" | "domains" | "payment-links";
 
 export type IntegrationDefinition = {
   id: IntegrationId;
@@ -27,6 +27,12 @@ export const INTEGRATION_CATALOGUE: IntegrationDefinition[] = [
     description: "Send your catalogue to Google Merchant Center and configure feed defaults.",
     icon: (p) => <GoogleLogo {...p} />,
     logoTile: true,
+  },
+  {
+    id: "channel-categories",
+    name: "Channel Categories",
+    description: "Map your product categories to eBay and Google categories once, instead of per listing.",
+    icon: (p) => <FolderTree {...p} />,
   },
   {
     id: "stripe",

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -27,16 +27,14 @@ import { FormSection } from "@/components/products/FormSection";
 import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
 import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
 import { SendProductEmailModal } from "@/components/products/SendProductEmailModal";
+import { ProductSalesChannelsSection } from "@/components/products/ProductSalesChannelsSection";
+import { SALES_CHANNELS_ANCHOR } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import { updateProduct } from "@/lib/api/products";
-import { getChannels } from "@/lib/api/channels";
-import { createGoogleListing } from "@/lib/api/googleListings";
-import { GOOGLE_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import type { Product } from "@/types/product";
 import { formatCurrency } from "@/utils/format";
 import {
   ShoppingBag,
-  ShoppingCart,
   ChevronDown,
   CheckCircle2,
   Mail,
@@ -131,20 +129,11 @@ export function ProductEditForm({
   const [imagesUploading, setImagesUploading] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
 
-  // Same queryKey GoogleConnectCard uses, sharing its cache so this doesn't fire a second request if Settings was already loaded this session.
-  const { data: channelsData } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
-  const googleConnected = channelsData?.data.find((c) => c.key === "google")?.connection.status === "connected";
-
-  // "Lightweight toggle" (google.listing.service.js): unlike eBay's multi-step form-then-push flow, this one action creates the listing and queues its first sync; safe to click again since the backend is idempotent.
-  const listOnGoogleMutation = useMutation({
-    mutationFn: () => createGoogleListing(product._id, null, GOOGLE_LISTING_FORM_INITIAL),
-    onSuccess: () => {
-      toast({ title: "Queued for Google Shopping sync", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-for-products"] });
-    },
-    onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
-  });
+  // Redirected listing links land here with ?channel=<key>#sales-channels (config/salesChannels.ts).
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const focusChannel = searchParams.get("channel");
+  const focusChannels = location.hash === `#${SALES_CHANNELS_ANCHOR}`;
 
   const {
     register,
@@ -289,36 +278,17 @@ export function ProductEditForm({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {/* Consolidated eBay + Google into one "List on Channel" dropdown (was two buttons) — scales to more channels as one more item, not another button. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={listOnGoogleMutation.isPending}
-                >
-                  <ShoppingBag className="h-3.5 w-3.5" />
-                  {listOnGoogleMutation.isPending ? "Listing…" : "List on Channel"}
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={() => navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`)}
-                >
-                  <ShoppingBag className="h-3.5 w-3.5 text-fg/50" />
-                  List on eBay
-                </DropdownMenuItem>
-                {googleConnected && (
-                  <DropdownMenuItem onSelect={() => listOnGoogleMutation.mutate()}>
-                    <ShoppingCart className="h-3.5 w-3.5 text-fg/50" />
-                    List on Google Shopping
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Listing now lives in the Sales channels section below (replaces the old per-channel pages). */}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => document.getElementById(SALES_CHANNELS_ANCHOR)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              <ShoppingBag className="h-3.5 w-3.5" />
+              Sales channels
+            </Button>
             <Button
               type="button"
               variant="primary"
@@ -503,6 +473,9 @@ export function ProductEditForm({
             slug={product.slug}
             notes={product.internal_notes}
           />
+
+          {/* 7. Sales channels — the single place a product is listed on eBay/Google/... */}
+          <ProductSalesChannelsSection number={7} product={product} focusChannel={focusChannel} focus={focusChannels} />
 
         </div>
 

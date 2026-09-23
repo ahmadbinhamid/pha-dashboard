@@ -10,6 +10,7 @@ import { NoChannelsConnectedCard } from "@/components/channels/NoChannelsConnect
 import { getChannels } from "@/lib/api/channels";
 import type { Product } from "@/types/product";
 import { Plus } from "lucide-react";
+import { productChannelsPath } from "@/config/salesChannels";
 
 // Split out of the old merged Products+Listings page: the flat, listing-centric view as its own page. Fetches GET /channels via the shared ["channels"] query key so the "no channels connected" nudge and ListingsTab's filter never hardcode a platform list.
 export default function ListingsPage() {
@@ -24,7 +25,7 @@ export default function ListingsPage() {
 
   function handleProductSelected(product: Product) {
     setPickerOpen(false);
-    navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`);
+    navigate(productChannelsPath(product.slug));
   }
 
   return (

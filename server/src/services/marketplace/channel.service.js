@@ -8,6 +8,7 @@ const MarketplaceListing = require("../../models/MarketplaceListing");
 const { enqueueChannelJob } = require("../../queues/channel.queue");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
 const { LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
+const { withStaticOptions } = require("./fieldSchema");
 
 function storefrontUnavailableReason(manifestName) {
   return `${manifestName} requires a verified storefront domain — connect and verify one under Settings > Domains before connecting ${manifestName}.`;
@@ -88,6 +89,8 @@ async function listChannelsForTenant(tenantId) {
 
     return {
       ...manifest,
+      // Additive: channel-only form fields, with static option lists attached.
+      fieldSchema: withStaticOptions(manifest.fieldSchema),
       capabilities: adapter.capabilities,
       available: storefrontOk,
       unavailable_reason: storefrontOk ? null : storefrontUnavailableReason(manifest.name),

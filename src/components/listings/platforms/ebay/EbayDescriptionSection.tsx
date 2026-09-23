@@ -1,36 +1,43 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { EbayListingFormState } from "@/types/marketplace";
-import type { Attachment, ProductVehicle } from "@/types/product";
+import type { EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
+import type { ProductVehicle } from "@/types/product";
+import { Textarea } from "@/components/ui/Textarea";
+import { OverrideField } from "@/components/listings/OverrideField";
 import { generateListingHtml } from "./ebayDescriptionGenerator";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { Eye } from "lucide-react";
 
 interface Props {
   form: EbayListingFormState;
+  onChange: (patch: Partial<EbayListingFormState>) => void;
   vehicle: ProductVehicle | null | undefined;
-  // Product/variant photos shown in the preview when this listing has no photo_overrides — display only, never saved.
-  fallbackAttachments?: Attachment[];
+  // Effective-value fallbacks for the preview — display only, never saved.
+  productDefaults: ListingProductDefaults;
 }
 
-export function EbayDescriptionSection({ form, vehicle, fallbackAttachments }: Props) {
+// Preview mirrors the template the server renders at push time (ebay.description.template.js).
+export function EbayDescriptionSection({ form, onChange, vehicle, productDefaults }: Props) {
   const { data: tenantSettingsData } = useQuery({
     queryKey: ["tenant-settings"],
     queryFn: getTenantSettings,
   });
   const tenant = tenantSettingsData?.data;
 
-  // embedImages: true since this preview renders same-origin, unlike the real eBay submission (see generateListingHtml's comment).
-  const fallbackImageUrl = fallbackAttachments?.[0]?.url;
+  const customDescription = form.description_override.trim();
+  const effectiveTitle = form.title_override.trim() || productDefaults.title;
+  const fallbackImageUrl = productDefaults.photos[0]?.url;
 
   const html = useMemo(
     () =>
-      generateListingHtml(form, vehicle, tenant?.company_name, tenant?.logo_url, {
+      customDescription ||
+      generateListingHtml({ ...form, title_override: effectiveTitle }, vehicle, tenant?.company_name, tenant?.logo_url, {
         embedImages: true,
         fallbackImageUrl,
       }),
     [
-      form.title_override,
+      customDescription,
+      effectiveTitle,
       vehicle,
       form.item_specifics.mpn,
       form.store_sku,
@@ -57,9 +64,25 @@ export function EbayDescriptionSection({ form, vehicle, fallbackAttachments }: P
       <div className="flex items-center gap-2 rounded-xs border border-accent/20 bg-accent/5 px-3 py-2">
         <Eye className="h-3.5 w-3.5 shrink-0 text-accent" />
         <p className="text-xs text-fg/60">
-          Auto-generated from your listing details — updates live as you fill in Title, Condition, MPN, SKU and Vehicle Fitment.
+          {customDescription
+            ? "Showing your custom description — it replaces the generated one on eBay."
+            : "Generated from the product and listing details when pushed — always reflects the current product."}
         </p>
       </div>
+
+      <OverrideField
+        label="Custom description (HTML)"
+        overridden={!!customDescription}
+        onReset={() => onChange({ description_override: "" })}
+        hint="Leave empty to use the generated description."
+      >
+        <Textarea
+          value={form.description_override}
+          onChange={(e) => onChange({ description_override: e.target.value })}
+          placeholder="Auto-generated from product details (see preview)"
+          rows={3}
+        />
+      </OverrideField>
 
       <div className="rounded-xs border border-border" style={{ height: 640 }}>
         <iframe

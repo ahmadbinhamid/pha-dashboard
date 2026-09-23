@@ -5,7 +5,8 @@ const Inventory = require("../models/Inventory");
 const InventoryHistory = require("../models/InventoryHistory");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
-const { enqueueChannelJob } = require("../queues/channel.queue");
+// Module reference (not destructured) so a test's mock.method() applies whenever it's installed.
+const channelQueue = require("../queues/channel.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { buildWordSearchOr } = require("../utils/regex");
@@ -173,7 +174,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
         ).select("push_seq");
         const seq = updated ? (updated.push_seq ?? null) : null;
 
-        await enqueueChannelJob(listing.platform, "sync_listing", { listingId: listing._id.toString(), seq });
+        await channelQueue.enqueueChannelJob(listing.platform, "sync_listing", { listingId: listing._id.toString(), seq });
         logger.info(`[inventory.service] fan-out queued sync_listing for ${listing._id} (${listing.platform}, seq ${seq})`);
         results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: true, seq });
       } catch (qErr) {
@@ -370,6 +371,23 @@ async function getTotalStockForProductVariant(productId, variantId) {
     variant: variantId || null,
   }).lean();
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
+}
+
+// Batched getTotalStockForProductVariant: one aggregate for many (product, variant) pairs,
+// summed identically. Returns Map("<productId>:<variantId|''>" -> total); missing pairs are 0.
+function stockKey(productId, variantId) {
+  return `${productId}:${variantId || ""}`;
+}
+
+async function getTotalStockForProductVariants(pairs) {
+  const totals = new Map(pairs.map(({ productId, variantId }) => [stockKey(productId, variantId), 0]));
+  if (!pairs.length) return totals;
+  const rows = await Inventory.aggregate([
+    { $match: { $or: pairs.map(({ productId, variantId }) => ({ product: new mongoose.Types.ObjectId(String(productId)), variant: variantId ? new mongoose.Types.ObjectId(String(variantId)) : null })) } },
+    { $group: { _id: { product: "$product", variant: "$variant" }, total: { $sum: { $ifNull: ["$stock_count", 0] } } } },
+  ]);
+  for (const row of rows) totals.set(stockKey(row._id.product, row._id.variant), row.total);
+  return totals;
 }
 
 // Product-level rollup across all variants/locations — used for the
@@ -657,6 +675,8 @@ module.exports = {
   setStock,
   getHistory,
   getTotalStockForProductVariant,
+  getTotalStockForProductVariants,
+  stockKey,
   getTotalStockForProduct,
   getLowStockItems,
   resolveSkuToIds,

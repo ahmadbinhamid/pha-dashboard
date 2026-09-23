@@ -1,19 +1,25 @@
-import type { EbayListingFormState } from "@/types/marketplace";
+import type { EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
 import { validateVehicleYearRange, priceSchema } from "@/lib/validation/commonFields";
+import { EBAY_TITLE_MAX_LENGTH } from "@/config/ebayListingOptions";
 
 export type EbayListingErrors = Partial<Record<keyof EbayListingFormState | "min_best_offer_amount", string>>;
 
 // Auction durations allowed by eBay (GTC is Fixed Price only)
 const AUCTION_DURATIONS = ["DAYS_1", "DAYS_3", "DAYS_5", "DAYS_7", "DAYS_10"];
 
-export function validateEbayListing(form: EbayListingFormState): EbayListingErrors {
+// Overrides are optional: every check below runs on the EFFECTIVE value (override, else the
+// product's), mirroring server validators/ebay.listing.validation.js#validateListingForPush.
+export function validateEbayListing(form: EbayListingFormState, defaults: ListingProductDefaults): EbayListingErrors {
   const errors: EbayListingErrors = {};
 
-  // Title — required, eBay hard limit is 80 chars
-  if (!form.title_override?.trim()) {
+  const titleOverride = form.title_override.trim();
+  const title = titleOverride || defaults.title;
+  if (!title.trim()) {
     errors.title_override = "Listing title is required.";
-  } else if (form.title_override.length > 80) {
-    errors.title_override = "Title must be 80 characters or fewer (eBay limit).";
+  } else if (title.length > EBAY_TITLE_MAX_LENGTH) {
+    errors.title_override = titleOverride
+      ? `eBay title override is ${title.length} characters — eBay allows ${EBAY_TITLE_MAX_LENGTH}.`
+      : `Product title is ${title.length} characters — eBay allows ${EBAY_TITLE_MAX_LENGTH}. Shorten it or set an eBay title override.`;
   }
 
   // Category — required by eBay to publish
@@ -22,7 +28,8 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
   }
 
   // Photos — eBay requires at least 1 image, max 24
-  const imageCount = (form.photo_overrides || []).filter((p) => p.type === "image").length;
+  const photos = form.photo_overrides.length > 0 ? form.photo_overrides : defaults.photos;
+  const imageCount = photos.filter((p) => p.type === "image").length;
   if (imageCount === 0) {
     errors.photo_overrides = "At least 1 image is required by eBay.";
   } else if (imageCount > 24) {
@@ -31,8 +38,9 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
 
   // Price — required and must be a real positive number (catches "-" and
   // other non-numeric junk, not just "was it filled in")
-  const priceResult = priceSchema("Price").safeParse(form.price_override);
-  const price = Number(form.price_override);
+  const effectivePrice = form.price_override !== "" ? form.price_override : String(defaults.price ?? "");
+  const priceResult = priceSchema("Price").safeParse(effectivePrice);
+  const price = Number(effectivePrice);
   if (!priceResult.success) {
     errors.price_override = "A valid price greater than A$0 is required.";
   }

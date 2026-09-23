@@ -12,9 +12,10 @@ module.exports = {
   Inventory: require("./Inventory"),
   InventoryHistory: require("./InventoryHistory"),
   InventorySettings: require("./InventorySettings"),
-  EbayProcessedOrder: require("./EbayProcessedOrder"),
+  ChannelProcessedEvent: require("./ChannelProcessedEvent"),
   MarketplaceListing: require("./MarketplaceListing"),
   ChannelConnection: require("./ChannelConnection"),
   ChannelSyncLog: require("./ChannelSyncLog"),
+  CategoryMapping: require("./CategoryMapping"),
   VehicleModel: require("./VehicleModel"),
 };

@@ -6,6 +6,14 @@ const CONDITION_LABEL: Record<string, string> = {
   USED: "Used",
 };
 
+// Stable marker present in every generated description; mirrors server ebay.description.template.js.
+const GENERATED_MARKER = 'class="pha-wrap"';
+
+// True when `html` is this app's generated template (never user-authored) rather than a real override.
+export function isGeneratedEbayDescription(html: string | null | undefined): boolean {
+  return !!html && html.includes(GENERATED_MARKER);
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")

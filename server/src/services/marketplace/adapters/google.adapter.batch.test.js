@@ -21,7 +21,7 @@ const ChannelConnection = require("../../../models/ChannelConnection");
 const ChannelSyncLog = require("../../../models/ChannelSyncLog");
 const { encrypt, packCiphertext } = require("../../../utils/crypto/tokenCipher");
 const { DOMAIN_STATUS } = require("../../../constants/domain.constants");
-const { resolveListing } = require("../listing.resolver");
+const { resolveListing, hydrateResolved } = require("../listing.resolver");
 const registry = require("../registry");
 
 const googleAdapter = require("./google.adapter");
@@ -138,6 +138,8 @@ test("publishBatch: a per-item failure is isolated — the rest of the batch sti
     ),
   );
 
+  // TASK 4: stock/URL lookups now happen in hydration, not inside publishBatch.
+  await hydrateResolved(resolvedList, googleAdapter, tenantId);
   const results = await googleAdapter.publishBatch(resolvedList, settings);
   assert.equal(results.length, 3);
   assert.equal(results[0].ok, true);

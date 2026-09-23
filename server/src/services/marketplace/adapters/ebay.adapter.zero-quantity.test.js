@@ -4,136 +4,92 @@
 // eBay. Before this fix, publish()/update() both had an early
 // `if (quantity === 0) return { skipped: true, reason: "out_of_stock" }`
 // BEFORE any write — and a manual dashboard stock correction reaches eBay
-// ONLY via fan-out -> sync_listing -> update() (Stripe sales took a
-// different, now-removed push_quantity path, which is why this bug hid
-// for as long as it did). The result: correcting stock to 0 in the
-// dashboard silently never told eBay, which kept selling stock that didn't
-// exist. eBay must now receive the real 0 and stay listed via its own
-// out-of-stock handling (marketplace/sync.service.js sets sync_status
-// OUT_OF_STOCK for visibility, but only after this write succeeds).
+// ONLY via fan-out -> sync_listing -> update(). The result: correcting stock
+// to 0 in the dashboard silently never told eBay, which kept selling stock
+// that didn't exist. eBay must now receive the real 0.
+//
+// TASK 4: the adapter is now a pure translator — quantity arrives on
+// resolved.stock and the sync baseline is stamped by sync.service.js via
+// hooks.onQuantityPushed. So this file runs WITHOUT Mongo and asserts the
+// hook call; the DB baseline itself is asserted end to end in
+// sync.service.baseline.test.js (same two scenarios).
 //
 // Mocks ebay.api.service's credentialsConfigured/getAccessToken/
-// upsertInventoryItem (all destructured by ebay.adapter.js at require
-// time, so must be installed BEFORE ebay.adapter.js is first required).
-// buildInventoryItemFromResolved/buildOfferFromResolved are left real, so
-// this also exercises their actual null-quantity omission logic.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/adapters/ebay.adapter.zero-quantity.test.js
+// upsertInventoryItem (destructured by ebay.adapter.js at require time, so
+// installed BEFORE it is first required). buildInventoryItemFromResolved is
+// left real, so this also exercises its null-quantity omission logic.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
-const mongoose = require("mongoose");
-const crypto = require("node:crypto");
-const config = require("../../../config");
 
 const ebayApiService = require("../../ebay/ebay.api.service");
 mock.method(ebayApiService, "credentialsConfigured", () => true);
 mock.method(ebayApiService, "getAccessToken", async () => "fake-token");
 const upsertInventoryItemSpy = mock.method(ebayApiService, "upsertInventoryItem", async () => ({ ok: true }));
 
-const ebaySettingsService = require("../../ebay/ebay.settings.service");
-mock.method(ebaySettingsService, "getSettings", async () => ({ tenant_id: null, sandbox: true, marketplace_id: "EBAY_AU" }));
+const ebayAdapter = require("./ebay.adapter");
 
-// ebay.adapter.js pulls in inventory.service.js (for getTotalStockForProductVariant),
-// which requires queues/ebay.queue.js at module load — its Bull/ioredis
-// client otherwise keeps this process alive indefinitely, hanging any
-// multi-file `node --test` run waiting on this one.
-const { ebayQueue } = require("../../../queues/ebay.queue");
-test.after(async () => {
-  await ebayQueue.close();
-});
+const SETTINGS = { sandbox: true, marketplace_id: "EBAY_AU" };
 
-async function makeFixture({ stockControl, stockCount }) {
-  const mongooseLib = require("mongoose");
-  const Product = require("../../../models/Product");
-  const Location = require("../../../models/Location");
-  const Inventory = require("../../../models/Inventory");
-  const MarketplaceListing = require("../../../models/MarketplaceListing");
-  const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../../constants/marketplace.constants");
-
-  const suffix = crypto.randomUUID();
-  const tenantId = new mongooseLib.Types.ObjectId();
-  const sku = `ZEROQ-${suffix}`;
-
-  const product = await Product.create({
-    tenant_id: tenantId,
-    title: `Zero quantity test ${suffix}`,
-    slug: `zero-quantity-test-${suffix}`,
-    sku,
-    status: "active",
-    stock_control: stockControl,
-  });
-  const location = await Location.create({ tenant_id: tenantId, name: `Zero-q loc ${suffix}` });
-  await Inventory.create({ product: product._id, variant: null, location: location._id, stock_count: stockCount });
-
-  const listing = await MarketplaceListing.create({
-    tenant_id: tenantId,
-    product: product._id,
+// ebay_category_id deliberately unset — update() then returns right after the
+// inventory-item write (the part this test cares about).
+function resolvedFor({ stockControl, quantity }) {
+  return {
+    sku: "ZEROQ-1",
+    title: "Zero quantity test",
+    description: "d",
+    price: 10,
+    brand: null,
+    photos: [],
+    category: null,
+    stock: { stock_control: stockControl, quantity: stockControl ? quantity : null },
+    listing: {
+      tenant_id: "t1",
+      condition: "NEW",
+      item_specifics: {},
+      external_listing_id: "L-1",
+      external_offer_id: "O-1",
+    },
+    product: { _id: "p1", stock_control: stockControl },
     variant: null,
-    platform: MARKETPLACE_PLATFORM.EBAY,
-    state: LISTING_STATE.ACTIVE,
-    external_listing_id: `L-${suffix}`,
-    external_offer_id: `O-${suffix}`,
-    condition: "NEW",
-    // ebay_category_id deliberately left unset — update() then returns
-    // right after the inventory-item write (the part this test cares
-    // about), before touching offer/policy machinery this test doesn't need to mock.
-  });
-
-  return { tenantId, product, listing };
+  };
 }
 
-test("manual correction to 0 (stock_control=true): quantity 0 is pushed to eBay, not skipped", async (t) => {
-  await mongoose.connect(config.mongoUri);
-  const { tenantId, product, listing } = await makeFixture({ stockControl: true, stockCount: 0 });
-
-  const { resolveListing } = require("../listing.resolver");
-  const ebayAdapter = require("./ebay.adapter");
-  const MarketplaceListing = require("../../../models/MarketplaceListing");
-
-  const populatedProduct = { ...product.toObject(), attachments: [] };
-  const resolved = resolveListing(listing, populatedProduct, null);
-
+test("manual correction to 0 (stock_control=true): quantity 0 is pushed to eBay, not skipped", async () => {
+  const onQuantityPushed = mock.fn(async () => {});
   const callsBefore = upsertInventoryItemSpy.mock.callCount();
-  const result = await ebayAdapter.update(resolved, { tenant_id: tenantId, sandbox: true, marketplace_id: "EBAY_AU" }, {});
+
+  const result = await ebayAdapter.update(resolvedFor({ stockControl: true, quantity: 0 }), SETTINGS, { onQuantityPushed });
 
   assert.notEqual(result.skipped, true, "must not be skipped as out_of_stock — it must actually push 0");
   assert.equal(result.quantity, 0);
   assert.equal(upsertInventoryItemSpy.mock.callCount(), callsBefore + 1, "the inventory item write must actually happen");
 
-  const pushedBody = upsertInventoryItemSpy.mock.calls[upsertInventoryItemSpy.mock.calls.length - 1].arguments[2];
+  const pushedBody = upsertInventoryItemSpy.mock.calls.at(-1).arguments[2];
   assert.equal(pushedBody.availability.shipToLocationAvailability.quantity, 0, "eBay must receive the true 0, not a skipped write");
 
-  const afterListing = await MarketplaceListing.findById(listing._id);
-  assert.equal(afterListing.ebay_synced_quantity, 0, "baseline must reflect the confirmed 0 push");
-
-  await mongoose.disconnect();
+  assert.deepEqual(onQuantityPushed.mock.calls.map((c) => c.arguments[0]), [0], "baseline must reflect the confirmed 0 push");
 });
 
-test("stock_control=false: no quantity is ever sent to eBay, and updateSyncBaseline is never called", async (t) => {
-  await mongoose.connect(config.mongoUri);
-  const { tenantId, product, listing } = await makeFixture({ stockControl: false, stockCount: 0 });
-
-  const { resolveListing } = require("../listing.resolver");
-  const ebayAdapter = require("./ebay.adapter");
-  const MarketplaceListing = require("../../../models/MarketplaceListing");
-
-  const populatedProduct = { ...product.toObject(), attachments: [] };
-  const resolved = resolveListing(listing, populatedProduct, null);
-
+test("stock_control=false: no quantity is ever sent to eBay, and the baseline hook is never called", async () => {
+  const onQuantityPushed = mock.fn(async () => {});
   const callsBefore = upsertInventoryItemSpy.mock.callCount();
-  const result = await ebayAdapter.update(resolved, { tenant_id: tenantId, sandbox: true, marketplace_id: "EBAY_AU" }, {});
+
+  const result = await ebayAdapter.update(resolvedFor({ stockControl: false }), SETTINGS, { onQuantityPushed });
 
   assert.equal(result.quantity, null);
   assert.equal(upsertInventoryItemSpy.mock.callCount(), callsBefore + 1, "the inventory item call still happens (title/condition/etc still sync)");
 
-  const pushedBody = upsertInventoryItemSpy.mock.calls[upsertInventoryItemSpy.mock.calls.length - 1].arguments[2];
+  const pushedBody = upsertInventoryItemSpy.mock.calls.at(-1).arguments[2];
   assert.equal(pushedBody.availability, undefined, "no availability block at all for an untracked-stock product");
 
-  const afterListing = await MarketplaceListing.findById(listing._id);
-  assert.equal(afterListing.ebay_synced_quantity, null, "updateSyncBaseline must never be called for a null (untracked) quantity");
+  assert.equal(onQuantityPushed.mock.callCount(), 0, "the baseline must never be stamped for a null (untracked) quantity");
+});
 
-  await mongoose.disconnect();
+test("eBay treats an UNSET stock_control as untracked (null quantity) — unlike Google, kept distinct", async () => {
+  const resolved = resolvedFor({ stockControl: true, quantity: 4 });
+  resolved.product.stock_control = undefined;
+  const result = await ebayAdapter.update(resolved, SETTINGS, {});
+  assert.equal(result.quantity, null);
 });

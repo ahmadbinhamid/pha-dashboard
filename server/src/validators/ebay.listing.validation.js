@@ -1,5 +1,8 @@
 const Joi = require("joi");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../constants/marketplace.constants");
+const { EBAY_TITLE_MAX_LENGTH } = require("../constants/ebay.constants");
+const { validateFieldValues } = require("../services/marketplace/fieldSchema");
+const { fieldSchema, fieldValues, POLICY_KEYS } = require("../services/marketplace/adapters/ebay.fieldSchema");
 
 const listListings = {
   query: Joi.object({
@@ -14,20 +17,34 @@ const listListings = {
   }),
 };
 
-// Validates a fully-populated listing document before enqueuing for eBay sync
-function validateListingForPush(listing, product) {
+// Validates a fully-populated listing document before enqueuing for eBay sync.
+// `categoryId` is the effective category (listing value, else the tenant's mapping);
+// `settings` supplies the tenant's default business policies.
+function validateListingForPush(listing, product, { categoryId = listing.ebay_category_id, settings = null } = {}) {
   const errors = [];
 
-  const title = listing.title_override || product?.title;
+  // Validates the EFFECTIVE title (override, else product), so an over-long product title
+  // is caught here rather than rejected by eBay.
+  const usingOverride = !!listing.title_override;
+  const title = usingOverride ? listing.title_override : product?.title;
   if (!title?.trim()) {
     errors.push({ field: "title_override", message: "Listing title is required." });
-  } else if (title.length > 80) {
-    errors.push({ field: "title_override", message: "Title must be 80 characters or fewer (eBay limit)." });
+  } else if (title.length > EBAY_TITLE_MAX_LENGTH) {
+    errors.push({
+      field: "title_override",
+      message: usingOverride
+        ? `eBay title override is ${title.length} characters — eBay allows ${EBAY_TITLE_MAX_LENGTH}.`
+        : `Product title is ${title.length} characters — eBay allows ${EBAY_TITLE_MAX_LENGTH}. Shorten it or set an eBay title override.`,
+    });
   }
 
-  if (!listing.ebay_category_id) {
-    errors.push({ field: "ebay_category_id", message: "eBay category is required." });
-  }
+  // Category + business policies come from the shared fieldSchema (same rules the adapter enforces).
+  // NOTE: a tenant default policy now satisfies this, matching what the adapter actually sends.
+  errors.push(
+    ...validateFieldValues(fieldSchema, fieldValues(listing, { categoryId, settings }), {
+      keys: ["ebay_category_id", ...POLICY_KEYS],
+    }),
+  );
 
   const overrideImages = (listing.photo_overrides || []).filter((a) => a?.type === "image");
   const productImages = (product?.attachments || []).filter((a) => a?.type === "image");
@@ -79,16 +96,6 @@ function validateListingForPush(listing, product) {
   }
   if (mpn && mpn !== "Does Not Apply" && !brand) {
     errors.push({ field: "item_specifics", message: "Brand is required when MPN is set." });
-  }
-
-  if (!listing.fulfillment_policy_id) {
-    errors.push({ field: "fulfillment_policy_id", message: "A shipping policy is required." });
-  }
-  if (!listing.payment_policy_id) {
-    errors.push({ field: "payment_policy_id", message: "A payment policy is required." });
-  }
-  if (!listing.return_policy_id) {
-    errors.push({ field: "return_policy_id", message: "A return policy is required." });
   }
 
   return errors;
