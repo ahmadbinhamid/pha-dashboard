@@ -16,6 +16,7 @@ import {
 import type { TooltipContentProps } from "recharts";
 import { AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { NativeSelect } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
@@ -23,6 +24,7 @@ import type { StatTileTone } from "@/components/dashboard/DashboardStatTile";
 import { cn } from "@/utils/cn";
 import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CATEGORY_COLOR_VARS } from "@/config/categoricalColors";
 import type { InventoryTurnoverResponse } from "@/types/reports";
 
 type ViewMode = "rate" | "dsi" | "categories";
@@ -31,15 +33,6 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: "rate", label: "Turnover Rate (x)" },
   { key: "dsi", label: "Days of Supply (DSI)" },
   { key: "categories", label: "Category Comparison" },
-];
-
-const CATEGORY_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
 ];
 
 function formatDayLabel(dateStr: string) {
@@ -185,10 +178,10 @@ export function InventoryTurnoverCard({
           </div>
 
           {viewMode === "categories" && categoryNames.length > 0 && (
-            <select
+            <NativeSelect
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-xl border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-fg outline-none"
+              className="h-auto w-auto rounded-xl border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-fg shadow-none"
             >
               <option value="All">
                 All {categoryNames.length} {categoryNames.length === 1 ? "category" : "categories"}
@@ -198,7 +191,7 @@ export function InventoryTurnoverCard({
                   {name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           )}
 
           <button

@@ -1,5 +1,6 @@
 import { Store } from "lucide-react";
 import { getChannelLogo } from "@/components/channels/channelLogos";
+import { CATEGORICAL_COLOR_VARS as AVATAR_COLOR_VARS } from "@/config/categoricalColors";
 
 // Identity-only chip for a sales channel. A recognized channel (eBay,
 // Google, or "storefront" — the tenant's own site) shows its real logo; an
@@ -13,20 +14,9 @@ import { getChannelLogo } from "@/components/channels/channelLogos";
 // (or vice-versa); both call into getChannelLogo() for the actual logo
 // though, so eBay/Google never get drawn twice.
 //
-// Deliberately carries no status meaning. Mixing "which channel" and "is it
-// healthy" into one colored dot was exactly what made the Products page's
-// channel status confusing: the same visual meant one thing collapsed and a
-// different thing once expanded. This chip only ever answers "which
-// channel"; color here never implies health.
-const AVATAR_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
-];
-
+// Deliberately carries no status meaning. Mixing "which channel" and "is it healthy" into one
+// colored dot was exactly what made the Products page's channel status confusing — this chip
+// only ever answers "which channel"; color here never implies health.
 export function channelAvatarColor(index: number) {
   return AVATAR_COLOR_VARS[index % AVATAR_COLOR_VARS.length];
 }

@@ -6,17 +6,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CHANNEL_COLOR_VARS } from "@/config/categoricalColors";
 import type { OrderChannel } from "@/types/orders";
 import type { RevenueByChannelRow } from "@/types/reports";
-
-const CHANNEL_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
-];
 
 function channelLabel(key: string) {
   return ORDER_CHANNEL_LABEL[key as OrderChannel] ?? key;

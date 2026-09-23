@@ -158,12 +158,13 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
                 <span className="shrink-0 border-r border-border bg-bg-2 px-3 py-2 text-xs font-medium text-fg/45 select-none">
                   #{i + 1}
                 </span>
-                <input
+                <Input
                   type="text"
+                  variant="ghost"
                   value={val}
                   onChange={(e) => updateSpn(i, e.target.value)}
                   placeholder="e.g. 45022TBCA01"
-                  className="w-full bg-transparent px-3 py-2 text-sm text-fg placeholder:text-fg/35 outline-none"
+                  className="h-auto w-full rounded-none border-0 bg-transparent px-3 py-2 text-sm text-fg shadow-none placeholder:text-fg/35 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
                 />
               </div>
               <button

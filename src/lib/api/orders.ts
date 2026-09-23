@@ -6,6 +6,7 @@ import type {
   OrderDeliveryMethod,
   OrderDetail,
   OrderFulfillmentStatus,
+  OrderStats,
 } from "@/types/orders";
 import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
@@ -24,12 +25,6 @@ export const getOrders = async (params: OrderListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<Order>>>("/order", { params });
   return data;
 };
-
-export interface OrderStats {
-  totalRevenueCents: number;
-  pendingFulfillmentCount: number;
-  unpaidCount: number;
-}
 
 export const getOrderStats = async () => {
   const { data } = await apiClient.get<BeResponse<OrderStats>>("/order/stats");

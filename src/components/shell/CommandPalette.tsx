@@ -3,6 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { PaletteRow } from "@/components/shell/CommandPaletteRow";
 import { CommandPaletteSection } from "@/components/shell/CommandPaletteSection";
@@ -191,12 +192,13 @@ export function CommandPalette({
               )}
             >
               <Search className="h-4 w-4 shrink-0 text-fg/40" />
-              <input
+              <Input
                 ref={inputRef}
+                variant="ghost"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search products, SKUs, orders, customers…"
-                className="w-full bg-transparent text-sm text-fg outline-none! placeholder:text-fg/40"
+                className="h-auto w-full flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none placeholder:text-fg/40 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
               />
               <button
                 type="button"

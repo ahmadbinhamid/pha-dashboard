@@ -143,3 +143,9 @@ export interface OrderDetail extends Omit<Order, "payment"> {
   payments: OrderPaymentSummary[];
   refunds: Refund[];
 }
+
+export interface OrderStats {
+  totalRevenueCents: number;
+  pendingFulfillmentCount: number;
+  unpaidCount: number;
+}

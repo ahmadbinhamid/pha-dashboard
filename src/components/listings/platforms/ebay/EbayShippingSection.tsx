@@ -64,7 +64,7 @@ export function EbayShippingSection({
             </SelectContent>
           </Select>
           {!policiesLoading && fulfillmentPolicies.length === 0 && (
-            <p className="mt-1 text-[11px] text-amber-500/80">
+            <p className="mt-1 text-[11px] text-warn/80">
               No fulfillment policies found. Set one up in eBay Seller Hub.
             </p>
           )}

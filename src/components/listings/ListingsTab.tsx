@@ -289,7 +289,7 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
                   <span className="font-medium text-fg">{deleteListingName}</span> will be permanently removed from{" "}
                   {PLATFORM_LABEL[deleteTarget.platform] ?? deleteTarget.platform}.
                   {deleteListingIsLive && (
-                    <span className="mt-1 block text-amber-500">
+                    <span className="mt-1 block text-warn">
                       This listing is live on {PLATFORM_LABEL[deleteTarget.platform] ?? deleteTarget.platform} and will also be withdrawn.
                     </span>
                   )}

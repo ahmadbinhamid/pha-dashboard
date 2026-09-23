@@ -714,6 +714,11 @@ async function getOrderForGuest(orderId, token, tenantId) {
   return order;
 }
 
+// guest_access_token is select:false by default; needed here to build an admin-generated payment link.
+async function getOrderForPaymentLink(orderId, tenantId) {
+  return Order.findOne({ _id: orderId, tenant_id: tenantId }).select("+guest_access_token");
+}
+
 // ── Admin ────────────────────────────────────────────────────────────────
 
 async function listOrders(
@@ -941,6 +946,7 @@ module.exports = {
   updateOrderCustomerDetails,
   updateOrderReferenceNumber,
   getOrderForGuest,
+  getOrderForPaymentLink,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,
   updateOrderStatus,

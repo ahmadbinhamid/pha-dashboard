@@ -6,7 +6,7 @@ require("../models/index"); // register all schemas before any query
 const { searchQueue } = require("../queues/search.queue");
 const { ensureProductsCollection } = require("../services/search/product.search.schema");
 const { indexProduct, deleteProductFromIndex } = require("../services/search/product.search.service");
-const Product = require("../models/Product");
+const { findProductByIdForIndexing } = require("../services/product.service");
 const { logger } = require("../loaders/logging");
 
 connectMongo().catch((err) => {
@@ -21,8 +21,7 @@ ensureProductsCollection().catch((err) => {
 // Re-fetches the product at process time so a job that sat queued for a while still indexes the latest state.
 searchQueue.process("index_product", 4, async (job) => {
   const { productId } = job.data;
-  // findById excludes soft-deleted docs, so null means "deleted since this job was enqueued".
-  const product = await Product.findById(productId);
+  const product = await findProductByIdForIndexing(productId);
   if (!product) {
     await deleteProductFromIndex(productId);
     return;

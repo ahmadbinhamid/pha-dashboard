@@ -48,6 +48,22 @@ async function logSyncEvent({ tenantId, platform, jobType, entityId, status, att
   }
 }
 
+// Shared shape for every syncListing skip branch below: log the ChannelSyncLog row for
+// jobType "sync_listing" and return the same { skipped, reason } shape. Any listing-state
+// update specific to one branch (e.g. not_connected marking the listing ERROR) is done by the
+// caller before calling this, since only one branch needs it.
+async function skipSync(listing, reason) {
+  await logSyncEvent({
+    tenantId: listing.tenant_id,
+    platform: listing.platform,
+    jobType: "sync_listing",
+    entityId: listing._id,
+    status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
+    errorCode: reason,
+  });
+  return { skipped: true, reason };
+}
+
 // seq is the fencing token claimed at enqueue time (see
 // inventory.service.js#fanOutMarketplaceInventory) — null/undefined for
 // callers that don't participate in fencing (e.g. an explicit manual
@@ -79,15 +95,7 @@ async function syncListing(listingId, seq = null) {
     logger.info(
       `[marketplace.sync] dropping stale sync_listing job for ${listingId} (seq ${seq} < last_pushed ${lastPushedSeq})`,
     );
-    await logSyncEvent({
-      tenantId: listing.tenant_id,
-      platform: listing.platform,
-      jobType: "sync_listing",
-      entityId: listing._id,
-      status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
-      errorCode: "stale_seq",
-    });
-    return { skipped: true, reason: "stale_seq" };
+    return skipSync(listing, "stale_seq");
   }
 
   const adapter = getAdapter(listing.platform);
@@ -108,15 +116,7 @@ async function syncListing(listingId, seq = null) {
     if (settings === null) {
       logger.warn(`[marketplace.sync] listing ${listingId}: "${listing.platform}" has no connection for this tenant — skipping`);
       await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: "Platform not connected" });
-      await logSyncEvent({
-        tenantId: listing.tenant_id,
-        platform: listing.platform,
-        jobType: "sync_listing",
-        entityId: listing._id,
-        status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
-        errorCode: "not_connected",
-      });
-      return { skipped: true, reason: "not_connected" };
+      return skipSync(listing, "not_connected");
     }
   }
 
@@ -125,15 +125,7 @@ async function syncListing(listingId, seq = null) {
   // (which would stall every OTHER tenant sharing that platform's queue).
   if (await circuitBreaker.isOpen(listing.tenant_id, listing.platform)) {
     logger.warn(`[marketplace.sync] listing ${listingId}: circuit open for ${listing.platform}/${listing.tenant_id} — skipping until resumed`);
-    await logSyncEvent({
-      tenantId: listing.tenant_id,
-      platform: listing.platform,
-      jobType: "sync_listing",
-      entityId: listing._id,
-      status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
-      errorCode: "circuit_open",
-    });
-    return { skipped: true, reason: "circuit_open" };
+    return skipSync(listing, "circuit_open");
   }
 
   const isUpdate = !!listing.external_listing_id;
@@ -147,15 +139,7 @@ async function syncListing(listingId, seq = null) {
   const capabilities = adapter.capabilities || {};
   if (isUpdate && capabilities.inventory === false) {
     logger.warn(`[marketplace.sync] listing ${listingId}: adapter "${listing.platform}" has no inventory capability — sync_listing is a no-op`);
-    await logSyncEvent({
-      tenantId: listing.tenant_id,
-      platform: listing.platform,
-      jobType: "sync_listing",
-      entityId: listing._id,
-      status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
-      errorCode: "inventory_not_supported",
-    });
-    return { skipped: true, reason: "inventory_not_supported" };
+    return skipSync(listing, "inventory_not_supported");
   }
 
   const variant = listing.variant

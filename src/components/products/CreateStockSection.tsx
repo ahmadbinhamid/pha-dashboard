@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus } from "lucide-react";
+import { Input } from "@/components/ui/Input";
 import { getLocations } from "@/lib/api/products";
 import type { StockEntry } from "@/types/product";
 
@@ -51,13 +52,14 @@ export function CreateStockSection({ entries, onChange }: CreateStockSectionProp
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <input
+          <Input
             type="number"
+            variant="ghost"
             min={0}
             value={qty}
             disabled={!mainWarehouse}
             onChange={(e) => setQty(Number(e.target.value) || 0)}
-            className="w-14 border-x border-border bg-transparent text-center text-sm tabular-nums outline-none!"
+            className="h-auto w-14 rounded-none border-0 border-x border-border bg-transparent px-0 text-center text-sm tabular-nums shadow-none hover:bg-transparent focus-visible:border-border focus-visible:shadow-none"
           />
           <button
             type="button"

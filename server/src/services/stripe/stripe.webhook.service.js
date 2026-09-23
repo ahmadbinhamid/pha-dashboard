@@ -84,6 +84,62 @@ async function handleEvent(event, tenantId) {
   }
 }
 
+// Verifies the captured amount/currency match this Payment doc, then marks it SUCCEEDED with the
+// card details Stripe returns — or flags MANUAL_REVIEW without touching stock on a mismatch.
+// Returns true when the caller should stop here (a mismatch was flagged), false to continue.
+async function settlePayment(payment, intent, order, tenantId) {
+  // Verify the captured amount matches this Payment doc's own `amount`, not order.total —
+  // an intent for a manual sale's remaining balance is legitimately less than the total.
+  const expectedAmount = payment.amount;
+  const amountReceived = intent.amount_received ?? intent.amount;
+  const amountMismatch = amountReceived !== expectedAmount;
+  const currencyMismatch = intent.currency !== order.currency;
+  if (amountMismatch || currencyMismatch) {
+    // Funds were captured — FAILED would wrongly imply no money moved, so flag for review instead.
+    payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
+    payment.failure_reason = [
+      amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
+      currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
+    ]
+      .filter(Boolean)
+      .join("; ");
+    await payment.save();
+    logger.error(
+      `[stripe.webhook] MISMATCH order ${order.order_number}: ${payment.failure_reason} — needs manual review`,
+    );
+    return true; // do not mark paid, do not touch stock
+  }
+
+  // Re-retrieve with expand to read card details — Stripe rejects nesting through `latest_charge`.
+  const stripe = await stripeKeysService.getStripeClient(tenantId);
+  const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
+  const paymentMethod =
+    fullIntent.payment_method && typeof fullIntent.payment_method === "object"
+      ? fullIntent.payment_method
+      : null;
+
+  payment.status = PAYMENT_STATUS.SUCCEEDED;
+  payment.amount = amountReceived;
+  payment.paid_at = new Date();
+  payment.card_brand = paymentMethod?.card?.brand || null;
+  payment.card_last4 = paymentMethod?.card?.last4 || null;
+  await payment.save();
+  return false;
+}
+
+// Sends the pickup or delivery order-confirmation email, matching the copy each channel expects.
+async function sendOrderConfirmationEmail(order, companyProfile) {
+  const payload = {
+    to: order.customer.email,
+    name: order.customer.name,
+    orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
+    companyProfile,
+    tenantId: order.tenant_id,
+  };
+  const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  return isPickup ? emailService.sendOrderReceivedPickup(payload) : emailService.sendOrderConfirmation(payload);
+}
+
 async function handlePaymentSucceeded(intent, tenantId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: intent.id });
   if (!payment) {
@@ -113,42 +169,8 @@ async function handlePaymentSucceeded(intent, tenantId) {
 
   // Skipped entirely on a resume — only the order/stock side below still needs finishing.
   if (payment.status !== PAYMENT_STATUS.SUCCEEDED) {
-    // Verify the captured amount matches this Payment doc's own `amount`, not order.total —
-    // an intent for a manual sale's remaining balance is legitimately less than the total.
-    const expectedAmount = payment.amount;
-    const amountReceived = intent.amount_received ?? intent.amount;
-    const amountMismatch = amountReceived !== expectedAmount;
-    const currencyMismatch = intent.currency !== order.currency;
-    if (amountMismatch || currencyMismatch) {
-      // Funds were captured — FAILED would wrongly imply no money moved, so flag for review instead.
-      payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
-      payment.failure_reason = [
-        amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
-        currencyMismatch ? `Currency mismatch: received ${intent.currency}, expected ${order.currency}` : null,
-      ]
-        .filter(Boolean)
-        .join("; ");
-      await payment.save();
-      logger.error(
-        `[stripe.webhook] MISMATCH order ${order.order_number}: ${payment.failure_reason} — needs manual review`,
-      );
-      return; // do not mark paid, do not touch stock
-    }
-
-    // Re-retrieve with expand to read card details — Stripe rejects nesting through `latest_charge`.
-    const stripe = await stripeKeysService.getStripeClient(tenantId);
-    const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
-    const paymentMethod =
-      fullIntent.payment_method && typeof fullIntent.payment_method === "object"
-        ? fullIntent.payment_method
-        : null;
-
-    payment.status = PAYMENT_STATUS.SUCCEEDED;
-    payment.amount = amountReceived;
-    payment.paid_at = new Date();
-    payment.card_brand = paymentMethod?.card?.brand || null;
-    payment.card_last4 = paymentMethod?.card?.last4 || null;
-    await payment.save();
+    const mismatched = await settlePayment(payment, intent, order, tenantId);
+    if (mismatched) return;
   }
 
   // Recomputed across every succeeded payment, not hardcoded to PAID, since a prior deposit
@@ -193,25 +215,8 @@ async function handlePaymentSucceeded(intent, tenantId) {
   // Best-effort — throwing here would make handleEvent release the claim and Stripe redeliver,
   // but payment.status is already SUCCEEDED so the email would never resend anyway.
   try {
-    const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
     const companyProfile = await getCompanyProfile(order.tenant_id);
-    if (isPickup) {
-      await emailService.sendOrderReceivedPickup({
-        to: order.customer.email,
-        name: order.customer.name,
-        orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
-        companyProfile,
-        tenantId: order.tenant_id,
-      });
-    } else {
-      await emailService.sendOrderConfirmation({
-        to: order.customer.email,
-        name: order.customer.name,
-        orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
-        companyProfile,
-        tenantId: order.tenant_id,
-      });
-    }
+    await sendOrderConfirmationEmail(order, companyProfile);
   } catch (err) {
     logger.error(`[stripe.webhook] failed to send order confirmation email for ${order.order_number}`, {
       error: err.message,

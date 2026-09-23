@@ -38,6 +38,56 @@ async function handleMissingFromEbay(listing, sku, tenantId) {
   return { deleted: true };
 }
 
+// Compares eBay's live quantity against this listing's tracked baseline and progresses the
+// pending-drift state machine one step; mirrors handleMissingFromEbay's shape (one listing in,
+// one outcome out) so the per-listing loop below stays uniform between the missing and drift cases.
+async function reconcileListingDrift(listing, sku, ebayQty, tenantId) {
+  // Listing is confirmed live on eBay again — clear any missing streak.
+  if (listing.ebay_missing_polls > 0) listing.ebay_missing_polls = 0;
+
+  if (listing.ebay_synced_quantity == null) {
+    // First time tracked — establish a baseline instead of guessing at historical drift.
+    listing.ebay_synced_quantity = ebayQty;
+    listing.ebay_synced_at = new Date();
+    await listing.save();
+    return { baselined: true, flagged: false };
+  }
+
+  if (listing.ebay_synced_quantity === ebayQty) {
+    // Confirmed back in sync — clear any stale pending drift.
+    if (listing.ebay_pending_reconcile_qty != null) listing.ebay_pending_reconcile_qty = null;
+    // Still persist a missing-streak reset if one happened above.
+    if (listing.isModified()) await listing.save();
+    return { baselined: false, flagged: false };
+  }
+
+  if (listing.ebay_pending_reconcile_qty !== ebayQty) {
+    // First poll to see this drift — eBay's read side may still be catching up; defer to next poll.
+    listing.ebay_pending_reconcile_qty = ebayQty;
+    await listing.save();
+    logger.info(
+      `[ebay.inventory-sync] SKU ${sku}: drift ${listing.ebay_synced_quantity} -> ${ebayQty} seen once, ` +
+        `deferring to next poll before flagging`,
+    );
+    return { baselined: false, flagged: false };
+  }
+
+  // Drift confirmed twice — never auto-apply to stock (caused the Aug 2026 false-restock incident);
+  // flag for human review via GET/POST /inventory/reconciliations instead.
+  await upsertPending({
+    tenantId,
+    listingId: listing._id,
+    sku,
+    localQty: listing.ebay_synced_quantity,
+    ebayQty,
+  });
+  logger.info(
+    `[ebay.inventory-sync] flagged SKU ${sku} for review: local baseline ${listing.ebay_synced_quantity}, ` +
+      `eBay reports ${ebayQty}`,
+  );
+  return { baselined: false, flagged: true };
+}
+
 async function reconcileEbayInventory() {
   const configured = await ebayTenant.getConfiguredTenants();
   const summary = { checked: 0, flagged: 0, baselined: 0, deletedFromEbay: 0, errors: 0 };
@@ -146,51 +196,9 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
     }
 
     try {
-      // Listing is confirmed live on eBay again — clear any missing streak.
-      if (listing.ebay_missing_polls > 0) listing.ebay_missing_polls = 0;
-
-      if (listing.ebay_synced_quantity == null) {
-        // First time tracked — establish a baseline instead of guessing at historical drift.
-        listing.ebay_synced_quantity = ebayQty;
-        listing.ebay_synced_at = new Date();
-        await listing.save();
-        summary.baselined++;
-        continue;
-      }
-
-      if (listing.ebay_synced_quantity === ebayQty) {
-        // Confirmed back in sync — clear any stale pending drift.
-        if (listing.ebay_pending_reconcile_qty != null) listing.ebay_pending_reconcile_qty = null;
-        // Still persist a missing-streak reset if one happened above.
-        if (listing.isModified()) await listing.save();
-        continue;
-      }
-
-      if (listing.ebay_pending_reconcile_qty !== ebayQty) {
-        // First poll to see this drift — eBay's read side may still be catching up; defer to next poll.
-        listing.ebay_pending_reconcile_qty = ebayQty;
-        await listing.save();
-        logger.info(
-          `[ebay.inventory-sync] SKU ${sku}: drift ${listing.ebay_synced_quantity} -> ${ebayQty} seen once, ` +
-            `deferring to next poll before flagging`,
-        );
-        continue;
-      }
-
-      // Drift confirmed twice — never auto-apply to stock (caused the Aug 2026 false-restock incident);
-      // flag for human review via GET/POST /inventory/reconciliations instead.
-      await upsertPending({
-        tenantId: tenant._id,
-        listingId: listing._id,
-        sku,
-        localQty: listing.ebay_synced_quantity,
-        ebayQty,
-      });
-      summary.flagged++;
-      logger.info(
-        `[ebay.inventory-sync] flagged SKU ${sku} for review: local baseline ${listing.ebay_synced_quantity}, ` +
-          `eBay reports ${ebayQty}`,
-      );
+      const result = await reconcileListingDrift(listing, sku, ebayQty, tenant._id);
+      if (result.baselined) summary.baselined++;
+      if (result.flagged) summary.flagged++;
     } catch (err) {
       summary.errors++;
       logger.error(`[ebay.inventory-sync] failed to reconcile SKU ${sku}: ${err.message}`);

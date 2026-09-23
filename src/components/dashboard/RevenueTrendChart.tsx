@@ -8,6 +8,7 @@ import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
 import { cn } from "@/utils/cn";
 import { formatCurrencyFromCents, formatCompactNumber } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CHANNEL_COLOR_VARS } from "@/config/categoricalColors";
 import type { OrderVolumePoint } from "@/types/dashboard";
 import type { OrderChannel } from "@/types/orders";
 
@@ -16,16 +17,6 @@ type ViewMode = "total" | "channels";
 const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: "total", label: "Total" },
   { key: "channels", label: "Channels" },
-];
-
-// Categorical palette (globals.css --cat-1..6), same tokens ProductChannelStatus.tsx uses; cycled in case a tenant has more channels than slots.
-const CHANNEL_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
 ];
 
 function channelLabel(key: string) {

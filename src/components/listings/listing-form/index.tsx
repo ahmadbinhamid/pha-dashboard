@@ -380,7 +380,7 @@ export function ListingForm({
             </SelectContent>
           </Select>
           {!policiesLoading && returnPolicies.length === 0 && (
-            <p className="mt-1 text-[11px] text-amber-500/80">
+            <p className="mt-1 text-[11px] text-warn/80">
               No return policies found. Set one up in eBay Seller Hub.
             </p>
           )}
@@ -416,7 +416,7 @@ export function ListingForm({
               </SelectContent>
             </Select>
             {!policiesLoading && paymentPolicies.length === 0 && (
-              <p className="mt-1 text-[11px] text-amber-500/80">
+              <p className="mt-1 text-[11px] text-warn/80">
                 No payment policies found. Set one up in eBay Seller Hub.
               </p>
             )}

@@ -18,6 +18,16 @@ async function findTenantsByIds(ids) {
   return Tenant.find({ _id: { $in: ids } }).select("name slug");
 }
 
+async function findTenantById(id) {
+  return Tenant.findById(id);
+}
+
+// email is unique per-tenant, not globally, so join-an-existing-tenant registration resolves the
+// tenant by its slug first.
+async function findTenantBySlug(slug) {
+  return Tenant.findOne({ slug });
+}
+
 // Order/invoice number prefix (e.g. "PHA-00001"); falls back to a fixed prefix if no usable letters.
 function baseCodeFromCompanyName(companyName) {
   const letters = companyName.toUpperCase().replace(/[^A-Z]/g, "");
@@ -90,4 +100,4 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
   }
 }
 
-module.exports = { registerTenantWithAdmin, findTenantsByIds };
+module.exports = { registerTenantWithAdmin, findTenantsByIds, findTenantById, findTenantBySlug };

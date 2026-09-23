@@ -197,3 +197,19 @@ export interface ProductEditFormState {
 }
 
 export type { EbaySettings, EbayStatus } from "./ebaySettings";
+
+export interface ProductListData {
+  items: Product[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ProductStats {
+  totalSkus: number;
+  totalStockUnits: number;
+  outOfStockCount: number;
+  avgPrice: number;
+  avgMarginPct: number | null;
+}

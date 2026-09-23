@@ -1,7 +1,6 @@
 // controllers/order.controller.js
 
 const orderService = require("../services/order.service");
-const Order = require("../models/Order");
 const { createPaymentLinkForOrder } = require("../services/stripe/stripe.payment.service");
 const { created, success, notFound, requestfailure, systemfailure } = require("../utils/http/response");
 
@@ -110,8 +109,7 @@ exports.downloadInvoicePdf = async (req, res) => {
 
 exports.generatePaymentLink = async (req, res) => {
   try {
-    // +guest_access_token: select:false by default; needed to build the link.
-    const order = await Order.findOne({ _id: req.params.id, tenant_id: req.tenantId }).select("+guest_access_token");
+    const order = await orderService.getOrderForPaymentLink(req.params.id, req.tenantId);
     if (!order) return notFound(res, "Order not found");
     const { url } = createPaymentLinkForOrder(order, req.tenant);
     return success(res, { url });

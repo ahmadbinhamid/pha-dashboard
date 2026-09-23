@@ -4,6 +4,7 @@ import type {
   InventoryRecord,
   InventoryHistoryRecord,
   InventorySettings,
+  InventoryListData,
 } from "@/types/inventory";
 
 export interface InventoryListParams {
@@ -13,14 +14,6 @@ export interface InventoryListParams {
   product?: string;
   variant?: string;
   limit?: number;
-}
-
-export interface InventoryListData {
-  items: InventoryRecord[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
 }
 
 export const getInventory = async (params: InventoryListParams = {}) => {

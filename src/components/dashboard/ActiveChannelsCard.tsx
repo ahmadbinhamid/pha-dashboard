@@ -8,6 +8,7 @@ import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLa
 import { getChannelLogo } from "@/components/channels/channelLogos";
 import { cn } from "@/utils/cn";
 import { formatRelativeTime } from "@/utils/formatRelativeTime";
+import { CATEGORICAL_COLOR_VARS as AVATAR_COLOR_VARS } from "@/config/categoricalColors";
 import type { ChannelHealth } from "@/types/dashboard";
 
 const STATUS_LABEL: Record<ChannelHealth["status"], string> = {
@@ -34,19 +35,7 @@ const STATUS_BORDER: Record<ChannelHealth["status"], string> = {
   not_connected: "border-border",
 };
 
-// Initials chip is purely decorative identity (not status), so it draws
-// from the same categorical palette ProductChannelStatus.tsx /
-// RevenueTrendChart.tsx use for "which channel is this" — cycled by index,
-// stable across renders since `channels` order doesn't change.
-const AVATAR_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
-];
-
+// Initials chip is purely decorative identity (not status), cycled by index — stable across renders since `channels` order doesn't change.
 function initials(name: string) {
   const words = name.trim().split(/\s+/);
   return words.length === 1 ? words[0].slice(0, 2).toUpperCase() : (words[0][0] + words[1][0]).toUpperCase();

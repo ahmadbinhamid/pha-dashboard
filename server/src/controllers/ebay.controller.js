@@ -6,7 +6,7 @@ const settingsService = require("../services/ebay/ebay.settings.service");
 const oauthService = require("../services/ebay/ebay.oauth.service");
 const catalogService = require("../services/ebay/ebay.catalog.service");
 const policiesService = require("../services/ebay/ebay.policies.service");
-const Tenant = require("../models/Tenant");
+const tenantService = require("../services/tenant.service");
 const { logger } = require("../loaders/logging");
 const config = require("../config");
 const {
@@ -148,7 +148,7 @@ exports.handleWebhook = async (req, res) => {
       return unauthorized(res, "Invalid signature");
     }
 
-    const tenant = await Tenant.findById(settings.tenant_id);
+    const tenant = await tenantService.findTenantById(settings.tenant_id);
     if (!tenant) return notFound(res, "Tenant not found");
 
     // Respond immediately — eBay retries on non-2xx

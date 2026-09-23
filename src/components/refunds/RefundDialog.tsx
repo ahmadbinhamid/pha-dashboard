@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Radio, RadioGroup } from "@/components/ui/Radio";
 import { NativeSelect } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
+import { Textarea } from "@/components/ui/Textarea";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/context";
 import { getRefundable, createRefund } from "@/lib/api/refunds";
@@ -265,11 +266,10 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
             </FormField>
 
             <FormField label="Internal Note">
-              <textarea
+              <Textarea
+                rows={2}
                 value={internalNote}
                 onChange={(e) => setInternalNote(e.target.value)}
-                rows={2}
-                className="w-full rounded-xs border border-border bg-bg px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="Optional — visible to staff only"
               />
             </FormField>

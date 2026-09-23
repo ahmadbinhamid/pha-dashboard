@@ -57,3 +57,11 @@ export interface InventorySettings {
   notification_email: string | null;
   notification_send_time: string;
 }
+
+export interface InventoryListData {
+  items: InventoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

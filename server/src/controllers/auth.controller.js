@@ -41,7 +41,6 @@ const {
 } = require("../services/email/email.service");
 const { toPublicUser, fullName } = require("../utils/user");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
-const Tenant = require("../models/Tenant");
 const tenantService = require("../services/tenant.service");
 const config = require("../config");
 
@@ -49,7 +48,7 @@ exports.register = async (req, res) => {
   try {
     const { first_name, last_name, email, password, role, tenant_slug } = req.body || {};
 
-    const tenant = await Tenant.findOne({ slug: tenant_slug });
+    const tenant = await tenantService.findTenantBySlug(tenant_slug);
     if (!tenant) return badRequest(res, "Unknown tenant");
 
     const existing = await findUserByEmail(email, tenant._id);

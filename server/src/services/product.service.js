@@ -340,6 +340,12 @@ async function findProductById(id, tenantId) {
   return Product.findOne({ _id: id, tenant_id: tenantId });
 }
 
+// Used by the search-index queue workers, which only carry a bare productId (no tenantId) in
+// job.data — findById excludes soft-deleted docs, so null means "deleted since this job was enqueued".
+async function findProductByIdForIndexing(id) {
+  return Product.findById(id);
+}
+
 // Adds a staff comment to a product's internal notes thread — never shown
 // to customers. Mirrors order.service.js#addOrderNote exactly.
 async function addProductNote(productId, { text, userId }, tenantId) {
@@ -553,6 +559,7 @@ module.exports = {
   getProductsByIds,
   getProductSuggestions,
   findProductById,
+  findProductByIdForIndexing,
   addProductNote,
   sendProductInfoEmail,
   getProductBySlug,
