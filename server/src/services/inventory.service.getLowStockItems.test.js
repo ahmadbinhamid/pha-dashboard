@@ -1,16 +1,9 @@
 // services/inventory.service.getLowStockItems.test.js
-//
-// getLowStockItems powers the low-stock digest email (see
-// inventory-digest.service.js) — same aggregation shape as
-// dashboard.service.js#getStockCounts, deliberately kept identical so the
-// dashboard's "low stock" tile and the digest email never disagree about
-// what counts as "low". Each boundary case below pairs a fixture that
-// SHOULD be included with a sibling that shouldn't, so an off-by-one in the
-// $gt/$lte aggregation stage would actually turn a specific assertion red,
-// not just change an array length.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/inventory.service.getLowStockItems.test.js
+// getLowStockItems powers the low-stock digest email, using the same aggregation shape as
+// dashboard.service.js#getStockCounts so the two never disagree about what counts as "low".
+// Each boundary case pairs an included fixture with an excluded sibling, so an off-by-one
+// turns a specific assertion red, not just an array length.
+// Needs a live Mongo connection. Run: node --test src/services/inventory.service.getLowStockItems.test.js
 
 const test = require("node:test");
 const { before, after } = require("node:test");
@@ -41,10 +34,8 @@ async function makeProduct(tenantId, overrides = {}) {
   });
 }
 
-// Registers cleanup for every doc created in the test so fixtures never leak
-// into the dev DB across runs (see inventory-digest.service.test.js's own
-// note on t.after firing in registration order, not LIFO — cleanup here is
-// deliberately the LAST thing registered in each test for that reason).
+// Registers cleanup so fixtures never leak into the dev DB; deliberately the last thing
+// registered in each test, since t.after fires in registration order, not LIFO.
 function cleanupOnExit(t, { products = [], variants = [], locations = [] } = {}) {
   t.after(async () => {
     const productIds = products.map((p) => p._id);
@@ -89,9 +80,7 @@ test("getLowStockItems: multi-location stock is summed before comparing against 
   const product = await makeProduct(tenantId);
   cleanupOnExit(t, { products: [product], locations: [locationA, locationB] });
 
-  // 3 + 3 = 6 total, ABOVE a threshold of 5 — must NOT show up as low stock
-  // even though each individual location's count (3) would be under 5 on
-  // its own. Proves the aggregation sums across locations, not per-location.
+  // 3 + 3 = 6 total, above a threshold of 5 — proves the aggregation sums across locations.
   await Inventory.create({ product: product._id, variant: null, location: locationA._id, stock_count: 3 });
   await Inventory.create({ product: product._id, variant: null, location: locationB._id, stock_count: 3 });
 

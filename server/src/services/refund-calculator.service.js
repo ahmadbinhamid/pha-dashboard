@@ -35,8 +35,7 @@
 //       has already been refunded), and whatever isn't attributable to a
 //       specific line (the order-level discount, plus any residual rounding)
 //       is captured once as the refund's own `adjustment_amount`, not spread
-//       across lines. This is exact by construction — there is nothing to
-//       round-trip.
+// across lines. This is exact by construction — there is nothing to round-trip.
 
 const GST_DIVISOR = 11; // AU GST-inclusive convention — see order.service.js#GST_DIVISOR
 

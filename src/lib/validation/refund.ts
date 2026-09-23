@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Mirrors the same string-based numeric pattern as commonFields.ts's
-// priceSchema — kept separate since the max bound is refund-specific
-// (cents, dynamic per order) rather than a flat "> 0" check.
+// Mirrors commonFields.ts's priceSchema pattern, kept separate since the max bound is refund-specific (cents, dynamic per order).
 export function refundAmountSchema(maxRefundableCents: number) {
   return z.string().superRefine((s, ctx) => {
     const n = Number(s);

@@ -14,11 +14,7 @@ interface ImageViewerModalProps {
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
 
-// Self-contained full-screen lightbox: scroll/buttons to zoom, drag to pan
-// once zoomed, arrow keys or edge buttons to move between images. Built
-// directly on the Radix Dialog primitives (rather than the shared Modal)
-// since that component is capped at max-w-lg and isn't meant for full-bleed
-// content.
+// Self-contained full-screen lightbox (zoom, pan, arrow-key navigation), built directly on Radix Dialog since the shared Modal is capped at max-w-lg.
 export function ImageViewerModal({ images, open, onOpenChange, initialIndex = 0 }: ImageViewerModalProps) {
   const [index, setIndex] = useState(initialIndex);
   const [scale, setScale] = useState(1);

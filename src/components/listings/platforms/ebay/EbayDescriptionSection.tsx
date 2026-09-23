@@ -9,8 +9,7 @@ import { Eye } from "lucide-react";
 interface Props {
   form: EbayListingFormState;
   vehicle: ProductVehicle | null | undefined;
-  // Product/variant photos to show in the preview when this listing has no
-  // photo_overrides of its own — display only, never saved onto the listing.
+  // Product/variant photos shown in the preview when this listing has no photo_overrides — display only, never saved.
   fallbackAttachments?: Attachment[];
 }
 
@@ -21,9 +20,7 @@ export function EbayDescriptionSection({ form, vehicle, fallbackAttachments }: P
   });
   const tenant = tenantSettingsData?.data;
 
-  // embedImages: true — this preview renders same-origin in our own
-  // dashboard, so the real photo/logo load fine here (unlike the actual
-  // eBay submission, see generateListingHtml's doc-comment).
+  // embedImages: true since this preview renders same-origin, unlike the real eBay submission (see generateListingHtml's comment).
   const fallbackImageUrl = fallbackAttachments?.[0]?.url;
 
   const html = useMemo(

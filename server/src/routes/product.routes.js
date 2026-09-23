@@ -12,9 +12,8 @@ const { upload } = require("../middlewares/upload");
 
 const formFields = upload.none();
 
-// auth(false) resolves req.tenant from a staff JWT when present (admin
-// dashboard browsing); resolveGuestTenant() fills in from X-Tenant-Slug
-// otherwise (public storefront browsing).
+// auth(false) resolves req.tenant from a staff JWT when present; resolveGuestTenant() fills
+// in from X-Tenant-Slug otherwise.
 router.get(
   "/",
   auth(false),
@@ -30,9 +29,7 @@ router.get(
   validate(v.suggestProducts),
   asyncHandler(ctrl.suggestProducts),
 );
-// Registered ahead of "/:slug" below — same single path segment, and that
-// route is public (auth(false)), so it would otherwise serve this as an
-// unauthenticated storefront lookup for a product literally named "stats".
+// Registered ahead of "/:slug" below, or the public route would serve this as a lookup for a product named "stats".
 router.get("/stats", auth(), asyncHandler(ctrl.getProductStats));
 router.get(
   "/:slug",

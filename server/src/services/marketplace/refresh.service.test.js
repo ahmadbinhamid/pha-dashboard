@@ -77,8 +77,7 @@ function daysAgo(n) {
 // registered discriminator, and Model.create() looks up a discriminator by
 // the discriminatorKey value and throws "Discriminator ... not found" for
 // anything unregistered; insertMany bypasses that discriminator resolution
-// and just writes the base-schema fields directly, which is all these
-// tests need.
+// and just writes the base-schema fields directly, which is all these tests need.
 async function makeListing(tenantId, platformKey, { state = LISTING_STATE.ACTIVE, syncedAt } = {}) {
   const _id = new mongoose.Types.ObjectId();
   await MarketplaceListing.insertMany([

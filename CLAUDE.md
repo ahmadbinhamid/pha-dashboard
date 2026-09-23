@@ -77,6 +77,19 @@ lives in `server/` (Node/Express/Mongoose). Follow these conventions on
   `sync.service.js#syncBatch` and `refresh.service.js#sweepStaleListings`
   are written.
 
+## Code Comments
+
+- **Keep comments short and to-the-point**: one line is ideal (~80 chars max).
+- **Collapse JSDoc/TSDoc blocks** to `/** brief summary */` when @param/@returns
+  are obvious from the signature; keep them only if they add clarity.
+- **Preserve the "why"**: workarounds, edge cases, API quirks, and non-obvious
+  logic should still be explained, just concisely.
+- **Keep TODO/FIXME/HACK markers** intact, but shorten the text after them.
+- **Never touch**: license/copyright headers, tooling directives (@ts-ignore,
+  eslint-disable, prettier-ignore, "use client"/"use server", webpack magic
+  comments), commented-out code blocks, or code strings containing comment-like
+  text.
+
 ## Before finishing any change
 
 - **FE**: reusable component used (not raw HTML)? theme tokens used (not

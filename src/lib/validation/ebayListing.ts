@@ -110,8 +110,7 @@ export function validateEbayListing(form: EbayListingFormState): EbayListingErro
     }
   }
 
-  // Fitment rows — each vehicle's year range must make sense on its own
-  // (a vehicle can't stop being made before it started).
+  // Fitment rows — each vehicle's year range must make sense on its own.
   for (const row of form.fitment) {
     const yearError = validateVehicleYearRange(row.year_from, row.year_to);
     if (yearError) {

@@ -1,15 +1,7 @@
 import { richTextToBlocks } from "@/utils/richText";
 
-// A policy field (Warranty & Returns, Legal Disclaimer) as it appears on the
-// invoice: one line per block, bold and italic preserved, and list markers —
-// a bullet, or the number the editor showed — printed as characters rather
-// than carried by a <ul>/<ol>.
-//
-// Deliberately NOT dangerouslySetInnerHTML. Two reasons: the stored HTML would
-// otherwise render with its own margins and heading sizes, which the 9.5px
-// footer column can't take; and the PDF has to draw the same content from the
-// same parsed blocks (see server/src/utils/pdf/invoicePdf.js#drawRichText), so
-// rendering the raw markup here is how the two would drift apart.
+// A policy field on the invoice: one line per block, bold/italic preserved, list markers printed as characters instead of <ul>/<ol>.
+// Not dangerouslySetInnerHTML: raw HTML would bring its own margins/heading sizes the footer column can't fit, and the PDF must draw from the same parsed blocks (server/src/utils/pdf/invoicePdf.js#drawRichText) to avoid drift.
 export function InvoiceRichText({
   value,
   className,

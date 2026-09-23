@@ -29,8 +29,7 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         // descendant painted in the same stacking layer as `nav` below. Since
         // `nav` renders first in the DOM, month_caption's invisible full-width
         // box would then paint on top of it and silently eat clicks on the
-        // prev/next chevrons — found by seeing the chevrons render but never
-        // fire onClick.
+        // prev/next chevrons — found by seeing the chevrons render but never fire onClick.
         month_caption: "flex items-center justify-center pt-1",
         caption_label: "text-sm font-semibold text-fg",
         nav: "absolute inset-x-0 top-0 z-10 flex items-center justify-between",

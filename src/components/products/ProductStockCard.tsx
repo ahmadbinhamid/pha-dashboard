@@ -11,9 +11,7 @@ interface ProductStockCardProps {
   variantId?: string;
 }
 
-// This system has exactly one stock location (Main Warehouse) — silently
-// ensures an inventory record exists for it instead of offering a location
-// picker that only ever has one real option. The user can only adjust the count.
+// One stock location only (Main Warehouse): silently ensures an inventory record exists instead of offering a picker with one real option; user can only adjust the count.
 export function ProductStockCard({ productId, variantId }: ProductStockCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

@@ -1,16 +1,7 @@
 import { useSyncExternalStore } from "react";
 
-// Shared by UserMenu's account panel (the quick Light/Dark picker in the
-// Topbar's avatar dropdown) and Settings → Appearance (the full three-way
-// picker) — an external store (not a plain per-component useState) is what
-// makes changing the theme in one immediately reflect in the other, since
-// both subscribe to the same module-level value instead of holding
-// independent copies.
-//
-// Two levels here: the MODE the user picked (which can be "system") and the
-// PREFERENCE that resolves to (only ever light or dark, since that's what the
-// <html> class and every consumer's isDark check need). Callers that only care
-// about the rendered theme keep reading `preference`/`isDark` as before.
+// Shared by UserMenu's quick Light/Dark picker and Settings → Appearance's full three-way picker — an external store, not per-component useState, so changing the theme in one reflects immediately in the other.
+// Two levels: the MODE picked (can be "system") and the PREFERENCE it resolves to (only ever light/dark, what <html>'s class and isDark need).
 export type ThemePreference = "light" | "dark";
 export type ThemeMode = ThemePreference | "system";
 
@@ -49,9 +40,7 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
-// While the mode is "system", the OS switching between light and dark has to
-// re-resolve the theme live — that's the whole point of the setting, and the
-// index.html bootstrap only runs once at load.
+// While mode is "system", the OS switching light/dark must re-resolve the theme live — the index.html bootstrap only runs once at load.
 const media = window.matchMedia?.("(prefers-color-scheme: dark)");
 media?.addEventListener?.("change", () => {
   if (currentMode !== "system") return;
@@ -82,8 +71,7 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-// One snapshot object per state change, not per call — returning a fresh
-// object literal on every getSnapshot() makes useSyncExternalStore loop.
+// One snapshot object per state change, not per call — a fresh object literal on every getSnapshot() would make useSyncExternalStore loop.
 let snapshot = { mode: currentMode, preference: currentPreference };
 listeners.add(() => {
   snapshot = { mode: currentMode, preference: currentPreference };

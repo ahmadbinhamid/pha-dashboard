@@ -65,7 +65,7 @@ export function CommandPalette({
       setQuery("");
       setDebouncedQuery("");
       setActiveIndex(0);
-      // Focus after the dialog's own mount/animation frame.
+      // Focus after the dialog's own mount/animation frame
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -121,9 +121,7 @@ export function CommandPalette({
     onOpenChange(false);
   }
 
-  // Flattened in the same order every section renders in, so Up/Down/Enter
-  // can move across Pages → Products → Orders → Customers with one shared
-  // index instead of each section owning separate keyboard state.
+  // Flattened in section render order so Up/Down/Enter moves across Pages→Products→Orders→Customers with one shared index.
   const flatEntries = useMemo(() => {
     const entries: { id: string; onSelect: () => void }[] = [];
     for (const item of pageResults) {
@@ -161,11 +159,7 @@ export function CommandPalette({
 
   const anyLoading = productsLoading || ordersLoading || customersLoading;
   const anyErrored = productsErrored || ordersErrored || customersErrored;
-  // A section that failed to search isn't the same as one that genuinely
-  // found nothing — surfacing that distinction (rather than the query
-  // silently reading as an empty array) is what caught product search
-  // returning zero everywhere because its backing search service was
-  // unreachable, not because nothing matched.
+  // A failed search isn't the same as a genuine zero-result — surfacing that distinction is what caught product search silently returning empty when its backing service was unreachable.
   const noResults = hasQuery && !anyLoading && !anyErrored && flatEntries.length === 0;
 
   return (
@@ -189,13 +183,7 @@ export function CommandPalette({
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <div className="shrink-0 border-b border-border p-3">
-            {/* A plain `outline-none` on the input loses to this app's global,
-                unlayered :focus-visible rule (globals.css) — same fix as
-                Input.tsx: `!` to actually win, plus the same rounded
-                border+glow focus treatment Input.tsx uses instead of a bare
-                outline, applied to the whole row via focus-within since the
-                border/glow belongs on this rounded container, not the
-                borderless <input> itself. */}
+            {/* Plain `outline-none` loses to globals.css's unlayered :focus-visible rule — same `!` fix as Input.tsx, with the border+glow applied via focus-within to this container, not the borderless input. */}
             <div
               className={cn(
                 "flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2.5",

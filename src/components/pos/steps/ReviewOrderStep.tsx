@@ -33,8 +33,7 @@ interface ReviewOrderStepProps {
   shippingCostInput: string;
   onShippingCostInputChange: (value: string) => void;
   onOrderCreated: (order: Order) => void;
-  // Bubbles the create-order mutation's pending state up to the page header,
-  // which owns the Create button now (and needs to show "Creating…"/disable it).
+  // Bubbles the create-order mutation's pending state up to the page header, which owns the Create button and shows "Creating…"/disables it.
   onPendingChange?: (pending: boolean) => void;
 }
 
@@ -82,23 +81,17 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 
   const rawSubtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0);
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
-  // Nothing to ship for pickup — matches order.service.js#createManualOrder,
-  // which only charges freight when delivery_method is "delivery".
+  // Nothing to ship for pickup, matching order.service.js#createManualOrder which only charges freight for "delivery".
   const computedShipping =
     deliveryMethod === "delivery" ? items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) : 0;
-  // The staff member can override the computed freight (e.g. a flat-rate
-  // quote for an oversized item) — an empty input falls back to the sum
-  // above, same convention order.service.js#createManualOrder uses server-side.
+  // Staff can override the computed freight (e.g. a flat-rate quote); an empty input falls back to the sum above, same convention as order.service.js#createManualOrder.
   const shippingTotal =
     deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
       ? Math.max(Number(shippingCostInput) || 0, 0)
       : computedShipping;
   const total = rawSubtotal - totalDiscount + shippingTotal;
 
-  // Pre-fill the field with the computed freight so it reads as "here's the
-  // shipping cost, edit if needed" rather than starting blank — only when
-  // still empty, so it never clobbers a value the staff member (or a
-  // restored draft) already set.
+  // Pre-fill with the computed freight so it reads as editable, not blank — only while still empty, so it never clobbers a value already set.
   useEffect(() => {
     if (deliveryMethod === "delivery" && shippingCostInput.trim() === "" && computedShipping > 0) {
       onShippingCostInputChange(computedShipping.toFixed(2));
@@ -151,8 +144,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       items: payloadItems,
       delivery_method: deliveryMethod,
       shipping_address: deliveryMethod === "delivery" ? shippingAddress : undefined,
-      // Joi's `forbidden()` for pickup orders rejects an explicit `null`,
-      // not just a truthy value — must be omitted entirely, not nulled.
+      // Joi's `forbidden()` for pickup orders rejects an explicit `null` too — must be omitted entirely, not nulled.
       billing_address: deliveryMethod === "delivery" && useDifferentBilling ? billingAddress : undefined,
       note: orderNote.trim() || null,
       payment_method: paymentCheck.data,
@@ -286,8 +278,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
           </Card>
         </div>
 
-        {/* Reference only — who and where. Sticks under the wizard header
-            so it stays readable while the editable column scrolls. */}
+        {/* Reference only — who and where. Sticks under the wizard header so it stays readable while the editable column scrolls. */}
         <div className="space-y-6 lg:sticky lg:top-44 lg:self-start">
           <Card>
             <CardHeader title="Customer" />

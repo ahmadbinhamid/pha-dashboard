@@ -1,16 +1,6 @@
 // services/ebay/ebay.api.condition.test.js
-//
-// Regression guard for Task 2's normalizeCondition fixes:
-//   - "USED" must map to USED_EXCELLENT (3000, a real eBay Motors parts
-//     grade), not USED_GOOD (5000, one of eBay's MEDIA grades — books,
-//     DVDs, games — not accepted by most parts categories).
-//   - A falsy condition must throw (naming the SKU), not silently default
-//     to FOR_PARTS_OR_NOT_WORKING — a blank condition field is a listing
-//     that needs attention, not a part that's actually broken.
-//
-// Pure function, no Mongo/Redis/network involved.
-//
-// Run with: node --test src/services/ebay/ebay.api.condition.test.js
+// Regression guard: "USED" maps to USED_EXCELLENT not USED_GOOD (a media grade), and falsy condition throws.
+// Pure function, no Mongo/Redis/network. Run: node --test src/services/ebay/ebay.api.condition.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -29,9 +29,7 @@ const tenantIdParam = {
 
 // ── Roles ───────────────────────────────────────────────────────────────────
 
-// Permissions are validated against the catalogue here as well as in the
-// service — this rejects a typo with a field-level 400 rather than a 422 from
-// deeper in, and keeps the API self-describing.
+// Validated against the catalogue here too, so a typo gets a field-level 400, not a 422 deeper in.
 const permissionList = Joi.array().items(Joi.string().valid(...ALL_PERMISSIONS)).min(1);
 
 const createRole = {
@@ -74,8 +72,7 @@ const invitationIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };
 
-// The token is opaque to everything but the hash lookup; length is the only
-// thing worth asserting, so a junk path can't reach the database.
+// Opaque to everything but the hash lookup; length is the only thing worth asserting.
 const invitationTokenParam = {
   params: Joi.object({ token: Joi.string().trim().min(16).max(256).required() }),
 };

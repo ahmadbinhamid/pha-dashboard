@@ -13,16 +13,14 @@ interface EditableOrderAmountProps {
   orderId: string;
   label: string;
   amountCents: number;
-  // Renders with a leading "-" when non-zero (e.g. Discount) — purely
-  // cosmetic, the underlying value stored/submitted is always non-negative.
+  // Renders with a leading "-" when non-zero (e.g. Discount) — cosmetic only, the stored/submitted value is always non-negative.
   negative?: boolean;
   mutationFn: (orderId: string, dollars: number) => Promise<unknown>;
   successMessage: string;
   errorMessage: string;
 }
 
-// Inline click-to-edit amount — same interaction as OrderItemsTable's
-// EditableUnitPrice, generalized for the order-level Discount/Shipping rows.
+// Inline click-to-edit amount, same interaction as OrderItemsTable's EditableUnitPrice, generalized for order-level Discount/Shipping rows.
 export function EditableOrderAmount({
   orderId,
   label,
@@ -110,10 +108,7 @@ export function EditableOrderAmount({
         setEditing(true);
       }}
     >
-      {/* The pencil is absolutely positioned (not a gap-ed flex sibling) so
-          it never reserves layout space — otherwise this value would sit
-          slightly left of every other plain-text row in the same column,
-          even while the pencil itself is invisible at opacity-0. */}
+      {/* Pencil is absolutely positioned so it never reserves layout space, or this value would sit left of other plain-text rows even at opacity-0. */}
       <span className="relative">
         {negative && amountCents > 0 ? "-" : ""}
         {formatCurrencyFromCents(amountCents)}

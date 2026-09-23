@@ -1,11 +1,5 @@
 // services/ebay/ebay.webhook.service.js
-//
-// Multi-tenant: each tenant registers their OWN subscription, pointed at the
-// one shared callback URL with their own opaque ?wt= token appended
-// (/api/v1/ebay/webhook?wt=<webhook_token> — see ebay.routes.js), verified
-// with their own EbaySettings.verification_token. The tenant is resolved
-// from that token by the controller before any of these functions run, so
-// nothing here has to guess whose notification this is.
+// Multi-tenant: each tenant's own ?wt= token (see ebay.routes.js) resolves the tenant before these functions run.
 
 const crypto = require("crypto");
 const { getAppToken, apiBaseUrlFor } = require("./ebay.api.service");
@@ -41,13 +35,8 @@ function verifySignature(rawBody, signatureHeader, verificationToken) {
   }
 }
 
-// Returns true if this is a new (orderId, sku, action) claim that should be
-// processed, false if it was already processed (duplicate key = race won by
-// the poller, or a retried/duplicate delivery of the same notification).
-// Keyed per-SKU, not per-order: eBay sends one notification per line item on
-// a multi-item order, and the old per-order key meant the second SKU's
-// notification silently lost this race against the first — see
-// EbayProcessedOrder.js's schema comment.
+// True if this (orderId, sku, action) is new; false if already claimed (poller race or duplicate
+// delivery). Keyed per-SKU, not per-order, since eBay sends one notification per line item.
 async function claimEvent(orderId, sku, action, quantity) {
   try {
     await EbayProcessedOrder.create({
@@ -74,15 +63,8 @@ async function processNotification(payload, tenant) {
     return { processed: false };
   }
 
-  // orderId must be eBay's actual order id, not a substitute — the whole
-  // point of claimEvent()'s dedup ledger is that the SAME sale claims the
-  // SAME key no matter how many times/ways it's delivered. notificationId
-  // is unique PER NOTIFICATION, not per order — a retried delivery of the
-  // same sale gets a fresh notificationId, so falling back to it here meant
-  // a webhook retry could claim a second, different dedup key for a sale
-  // that was already claimed (by the first delivery, or by the poller's
-  // independent fallback), double-deducting stock for one real sale. Found
-  // during the Aug 2026 sync-loop investigation — skip rather than guess.
+  // Must use eBay's actual orderId, never notificationId (unique per-delivery, not per-order) —
+  // falling back to it let a retried webhook double-deduct stock. Found in the Aug 2026 sync-loop bug.
   const orderId = data.orderId;
 
   if (topic === "ORDER.LINE_ITEMS_CREATED") {
@@ -134,11 +116,8 @@ async function processNotification(payload, tenant) {
 
       await adjustStockBySku(sku, qty, tenant._id);
 
-      // Isolated from the stock adjustment above: eBay never retries this
-      // webhook (we already respond 200 before processNotification runs —
-      // see ebay.controller.js), so a throw here would permanently skip
-      // the bookkeeping update below with no chance to recover. The stock
-      // correction is the critical side effect and has already committed.
+      // eBay never retries this webhook (we 200 before processNotification runs), so catch here —
+      // the stock correction above already committed and is the critical side effect.
       const localStatus = status === "CANCELLED" ? ORDER_STATUS.CANCELLED : ORDER_STATUS.REFUNDED;
       try {
         await updateEbayOrderStatus(orderId, { sku, quantity: qty, status: localStatus }, tenant._id);

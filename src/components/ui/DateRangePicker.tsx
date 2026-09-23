@@ -10,13 +10,7 @@ import type { DateRangeValue } from "@/utils/dateRange";
 
 const DEFAULT_PRESET_DAYS = [7, 14, 30, 90] as const;
 
-// Generic date-range filter control — a preset "last N days" list plus a
-// real calendar-based custom range (react-day-picker in range mode). Used
-// by the Dashboard's Order Volume / Revenue Trends charts and the Activity
-// Log's date filter; both used to hand-roll their own picker (native
-// <input type="date"> pairs on Activity Log — inconsistent across browsers,
-// no visual of the range being picked, cramped on narrow screens) instead
-// of sharing one.
+// Generic date-range filter: a preset "last N days" list plus a calendar-based custom range (react-day-picker). Used by the Dashboard charts and Activity Log, replacing each one's own hand-rolled native date-input pair.
 export function DateRangePicker({
   value,
   onChange,
@@ -29,12 +23,9 @@ export function DateRangePicker({
   value: DateRangeValue;
   onChange: (next: DateRangeValue) => void;
   presetDays?: readonly number[];
-  // Shown as the trigger label when no range is applied — only reachable
-  // when `allowClear` is true, since otherwise a value is always set.
+  // Shown as the trigger label when no range is applied — only reachable when `allowClear` is true.
   placeholder?: string;
-  // Whether a "Clear" action is offered to return to an unfiltered (no
-  // from/to) state — the Dashboard's charts always need a concrete range to
-  // query, so they leave this off; Activity Log's filter is optional.
+  // Whether a "Clear" action returns to an unfiltered state — Dashboard charts always need a concrete range so they leave this off; Activity Log's filter is optional.
   allowClear?: boolean;
   align?: "start" | "end";
   className?: string;
@@ -77,8 +68,7 @@ export function DateRangePicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        // Discard an in-progress, un-applied custom pick on close so
-        // reopening doesn't show a stale half-made selection.
+        // Discard an in-progress, un-applied custom pick on close so reopening doesn't show a stale half-made selection.
         if (!next) resetDraftToValue();
       }}
     >

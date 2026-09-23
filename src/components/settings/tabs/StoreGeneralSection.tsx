@@ -12,9 +12,7 @@ import { useToast } from "@/context";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings } from "@/types/tenantSettings";
 
-// Identity and contact details, split into the two cards the reference uses.
-// Both PATCH the same tenant-settings endpoint but only send their own fields,
-// so saving trading hours can't clobber an ABN someone else just edited.
+// Identity and contact details in two cards; both PATCH the same tenant-settings endpoint but send only their own fields, so saving trading hours can't clobber a just-edited ABN.
 type GeneralState = {
   company_name: string;
   abn: string;

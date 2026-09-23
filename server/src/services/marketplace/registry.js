@@ -34,8 +34,7 @@
 //                              expires listings" (eBay) — the refresh sweep
 //                              (refresh.service.js, wired in
 //                              workers/channel.worker.js) treats a missing
-//                              field as opt-out, so an adapter that never
-//                              sets this needs zero changes.
+// field as opt-out, so an adapter that never sets this needs zero changes.
 
 const adapters = new Map();
 

@@ -1,15 +1,7 @@
 // config/permissions.js
-//
-// The permission catalogue: every action a role can be granted, as a
-// `group.action` string (e.g. "orders.refund"). This file is the single
-// source of truth — roles store the strings they were granted and are
-// validated against this list, so a permission that isn't here cannot be
-// saved, and removing one here retires it everywhere.
-//
-// Modelled on flowpos-backend's config/permissions.php, over this product's
-// own feature set. `label`/`description` live here too (rather than only in
-// the dashboard) so the permission matrix in Settings → Roles renders from
-// the same list the server enforces, and the two can't drift.
+// The permission catalogue: every action a role can be granted, as a `group.action` string.
+// The single source of truth roles are validated against, so an unknown permission can't be
+// saved. label/description live here too so the Settings matrix and server enforcement can't drift.
 
 const PERMISSION_GROUPS = [
   {

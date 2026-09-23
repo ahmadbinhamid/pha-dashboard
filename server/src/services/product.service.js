@@ -201,8 +201,7 @@ function buildChannelStages(channel) {
   return stages;
 }
 
-// Same reasoning — shared attachment/category hydration for both listing
-// paths.
+// Same reasoning — shared attachment/category hydration for both listing paths.
 const HYDRATION_STAGES = [
   {
     $lookup: {

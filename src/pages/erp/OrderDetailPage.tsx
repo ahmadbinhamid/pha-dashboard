@@ -116,15 +116,7 @@ export default function OrderDetailPage() {
     },
   });
 
-  // "Print Invoice" opens the same server-rendered PDF the "Download PDF"
-  // action uses (real, pre-paginated pdfkit output) in a new tab, rather
-  // than driving the browser's own print dialog off the on-page HTML — a
-  // browser print reflow has no reliable way to paginate a multi-page
-  // invoice cleanly (rows/sections splitting mid-content, or getting bumped
-  // to a fresh page with a large blank gap left behind), while a real PDF
-  // always paginates exactly as rendered. The window opens synchronously
-  // (before the PDF fetch) so the browser doesn't treat the later redirect
-  // as an unrelated popup and block it.
+// "Print Invoice" opens the same server-rendered, pre-paginated PDF as "Download PDF" in a new tab, since a browser print reflow can't paginate a multi-page invoice cleanly. Window opens synchronously (before the fetch) so the later redirect isn't blocked as an unrelated popup.
   const printPdfMutation = useMutation({
     mutationFn: async () => {
       const printWindow = window.open("", "_blank");
@@ -134,8 +126,7 @@ export default function OrderDetailPage() {
         if (printWindow) {
           printWindow.location.href = url;
         } else {
-          // Popup blocked — fall back to a plain download so the invoice
-          // isn't lost, rather than silently doing nothing.
+          // Popup blocked — fall back to a plain download so the invoice isn't lost.
           const link = document.createElement("a");
           link.href = url;
           link.download = `invoice-${id}.pdf`;
@@ -157,26 +148,18 @@ export default function OrderDetailPage() {
   if (isError || !order) return <NotFoundState />;
 
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
-  // Item-level discounts plus any legacy order-level discount (see
-  // Order.js's discount_amount comment) — a single combined figure, no
-  // longer split into an "Item Discount" line vs a separately-editable
-  // order-level one. Always shown, even when $0.
+  // Item-level discounts plus any legacy order-level discount (Order.js's discount_amount) as one combined figure, always shown even at $0.
   const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, order.discount_amount);
-  // eBay and manual (in-store) orders can have their shipping cost and
-  // per-item price/discount corrected after the fact — storefront orders
-  // can't (see order.service.js#EDITABLE_CHANNELS).
+  // eBay and manual orders can have shipping/price/discount corrected after the fact; storefront orders can't (order.service.js#EDITABLE_CHANNELS).
   const amountsEditable = order.channel === "ebay" || order.channel === "manual";
   const totalPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
-  // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
-  // in full, then refunded" (due $0) from "never paid in full, then refunded
-  // on top of that" (due reflects the real remaining shortfall).
+  // utils/paymentTotals.ts#getBalanceDue distinguishes "paid in full, then refunded" (due $0) from "never fully paid, refunded on top" (due reflects the real shortfall).
   const totalDue = getBalanceDue(order.total, order.payments, order.payment_status);
 
   return (
     <div className="space-y-5 pb-24 print:pb-0">
-      {/* On-screen admin view — the actual invoice (matching what's emailed
-          to the customer) is rendered separately below, for print only. */}
+      {/* On-screen admin view — the actual invoice (matching what's emailed) renders separately below, for print only. */}
       <div className="space-y-5 print:hidden">
         <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: formatOrderNumber(order.order_number_prefix, order.order_number) }]} />
 
@@ -246,11 +229,7 @@ export default function OrderDetailPage() {
         )}
 
         <div className="grid gap-5 lg:grid-cols-3">
-          {/* min-w-0 overrides the grid item's default min-width: auto — without
-              it, OrderItemsTable's own min-w (needed so its columns don't
-              crush together) forces this whole grid track wider than the
-              viewport instead of just scrolling internally, pushing the
-              entire page into horizontal scroll on mobile. */}
+          {/* min-w-0 overrides the grid item's default min-width: auto, or OrderItemsTable's own min-w forces this whole track wider than the viewport instead of scrolling internally. */}
           <div className="min-w-0 space-y-5 lg:col-span-2">
             <Card>
               <CardHeader title="Items" description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`} />
@@ -260,10 +239,7 @@ export default function OrderDetailPage() {
                   <span>Subtotal</span>
                   <span>{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
                 </div>
-                {/* Sum of every line item's own discount (editable per line,
-                    in the items table above) plus any legacy order-level
-                    discount — always shown, even at $0, so it's never
-                    unclear whether an order has one. */}
+                {/* Sum of every line item's own discount plus any legacy order-level discount, always shown even at $0. */}
                 <div className="flex justify-between text-fg/60">
                   <span>Discount</span>
                   <span>{totalDiscount > 0 ? `-${formatCurrencyFromCents(totalDiscount)}` : formatCurrencyFromCents(0)}</span>

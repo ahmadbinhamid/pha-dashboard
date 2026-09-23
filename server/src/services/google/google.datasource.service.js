@@ -1,21 +1,11 @@
 // services/google/google.datasource.service.js
-//
-// Creates/resolves the tenant's Merchant API primary product data source —
-// a prerequisite for any product push (productInputs.insert targeting a
-// data source that doesn't exist is rejected). Called during connect (see
-// google.controller.js#oauthCallback), not lazily on first sync, per this
-// integration's own design decision — a tenant that's "connected" but has
-// no data source yet is an inconsistent state worth catching at connect
-// time, not surfacing as a confusing failure on the tenant's first publish.
+// Creates/resolves the tenant's Merchant API data source; run at connect time (not lazily) so a "connected" tenant always has one before first push.
 
 const { logger } = require("../../loaders/logging");
 
-// v1beta was discontinued by Google on 2026-02-28 (confirmed live: a real
-// dataSources.create call against v1beta now returns 409 ABORTED
-// "V1BETA_RAMP_DOWN" — see https://developers.google.com/merchant/api/guides/compatibility/migrate-v1beta-v1).
+// v1beta was discontinued by Google 2026-02-28 — now returns 409 ABORTED "V1BETA_RAMP_DOWN".
 const DATASOURCES_BASE = "https://merchantapi.googleapis.com/datasources/v1";
-// Separate sub-API from DATASOURCES_BASE — developerRegistration lives
-// under accounts/v1, not datasources/v1.
+// Separate sub-API — developerRegistration lives under accounts/v1, not datasources/v1.
 const ACCOUNTS_BASE = "https://merchantapi.googleapis.com/accounts/v1";
 
 function headersFor(token) {
@@ -57,8 +47,7 @@ async function throwForResponse(res, action) {
 // https://developers.google.com/merchant/api/guides/quickstart/direct-api-calls's
 // own example — the pre-existing auto-recovery call below from
 // createDataSource has run live without it, so it's kept optional/omitted
-// rather than required, to not change that already-working call's request
-// shape).
+// rather than required, to not change that already-working call's request shape).
 async function registerGcp(token, merchantId, developerEmail = null) {
   const url = `${ACCOUNTS_BASE}/accounts/${merchantId}/developerRegistration:registerGcp`;
   const body = developerEmail ? { developerEmail } : {};

@@ -16,10 +16,7 @@ export type NavItem = {
   label: string;
   href: string;
   icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
-  // Extra path prefixes that should also count as "this nav item is
-  // active" — for a page whose own create/edit sub-routes live outside its
-  // own href prefix, so the plain startsWith(href) check below wouldn't
-  // highlight it on those sub-routes without this.
+  // Extra path prefixes that also count as "active" — for a page whose create/edit sub-routes live outside its own href prefix.
   activeMatch?: string[];
 };
 

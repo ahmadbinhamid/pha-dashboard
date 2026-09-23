@@ -1,30 +1,11 @@
 // services/ebay/ebay.inventory-sync.service.js
-//
-// Flags eBay-side inventory quantity drift (e.g. a seller manually changing
-// "Available quantity" in eBay Seller Hub) for human review, and removes
-// listings locally once they've been deleted directly on eBay. Runs on a
-// schedule from the eBay worker — see src/workers/ebay.worker.js.
-//
-// Direction: eBay -> App. The opposite direction (App -> eBay) is handled by
-// order-stock-sync.service.js / inventory.service.js#fanOutMarketplaceInventory
-// and ebay.adapter.js's publish/update, which also keep
-// MarketplaceListing.ebay_synced_quantity current — but that field is OUR
-// EXPECTED eBay quantity, not a guaranteed-accurate read of it (see the
-// field's own schema comment on MarketplaceListing.js for why). This job
-// diffs eBay's live quantity against that baseline, not against local stock
-// directly, so a storefront sale that happened in between polls isn't
-// mistaken for drift — but a confirmed mismatch is never auto-applied to
-// stock; it's written to PendingReconciliation for a human to accept or
-// reject (see pendingReconciliation.service.js), because the baseline
-// itself can be wrong (an oversell silently erases real drift — see
-// inventory.service.js#adjustStockBySku), not just eBay's read side lagging.
+// Flags eBay-side quantity drift for human review and removes listings deleted directly on eBay.
+// Direction: eBay -> App (opposite of order-stock-sync.service.js). Diffs eBay's live quantity against
+// our expected-quantity baseline, not local stock; confirmed mismatches go to PendingReconciliation, never auto-applied.
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");
-// Namespace imports (not destructured) — same reasoning as ebayApi above:
-// keeps these mockable by tests regardless of when this module is first
-// required, since a destructured reference is bound once at require time
-// and a later mock.method() patch on the source module wouldn't be seen.
+// Namespace imports (not destructured) so tests can mock.method() the source module after require.
 const ebayTenant = require("./ebay.tenant");
 const ebaySettingsService = require("./ebay.settings.service");
 const { resolveSku } = require("../marketplace/listing.resolver");
@@ -34,9 +15,7 @@ const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const { EBAY_CONNECTION_STATUS } = require("../../constants/ebay.constants");
 
-// Consecutive misses required before we treat a listing as genuinely deleted
-// on eBay (rather than a transient blip in that one poll) — see the schema
-// comment on MarketplaceListing.ebay_missing_polls for why this isn't 1.
+// Consecutive misses before treating a listing as genuinely deleted on eBay, not a transient blip.
 const MISSING_POLLS_THRESHOLD = 2;
 
 // Listing was found absent from eBay's inventory list this poll. Tracks a
@@ -77,17 +56,12 @@ async function reconcileEbayInventory() {
       summary.deletedFromEbay += tenantSummary.deletedFromEbay;
       summary.errors += tenantSummary.errors;
 
-      // Self-heal — mirrors ebay.orders.service.js's poll loop: a successful
-      // reconciliation is proof the connection works, even if a previous
-      // cycle left connection_status stuck at ERROR/TOKEN_EXPIRED/REVOKED.
+      // Self-heal (mirrors ebay.orders.service.js): success is proof the connection works again.
       if (settings.connection_status && settings.connection_status !== EBAY_CONNECTION_STATUS.CONNECTED) {
         await ebaySettingsService.markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
       }
     } catch (err) {
       summary.errors++;
-      // Previously only logged — connection_status never reflected a
-      // revoked/expired token, so a broken integration failed silently and
-      // indefinitely instead of surfacing to the tenant. Found live.
       logger.error(`[ebay.inventory-sync] tenant ${tenant._id} reconciliation failed: ${err.message}`);
       await ebaySettingsService.markConnectionError(tenant._id, { message: err.message });
     }
@@ -112,17 +86,8 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
     .populate("product")
     .populate("variant");
 
-  // Defensive dedup — this collection SHOULD be guaranteed unique per
-  // external_offer_id by a DB index (see MarketplaceListing.js), but if that
-  // index is ever missing/not yet built (found live: it wasn't), two local
-  // records can silently share one real eBay offer. Reconciling both against
-  // the same underlying stock each poll — each tracking its own independent
-  // "last known quantity" for what's really one number — creates a
-  // self-sustaining +1-per-cycle drift with no human or eBay-side action
-  // involved. Keeping only the oldest record per offer here makes this
-  // job safe even while duplicates still exist in the data; it does not fix
-  // the duplicates themselves (see scripts note / ops runbook for cleanup +
-  // rebuilding the missing unique indexes).
+  // Defensive dedup: external_offer_id should be unique via a DB index, but if that index is
+  // missing (found live), duplicates would cause a self-sustaining drift. Keep only the oldest per offer.
   const byOfferId = new Map();
   for (const listing of rawListings) {
     const existing = byOfferId.get(listing.external_offer_id);
@@ -185,8 +150,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
       if (listing.ebay_missing_polls > 0) listing.ebay_missing_polls = 0;
 
       if (listing.ebay_synced_quantity == null) {
-        // First time we've tracked this listing — establish a baseline
-        // instead of guessing at any historical drift.
+        // First time tracked — establish a baseline instead of guessing at historical drift.
         listing.ebay_synced_quantity = ebayQty;
         listing.ebay_synced_at = new Date();
         await listing.save();
@@ -195,23 +159,15 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
       }
 
       if (listing.ebay_synced_quantity === ebayQty) {
-        // Confirmed back in sync — eBay's own read side caught up (or
-        // nothing changed). Clear any pending drift so a stale one-off
-        // reading can't get combined with a later, unrelated drift.
+        // Confirmed back in sync — clear any stale pending drift.
         if (listing.ebay_pending_reconcile_qty != null) listing.ebay_pending_reconcile_qty = null;
-        // Nothing to reconcile, but still persist a missing-streak reset if
-        // one happened above — otherwise it's silently lost on this path.
+        // Still persist a missing-streak reset if one happened above.
         if (listing.isModified()) await listing.save();
         continue;
       }
 
       if (listing.ebay_pending_reconcile_qty !== ebayQty) {
-        // First poll to see this exact drift — eBay's GetInventoryItem API
-        // can still be catching up to an order we just processed (a push
-        // we made, or an eBay-side sale we already deducted for). Don't
-        // flag anything yet; just remember what we saw and check again
-        // next poll — most of these self-resolve within one cycle and
-        // never need a human to look at them.
+        // First poll to see this drift — eBay's read side may still be catching up; defer to next poll.
         listing.ebay_pending_reconcile_qty = ebayQty;
         await listing.save();
         logger.info(
@@ -221,11 +177,8 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
         continue;
       }
 
-      // Same drift confirmed on a second consecutive poll. This is never
-      // applied to stock automatically — see PendingReconciliation's model
-      // comment for why (this exact auto-apply step is what caused the
-      // Aug 2026 false-restock incident). Flag it for a human to review via
-      // GET/POST /inventory/reconciliations instead.
+      // Drift confirmed twice — never auto-apply to stock (caused the Aug 2026 false-restock incident);
+      // flag for human review via GET/POST /inventory/reconciliations instead.
       await upsertPending({
         tenantId: tenant._id,
         listingId: listing._id,

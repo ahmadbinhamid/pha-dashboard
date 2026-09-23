@@ -18,8 +18,7 @@ exports.createOrder = async (req, res) => {
 exports.getOrder = async (req, res) => {
   try {
     const order = await orderService.getOrderForGuest(req.params.id, req.query.token, req.tenantId);
-    // getOrderForGuest explicitly re-selects guest_access_token to verify it —
-    // strip it back out before responding so it isn't echoed on every poll.
+    // getOrderForGuest re-selects guest_access_token to verify it; strip it before responding.
     const safeOrder = order.toObject();
     delete safeOrder.guest_access_token;
     return success(res, safeOrder);
@@ -111,7 +110,7 @@ exports.downloadInvoicePdf = async (req, res) => {
 
 exports.generatePaymentLink = async (req, res) => {
   try {
-    // +guest_access_token: select:false by default — needed to build the link.
+    // +guest_access_token: select:false by default; needed to build the link.
     const order = await Order.findOne({ _id: req.params.id, tenant_id: req.tenantId }).select("+guest_access_token");
     if (!order) return notFound(res, "Order not found");
     const { url } = createPaymentLinkForOrder(order, req.tenant);

@@ -11,12 +11,7 @@ const {
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 const { buildProductFilter } = require("../utils/productFilter");
 
-// Product counts reflect only what a storefront shopper could ever find
-// (published + active) — not the raw/admin-visible product count. `extraFilter`
-// layers on whatever product-level filters (search text, vehicle fitment, price,
-// condition...) are currently active on the shop page, so each category's count
-// reflects "how many results toggling this category would return" rather than
-// a catalog-wide total.
+// Counts only storefront-visible products, scoped by whatever shop-page filters are active.
 async function getProductCountsByCategory(categoryIds, extraFilter = {}) {
   if (!categoryIds.length) return new Map();
 
@@ -48,9 +43,7 @@ async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {},
     Category.countDocuments(filter),
   ]);
 
-  // The category facet itself is excluded so every category keeps showing its
-  // own count regardless of which ones are already checked; publish/active is
-  // dropped too since getProductCountsByCategory always enforces it above.
+  // Exclude category/publish/active filters — getProductCountsByCategory enforces those itself.
   const countFilter = buildProductFilter(productFilters, { authenticated: false, tenantId });
   delete countFilter.categories;
   delete countFilter.is_published_online;
@@ -69,12 +62,7 @@ async function getCategoryById(id, tenantId) {
   return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
 
-// `parent`/`thumbnail` are ids the client supplies directly — without this,
-// a tenant could link its own category to another tenant's category (as
-// parent) or attachment (as thumbnail) just by knowing/guessing the id. Not
-// a read/write of the other tenant's protected fields, but a referential-
-// integrity/minor-exposure gap; verify both actually belong to this tenant
-// before ever setting them.
+// Verify client-supplied parent/thumbnail ids belong to this tenant, to prevent cross-tenant linking.
 async function verifyReferenceOwnership({ parent, thumbnail }, tenantId) {
   const checks = [];
   if (parent) checks.push(Category.exists({ _id: parent, tenant_id: tenantId }).then((ok) => ({ field: "parent", ok })));
@@ -88,8 +76,7 @@ async function createCategory({ name, description, thumbnail, parent, sort_order
   await verifyReferenceOwnership({ parent, thumbnail }, tenantId);
 
   const baseSlug = generateSlug(name);
-  // Race-safe: retries on a genuine slug conflict instead of trusting a
-  // single check-then-insert (see utils/slug.js for why).
+  // Race-safe: retries on slug conflict rather than check-then-insert (see utils/slug.js).
   return createWithUniqueSlug(
     Category,
     baseSlug,
@@ -125,8 +112,7 @@ async function updateCategory(id, { name, description, thumbnail, parent, sort_o
   if (parent !== undefined) category.parent = parent || null;
   if (sort_order !== undefined) category.sort_order = sort_order;
 
-  // Race-safe: retries on a genuine slug conflict instead of trusting a
-  // single check-then-save (see utils/slug.js for why).
+  // Race-safe: retries on slug conflict rather than check-then-save (see utils/slug.js).
   if (pendingSlugBase) {
     await saveWithUniqueSlug(category, Category, pendingSlugBase, category._id.toString(), { tenantId });
   } else {

@@ -7,16 +7,12 @@ export interface CartItem {
   sku: string | null;
   image_url: string | null;
   unit_price: number; // dollars, matches Product/ProductVariant.price convention
-  // Per-unit freight cost, dollars — always the parent Product's shipping_cost
-  // (there's no per-variant shipping rate), summed into the order total for
-  // delivery orders only. Mirrors Order.service.js#resolveOrderItem.
+  // Per-unit freight cost, dollars — always the parent Product's shipping_cost, summed into the order total for delivery only. Mirrors Order.service.js#resolveOrderItem.
   shipping_cost: number;
   quantity: number;
-  // Soft stock cap captured at add-to-cart time — a best-effort UX guard
-  // only; the backend always re-validates real stock at order-creation time.
+  // Soft stock cap at add-to-cart time — a best-effort UX guard; backend always re-validates at order-creation time.
   max_quantity: number | null;
-  // Customer-facing note for this specific line (e.g. "no engine oil
-  // included") — editable from the Add Products and Review Order steps.
+  // Customer-facing note for this line, editable from Add Products and Review Order steps.
   note: string | null;
 }
 

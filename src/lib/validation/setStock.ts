@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-// Kept as a string (not z.coerce.number()) so RHF's controlled <input>
-// value type matches the schema's input type exactly.
+// Kept as a string (not z.coerce.number()) so RHF's controlled <input> value type matches the schema's input type.
 export const setStockFormSchema = z.object({
   stock_count: z.string().refine(
     (s) => {

@@ -1,16 +1,6 @@
 // services/membership.service.js
-//
-// Owns every Membership query — the join that lets one person belong to
-// several organisations, holding a different role in each.
-//
-// Two rules the rest of the app leans on:
-//   * Permissions only ever come from an ACTIVE membership. Suspending
-//     someone removes their access without deleting who-did-what.
-//   * Removing someone from an organisation deletes the membership only. The
-//     account, and their membership of other organisations, survive.
-//
-// Mirrors flowpos-backend's tenant_user pivot (role_id / is_active /
-// is_default / added_at) and its User::hasPermission semantics.
+// Owns every Membership query, the join letting one person belong to several organisations.
+// Permissions only ever come from an ACTIVE membership; removing someone deletes only that membership.
 
 const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
@@ -38,27 +28,17 @@ async function getMembership(userId, tenantId) {
     .lean();
 }
 
-/**
- * Every organisation a user belongs to — what an org switcher renders, and
- * what the auth layer picks the active tenant from.
- */
+/** Every organisation a user belongs to — what the org switcher renders and auth picks the active tenant from. */
 async function listUserMemberships(userId) {
   return Membership.find({ user_id: userId, status: MEMBERSHIP_STATUS.ACTIVE })
     .populate("tenant_id", "name company_name slug logo_url status")
-    // `permissions` comes along because the auth layer resolves the active
-    // organisation from this same call on every request (see
-    // middlewares/auth.js) — leaving it out cost a second query per request,
-    // or silently handed the request an empty permission set.
+    // `permissions` comes along since auth.js resolves the active org from this same call per request.
     .populate("role_id", "name is_system permissions")
     .sort({ is_default: -1, joined_at: 1 })
     .lean();
 }
 
-/**
- * Attach a user to an organisation. Joining twice is a no-op rather than an
- * error — an invite accepted by an existing member should settle quietly.
- * Their first organisation becomes the one the dashboard opens on.
- */
+/** Attaches a user to an organisation; joining twice is a no-op. Their first org becomes the default. */
 async function addMember({ tenantId, userId, roleId, invitedBy = null }) {
   const existing = await Membership.findOne({ tenant_id: tenantId, user_id: userId });
   if (existing) return existing.toObject();
@@ -77,11 +57,7 @@ async function addMember({ tenantId, userId, roleId, invitedBy = null }) {
   return membership.toObject();
 }
 
-/**
- * Change someone's role or suspend/restore them, within one organisation.
- * Refuses to touch a Super Admin, matching flowpos-backend — otherwise an
- * Admin could demote the only person who can undo it.
- */
+/** Changes someone's role or suspends/restores them; refuses to touch a Super Admin. */
 async function updateMember(userId, tenantId, { roleId, status }) {
   const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId }).populate("role_id", "name");
   if (!membership) return null;
@@ -107,11 +83,7 @@ async function updateMember(userId, tenantId, { roleId, status }) {
   return getMembership(userId, tenantId);
 }
 
-/**
- * Remove someone from ONE organisation. Their account and any other
- * memberships are untouched. If this was their default, the oldest remaining
- * membership takes over so they still land somewhere on next sign-in.
- */
+/** Removes someone from one organisation only; if it was their default, the oldest remaining membership takes over. */
 async function removeMember(userId, tenantId) {
   const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId }).populate("role_id", "name");
   if (!membership) return null;
@@ -147,11 +119,7 @@ async function setDefaultMembership(userId, tenantId) {
   return target.toObject();
 }
 
-/**
- * The permissions a user holds in an organisation — [] when they aren't a
- * member, or are suspended. Super Admin returns the whole catalogue via its
- * seeded permission list.
- */
+/** The permissions a user holds; [] when not a member or suspended. Super Admin gets the whole catalogue. */
 async function getPermissions(userId, tenantId) {
   const membership = await Membership.findOne({
     user_id: userId,
@@ -164,12 +132,7 @@ async function getPermissions(userId, tenantId) {
   return membership?.role_id?.permissions ?? [];
 }
 
-/**
- * Pure check against an already-loaded membership (role_id populated with at
- * least `name`/`permissions`). Exported so callers that already hold a
- * membership — the auth layer resolves one on every request via
- * listUserMemberships — can check permissions without a second query.
- */
+/** Pure check against an already-loaded membership, so callers with one already don't need a second query. */
 function membershipHasPermission(membership, permission) {
   if (!membership) return false;
   // Short-circuit, so Super Admin keeps working as the catalogue grows.

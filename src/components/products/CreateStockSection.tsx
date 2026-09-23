@@ -9,9 +9,7 @@ interface CreateStockSectionProps {
   onChange: (entries: StockEntry[]) => void;
 }
 
-// This system has exactly one stock location (Main Warehouse) — no picker,
-// just an opening-quantity control for it. `entries` stays a 0-or-1-item
-// array only to keep the FormData payload shape unchanged on submit.
+// One stock location only (Main Warehouse), so just an opening-quantity control; `entries` stays a 0-or-1-item array to keep the FormData payload shape unchanged.
 export function CreateStockSection({ entries, onChange }: CreateStockSectionProps) {
   const { data: locData } = useQuery({ queryKey: ["locations"], queryFn: getLocations });
   const mainWarehouse = (locData?.data ?? []).find((l) => l.is_active && l.name === "Main Warehouse");

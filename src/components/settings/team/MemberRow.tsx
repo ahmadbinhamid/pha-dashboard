@@ -12,8 +12,7 @@ import { cn } from "@/utils/cn";
 import { SYSTEM_ROLE_SUPER_ADMIN } from "@/config/access";
 import type { Member } from "@/types/access";
 
-// Initials avatar — the same fallback shape TenantLogo uses when a tenant has
-// no logo, rather than introducing a second avatar treatment.
+// Initials avatar — same fallback shape TenantLogo uses when a tenant has no logo, rather than a second avatar treatment.
 function Initials({ first, last }: { first: string; last: string }) {
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-[11px] font-bold text-accent">
@@ -50,8 +49,7 @@ export function MemberRow({
 }) {
   const user = member.user_id;
   const suspended = member.status === "suspended";
-  // Super Admin is protected server-side too (membership.service.js) — the
-  // menu simply doesn't offer what would be refused.
+  // Super Admin is protected server-side too (membership.service.js) — the menu just doesn't offer what would be refused.
   const isSuperAdmin = member.role_id?.name === SYSTEM_ROLE_SUPER_ADMIN;
   const locked = isSelf || isSuperAdmin;
 

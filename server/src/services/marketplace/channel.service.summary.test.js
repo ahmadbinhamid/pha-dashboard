@@ -1,16 +1,7 @@
 // services/marketplace/channel.service.summary.test.js
-//
-// Catalogue redesign — listChannelsForTenant now also returns
-// last_synced_at (real per-platform max MarketplaceListing.synced_at, not
-// the connection-level "last successful API call" health.last_success_at
-// already returned), needs_attention_count (listings in sync_status
-// error/price_locked), and health_status ("healthy" | "needs_attention",
-// folding in both the listing-level count AND ChannelConnection's own
-// consecutive_failures/degraded state — a channel with zero bad listings
-// but a tripped circuit breaker must still read "needs_attention").
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/channel.service.summary.test.js
+// listChannelsForTenant returns last_synced_at (max MarketplaceListing.synced_at), needs_attention_count
+// (error/price_locked listings), and health_status, folding in both listing- and connection-level trouble.
+// Needs a live Mongo connection. Run: node --test src/services/marketplace/channel.service.summary.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,12 +12,8 @@ require("../../models/index");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ChannelConnection = require("../../models/ChannelConnection");
 const registry = require("./registry");
-// Real ebay adapter — its manifest/discriminator already exist regardless of
-// registration; register() is what makes it show up in listChannelsForTenant's
-// output. google is already required by other test files loaded in the same
-// run in some suites, but this file must be independently runnable
-// (`node --test` isolates one process per file), so register both directly,
-// same pattern as channel.service.storefront.test.js.
+// register() makes an adapter show up in listChannelsForTenant's output; this file must be
+// independently runnable (`node --test` isolates one process per file), so register both directly.
 const ebayAdapter = require("./adapters/ebay.adapter");
 const googleAdapter = require("./adapters/google.adapter");
 registry.register(ebayAdapter);
@@ -61,8 +48,7 @@ test("listChannelsForTenant: last_synced_at is the real max MarketplaceListing.s
 
   await MarketplaceListing.create([
     makeListing(tenantId, { synced_at: older, sync_status: LISTING_SYNC_STATUS.SYNCED }),
-    // The most recent activity is an ERROR row, not a synced one —
-    // last_synced_at must still pick it up (max across ALL buckets).
+    // The most recent activity is an ERROR row — last_synced_at must still pick it up.
     makeListing(tenantId, { synced_at: newer, sync_status: LISTING_SYNC_STATUS.ERROR }),
   ]);
 
@@ -144,9 +130,7 @@ test("listChannelsForTenant: health_status is needs_attention from a tripped cir
     platform: "ebay",
     status: CHANNEL_CONNECTION_STATUS.DEGRADED,
     consecutive_failures: 12,
-    // ebay discriminator's own required-ish connection fields, if any, are
-    // deliberately left at schema defaults here — this test only cares
-    // about status/consecutive_failures feeding into health_status.
+    // Other ebay discriminator fields left at schema defaults — only status/consecutive_failures matter here.
     connected_at: new Date(),
   });
 

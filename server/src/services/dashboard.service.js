@@ -174,8 +174,7 @@ async function getPlatformChannelHealth(tenantId, adapter) {
 // (it's always available, no external sync concept) — kept as one hardcoded
 // row for that reason; every other channel comes from registry.getAll(), so
 // a new adapter (Google today, anything registered later) shows up here with
-// zero changes to this function once it's registered — see
-// registerAdapters.js.
+// zero changes to this function once it's registered — see registerAdapters.js.
 async function getChannelHealth(tenantId) {
   const registry = require("./marketplace/registry");
   const platformChannels = await Promise.all(

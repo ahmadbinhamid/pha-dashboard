@@ -10,18 +10,13 @@ import type { CartItem } from "@/types/cart";
 
 interface CartItemRowProps {
   item: CartItem;
-  // Review Order step shows a per-line discount input; Add Products step's
-  // basket doesn't (discounts are decided at review time, not while shopping).
+  // Review Order step shows a per-line discount input; Add Products step's basket doesn't (discounts are decided at review time).
   discountValue?: string;
   onDiscountChange?: (value: string) => void;
   lineTotal?: number; // dollars, post-discount — falls back to unit_price*qty when omitted
 }
 
-// Two-row layout (name+note full-width on top, controls below) instead of
-// cramming image/name/discount/qty/price/remove into one line — a single row
-// only has room for all of that in a wide context (Review Order); in the
-// narrow Basket sidebar it squeezed the name down to nothing. Stacking
-// vertically works at any container width.
+// Two-row layout instead of cramming image/name/discount/qty/price/remove into one line, which only fit in a wide context (Review Order), not the narrow Basket sidebar.
 export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }: CartItemRowProps) {
   const { removeItem, setQuantity, setItemNote } = useCart();
   const [noteOpen, setNoteOpen] = useState(!!item.note);

@@ -1,18 +1,8 @@
 // services/inventory-digest.service.test.js
-//
-// The sweep + per-tenant send-time/dedup logic. Mocks emailService's own
-// sendLowStockDigest (never touches a real Redis/SMTP path) so these tests
-// only exercise inventory-digest.service.js's own decision logic — same
-// mocking boundary refresh.service.js's own test suite uses for its
-// downstream sync call.
-//
-// notification_send_time is compared against the REAL current UTC clock
-// (no injected "now" — matches refresh.service.js, which doesn't have one
-// either), so fixtures set their send_time relative to Date.now() rather
-// than a fixed clock value.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/inventory-digest.service.test.js
+// Tests the sweep + per-tenant send-time/dedup logic. Mocks emailService's sendLowStockDigest
+// so tests only exercise decision logic. notification_send_time is compared against the real
+// current UTC clock (no injected "now"), so fixtures set send_time relative to Date.now().
+// Needs a live Mongo connection. Run: node --test src/services/inventory-digest.service.test.js
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
@@ -28,10 +18,8 @@ const Location = require("../models/Location");
 
 const emailServiceModule = require("./email/email.service");
 
-// A single connection for the whole file rather than per-test connect/
-// disconnect: node:test runs multiple t.after() hooks in REGISTRATION order
-// (not LIFO), so a per-test `t.after(() => mongoose.disconnect())` registered
-// early would fire before a later-registered cleanup delete, breaking it.
+// One connection for the whole file — node:test runs t.after() hooks in registration order
+// (not LIFO), so a per-test disconnect registered early would break a later cleanup delete.
 before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
 
@@ -65,10 +53,7 @@ test("inventory-digest.service: kill switch — no query, no send, when digestSw
   });
   t.after(() => findSpy.mock.restore());
 
-  // Fresh require AFTER the config flip and the mock are both in place —
-  // sweepLowStockDigests reads config.inventory.digestSweepEnabled at call
-  // time (module-level `require("../config")` returns the same live object
-  // either way, since Node caches modules by reference).
+  // Fresh require after the config flip and mock are in place; config is a live object either way.
   const { sweepLowStockDigests } = require("./inventory-digest.service");
   const result = await sweepLowStockDigests();
 
@@ -83,7 +68,7 @@ test("inventory-digest.service: not due yet — never sends, never stamps last_d
   t.after(() => sendSpy.mock.restore());
 
   const tenantId = new mongoose.Types.ObjectId();
-  // 2 hours in the future (UTC) — never "due" relative to nowMinutes.
+  // 2 hours in the future (UTC), never "due" relative to nowMinutes.
   const future = new Date(Date.now() + 2 * 60 * 60 * 1000);
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
@@ -137,9 +122,7 @@ test("inventory-digest.service: due now, has low stock — sends once with the r
   const callArgs = sendSpy.mock.calls[0].arguments[0];
   assert.equal(callArgs.to, "owner@example.com");
   assert.ok(callArgs.items.some((i) => i.title === product.title));
-  // Sent from the platform mailbox, never the tenant's own BYOK SMTP — this
-  // is an alert about the tenant's own store, not customer-facing — so the
-  // call must NOT carry a tenantId for mailer.js to route through.
+  // Sent from the platform mailbox, never BYOK SMTP, so no tenantId for mailer.js to route through.
   assert.equal(callArgs.tenantId, undefined);
   assert.ok(callArgs.pdfBase64, "must attach the low-stock report PDF");
   assert.match(callArgs.pdfFilename, /^low-stock-report-\d{4}-\d{2}-\d{2}\.pdf$/);

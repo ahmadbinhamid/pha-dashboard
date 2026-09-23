@@ -3,19 +3,11 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
 
-// A "stock" event's first tag is the real ADJUSTMENT_TYPE value the backend
-// recorded it under (mapStockEvent in dashboard.service.js) — used here
-// instead of sniffing the event's title text, which is free-form copy, not
-// a stable signal to branch icon/color on.
+// A "stock" event's first tag is the real ADJUSTMENT_TYPE (backend's mapStockEvent) — more stable to branch on than the free-form title text.
 const RESTOCK_ADJUSTMENT_TAGS = new Set(["restock", "transfer_in"]);
 const LOSS_ADJUSTMENT_TAGS = new Set(["damaged", "lost", "stolen"]);
 
-// Shared by this full row and the dashboard's compact RecentActivityRow so
-// both read an event's type/tags into the same icon+color exactly once,
-// rather than each guessing at it independently. Restock keeps its own
-// RefreshCw icon (it's a distinct "stock coming back in" action, not just
-// another adjustment) — every other stock event (plain adjustment, loss)
-// shares the Package icon, differing only by tone (accent vs. danger).
+// Shared by this row and the dashboard's compact RecentActivityRow for one consistent icon/color mapping; restock gets its own RefreshCw icon, other stock events share Package.
 export function eventVisual(event: ActivityEvent): { icon: typeof ShoppingCart; style: string } {
   if (event.type === "order") return { icon: ShoppingCart, style: "bg-ok/10 text-ok" };
   const adjustmentTag = event.tags[0];
@@ -33,9 +25,7 @@ function formatDateTime(iso: string) {
   return `${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}, ${formatTime(iso)}`;
 }
 
-// Icon + title/description/tags block shared by the dashboard's compact
-// Recent Activity feed and the full Activity Log page — only the timestamp
-// format and the surrounding spacing/divider differ between the two.
+// Icon + title/description/tags block shared by the dashboard feed and the full Activity Log page.
 export function ActivityEventRow({ event, showDate }: { event: ActivityEvent; showDate?: boolean }) {
   const { icon: Icon, style } = eventVisual(event);
   return (

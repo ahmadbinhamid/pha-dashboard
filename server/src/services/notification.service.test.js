@@ -1,13 +1,7 @@
 // services/notification.service.test.js
 //
-// notifyNewOrder's recipient resolution (active admin/superadmin only —
-// never a plain "user"-role account, since routes/order.routes.js gates
-// every order-reading route behind admin/superadmin, so a "user"-role
-// account couldn't open the order a notification would link to anyway),
-// the websocket push, and the list/mark-read API surface.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/notification.service.test.js
+// Covers notifyNewOrder's recipient resolution (active admin/superadmin only, per order.routes.js's access gate), the websocket push, and the list/mark-read API.
+// Needs a live Mongo connection — run with: node --test src/services/notification.service.test.js
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
@@ -21,10 +15,7 @@ const User = require("../models/User");
 const websocketService = require("./websocket.service");
 const notificationService = require("./notification.service");
 
-// Single connection for the whole file — t.after() hooks run in
-// REGISTRATION order, not LIFO, so per-test connect/disconnect is a
-// footgun (see inventory-digest.service.test.js's own note on this, fixed
-// this same session).
+// Single connection for the whole file — t.after() hooks run in registration order, not LIFO, so per-test connect/disconnect is a footgun.
 before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
 
@@ -143,9 +134,7 @@ test("listNotifications: pagination and unread_count are correct against a mix o
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "A", message: "a", read_at: null },
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "B", message: "b", read_at: null },
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "C", message: "c", read_at: new Date() },
-    // Another tenant's notification to the SAME user id would be impossible
-    // in practice (a User belongs to one tenant), but a different user under
-    // a different tenant proves tenant scoping regardless.
+    // A same-user-id collision across tenants can't happen in practice, but a different user proves tenant scoping anyway.
     { tenant_id: otherTenantId, user_id: new mongoose.Types.ObjectId(), type: "order.new", title: "D", message: "d", read_at: null },
   ]);
   t.after(() => Notification.deleteMany({ _id: { $in: docs.map((d) => d._id) } }));

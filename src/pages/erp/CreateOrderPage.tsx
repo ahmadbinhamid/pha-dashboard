@@ -91,7 +91,7 @@ function persistWizard(state: WizardStorage) {
   try {
     localStorage.setItem(ORDER_DRAFT_STORAGE_KEY, JSON.stringify(state));
   } catch {
-    /* localStorage unavailable (private mode / quota) — wizard still works for this tab */
+    /* localStorage unavailable (private mode / quota) — wizard still works f... */
   }
 }
 

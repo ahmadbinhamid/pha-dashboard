@@ -1,18 +1,7 @@
 // services/ebay/ebay.inventory-sync.service.test.js
-//
-// Regression coverage for the Aug 2026 sync-loop incident: an eBay sale
-// deducted stock, then the reconciliation poller (running before eBay's own
-// GetInventoryItem read had caught up to the sale it had just processed)
-// saw a stale-vs-live mismatch and added the stock back — a false
-// "manual edit on eBay" correction that silently undid a real sale.
-//
-// Mocks ebayApi.getAllInventoryItems and ebay.tenant#getConfiguredTenants
-// via node:test's built-in mock support, since this exercises poll-timing
-// behavior (a "lagging" eBay read) without a real eBay account. Mocks must
-// be installed BEFORE ebay.inventory-sync.service.js is first required.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/ebay/ebay.inventory-sync.service.test.js
+// Regression coverage for the Aug 2026 sync-loop incident: a stale eBay read undid a real sale.
+// Mocks ebayApi/ebayTenant via node:test before the service module is first required.
+// Needs a live Mongo connection. Run: node --test src/services/ebay/ebay.inventory-sync.service.test.js
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -30,17 +19,12 @@ const ebayTenant = require("./ebay.tenant");
 const ebaySettingsService = require("./ebay.settings.service");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 
-// Installed at module scope, before inventory.service.js/pendingReconciliation
-// .service.js are first required by any test below — every stock adjustment
-// in this file fans out to enqueueEbayJob("sync_listing", ...), which would
-// otherwise need a real Redis connection just to be a no-op. Also doubles as
-// the spy the "accept does not push" test reads call counts from.
+// Installed before inventory.service.js is first required, so stock adjustments (which fan out to
+// enqueueEbayJob) don't need a real Redis connection. Also the spy the "accept does not push" test reads.
 const ebayQueueModule = require("../../queues/ebay.queue");
 const enqueueEbayJobSpy = mock.method(ebayQueueModule, "enqueueEbayJob", async () => {});
 
-// Bull's underlying ioredis client keeps its connection open indefinitely by
-// design (auto-reconnect) — without closing it, this process never exits on
-// its own, which hangs any multi-file `node --test` run waiting on this one.
+// Bull's ioredis client auto-reconnects and stays open; close it or the test process never exits.
 test.after(async () => {
   await ebayQueueModule.ebayQueue.close();
 });
@@ -93,16 +77,13 @@ test("sync loop: a stale eBay read (still showing pre-sale quantity) is deferred
   await mongoose.connect(config.mongoUri);
   const fixture = await makeFixture();
 
-  // adjustStockBySku is what a real eBay sale triggers — stock 1 -> 0,
-  // baseline correctly stamped to 0 (this is the "ground truth" write this
-  // fix deliberately kept, see inventory.service.js's comment).
+  // adjustStockBySku is what a real eBay sale triggers — the "ground truth" write this fix keeps.
   const { adjustStockBySku } = require("../inventory.service");
   await adjustStockBySku(fixture.sku, -1, fixture.tenantId);
 
   const { reconcileEbayInventory } = require("./ebay.inventory-sync.service");
 
-  // Poll #1: eBay's read side hasn't caught up yet — still reports the
-  // PRE-sale quantity (1), even though the sale already happened.
+  // Poll #1: eBay's read side hasn't caught up yet, still reports the pre-sale quantity (1).
   installMocks(t, { tenant: fixture, ebayQtyBySku: { [fixture.sku]: 1 } });
   const run1 = await reconcileEbayInventory();
   assert.equal(run1.flagged, 0, "a single-poll drift must never be flagged for review");
@@ -113,8 +94,7 @@ test("sync loop: a stale eBay read (still showing pre-sale quantity) is deferred
   let inv = await Inventory.findById(fixture.inventory._id);
   assert.equal(inv.stock_count, 0, "stock must still reflect the real sale after poll #1");
 
-  // Poll #2: eBay's read side has now caught up — reports 0, matching our
-  // baseline. Nothing to reconcile.
+  // Poll #2: eBay's read side has caught up, reports 0 matching our baseline.
   t.mock.reset();
   installMocks(t, { tenant: fixture, ebayQtyBySku: { [fixture.sku]: 0 } });
   const run2 = await reconcileEbayInventory();
@@ -186,9 +166,7 @@ test("sync loop: accepting a flagged reconciliation applies the delta to stock a
   const resolved = await PendingReconciliation.findById(row._id);
   assert.equal(resolved.status, "accepted");
 
-  // fanOutMarketplaceInventory (which would enqueue an outbound push) is
-  // skipped via skipMarketplaceFanOut — accepting a number that CAME from
-  // eBay has nothing to push back.
+  // fanOutMarketplaceInventory is skipped via skipMarketplaceFanOut — a number that came from eBay has nothing to push back.
   assert.equal(
     enqueueEbayJobSpy.mock.callCount(),
     callsBefore,
@@ -207,13 +185,10 @@ test("sync loop: a truncated getAllInventoryItems response never deletes a listi
 
   const { reconcileEbayInventory } = require("./ebay.inventory-sync.service");
 
-  // The SKU is simply absent from this (incomplete) page — complete: false
-  // signals the fetch didn't cover the whole account, so "absent" can't be
-  // trusted as "deleted on eBay".
+  // complete: false signals the fetch didn't cover the whole account, so absence isn't proof of deletion.
   installMocks(t, { tenant: fixture, ebayQtyBySku: {}, complete: false });
 
-  // Run twice — MISSING_POLLS_THRESHOLD is 2, so if the incomplete-fetch
-  // guard were missing, two runs would be enough to trigger deletion.
+  // Run twice — MISSING_POLLS_THRESHOLD is 2, enough to trigger deletion if the guard were missing.
   await reconcileEbayInventory();
   await reconcileEbayInventory();
 

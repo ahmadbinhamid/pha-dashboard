@@ -32,13 +32,10 @@ export function SendOrderEmailModal({ order, open, onOpenChange }: SendOrderEmai
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isDelivery = order.delivery_method === "delivery";
-  // Tracking is captured once (the first "Send Email" fulfils the order) —
-  // re-sending afterwards (e.g. the customer says they missed the email)
-  // should reuse what's on file instead of asking again.
+  // Tracking is captured once (the first "Send Email" fulfils the order); re-sending afterwards reuses what's on file instead of asking again.
   const hasSavedTracking = isDelivery && !!order.tracking_number && !!order.carrier_name;
   const canAddTracking = isDelivery && !hasSavedTracking;
-  // Off by default — tracking is optional, so the fields only appear once
-  // the admin explicitly opts in via the switch.
+  // Off by default — tracking fields only appear once the admin opts in via the switch.
   const [addTracking, setAddTracking] = useState(false);
   const needsTrackingInput = canAddTracking && addTracking;
 

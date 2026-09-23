@@ -4,12 +4,8 @@ const config = require("../../config");
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
 
-// Customer-facing order emails (shipped/pickup/confirmation/receipt) must
-// look like they came from the tenant's own business, not the platform.
-// Only the display NAME can be pre-built here — the actual address depends
-// on which SMTP account ends up sending it (the tenant's own, if they've
-// configured one, otherwise the platform's), which mailer.js resolves at
-// send time (see mailer.js#sendEmail's fromName/tenantId handling).
+// Only the display name can be pre-built here — the address depends on which SMTP account ends
+// up sending it, resolved by mailer.js#sendEmail at send time.
 const tenantFromName = (companyProfile) => companyProfile?.company_name || null;
 
 const tenantBrandVars = (companyProfile) => ({
@@ -17,9 +13,7 @@ const tenantBrandVars = (companyProfile) => ({
   support_email: companyProfile?.email || config.emailBrand.supportEmail,
 });
 
-/**
- * Send OTP for Login Verification
- */
+/** Sends the login verification OTP. */
 async function sendOTP({ to, name, otp }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -33,15 +27,13 @@ async function sendOTP({ to, name, otp }) {
   });
 }
 
-/**
- * Send Account Verification Notification
- */
+/** Sends the account-verified notification. */
 async function accountVerified({ to, name, verifiedDate }) {
   return enqueueEmailJob({
     from: defaultFrom(),
     to,
     subject: `Account Verified - ${config.emailBrand.appName}`,
-    template: "accountVerified", // Make sure this matches the .hbs filename exactly
+    template: "accountVerified", // must match the .hbs filename exactly
     variables: {
       name,
       verified_date: verifiedDate,
@@ -50,9 +42,7 @@ async function accountVerified({ to, name, verifiedDate }) {
   });
 }
 
-/**
- * Send Password Reset Email
- */
+/** Sends the password reset email. */
 async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -67,13 +57,7 @@ async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   });
 }
 
-/**
- * Notify a tenant's own inbox of a storefront inquiry submitted by one of
- * their customers — `to` is that tenant's own email (resolved by the
- * caller, e.g. inquiry.controller.js via getCompanyProfile), never a
- * platform-wide address, since a different tenant's inquiry must never land
- * in another tenant's (or the platform's own) inbox.
- */
+/** Notifies a tenant's own inbox of a storefront inquiry; `to` is that tenant's own email, never platform-wide. */
 async function sendInquiryNotification({ to, customerName, customerEmail, customerPhone, subject, message }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -91,10 +75,7 @@ async function sendInquiryNotification({ to, customerName, customerEmail, custom
   });
 }
 
-/**
- * Notify a tenant's own inbox of a new storefront newsletter subscriber —
- * same reasoning as sendInquiryNotification: `to` is that tenant's own email.
- */
+/** Notifies a tenant's own inbox of a new newsletter subscriber (same reasoning as sendInquiryNotification). */
 async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -107,14 +88,7 @@ async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
   });
 }
 
-/**
- * Notify the platform's own inbox (config.smtp.alertsTo, same address
- * utils/emailSender.js#sendErrorAlert uses) of a "Request a Demo" submission
- * from the marketing site. Unlike sendInquiryNotification/
- * sendNewsletterSignupNotification, this has no tenant to resolve `to` from —
- * a demo request is someone who doesn't have an account yet, asking about the
- * product itself.
- */
+/** Notifies the platform's own inbox of a "Request a Demo" submission — no tenant to resolve `to` from. */
 async function sendDemoRequestNotification({ fullName, businessName, phone, workEmail, message }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -131,12 +105,7 @@ async function sendDemoRequestNotification({ fullName, businessName, phone, work
   });
 }
 
-/**
- * Notify a customer that their DELIVERY order has shipped, with tracking
- * details and the tax invoice attached as a PDF (base64-encoded — Bull job
- * payloads are JSON over Redis, so a raw Buffer wouldn't round-trip to the
- * worker intact).
- */
+/** Notifies a customer their delivery order shipped, with tracking and the invoice PDF (base64, since Bull payloads are JSON). */
 async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -161,11 +130,7 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
   });
 }
 
-/**
- * Notify a customer that their PICKUP order is ready for collection, with
- * the tax invoice attached as a PDF (base64-encoded — Bull job payloads are
- * JSON over Redis, so a raw Buffer wouldn't round-trip to the worker intact).
- */
+/** Notifies a customer their pickup order is ready, with the invoice PDF attached (base64). */
 async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {}, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -192,12 +157,7 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
   });
 }
 
-/**
- * Notify a customer their DELIVERY storefront order was placed and paid —
- * sent automatically once payment succeeds for delivery_method = delivery
- * (see stripe.webhook.service.js). No invoice attached here; that's sent
- * manually later via the admin's "Send Email" action (sendOrderShipped above).
- */
+/** Notifies a customer their delivery order was placed and paid; no invoice here (see sendOrderShipped). */
 async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -213,12 +173,7 @@ async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, te
   });
 }
 
-/**
- * Notify a customer their PICKUP storefront order was placed and paid — sent
- * automatically once payment succeeds for delivery_method = pickup (see
- * stripe.webhook.service.js). No invoice attached here; that's sent manually
- * later via the admin's "Send Email" action (sendOrderReadyForPickup above).
- */
+/** Notifies a customer their pickup order was placed and paid; no invoice here (see sendOrderReadyForPickup). */
 async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -234,12 +189,7 @@ async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, 
   });
 }
 
-/**
- * Send the tax invoice/receipt for an in-person/manual sale created from the
- * admin dashboard — no shipped/pickup framing (the sale is already
- * complete), just the invoice and, if the customer still owes money, the
- * outstanding balance called out up front.
- */
+/** Sends the invoice/receipt for a manual sale — no shipped/pickup framing, just the invoice and any balance due. */
 async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -263,13 +213,7 @@ async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBas
   });
 }
 
-/**
- * Send a customer a link to pay an order online (manual/in-store sale where
- * staff chose "Payment Link (Stripe)" as the settlement method) — triggered
- * by the "Send Payment Link" action on the order creation confirmation
- * screen. No invoice PDF attached; the customer sees the invoice once they
- * pay, same as any other guest checkout.
- */
+/** Sends a customer a link to pay an order online. No invoice PDF; they see it once they pay. */
 async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -287,12 +231,7 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
   });
 }
 
-/**
- * Send a product's title/SKU/images to a recipient the admin picks —
- * triggered by the "Send Email" action on the product edit page. Images are
- * attached by disk path (not base64) since the email worker shares the same
- * uploads volume as the API — see product.service.js#sendProductInfoEmail.
- */
+/** Sends a product's title/SKU/images to a recipient the admin picks; images attached by disk path (shared uploads volume). */
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
   return enqueueEmailJob(
     {
@@ -310,34 +249,14 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
       },
       attachments,
     },
-    // Product photos can be several MB each and are sent through a
-    // deliberately rate-limited SMTP transporter (see config.smtp) — the
-    // queue's default 30s job timeout is fine for a lightweight OTP/PDF
-    // email but too short here, and since a Bull job timeout can't actually
-    // cancel an in-flight SMTP send, a spurious timeout used to trigger up
-    // to 5 retries that each *also* completed the real send afterward,
-    // duplicate-delivering the same email to the recipient several times.
-    // A longer ceiling makes hitting it rare; fewer attempts caps the
-    // worst-case duplicate count if it's ever hit anyway.
+    // Product photos are several MB through a rate-limited transporter — the default 30s job
+    // timeout was too short and, since it can't cancel an in-flight SMTP send, caused duplicate
+    // deliveries on retry. Longer timeout + fewer attempts caps the worst case.
     { timeout: 180000, attempts: 2 },
   );
 }
 
-/**
- * Send a tenant's daily low-stock digest — triggered by the
- * low_stock_digest_sweep repeatable job, see
- * services/inventory-digest.service.js. Always called with at least one
- * item; the sweep never calls this for an empty digest (see that service's
- * own comment on why — an empty "0 items low" email is just noise).
- *
- * `to` is the tenant's OWN inbox (this is an alert about their own store,
- * not customer-facing), so unlike the order emails above this always sends
- * from the platform mailbox — never the tenant's own BYOK SMTP — same as
- * sendInquiryNotification/sendNewsletterSignupNotification. `pdfBase64` is
- * the full item list built by utils/pdf/lowStockReportPdf.js — base64 since
- * Bull job payloads are JSON over Redis, same reasoning as the order emails'
- * invoice PDFs.
- */
+/** Sends a tenant's daily low-stock digest, always from the platform mailbox (never BYOK SMTP), always with at least one item. */
 async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFilename }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -364,11 +283,7 @@ async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFil
   });
 }
 
-/**
- * Invite someone into a tenant's organisation. Sent from the tenant's own
- * brand (not the platform's) via tenantBrandVars, same as the order emails —
- * the recipient is being asked to join *that business*, not this product.
- */
+/** Invites someone into a tenant's organisation, sent from the tenant's own brand. */
 async function sendTeamInvite({ to, organisationName, inviterName, roleName, inviteUrl, expiresAt, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),

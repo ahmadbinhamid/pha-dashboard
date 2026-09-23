@@ -1,7 +1,5 @@
 // routes/member.routes.js
-//
-// The current organisation's people, plus the signed-in user's own list of
-// organisations (which needs no permission — it's their own membership).
+// The current organisation's people, plus the signed-in user's own org list (needs no permission).
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");

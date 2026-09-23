@@ -1,12 +1,7 @@
 // services/marketplace/adapters/google.adapter.contract.test.js
-//
-// Verifies the Google adapter conforms to registry.js's documented contract
-// (key, manifest, capabilities, loadSettings/publish/update/end/publishBatch),
-// and exercises the pure, no-I/O building blocks directly (identifier
-// branching, availability mapping, resource-name shape) without touching
-// Mongo, Redis, or the network.
-//
-// Run with: node --test src/services/marketplace/adapters/google.adapter.contract.test.js
+// Verifies the Google adapter conforms to registry.js's contract and exercises its pure,
+// no-I/O building blocks directly, without Mongo/Redis/network.
+// Run: node --test src/services/marketplace/adapters/google.adapter.contract.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

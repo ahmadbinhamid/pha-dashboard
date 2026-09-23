@@ -13,11 +13,7 @@ exports.listRoles = async (req, res) => {
   }
 };
 
-/**
- * The permission catalogue the matrix in Settings renders from. Served rather
- * than duplicated in the dashboard so the list a role can be given is always
- * the list the server will accept.
- */
+/** The permission catalogue the matrix in Settings renders from, served not duplicated. */
 exports.listPermissions = async (req, res) => {
   try {
     return success(res, PERMISSION_GROUPS);

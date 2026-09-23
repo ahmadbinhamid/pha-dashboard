@@ -11,11 +11,7 @@ interface OrderStepperProps {
   current: number;
 }
 
-// Progress through the order wizard.
-//
-// Below `md` the rail is replaced by "Step 2 of 4 · Customer & Delivery": four
-// labelled circles don't fit a phone without truncating to initials, which
-// tells the operator less than the sentence does.
+// Progress through the order wizard. Below `md`, the rail is replaced by "Step 2 of 4 · ..." since four labelled circles don't fit a phone without truncating to initials.
 export function OrderStepper({ steps, current }: OrderStepperProps) {
   const activeLabel = steps[current - 1]?.label;
 
@@ -54,8 +50,7 @@ export function OrderStepper({ steps, current }: OrderStepperProps) {
                 >
                   {isComplete ? <Check className="h-3.5 w-3.5" /> : stepNumber}
                 </span>
-                {/* Labels sit beside their number rather than under it: the
-                    stacked version made the rail twice as tall for no gain. */}
+                {/* Labels sit beside their number, not under it — the stacked version made the rail twice as tall for no gain. */}
                 <span
                   className={cn(
                     "whitespace-nowrap text-xs font-semibold transition-colors",

@@ -30,8 +30,7 @@ interface RecordPaymentModalProps {
 
 const EMPTY_FORM: RecordPaymentFormValues = { payment_method: "cash", amount: "" };
 
-// Staff-entered follow-up payment (cash/bank transfer) against an order's
-// outstanding balance — e.g. collecting the rest of a manual sale's deposit.
+// Staff-entered follow-up payment (cash/bank transfer) against an order's outstanding balance, e.g. collecting the rest of a deposit.
 export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChange }: RecordPaymentModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

@@ -42,14 +42,7 @@ const DEFAULT_VALUES: GoogleCompleteConnectFormValues = {
   contentLanguage: "en",
 };
 
-// Maps the specific `reason` codes this flow can fail with — either from
-// oauthCallback's redirect query string (OAuth-layer failures: bad/expired
-// code, bad state) or from completeConnect's JSON error response
-// (Merchant-Center-layer failures, surfaced via the axios interceptor's
-// `error.reason` — see lib/api/client.ts) — onto a friendlier message.
-// Falls back to the raw reason for anything not explicitly handled here, so
-// a new/unmapped backend reason still shows *something* actionable rather
-// than silently disappearing.
+// Maps `reason` codes from oauthCallback's redirect query string or completeConnect's error response (via the axios interceptor's `error.reason`) to a friendlier message; falls back to the raw reason otherwise.
 function connectErrorMessage(reason: string | null | undefined): string {
   switch (reason) {
     case "registration_pending":
@@ -73,11 +66,7 @@ export function GoogleConnectCard() {
   const callbackReason = searchParams.get("reason");
   const choosingAccount = callbackResult === "choose_account";
 
-  // Clear the one-time error banner's query params so a page refresh
-  // doesn't re-show a stale one — mirrors EbayConnectCard. `choose_account`
-  // is deliberately NOT auto-cleared here — it needs to survive a refresh
-  // while the tenant is filling in step 2, and is cleared explicitly once
-  // completeConnect succeeds (see completeMutation.onSuccess below).
+  // Clear the one-time error banner's params (mirrors EbayConnectCard); `choose_account` is NOT auto-cleared — it must survive a refresh during step 2, cleared explicitly in completeMutation.onSuccess.
   useEffect(() => {
     if (callbackResult !== "error") return;
     queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -88,24 +77,18 @@ export function GoogleConnectCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callbackResult]);
 
-  // No dedicated GET /google/settings exists yet (see types/googleSettings.ts's
-  // own comment) — the generic channels list is the only source of this
-  // tenant's Google connection status/health today.
+  // No dedicated GET /google/settings yet (see types/googleSettings.ts) — the channels list is the only source of connection status/health.
   const { data: channelsData, isLoading: channelsLoading } = useQuery({
     queryKey: ["channels"],
     queryFn: getChannels,
   });
   const googleChannel = channelsData?.data.find((c) => c.key === "google");
   const connectionStatus = googleChannel?.connection.status ?? "disconnected";
-  // TASK 5: googleChannel.available is only false while channelsData is
-  // still loading its first result (undefined) — default true so the card
-  // doesn't flash a false "unavailable" state before the real value loads.
+  // googleChannel.available is false only while channelsData is still loading — default true so the card doesn't flash "unavailable".
   const unavailable = googleChannel ? !googleChannel.available : false;
   const unavailableReason = googleChannel?.unavailable_reason ?? null;
 
-  // Step 1: no form at all any more — consent happens before any Merchant
-  // Center account is chosen (see lib/api/google.ts#getGoogleConnectUrl's
-  // own comment).
+  // Step 1: no form — consent happens before any Merchant Center account is chosen (lib/api/google.ts#getGoogleConnectUrl).
   const connectMutation = useMutation({
     mutationFn: getGoogleConnectUrl,
     onSuccess: (res) => {
@@ -127,10 +110,7 @@ export function GoogleConnectCard() {
     defaultValues: DEFAULT_VALUES,
   });
 
-  // feedLabel defaults to the chosen target country (e.g. "AU") — the
-  // review's own "default sensibly... with an override" instruction —
-  // pre-filled here rather than just shown as placeholder text, but only
-  // while the tenant hasn't actually typed their own value in yet.
+  // feedLabel defaults to the chosen target country, pre-filled (not just placeholder) until the tenant types their own value.
   const targetCountry = watch("targetCountry");
   useEffect(() => {
     if (!formState.dirtyFields.feedLabel) setValue("feedLabel", targetCountry);

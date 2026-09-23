@@ -1,16 +1,8 @@
 // services/refund.service.void-guard.test.js
-//
-// Corrections round — voidRefund only reverses OUR books; there is no
-// Stripe API to "un-refund" a charge. Once a Stripe allocation has settled
-// (webhook-confirmed), voiding here would desync the ledger from what
-// Stripe actually did rather than fix anything. This proves the admin void
-// path is blocked on a settled Stripe refund without an explicit `force`,
-// while the legitimate exception (source: "stripe_reversal", used by
-// stripe.webhook.service.js#handleChargeRefundUpdated for §4.2) still goes
-// through — and that force: true still works when genuinely intended.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.service.void-guard.test.js
+// voidRefund only reverses our books; there's no Stripe API to un-refund a charge, so voiding
+// a settled Stripe allocation would desync the ledger. Proves the admin path is blocked without
+// an explicit `force`, while source: "stripe_reversal" and force: true still go through.
+// Needs a live Mongo connection. Run: node --test src/services/refund.service.void-guard.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

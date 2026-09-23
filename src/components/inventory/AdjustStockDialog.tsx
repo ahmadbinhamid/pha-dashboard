@@ -31,9 +31,7 @@ interface AdjustStockDialogProps {
 
 const EMPTY_FORM: AdjustStockFormValues = { adjustment: 0, type: "", note: "" };
 
-// Relative +/- stock change — distinct from Set Stock's absolute count. The
-// reason dropdown's options flip with the sign of the adjustment (you can't
-// "restock" a decrease, or mark an increase "damaged").
+// Relative +/- stock change, distinct from Set Stock's absolute count; the reason dropdown flips options with the adjustment's sign.
 export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -71,8 +69,7 @@ export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?._id]);
 
-  // Reset the reason whenever the adjustment flips from increase to decrease
-  // (or vice versa) — the previous choice may no longer be a valid option.
+  // Reset the reason when the adjustment flips sign — the previous choice may no longer be valid.
   useEffect(() => {
     const sign = adjustment > 0 ? 1 : adjustment < 0 ? -1 : 0;
     if (sign !== 0 && sign !== prevSignRef.current) setValue("type", "");
@@ -89,9 +86,7 @@ export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps
     onSuccess: () => {
       toast({ title: "Stock adjusted", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      // Product.stock_count is a separate cached copy (Products list, the
-      // product-edit page's live preview) — without this it stays stale
-      // until an unrelated action happens to invalidate it, or a reload.
+      // Product.stock_count is a separate cached copy (Products list, live preview) that would otherwise stay stale until an unrelated invalidation or reload.
       queryClient.invalidateQueries({ queryKey: ["product"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       onOpenChange(false);

@@ -1,10 +1,6 @@
 import type { InventoryAdjustType } from "@/types/inventory";
 
-// Direction-dependent reason options for Adjust Stock — restricted to the
-// values the backend's Joi validator actually accepts for a manual adjustment
-// (server/src/constants/inventory.constants.js#ADJUSTMENT_TYPE). The eBay/
-// Stripe/manual-sale entries in that enum are system-generated and never
-// user-selectable here.
+// Direction-dependent reason options for Adjust Stock, restricted to values the backend's Joi validator accepts (inventory.constants.js#ADJUSTMENT_TYPE). System-generated entries (eBay/Stripe/manual-sale) are never user-selectable here.
 export const POSITIVE_ADJUST_REASONS: { value: InventoryAdjustType; label: string }[] = [
   { value: "restock", label: "Restock" },
   { value: "transfer_in", label: "Transfer In" },

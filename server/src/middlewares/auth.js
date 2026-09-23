@@ -34,10 +34,8 @@ const auth =
         return unauthorized(res, "Invalid or expired token");
       }
 
-      // soft-delete plugin hides deleted users by default. Loaded alongside
-      // the membership list rather than after it — both only depend on
-      // decoded.sub, so running them serially was a wasted round trip on
-      // every authenticated request.
+      // Loaded alongside the membership list, not after — both only depend on decoded.sub, so
+      // running them serially was a wasted round trip on every request.
       const [user, memberships] = await Promise.all([
         User.findById(decoded.sub).select("-password"),
         membershipService.listUserMemberships(decoded.sub),
@@ -47,16 +45,9 @@ const auth =
       req.auth = decoded;
       req.user = user;
 
-      // Which organisation is this request for? A user can belong to several,
-      // so the active one comes from the X-Tenant-Id header when the client
-      // names one, and from their default membership otherwise. Either way it
-      // is validated against their own memberships — a header can only ever
-      // select between organisations they already belong to, never grant
-      // access to one they don't.
-      //
-      // Sourced per-request rather than from the JWT so joining, leaving or
-      // switching organisations takes effect immediately instead of waiting
-      // for the token to expire.
+      // Active org comes from X-Tenant-Id when named, else the default membership; validated
+      // against the user's own memberships either way. Sourced per-request, not from the JWT,
+      // so joining/leaving/switching orgs takes effect immediately.
       const requestedTenantId = req.header("x-tenant-id");
       const active = requestedTenantId
         ? memberships.find((m) => String(m.tenant_id?._id ?? m.tenant_id) === String(requestedTenantId))
@@ -69,22 +60,14 @@ const auth =
       if (active) {
         req.membership = active;
         req.tenantId = active.tenant_id?._id ?? active.tenant_id;
-        // Always the FULL tenant document, never the membership's populated
-        // copy: listUserMemberships projects tenant_id down to the handful of
-        // fields an organisation switcher needs, and handing that partial
-        // (and lean) object to the app broke everything reading a field
-        // outside it — generateNextSku crashed on `tenant.code`, order and
-        // invoice numbering lost their prefixes, and payment links silently
-        // ignored payment_domain_mode. It also matches what
-        // middlewares/tenant.js assigns for guest routes, so req.tenant is
-        // one shape everywhere.
+        // Always the full tenant document, never the membership's populated (lean, partial)
+        // copy — that broke generateNextSku, order/invoice prefixes, and payment_domain_mode.
+        // Also matches what middlewares/tenant.js assigns for guest routes.
         req.tenant = await Tenant.findById(req.tenantId);
         req.permissions = active.role_id?.permissions ?? [];
       } else {
-        // No membership row yet — a user created before memberships existed,
-        // or one whose backfill hasn't run. Fall back to the tenant stamped on
-        // the account so existing sessions keep working; permission checks
-        // fall back to the legacy role on the User doc (see requirePermission).
+        // No membership row yet; fall back to the tenant stamped on the account and the
+        // legacy User.role for permission checks.
         req.tenantId = user.tenant_id;
         req.permissions = [];
         if (user.tenant_id) req.tenant = await Tenant.findById(user.tenant_id);
@@ -111,17 +94,9 @@ const requireRoles =
     return next();
   };
 
-/**
- * Permission guard: `requirePermission("users.create")`.
- *
- * Checks the role held through the ACTIVE membership for the current
- * organisation (see membership.service.js#hasPermission — Super Admin
- * short-circuits to true). Queried live rather than read off req.membership,
- * so a role change takes effect on the very next request without needing the
- * token reissued (see auth.membership.test.js). Falls back to the legacy
- * User.role for accounts that have no membership row yet, so routes can move
- * onto permissions before every account has been migrated.
- */
+/** Permission guard, e.g. requirePermission("users.create"). Queried live (not off
+ * req.membership) so a role change takes effect immediately. Falls back to legacy User.role
+ * for accounts with no membership row yet. */
 const requirePermission =
   (...permissions) =>
   async (req, res, next) => {

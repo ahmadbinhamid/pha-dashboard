@@ -37,14 +37,9 @@ module.exports = (schemas = {}, options = {}) => {
       if (value.body) req.body = value.body;
       if (value.params) req.params = value.params;
       if (value.query) {
-        // Express 5 defines `req.query` as a getter with no setter that
-        // re-parses the raw URL on every access, so a plain `req.query = ...`
-        // assignment silently no-ops (sloppy-mode assignment to an
-        // accessor-only property) and every "validated" query param actually
-        // stays as its original raw string — e.g. Joi's `year: Joi.number()`
-        // coercion never took effect, so numeric comparisons against it
-        // (`$lte`/`$gte`) silently matched nothing. Redefining the property
-        // replaces the getter with a real data property for this request.
+        // Express 5's req.query is a getter-only accessor, so a plain assignment silently
+        // no-ops and Joi's coercion (e.g. year: Joi.number()) never took effect. Redefine the
+        // property to replace the getter with a real data property.
         Object.defineProperty(req, "query", {
           value: value.query,
           writable: true,

@@ -32,7 +32,7 @@ export function ReportsMetricCard({
   changeLabel?: string;
   icon: React.ReactNode;
   colorVar: ReportsMetricColorVar;
-  /** Real per-day series for the same range (e.g. dailyRevenueCents) — not decorative. */
+  /** Real per-day series for the same range (e.g. dailyRevenueCents) — not... */
   sparkline: number[];
   loading?: boolean;
 }) {

@@ -12,8 +12,7 @@ export interface FilterSelectOption {
   value: string;
 }
 
-// Toolbar status/enum filter — a Select dropdown where the first option acts
-// as the "no filter applied" state (empty string value, e.g. "All Status").
+// Toolbar status/enum filter: a Select where the first option is "no filter applied" (empty string value, e.g. "All Status").
 export function FilterSelect({
   options,
   value,

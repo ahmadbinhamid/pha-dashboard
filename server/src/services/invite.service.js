@@ -1,14 +1,7 @@
 // services/invite.service.js
-//
-// Bringing a person into an organisation. The rule the whole thing is built
-// on, carried over from flowpos-backend: **one email, one organisation, one
-// link.** A tenant holds at most one invite per address, and that invite has
-// at most one live link. Inviting again reopens the same row with a fresh
-// link and kills the old one.
-//
-// The link carries only the token; the address it was sent to comes back from
-// getInvitationByToken, so the landing page can prefill sign-in/sign-up. A
-// link is bound to that address: another account cannot redeem it.
+// One email, one organisation, one link: a tenant holds at most one invite per address, and
+// inviting again reopens the same row with a fresh link, killing the old one.
+// The link is bound to its address; another account cannot redeem it.
 
 const crypto = require("node:crypto");
 const Invitation = require("../models/Invitation");
@@ -57,12 +50,7 @@ function close(invite, status, stampField) {
   invite[stampField] = new Date();
 }
 
-/**
- * `is_expired` is a schema virtual, and Mongoose does not evaluate virtuals on
- * .lean() results (that needs the mongoose-lean-virtuals plugin) — so every
- * lean read here would silently report `undefined`, which a client reads as
- * "not expired". Computed explicitly instead.
- */
+/** `is_expired` is a schema virtual that Mongoose doesn't evaluate on .lean() results; computed explicitly instead. */
 function decorate(invite) {
   if (!invite) return invite;
   return {
@@ -80,13 +68,7 @@ function isOpen(invite) {
   );
 }
 
-/**
- * Is a role still promised to anyone through a redeemable invite? Deleting a
- * role that a pending invite points at would let that invite later create a
- * Membership whose role_id resolves to nothing — the person joins with no
- * permissions and nothing surfaces an error. role.service.js#deleteRole
- * checks this the same way it already checks for existing Memberships.
- */
+/** Is a role still promised to anyone through a redeemable invite? Used by role.service.js#deleteRole. */
 async function hasOpenInviteForRole(tenantId, roleId) {
   const openInvites = await Invitation.find({ tenant_id: tenantId, role_id: roleId, status: INVITE_STATUS.PENDING })
     .select("status expires_at +token_hash")
@@ -95,14 +77,7 @@ async function hasOpenInviteForRole(tenantId, roleId) {
   return openInvites.some(isOpen);
 }
 
-/**
- * Invite an address to an organisation. If that address already has a row
- * here — pending, declined, revoked or expired — it is reopened with the new
- * role and a fresh link rather than a second row appearing.
- *
- * Returns { invitation, token }: the plaintext token is the caller's only
- * chance to build a copyable link, since only its hash is stored.
- */
+/** Invites an address; an existing row for that address is reopened rather than duplicated. Returns { invitation, token }. */
 async function sendInvite({ tenantId, email, roleId, invitedBy = null }) {
   const address = normaliseEmail(email);
   if (!address) throw httpError("An email address is required.", 422);
@@ -187,10 +162,7 @@ async function findOpenInviteByToken(token) {
   return isOpen(invite) ? invite : null;
 }
 
-/**
- * What the public landing page shows before anyone is signed in. `has_account`
- * lets it go straight to sign-in or sign-up.
- */
+/** What the public landing page shows pre-sign-in; `has_account` lets it go straight to sign-in/sign-up. */
 async function getInvitePreview(token) {
   const invite = await findOpenInviteByToken(token);
   if (!invite) return null;
@@ -216,11 +188,7 @@ async function getInvitePreview(token) {
   };
 }
 
-/**
- * Join the signed-in user to the organisation. Accepting when already a
- * member settles quietly rather than erroring — a double-click on the link
- * shouldn't look like a failure.
- */
+/** Joins the signed-in user; accepting when already a member settles quietly rather than erroring. */
 async function acceptInvite(token, user) {
   const invite = await findOpenInviteByToken(token);
   if (!invite) throw httpError("That invitation link is no longer valid.", 404);
@@ -256,11 +224,7 @@ async function declineInvite(token, user) {
   return getInvitationById(invite._id, invite.tenant_id);
 }
 
-/**
- * Sign up from a link. The account is created for the invited address only,
- * and lands straight in the inviting organisation — unlike ordinary
- * registration, no organisation of their own is created for them.
- */
+/** Signs up from a link, landing straight in the inviting organisation (no own org created). */
 async function registerFromInvite(token, { first_name, last_name, password, phone = null }) {
   const invite = await findOpenInviteByToken(token);
   if (!invite) throw httpError("That invitation link is no longer valid.", 404);
@@ -268,9 +232,7 @@ async function registerFromInvite(token, { first_name, last_name, password, phon
   const existing = await User.findOne({ email: invite.email }).select("_id").lean();
   if (existing) throw httpError("An account already exists for this email. Sign in to accept the invitation.", 409);
 
-  // createUser is required lazily: user.service requires nothing from here,
-  // but tenant.service -> role.service -> this module would otherwise form a
-  // cycle at load time.
+  // Required lazily to avoid a load-time cycle: tenant.service -> role.service -> this module.
   const { createUser } = require("./user.service");
   const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
@@ -283,8 +245,7 @@ async function registerFromInvite(token, { first_name, last_name, password, phon
     phone,
     role: USER_ROLE.USER,
     status: USER_STATUS.ACTIVE,
-    // Reaching the link proves the address, the same way a verification email
-    // would have.
+    // Reaching the link proves the address, same as a verification email would.
     verified_at: new Date(),
   });
 

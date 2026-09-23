@@ -14,36 +14,22 @@ export function formatCompactNumber(n: number) {
   return _compactFmt.format(n);
 }
 
-// Payment/Refund amounts are stored as integer cents in the backend —
-// unlike Product.price, which is dollars. Keep the cents/dollars boundary
-// explicit rather than dividing by 100 ad hoc at each call site.
+// Payment/Refund amounts are integer cents on the backend, unlike Product.price (dollars) — keep the boundary explicit rather than dividing by 100 ad hoc.
 export function formatCurrencyFromCents(cents: number, currency: string = "AUD") {
   return formatCurrency(cents / 100, currency);
 }
 
-// GST-inclusive AU retail pricing: GST component of a (post-discount) line
-// total is extracted as total/11, never added on top — same convention as
-// the backend's order.service.js#GST_DIVISOR, applied per-line here since
-// order.tax_amount is only ever an order-level figure.
+// GST-inclusive AU pricing: GST is extracted as total/11, never added on top — same convention as order.service.js#GST_DIVISOR, applied per-line since order.tax_amount is order-level only.
 export function getLineGst(lineTotalCents: number) {
   return Math.round(lineTotalCents / 11);
 }
 
-// Same GST-inclusive convention as getLineGst, applied to a single unit's
-// inclusive price to get its GST-exclusive counterpart for display.
+// Same GST-inclusive convention as getLineGst, applied to a unit's inclusive price to get its GST-exclusive counterpart for display.
 export function getExclusiveUnitPrice(unitPriceCents: number) {
   return unitPriceCents - getLineGst(unitPriceCents);
 }
 
-// Order.order_number/invoice_number are stored as just the zero-padded
-// sequence ("00001") — no prefix baked in. The prefix comes from the
-// order's OWN order_number_prefix/invoice_number_prefix (snapshotted at
-// creation time from TenantSettings — see types/orders.ts), never a
-// hardcoded literal and never a live lookup of the tenant's CURRENT
-// setting, which would retroactively relabel every past order the moment
-// that setting changes. Backend-rendered outputs the frontend never
-// touches (the PDF invoice, transactional emails) use the equivalent
-// server/src/utils/orderNumberFormat.js instead.
+// order_number/invoice_number store just the zero-padded sequence ("00001") — the prefix comes from the order's own snapshotted prefix (types/orders.ts), never a live tenant-setting lookup that would retroactively relabel past orders. Backend outputs use the equivalent server/src/utils/orderNumberFormat.js.
 export function formatOrderNumber(prefix: string, raw: string) {
   return `${prefix}-${raw}`;
 }
@@ -52,13 +38,7 @@ export function formatInvoiceNumber(prefix: string, raw: string) {
   return `${prefix}-${raw}`;
 }
 
-// eBay orders store the buyer's masked eBay identifier as a literal
-// "ebay:<code>, " prefix on address line 1 (e.g. "ebay:znb2cfa, 26A Lynesta
-// Avenue") — useful internally, but meaningless (and unprofessional-
-// looking) on a customer-facing invoice/receipt. Strips it when present; a
-// no-op on any other address, so it's safe to call unconditionally rather
-// than gating it on order.channel === "ebay". Backend-rendered invoice PDFs
-// use the equivalent server/src/utils/addressFormat.js instead.
+// eBay orders store the buyer's masked identifier as an "ebay:<code>, " prefix on address line 1 — meaningless on a customer-facing invoice. Strips it when present, a no-op otherwise, so it's safe unconditionally. Backend PDFs use server/src/utils/addressFormat.js.
 export function stripEbayAddressPrefix(address: string) {
   return address.replace(/^ebay:[^,]*,\s*/i, "");
 }

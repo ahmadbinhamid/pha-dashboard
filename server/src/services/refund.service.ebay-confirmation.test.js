@@ -1,16 +1,8 @@
 // services/refund.service.ebay-confirmation.test.js
-//
-// refund-redesign-spec.md §5 gap — flagged and deferred in an earlier round,
-// implemented here. An eBay-channel payment settles through eBay Managed
-// Payments: a refund against it is bookkeeping only (no gateway call), and
-// restocking pushes the SKU's quantity back UP on the live eBay listing. If
-// the admin hasn't actually issued the refund in eBay Seller Hub, that push
-// is a lie — stock rises while the sale still stands there. createRefund
-// must require ebay_refund_confirmed: true whenever any resolved allocation
-// is provider: "ebay", and persist that acknowledgement on the Refund doc.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.service.ebay-confirmation.test.js
+// An eBay refund is bookkeeping only (no gateway call), and restocking pushes quantity back up
+// on the live listing — a lie if the admin hasn't actually issued the refund in Seller Hub.
+// createRefund must require ebay_refund_confirmed: true for any eBay allocation.
+// Needs a live Mongo connection. Run: node --test src/services/refund.service.ebay-confirmation.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

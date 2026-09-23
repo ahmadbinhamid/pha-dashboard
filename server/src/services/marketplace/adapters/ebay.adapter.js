@@ -280,8 +280,7 @@ async function updateOfferTolerant(token, settings, offerId, offerBody, sku) {
 // for this SKU (25002 — extracts the offerId eBay reports back and switches
 // to updateOffer instead). Shared by publish()'s "no offerId yet" branch and
 // both publish()/update()'s "stored offerId is dead" recovery below, so
-// there's exactly one place that knows how to stand up an offer from
-// scratch.
+// there's exactly one place that knows how to stand up an offer from scratch.
 async function createOrRecoverOffer(token, settings, offerBody, sku) {
   try {
     const offerId = await createOffer(token, settings, offerBody);
@@ -351,8 +350,7 @@ async function publish(resolved, settings, hooks = {}, seq = null) {
   await ensureLocation(token, settings);
 
   // Step 4 — create/update offer (recover from 25002 if it already exists,
-  // or from the stored offerId being dead on eBay's side — see
-  // isOfferMissingError)
+  // or from the stored offerId being dead on eBay's side — see isOfferMissingError)
   logger.info(`[EbayAdapter] using categoryId: "${listing.ebay_category_id}"`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;

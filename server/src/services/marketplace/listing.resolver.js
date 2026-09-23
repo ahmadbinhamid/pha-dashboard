@@ -106,8 +106,7 @@ function getPlatformManifest(platform) {
 // something real. tenant.slug itself is a required, always-present field
 // (models/Tenant.js), so once linkDomain is configured (and allowed) that
 // fallback is always resolvable — the only other failure mode guarded here
-// is the tenant record itself somehow not resolving at all (deleted
-// mid-request).
+// is the tenant record itself somehow not resolving at all (deleted mid-request).
 //
 // Product.slug is NOT a required field (models/Product.js) — a product
 // with none fails loudly, naming the SKU, rather than building a URL with

@@ -1,13 +1,7 @@
 // services/marketplace/channel.service.storefront.test.js
-//
-// TASK 5 (requiresStorefront capability): a tenant with no verified default
-// Domain must see Google Shopping marked unavailable (with a clear reason)
-// in GET /api/v1/channels, and checkStorefrontRequirement — the same
-// generic, manifest-driven check — must refuse the same tenant a connect
-// attempt. eBay (no requiresStorefront) must be completely unaffected.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/channel.service.storefront.test.js
+// A tenant with no verified default Domain must see Google marked unavailable in GET
+// /api/v1/channels, and checkStorefrontRequirement must refuse a connect attempt. eBay is unaffected.
+// Needs a live Mongo connection. Run: node --test src/services/marketplace/channel.service.storefront.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

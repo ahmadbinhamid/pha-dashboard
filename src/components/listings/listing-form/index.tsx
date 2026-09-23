@@ -39,10 +39,7 @@ interface ListingFormProps {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
   listing?: EbayListing | null;
-  // The listed product's own vehicle data, fetched live by the page —
-  // Technical Specifications always reads this directly, never a copy
-  // stored in form state, so it can never go stale or drift from the
-  // Product page's own make/model/year fields.
+  // Product's own vehicle data, fetched live by the page — read directly, never copied into form state, so it can't drift from the Product page.
   productVehicle?: ProductVehicle | null;
   onSaveDraft: () => void;
   onPush: () => void;
@@ -81,10 +78,7 @@ export function ListingForm({
   const titleLen = (form.title_override || "").length;
   const photoImages = form.photo_overrides || [];
 
-  // Display-only fallback for the description preview when this listing has
-  // no photo_overrides of its own — mirrors the variant -> product fallback
-  // the backend already applies when actually pushing to eBay (see
-  // listing.resolver.js#resolvePhotos). Never written into form state/saved.
+  // Display-only fallback for the preview when this listing has no photo_overrides; mirrors the backend's variant->product fallback (listing.resolver.js#resolvePhotos). Never saved.
   const listingVariant = listing && typeof listing.variant === "object" ? listing.variant : null;
   const listingProductForFallback =
     listing && listing.product !== null && typeof listing.product === "object" ? listing.product : null;

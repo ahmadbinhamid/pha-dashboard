@@ -11,22 +11,16 @@ const rv = require("../validators/refund.validation");
 const ctrl = require("../controllers/order.controller");
 const refundCtrl = require("../controllers/refund.controller");
 
-// Guest checkout only — the storefront has no customer accounts, so these
-// are intentionally unauthenticated. GET is gated by the per-order
-// guest_access_token (query param) instead of a JWT. resolveGuestTenant()
-// reads the storefront's own tenant identifier (X-Tenant-Slug header).
+// Guest checkout only, intentionally unauthenticated. GET is gated by guest_access_token instead of a JWT.
 router.post("/", resolveGuestTenant(), validate(v.createOrder), asyncHandler(ctrl.createOrder));
 
-// Registered ahead of the guest "/:id" route below — same single path
-// segment, so it would otherwise be swallowed by that catch-all (id="stats").
+// Registered ahead of the guest "/:id" route below, or it'd be swallowed by that catch-all.
 router.get("/stats", auth(), admin, asyncHandler(ctrl.getOrderStats));
 
 router.get("/:id", resolveGuestTenant(), validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 
 // ── Admin ─────────────────────────────────────────────────────────────────
-// "/:id/detail" (not a bare "/:id") deliberately avoids colliding with the
-// guest route above, which owns that exact path with different auth
-// semantics (token-gated, no JWT).
+// "/:id/detail" avoids colliding with the guest route above, which owns "/:id" with different auth.
 router.get("/", auth(), admin, pagination(), validate(v.listOrders), asyncHandler(ctrl.listOrders));
 router.post("/manual", auth(), admin, validate(v.createManualOrder), asyncHandler(ctrl.createManualOrder));
 router.get("/:id/detail", auth(), admin, validate(v.adminByIdParam), asyncHandler(ctrl.getOrderDetail));
@@ -97,11 +91,8 @@ router.patch(
   asyncHandler(ctrl.updateOrderReferenceNumber),
 );
 
-// ── Refunds (refund-redesign-spec.md §2) — order-scoped, not payment-scoped:
-// line items and multi-payment allocation are both order-level concerns.
-// Mounted under /order (this app's existing convention — see routes/index.js
-// — not the spec's literal /orders) for consistency with every other route
-// in this file.
+// ── Refunds: order-scoped, not payment-scoped — line items and multi-payment allocation are
+// order-level concerns. Mounted under /order for consistency with every other route here.
 router.get("/:id/refundable", auth(), admin, validate(rv.getRefundable), asyncHandler(refundCtrl.getRefundable));
 router.get("/:id/refunds", auth(), admin, validate(rv.listRefunds), asyncHandler(refundCtrl.listRefunds));
 router.post("/:id/refunds", auth(), admin, validate(rv.createRefund), asyncHandler(refundCtrl.createRefund));

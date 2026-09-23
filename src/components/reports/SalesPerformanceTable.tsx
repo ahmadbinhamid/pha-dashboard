@@ -30,12 +30,7 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
         ) : rows.length === 0 ? (
           <div className="py-10 text-center text-sm text-fg/45">No orders in this range yet</div>
         ) : (
-          // Zero horizontal cell padding (content spacing does the work) —
-          // same compact-table pattern CriticalStockCard.tsx already uses.
-          // Six money/count columns in this card's ~1/3-page width don't
-          // leave room for Table.tsx's default px-4 (or even px-2) per cell
-          // without forcing a hidden horizontal scroll that clips the last
-          // column entirely — found live via a full-page screenshot.
+          // Zero horizontal cell padding (same compact pattern as CriticalStockCard.tsx) — six columns in this card's ~1/3-page width don't fit Table.tsx's default px-4 without clipping the last column.
           <div className="overflow-x-auto">
             <Table className="text-[11px]">
               <TableHeader className="bg-transparent">

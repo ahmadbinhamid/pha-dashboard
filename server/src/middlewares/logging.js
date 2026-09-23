@@ -17,13 +17,11 @@ const requestLogger = expressWinston.logger({
   requestWhitelist: [
     "method",
     "url",
-    // exclude authorization header to avoid leaking tokens
-    // "headers",
+    // exclude authorization header to avoid leaking tokens "headers",
     "httpVersion",
     "originalUrl",
     "query",
-    // avoid logging raw body which may include secrets like passwords
-    // "body",
+    // avoid logging raw body which may include secrets like passwords "body",
   ],
   responseWhitelist: ["statusCode", "responseTime"],
 });

@@ -14,9 +14,7 @@ interface ProductLivePreviewCardProps {
   stockCount?: number | null;
 }
 
-// Read-only reflection of the form's current values — lets the user see
-// roughly what the product will look like before saving. Clicking the
-// cover opens a full-screen viewer (zoom + next/prev) over every image.
+// Read-only reflection of the form's current values, so the user sees roughly what the product will look like before saving; clicking the cover opens a full-screen viewer.
 export function ProductLivePreviewCard({
   title,
   images = [],

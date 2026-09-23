@@ -1,10 +1,6 @@
 // utils/pdf/lowStockReportPdf.js
-//
-// Renders the low-stock digest email's PDF attachment — a plain tabular
-// report (item / SKU / variant / stock). Letterhead language (logo, rule
-// weight, accent color) mirrors invoicePdf.js's tax invoice, but the layout
-// is far simpler: no financial figures, just a list to action, so this
-// doesn't share that file's column/meta-strip machinery.
+// Renders the low-stock digest email's PDF attachment, a plain tabular report. Letterhead
+// mirrors invoicePdf.js's style, but the layout is simpler and shares none of its machinery.
 
 const path = require("path");
 const PDFDocument = require("pdfkit");
@@ -24,9 +20,8 @@ const FONT_BOLD = "Helvetica-Bold";
 const FONT = "Helvetica";
 const MONO = "Courier";
 
-// Same palette as the dashboard's --accent/--danger/--border/--fg tokens
-// (src/app/globals.css) — that file's own comment gives the exact hsl->hex
-// mapping this hardcodes (email/PDF rendering can't read CSS variables).
+// Same palette as the dashboard's --accent/--danger/--border/--fg tokens, hardcoded since
+// PDF rendering can't read CSS variables.
 const COLORS = {
   text: "#14181f",
   muted: "#6b7280",
@@ -112,12 +107,10 @@ function drawRow(doc, item, y) {
   return y + ROW_HEIGHT;
 }
 
-// items: getLowStockItems' own rows ({ title, sku, variant_name, stock, ... })
-// — the same shape email.service.js#sendLowStockDigest receives, unmapped.
+// items: getLowStockItems' own rows, the same shape sendLowStockDigest receives, unmapped.
 function buildLowStockReportPdfBuffer(items, { companyProfile = {}, threshold } = {}) {
   return new Promise((resolve, reject) => {
-    // bufferPages: true — needed to stamp "Page X of Y" once every page
-    // exists, same reasoning as invoicePdf.js's own use of this option.
+    // bufferPages: true, needed to stamp "Page X of Y" once every page exists.
     const doc = new PDFDocument({ size: "A4", margin: PAGE_MARGIN, bufferPages: true });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));

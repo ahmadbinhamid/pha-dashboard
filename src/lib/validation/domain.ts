@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-// Mirrors the backend's HOSTNAME_PATTERN (server/src/validators/domain.validation.js)
-// — kept in sync manually, same as the DNS verification subdomain prefix
-// (see DomainRow.tsx). Client-side validation here is purely for fast
-// feedback; the backend re-validates and is the actual source of truth.
+// Mirrors the backend's HOSTNAME_PATTERN (domain.validation.js), kept in sync manually. Purely for fast feedback — the backend re-validates and is the source of truth.
 const HOSTNAME_PATTERN = /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))+$/;
 
 export const addDomainSchema = z.object({

@@ -1,9 +1,6 @@
 import { cn } from "@/utils/cn";
 
-// Presentational drag handle for the useColumnResize hook — a thin strip on
-// an element's right edge; the parent must be `position: relative` (or
-// `sticky`, which also establishes a positioning context) for this to sit
-// where intended.
+// Presentational drag handle for useColumnResize; parent must be `position: relative` (or `sticky`) for this to sit where intended.
 export function ColumnResizeHandle({
   onMouseDown,
   className,
@@ -17,8 +14,7 @@ export function ColumnResizeHandle({
       aria-orientation="vertical"
       aria-label="Resize column"
       onMouseDown={(e) => {
-        // Rows this renders inside (e.g. a clickable product/listing row)
-        // must never treat a resize drag as a row click.
+        // Rows this renders inside (e.g. a clickable row) must never treat a resize drag as a row click.
         e.stopPropagation();
         onMouseDown(e);
       }}

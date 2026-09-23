@@ -4,10 +4,7 @@ const mongoose = require("mongoose");
 const { escapeRegex, buildWordSearchOr } = require("./regex");
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 
-// Builds the Mongo match filter shared by product listing and category-count
-// aggregation, so both stay in sync on what "matches the current search/filters"
-// means. `authenticated: false` (public/storefront callers) always restricts to
-// published+active products.
+// Shared Mongo filter for product listing and category-count aggregation; public callers get published+active only.
 function buildProductFilter(query = {}, { authenticated = false, tenantId = null } = {}) {
   const filter = {};
   const and = [];

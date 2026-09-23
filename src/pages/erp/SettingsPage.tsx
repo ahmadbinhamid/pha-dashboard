@@ -8,9 +8,7 @@ import { ComingSoonPanel } from "@/components/settings/ComingSoonPanel";
 import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
-// UsersTab/RolesTab are fully built but not wired up right now — see
-// config/settingsTabs.tsx's comment on "users"/"roles" for why. Both tabs
-// fall through to the generic `available: false` branch below instead.
+// UsersTab/RolesTab are fully built but not wired up — see config/settingsTabs.tsx's comment on "users"/"roles". Both fall through to the generic `available: false` branch below.
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
   DEFAULT_SETTINGS_TAB,
@@ -23,18 +21,12 @@ import {
 import type { IntegrationId } from "@/config/integrations";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 
-// Settings as a full page (it used to be a bottom-sheet overlay): a header,
-// one horizontal tab bar, and the active tab's own body. Both levels of
-// navigation live in the URL — /settings/:tab and, for tabs that have a
-// second level, /settings/:tab/:section — so every screen here is linkable
-// and survives a refresh.
+// Settings as a full page (used to be a bottom-sheet overlay): header, tab bar, active tab's body. Both nav levels live in the URL (/settings/:tab and /settings/:tab/:section) so every screen is linkable.
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { tab, section } = useParams<{ tab?: string; section?: string }>();
 
-  // Forms inside the tabs (eBay, Stripe, SMTP) render their Save button into
-  // the page header through this portal target, which is what keeps the action
-  // visible without each panel growing its own action row.
+  // Forms inside the tabs (eBay, Stripe, SMTP) render their Save button into the page header through this portal target, keeping the action visible without each panel growing its own row.
   const [headerActionsEl, setHeaderActionsEl] = useState<HTMLDivElement | null>(null);
 
   const activeTab = findSettingsTab(tab) ?? findSettingsTab(DEFAULT_SETTINGS_TAB)!;
@@ -47,20 +39,8 @@ export default function SettingsPage() {
 
   return (
     <div className="-mt-section space-y-6">
-      {/* Title, header actions and tab bar pin to the top of AppShell's scroll
-          container as one block. The tab bar staying reachable is half of it;
-          the other half is the action slot below — the eBay/Stripe/SMTP forms
-          portal their Save button into it (see SettingsHeaderActions), and a
-          Save that scrolls off on a long form is the thing the old settings
-          sheet used a sticky header to avoid.
-
-          The negative margins cancel the page gutter so the opaque background
-          reaches the edges, instead of letting cards show through beside it
-          as they scroll under. -top-section is the same idea vertically:
-          sticky pins against the scroll container's PADDING box, so at top-0
-          the shell's py-section left a band above the header that content
-          scrolled visibly through — offsetting by that padding tucks the
-          block's own pt-section above the fold instead. */}
+      {/* Title, header actions and tab bar pin to the top of AppShell's scroll container as one block, so a Save button on a long form (portaled in via SettingsHeaderActions) never scrolls off.
+          Negative margins cancel the page gutter so the opaque background reaches the edges; -top-section offsets the shell's own py-section so sticky pins flush instead of leaving a scroll-through band above the header. */}
       <div className="sticky -top-section z-20 -mx-4 space-y-4 bg-bg px-4 pt-section sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
         <PageHeader
           title="Settings"

@@ -155,8 +155,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
     for (const listing of listings) {
       // A listing can outlive its adapter being registered (e.g. a platform
       // temporarily disabled in this worker process) — skip it rather than
-      // let one unknown platform throw and abort every other listing's
-      // fan-out below.
+      // let one unknown platform throw and abort every other listing's fan-out below.
       if (!registry.has(listing.platform)) {
         logger.warn(`[inventory.service] fan-out skipped: no adapter registered for platform "${listing.platform}" (listing ${listing._id})`);
         results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: false, error: "no_adapter" });

@@ -1,17 +1,7 @@
 // src/queues/channel.queue.js
-//
-// Channel-agnostic job queues, keyed by platform — see
-// server/docs/channel-architecture.md for the full picture. Each platform
-// gets its own Bull queue so a slow/rate-limited platform (Google Shopping,
-// Meta Shop, added later) never head-of-line blocks another's jobs.
-//
-// eBay's queue is a special case: it MUST keep the exact Bull queue name
-// ("ebay") and job names ("sync_listing", "poll_orders", "poll_inventory")
-// queues/ebay.queue.js has always used — there may be jobs already sitting
-// in Redis at deploy time, and renaming the queue would orphan them (nothing
-// would ever process them again). See ebay.queue.js, kept as a thin
-// backward-compatible re-export of this module's "ebay" queue for anything
-// that still imports it directly.
+// Channel-agnostic job queues, keyed by platform — each gets its own Bull queue so a slow
+// platform never head-of-line blocks another's jobs. eBay's queue must keep its exact Bull
+// queue/job names (see ebay.queue.js) so already-queued Redis jobs aren't orphaned on deploy.
 
 const Queue = require("bull");
 const config = require("../config");
@@ -40,9 +30,7 @@ function limiterFor(platform) {
 
 const queues = new Map();
 
-// Lazily creates (and caches) the Bull queue for a platform. Called by
-// enqueueChannelJobDirect below, and by workers/channel.worker.js to attach
-// a processor for every registered adapter's platform.
+// Lazily creates (and caches) the Bull queue for a platform.
 function getQueue(platform) {
   let queue = queues.get(platform);
   if (queue) return queue;
@@ -64,50 +52,26 @@ const DEFAULT_JOB_OPTS = {
   timeout: 60_000,
 };
 
-// The actual enqueue implementation — always adds to the real Bull queue for
-// `platform`, ignoring any registered override (see registerEnqueueOverride
-// below). ebay.queue.js's enqueueEbayJob calls this directly (never the
-// override-checking enqueueChannelJob) so registering itself as eBay's
-// override can never recurse back into itself.
-//
-// opts.bypassDebounce: true skips the debounce jobId/delay entirely — Bull
-// assigns its own unique id and the job runs immediately (subject to normal
-// queue order/rate limits). Used by channel.service.js#retryChannelLog: a
-// manual "retry this failed job" action must always actually enqueue
-// something, never collapse into (or get blocked by) whatever debounced job
-// already exists for that listing.
+// The actual enqueue implementation, always adding to the real Bull queue, ignoring any
+// registered override. ebay.queue.js calls this directly so its own override can't recurse.
+// opts.bypassDebounce: true skips the debounce jobId/delay so a manual retry always enqueues,
+// never collapsing into whatever debounced job already exists for that listing.
 async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
   const queue = getQueue(platform);
   const { bypassDebounce, ...restOpts } = opts;
   const jobOpts = { ...DEFAULT_JOB_OPTS, ...restOpts };
 
-  // Debounce: collapse rapid-fire sync_listing calls for the SAME listing
-  // into one delayed job, keyed by listing id (not by payload) — a fresh
-  // call arriving while an earlier one is still delayed is a no-op (Bull's
-  // normal "a job with this id already exists" behavior). That's fine here:
-  // the eventual job re-reads the listing's CURRENT push_seq at execution
-  // time rather than trusting whichever payload happened to win (see
-  // sync.service.js#syncListing and inventory.service.js#fanOutMarketplaceInventory),
-  // so which of the N calls' payload "wins" the dedup doesn't matter.
+  // Debounce: collapse rapid-fire sync_listing calls for the same listing into one delayed
+  // job, keyed by listing id. Safe because the eventual job re-reads the current push_seq at
+  // execution time rather than trusting whichever payload happened to win the dedup.
   if (jobName === "sync_listing" && payload?.listingId && !bypassDebounce) {
     const jobId = `sync:${platform}:${payload.listingId}`;
 
-    // Bull gotcha (verified for bull@4.16.5, this repo's pinned version —
-    // see package.json): add() returns the EXISTING job for a jobId present
-    // in ANY state — waiting, delayed, active, completed, OR failed — it
-    // does not create a new one. removeOnComplete: true frees a completed
-    // job's id back up for the next debounce window. removeOnFail used to
-    // stay false "so a failed job is still visible/retryable" — but that
-    // reasoning was backwards: a failed job sitting under this jobId
-    // doesn't make it retryable, it makes every SUBSEQUENT sync_listing
-    // call for that listing silently a no-op forever, since add() just
-    // keeps returning the same dead failed job. ChannelSyncLog is the
-    // durable failure record now (see sync.service.js#logSyncEvent), so
-    // nothing is lost by removing a failed job from Bull — removeOnFail:
-    // true is the fix going forward. Defensively also clear out any job
-    // already sitting in a terminal state under this id (e.g. one that
-    // failed before this fix was deployed, back when removeOnFail was
-    // false) so this jobId can never be permanently stuck either way.
+    // Bull gotcha (verified bull@4.16.5): add() returns the existing job for a jobId in any
+    // state, including failed, rather than creating a new one. removeOnFail: true is required —
+    // a failed job left under this id would make every subsequent call for that listing a
+    // silent no-op forever, since ChannelSyncLog is the durable failure record, not Bull.
+    // Defensively also clear any pre-existing terminal job under this id, from before the fix.
     const existing = await queue.getJob(jobId);
     if (existing) {
       const state = await existing.getState();
@@ -134,16 +98,9 @@ async function enqueueChannelJobDirect(platform, jobName, payload, opts = {}) {
   return Promise.race([job, deadline]);
 }
 
-// Lets a platform's own queue module supply its OWN enqueue function instead
-// of the generic one above, while every caller still goes through the one
-// enqueueChannelJob(platform, ...) entry point (see
-// inventory.service.js#fanOutMarketplaceInventory). This exists purely for
-// eBay's backward-compatibility shim (see ebay.queue.js): several
-// pre-existing tests mock ebay.queue.js's enqueueEbayJob directly (e.g.
-// ebay.inventory-sync.service.test.js) and must keep intercepting real
-// eBay-bound enqueue calls even though the generic fan-out now calls
-// enqueueChannelJob, not enqueueEbayJob, directly. No other platform needs
-// this — it's a no-op unless something registers an override for that key.
+// Lets a platform's own queue module supply its own enqueue function instead of the generic
+// one above, while every caller still goes through enqueueChannelJob. Exists purely for
+// eBay's backward-compatibility shim, since existing tests mock enqueueEbayJob directly.
 const enqueueOverrides = new Map();
 function registerEnqueueOverride(platform, fn) {
   enqueueOverrides.set(platform, fn);

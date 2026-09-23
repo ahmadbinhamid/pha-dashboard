@@ -1,9 +1,6 @@
 // services/email/smtp.keys.service.js
-//
-// This is the only place in the codebase that touches a tenant's encrypted
-// SMTP password directly. mailer.js is the only consumer that actually
-// sends mail with it — everything else asks for a tenant-scoped transporter
-// through getTransporterForTenant, never the raw credentials.
+// The only place that touches a tenant's encrypted SMTP password directly; everything else
+// asks for a tenant-scoped transporter through getTransporterForTenant instead.
 
 const nodemailer = require("nodemailer");
 const Tenant = require("../../models/Tenant");
@@ -27,10 +24,7 @@ function buildTransporter({ host, port, user, pass }) {
     port,
     secure: port === 465, // 587/25/2525 all expect STARTTLS, not implicit TLS
     auth: { user, pass },
-    // Conservative pooling defaults — a tenant's own mailbox provider (Gmail,
-    // Office 365, etc.) throttles far more aggressively than a dedicated
-    // transactional-email service. See config.smtp's own comment for the
-    // platform transporter, which this mirrors.
+    // Conservative pooling defaults, since a tenant's own mailbox provider throttles more aggressively.
     pool: true,
     maxConnections: 2,
     rateLimit: 5,
@@ -42,9 +36,7 @@ function fingerprint(creds) {
   return [creds.host, creds.port, creds.user, creds.pass].join("|");
 }
 
-// Keyed by tenantId — avoids re-creating a pooled transporter (and its SMTP
-// connections) on every email. Invalidated whenever credentials change (see
-// updateSmtpCredentials) so a rotated/revoked password can't keep being used.
+// Keyed by tenantId. Invalidated on credential change so a rotated/revoked password can't be reused.
 const _transporterCache = new Map(); // tenantId -> { transporter, fingerprint }
 
 function clearTransporterCache(tenantId) {
@@ -71,8 +63,7 @@ async function getDecryptedSmtpCredentials(tenantId) {
   };
 }
 
-// Returns null (not a throw) when this tenant hasn't configured their own
-// SMTP — callers (mailer.js) fall back to the platform transporter in that case.
+// Returns null (not a throw) when this tenant hasn't configured their own SMTP.
 async function getTransporterForTenant(tenantId) {
   const creds = await getDecryptedSmtpCredentials(tenantId);
   if (!creds) return null;
@@ -87,11 +78,7 @@ async function getTransporterForTenant(tenantId) {
   return { transporter, creds };
 }
 
-// Validates against the SMTP server itself (a real connection + auth
-// handshake, no message sent) before persisting — catching a typo'd host or
-// wrong password at save time instead of on the next real order email.
-// `pass` omitted entirely means "keep the currently saved password" (e.g.
-// just changing the From name); "" clears it (disconnects).
+// Validates against the SMTP server before persisting. `pass` omitted keeps the saved password; "" clears it.
 async function updateSmtpCredentials(tenantId, { host, port, user, pass, from_name, from_email }) {
   const tenant = await Tenant.findById(tenantId).select(SMTP_SELECT);
   if (!tenant) throw httpError("Tenant not found", 404);

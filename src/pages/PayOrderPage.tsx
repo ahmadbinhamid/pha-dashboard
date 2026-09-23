@@ -9,11 +9,7 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 
-// BYOK — this page is shared across every tenant's admin-generated "payment
-// link" orders, and each tenant now has their own Stripe account/publishable
-// key (see stripe.payment.service.js#createPaymentIntentForOrder), returned
-// alongside the client_secret rather than read from a single build-time env
-// var. Cached per publishable key so re-rendering doesn't re-init Stripe.js.
+// BYOK: each tenant has their own Stripe publishable key (stripe.payment.service.js#createPaymentIntentForOrder), returned alongside client_secret rather than a build-time env var. Cached per key so re-rendering doesn't re-init Stripe.js.
 const stripeInstances = new Map<string, ReturnType<typeof loadStripe>>();
 function getStripeForKey(publishableKey: string) {
   if (!stripeInstances.has(publishableKey)) {
@@ -22,21 +18,8 @@ function getStripeForKey(publishableKey: string) {
   return stripeInstances.get(publishableKey)!;
 }
 
-// Shared, platform-hosted payment page — one page for every tenant's
-// admin-generated "payment link" orders (see stripe.payment.service.js#createPaymentLinkForOrder).
-// No login, no tenant branding: just enough to show what's owed and collect
-// a card payment. Security is the guest `token` in the URL, not a session.
-// One message for every failure hid the actual cause: a rotated token, a
-// suspended tenant, an unreachable API and a blocked CORS origin all read as
-// "invalid or expired link". Only a real 404 means the link is dead —
-// anything else is our side failing, and telling a customer to chase a new
-// link for a transport error is the worst version of that.
-//
-// Reads `.status`, not axios internals: the client's response interceptor
-// (lib/api/client.ts) rejects with a plain Error carrying `status`, so
-// isAxiosError() is never true by the time an error reaches a page. No
-// status at all means the request never got a response — wrong API base URL,
-// CORS refusal, DNS, or the server being down.
+// Shared, platform-hosted payment page for every tenant's payment-link orders (stripe.payment.service.js#createPaymentLinkForOrder). No login/branding — security is the guest `token` in the URL. Only a real 404 means the link is dead; other failures (rotated token, CORS, transport) shouldn't tell the customer to chase a new link.
+// Reads `.status`, not axios internals: the client's interceptor (lib/api/client.ts) rejects with a plain Error carrying `status`; no status means the request never got a response.
 function payLinkErrorMessage(error: unknown) {
   const status = (error as { status?: number } | null | undefined)?.status;
 

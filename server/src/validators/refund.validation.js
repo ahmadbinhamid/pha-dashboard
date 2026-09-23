@@ -64,8 +64,7 @@ const createRefund = {
       .required(),
     internal_note: Joi.string().trim().allow("", null).default(null),
 
-    // Optional — server auto-allocates across the order's payments if
-    // omitted (§2.2).
+    // Optional — server auto-allocates across the order's payments if omitted (§2.2).
     payment_allocations: Joi.array().items(paymentAllocation).min(1),
 
     // §5 — required true whenever this refund ends up touching an eBay

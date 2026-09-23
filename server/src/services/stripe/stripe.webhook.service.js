@@ -1,18 +1,7 @@
 // services/stripe/stripe.webhook.service.js
-//
-// Signature verification, idempotency, and event dispatch for incoming
-// Stripe webhooks. Mirrors ebay.webhook.service.js's shape: unauthenticated
-// route (see routes wiring), raw-body signature check, and an atomic
-// unique-index "claim" collection (StripeProcessedEvent) instead of a
-// read-then-write existence check.
-//
-// BYOK — each tenant has their own Stripe account, so there is no shared
-// platform webhook endpoint anymore. The tenant is resolved from an opaque
-// `?wt=` token in the URL (payment.controller.js#handleWebhook, mirroring
-// ebay.controller.js's webhook redesign) BEFORE signature verification, so
-// the right tenant's own webhook secret can be used to verify it. Once
-// resolved, tenantId is the source of truth for every downstream call — no
-// more Connect-only event.account field to cross-check against.
+// Signature verification, idempotency, and event dispatch for Stripe webhooks, mirroring
+// ebay.webhook.service.js's shape. BYOK: the tenant is resolved from an opaque `?wt=` token
+// before signature verification, so the right tenant's webhook secret verifies it.
 
 const Payment = require("../../models/Payment");
 const Order = require("../../models/Order");
@@ -32,23 +21,15 @@ const { derivePaymentStatus } = require("../../utils/paymentStatus");
 const { formatOrderNumber } = require("../../utils/orderNumberFormat");
 const { logger } = require("../../loaders/logging");
 
-// Stripe.webhooks.constructEvent is a static helper (pure HMAC verification,
-// no API call) — no per-tenant Stripe client/API key needed here, just the
-// tenant's own webhook signing secret (resolved by the caller via the
-// opaque `wt` token in the URL).
+// constructEvent is pure HMAC verification, no API call — just the tenant's webhook signing secret.
 const Stripe = require("stripe");
 
 function constructEvent(rawBody, signatureHeader, webhookSecret) {
   return Stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
 }
 
-// Verifies against each candidate secret in order, returning on the first
-// match. Real use case: local `stripe listen` testing against a BYOK tenant
-// — the tenant's real secret is always tried first (and is all a production
-// deployment ever has, since the caller only adds a second candidate outside
-// production), so this changes nothing about how a real webhook delivery is
-// verified. Throws the FIRST candidate's error if every one fails, since
-// that's the one that actually matters (the tenant's real secret).
+// Verifies against each candidate secret in order (for local `stripe listen` testing); throws
+// the first candidate's error if all fail, since that's the tenant's real secret.
 function constructEventWithFallback(rawBody, signatureHeader, candidateSecrets) {
   let firstError;
   for (const secret of candidateSecrets.filter(Boolean)) {
@@ -61,8 +42,7 @@ function constructEventWithFallback(rawBody, signatureHeader, candidateSecrets) 
   throw firstError || new Error("No webhook secret configured");
 }
 
-// Atomic claim: throws E11000 if this event id was already processed, which
-// the caller treats as "already handled, no-op" rather than an error.
+// Atomic claim: E11000 means already processed, treated by the caller as a no-op.
 async function claimEvent(event, tenantId) {
   try {
     await StripeProcessedEvent.create({
@@ -98,9 +78,7 @@ async function handleEvent(event, tenantId) {
         logger.info(`[stripe.webhook] unhandled event type: ${event.type}`);
     }
   } catch (err) {
-    // Processing failed after the claim was already made — release it so
-    // the 500 we return causes Stripe to retry this same event instead of
-    // it being silently treated as "already handled" forever.
+    // Release the claim so our 500 causes Stripe to retry, instead of treating this as handled forever.
     await StripeProcessedEvent.deleteOne({ stripe_event_id: event.id });
     throw err;
   }
@@ -112,28 +90,19 @@ async function handlePaymentSucceeded(intent, tenantId) {
     logger.error(`[stripe.webhook] payment_intent.succeeded for unknown intent ${intent.id}`);
     return;
   }
-  // Fully handled only when BOTH the payment record and the order/stock
-  // side effects are done — checking status alone meant a retry after the
-  // order/stock step failed (payment already saved as SUCCEEDED, but
-  // order.save() below never completed) hit this guard and returned
-  // immediately, leaving the order stuck at pending_payment forever despite
-  // Stripe having actually captured the money. Found live.
+  // Fully handled only when both the payment record and order/stock effects are done — status
+  // alone let a retry after a failed order.save() get stuck permanently at pending_payment.
   if (payment.status === PAYMENT_STATUS.SUCCEEDED && payment.order_effects_applied_at) return;
 
-  // +guest_access_token: needed to build the customer-facing "view order"
-  // link in the confirmation email below — excluded by default (select: false).
+  // +guest_access_token needed for the "view order" link in the confirmation email below.
   const order = await Order.findById(payment.order).select("+guest_access_token");
   if (!order) {
     logger.error(`[stripe.webhook] order ${payment.order} missing for intent ${intent.id}`);
     return;
   }
 
-  // Defense-in-depth: the local Payment/Order lookup above is what actually
-  // resolves which tenant this event belongs to (stripe_payment_intent_id is
-  // globally unique regardless of whose account it lives in) — this just
-  // confirms that matches the tenant whose webhook URL/secret Stripe
-  // delivered against, catching a misconfigured webhook or a future bug
-  // before it can apply effects to the wrong tenant's order.
+  // Defense-in-depth: confirms the resolved order's tenant matches the webhook's tenant,
+  // catching a misconfigured webhook before it applies effects to the wrong tenant's order.
   if (String(order.tenant_id) !== String(tenantId)) {
     logger.error(
       `[stripe.webhook] tenant mismatch on intent ${intent.id}: webhook tenant=${tenantId}, ` +
@@ -142,23 +111,16 @@ async function handlePaymentSucceeded(intent, tenantId) {
     return;
   }
 
-  // Skipped entirely on a resume (payment.status already SUCCEEDED from a
-  // prior attempt, only order_effects_applied_at was missing) — re-running
-  // the mismatch check or re-fetching the intent would be harmless but
-  // pointless; only the order/stock side below still needs finishing.
+  // Skipped entirely on a resume — only the order/stock side below still needs finishing.
   if (payment.status !== PAYMENT_STATUS.SUCCEEDED) {
-    // Trust nothing from the intent except what Stripe says was actually
-    // captured — verify it matches what we billed for before marking paid.
-    // Compared against this Payment doc's own `amount` (what we told Stripe
-    // to charge when the intent was created), NOT order.total — an intent
-    // for a manual sale's remaining balance is legitimately less than the total.
+    // Verify the captured amount matches this Payment doc's own `amount`, not order.total —
+    // an intent for a manual sale's remaining balance is legitimately less than the total.
     const expectedAmount = payment.amount;
     const amountReceived = intent.amount_received ?? intent.amount;
     const amountMismatch = amountReceived !== expectedAmount;
     const currencyMismatch = intent.currency !== order.currency;
     if (amountMismatch || currencyMismatch) {
-      // Funds were captured (this event only fires on success) — FAILED would
-      // wrongly imply no money moved, so flag for manual review instead.
+      // Funds were captured — FAILED would wrongly imply no money moved, so flag for review instead.
       payment.status = PAYMENT_STATUS.MANUAL_REVIEW;
       payment.failure_reason = [
         amountMismatch ? `Amount mismatch: received ${amountReceived}, expected ${expectedAmount}` : null,
@@ -173,12 +135,7 @@ async function handlePaymentSucceeded(intent, tenantId) {
       return; // do not mark paid, do not touch stock
     }
 
-    // The webhook payload only carries payment_method as a bare ID, not the
-    // expanded object — so re-retrieve the intent with expand to read card
-    // details. Expand `payment_method` directly (a top-level expandable field
-    // on PaymentIntent) rather than nesting through `latest_charge` — Stripe
-    // rejects "latest_charge.payment_method" as an unsupported expand path.
-    // Never rely on the legacy `charges.data[]` shape either way.
+    // Re-retrieve with expand to read card details — Stripe rejects nesting through `latest_charge`.
     const stripe = await stripeKeysService.getStripeClient(tenantId);
     const fullIntent = await stripe.paymentIntents.retrieve(intent.id, { expand: ["payment_method"] });
     const paymentMethod =
@@ -194,33 +151,17 @@ async function handlePaymentSucceeded(intent, tenantId) {
     await payment.save();
   }
 
-  // Recomputed across every succeeded payment on the order, not hardcoded to
-  // PAID — this same webhook fires for a manual sale's payment-link
-  // remainder too, where a prior deposit means this payment might not be
-  // the last money owed... though in practice it always is, since nothing
-  // else currently lets more than one payment attempt be in flight at once.
+  // Recomputed across every succeeded payment, not hardcoded to PAID, since a prior deposit
+  // means this payment might not be the last money owed.
   const totalPaidCents = await getTotalPaidForOrder(order._id);
   const derivedStatus = derivePaymentStatus(totalPaidCents, order.total);
   order.status = derivedStatus;
-  // §1.2/§9 — payment_status is the field refund.service.js#createRefund
-  // actually gates admission on (REFUNDABLE_PAYMENT_STATUSES). Found live:
-  // this webhook — the ONE place that marks a storefront order (or a manual
-  // order's payment-link top-up) as paid — was only ever writing the LEGACY
-  // `status` field, never this one. payment_status stays stuck at its
-  // schema default ("pending_payment") for every order paid through this
-  // path, forever, since nothing else sets it until a refund is attempted —
-  // which is exactly what createRefund's own admission check then rejects,
-  // even for a fully, genuinely paid order. ORDER_STATUS and
-  // ORDER_PAYMENT_STATUS share identical string values for every payment
-  // state (see order.constants.js) — derivePaymentStatus's return value is
-  // valid for both fields directly, no re-mapping needed.
+  // payment_status is what createRefund actually gates on — this webhook previously only wrote
+  // the legacy `status` field, leaving payment_status stuck at pending_payment forever.
   order.payment_status = derivedStatus;
 
-  // Manual/in-store sales already had their stock deducted in full at
-  // creation time (the goods left with the customer then, regardless of how
-  // much was actually collected) — deducting again here on a payment-link
-  // top-up would double-count it. Only storefront/eBay orders wait for a
-  // Stripe payment to confirm before stock ever moves.
+  // Manual/in-store sales already deducted stock in full at creation time; only storefront/eBay
+  // orders wait for a Stripe payment to confirm before stock moves.
   if (order.channel !== ORDER_CHANNEL.MANUAL) {
     const { hasShortfall, note } = await syncOrderStock(order, DIRECTION.DEDUCT);
     if (hasShortfall) {
@@ -231,42 +172,26 @@ async function handlePaymentSucceeded(intent, tenantId) {
 
   await order.save();
 
-  // Marks this payment's order/stock effects as durably complete. No
-  // transaction spans this and the order.save() above (see the field's
-  // schema comment) — a crash in the narrow window between them would
-  // leave this unset and a retry would redo the stock deduction. Accepted:
-  // far narrower and rarer than the bug this replaces (any transient error
-  // anywhere in this handler permanently stranding the order as unpaid).
+  // Marks order/stock effects as durably complete. No transaction spans this and order.save()
+  // above; a crash in that narrow window would redo the stock deduction on retry — accepted trade-off.
   payment.order_effects_applied_at = new Date();
   await payment.save();
 
   logger.info(`[stripe.webhook] order ${order.order_number} marked ${order.status} (intent ${intent.id})`);
 
-  // Manual/in-store sales get their invoice via the explicit "Send Email"
-  // button (order.service.js#sendOrderNotification) — never this automatic
-  // storefront-checkout confirmation, which assumes a storefront/eBay order
-  // shape (e.g. sendOrderConfirmation's copy) that doesn't fit an in-person sale.
+  // Manual/in-store sales get their invoice via the explicit "Send Email" button instead.
   if (order.channel === ORDER_CHANNEL.MANUAL) return;
 
-  // Best-effort — a broken notification pipeline must never fail this
-  // webhook. Manual orders are already notified at creation
-  // (order.service.js#createManualOrder); eBay orders never reach this
-  // handler at all (they create their own Payment directly, no Stripe
-  // webhook involved) — so this is the only place storefront orders get
-  // notified, deliberately deferred until payment actually succeeds rather
-  // than at order.service.js#createOrder (which only creates a
-  // PENDING_PAYMENT order) so an abandoned/unpaid checkout never notifies.
+  // Best-effort — a broken notification pipeline must never fail this webhook. This is the only
+  // place storefront orders get notified, deferred until payment succeeds so an abandoned checkout doesn't.
   try {
     await notificationService.notifyNewOrder(order.tenant_id, order);
   } catch (err) {
     logger.error(`[stripe.webhook] failed to notify new order ${order.order_number}`, { error: err.message });
   }
 
-  // Best-effort — never let an email hiccup fail this webhook. Throwing here
-  // would make handleEvent release the processed-event claim and cause
-  // Stripe to redeliver, but payment.status is already SUCCEEDED by then, so
-  // the retry would short-circuit above and this email would never resend
-  // anyway. Log and move on instead.
+  // Best-effort — throwing here would make handleEvent release the claim and Stripe redeliver,
+  // but payment.status is already SUCCEEDED so the email would never resend anyway.
   try {
     const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
     const companyProfile = await getCompanyProfile(order.tenant_id);
@@ -308,8 +233,7 @@ async function handlePaymentFailed(intent) {
   // Order stays pending_payment — the storefront can retry on the same order/intent.
 }
 
-// Stripe's refund `reason` values don't line up with ours — used only when
-// reconciling a refund we didn't create ourselves (dashboard-issued).
+// Stripe's refund `reason` values don't line up with ours; used only for dashboard-issued refunds.
 function mapStripeReasonToOurs(stripeReason) {
   const map = {
     duplicate: REFUND_REASON.DUPLICATE_PAYMENT,
@@ -319,25 +243,10 @@ function mapStripeReasonToOurs(stripeReason) {
   return map[stripeReason] || REFUND_REASON.OTHER;
 }
 
-// refund-redesign-spec.md §4.1 — rewritten to look up by
-// payment_allocations.stripe_refund_id (now indexed and unique — see
-// Refund.js) instead of the legacy top-level field, and to apply effects
-// through refund.service.js's derived-state applyRefundEffects rather than
-// hand-rolling payment.amount_refunded/order.status here directly.
-//
-// Fires for every refund on a charge — including ones we just created
-// ourselves via refund.service.js#createRefund (which also calls Stripe
-// directly) — so this MUST reconcile by stripe_refund_id rather than
-// blindly re-applying effects, or our own admin-initiated refunds would
-// double-count/restock here.
-//
-// Still lists refunds for the payment intent rather than reading a single
-// id off the event, unlike handleChargeRefundUpdated below — charge.refunds
-// is not reliably expanded on the Charge object across API versions (see
-// the original version of this comment, kept accurate below), and this
-// event fires once per CHARGE, potentially covering several refunds at
-// once. handleChargeRefundUpdated (§4.2) is the leaner, non-listing path
-// for a single refund's own status transitions once it exists.
+// Fires for every refund on a charge, including our own admin-initiated ones, so this must
+// reconcile by stripe_refund_id rather than blindly re-applying effects. Lists refunds for the
+// intent (unlike handleChargeRefundUpdated below) since charge.refunds isn't reliably expanded
+// and one event can cover several refunds.
 async function handleChargeRefunded(charge, tenantId) {
   const payment = await Payment.findOne({ stripe_payment_intent_id: charge.payment_intent });
   if (!payment) {
@@ -356,13 +265,8 @@ async function handleChargeRefunded(charge, tenantId) {
     return;
   }
 
-  // charge.refunds is NOT auto-expanded on the Charge object as of Stripe API
-  // version 2022-11-15+ — and the payload shape follows the API version
-  // configured on the Stripe account/webhook endpoint, not our SDK-pinned
-  // apiVersion, so charge.refunds?.data can be silently absent here even
-  // though our code is pinned to a version that (in the SDK docs) still
-  // shows it. Never rely on optional sub-objects being present in webhook
-  // payloads — re-fetch explicitly instead.
+  // charge.refunds isn't reliably auto-expanded on the webhook payload (follows the account's
+  // configured API version, not our SDK-pinned one) — re-fetch explicitly instead.
   const stripe = await stripeKeysService.getStripeClient(tenantId);
   const { data: stripeRefunds } = await stripe.refunds.list({ payment_intent: charge.payment_intent });
 
@@ -376,11 +280,8 @@ async function reconcileStripeRefund(sr, payment, order) {
   const existing = await Refund.findOne({ "payment_allocations.stripe_refund_id": sr.id });
 
   if (existing) {
-    // Already tracked via our own createRefund (admin_api) — only confirm
-    // this allocation's settlement, never re-apply effects a second time
-    // (applyRefundEffects' own ledger recompute is idempotent regardless,
-    // but the restock/eBay leg is guarded by effects_applied_at precisely
-    // so redelivery like this can't double-run it).
+    // Already tracked via our own createRefund — only confirm settlement, never re-apply
+    // effects (guarded by effects_applied_at so redelivery can't double-run the restock/eBay leg).
     const allocation = existing.payment_allocations.find((a) => a.stripe_refund_id === sr.id);
     if (allocation && !allocation.settled && sr.status === "succeeded") {
       allocation.settled = true;
@@ -388,18 +289,8 @@ async function reconcileStripeRefund(sr, payment, order) {
     }
     const allSettled = existing.payment_allocations.every((a) => a.settled);
     if (allSettled && existing.status === REFUND_STATUS.PROCESSING) {
-      // status = SUCCEEDED must be saved BEFORE applyRefundEffects runs:
-      // its recomputeLedger only counts refunds via getSucceededRefunds, so
-      // if this refund isn't SUCCEEDED yet when its own recompute runs, its
-      // own contribution is silently excluded from
-      // order.items[].quantity_refunded. (Tried reordering this once —
-      // broke refund.service.concurrency.test.js. Reverted — see
-      // settleRefund's matching comment in refund.service.js.) A sweep to
-      // auto-retry a refund stuck SUCCEEDED-with-effects-never-applied was
-      // also tried and reverted — see refund.reconciliation.service.js's
-      // own comment on why (indistinguishable from old, legitimately fine
-      // historical refunds; re-running it against one auto-voided a real
-      // settled refund in testing). Accepted as a residual gap.
+      // status = SUCCEEDED must be saved before applyRefundEffects runs, or its own recompute
+      // silently excludes this refund's contribution (reordering broke refund.service.concurrency.test.js).
       existing.status = REFUND_STATUS.SUCCEEDED;
       await existing.save();
       await refundService.applyRefundEffects(existing._id);
@@ -407,26 +298,16 @@ async function reconcileStripeRefund(sr, payment, order) {
     return;
   }
 
-  // Unknown stripe_refund_id => issued directly from the Stripe dashboard,
-  // bypassing our API entirely. Recorded as scope: "amount" with
-  // needs_reconciliation: true (§4.1) — no admin user in our system
-  // initiated it and no restock option was ever presented to anyone, so
-  // stock is deliberately left untouched; an admin can restock manually via
-  // the inventory screen if the return applies. RefundHistoryList.tsx badges
-  // needs_reconciliation so this is never mistaken for a fully-attributed
-  // item refund.
-  //
-  // Guarded by the unique index on payment_allocations.stripe_refund_id
-  // (§1.3), not a read-then-act check — catches E11000 as "another delivery
-  // won the race" rather than an error, closing the race the old
-  // stripe_refund_id-with-no-index version of this code was exposed to.
+  // Unknown stripe_refund_id => issued directly from the Stripe dashboard. Recorded as
+  // scope: "amount" with needs_reconciliation: true; stock is left untouched since no restock
+  // option was ever presented. Guarded by the unique index on stripe_refund_id, not read-then-act.
   let created;
   try {
     const refundNumber = await refundService.nextRefundNumber(order.tenant_id);
     created = await Refund.create({
       tenant_id: order.tenant_id,
       order: order._id,
-      payment: payment._id, // legacy field, kept populated during the transition
+      payment: payment._id, // legacy field, kept populated during transition
       amount: sr.amount,
       reason: mapStripeReasonToOurs(sr.reason),
       status: sr.status === "succeeded" ? REFUND_STATUS.SUCCEEDED : REFUND_STATUS.PROCESSING,
@@ -462,13 +343,8 @@ async function reconcileStripeRefund(sr, payment, order) {
   }
 }
 
-// refund-redesign-spec.md §4.2 — new subscription. event.data.object for
-// charge.refund.updated is the Stripe Refund object itself (not a Charge),
-// so this needs no list() call at all — it names the specific refund
-// directly. Requires enabling this event type on the Stripe webhook
-// endpoint's configuration in the Dashboard (Developers → Webhooks → this
-// endpoint → "+ Select events" → charge.refund.updated) — not something
-// this codebase can turn on by itself.
+// event.data.object here is the Stripe Refund object itself, so no list() call needed. Requires
+// enabling charge.refund.updated on the Stripe webhook endpoint's Dashboard configuration.
 async function handleChargeRefundUpdated(sr, tenantId) {
   if (sr.status !== "failed" && sr.status !== "canceled") return; // only a reversal is actionable here
 
@@ -478,23 +354,9 @@ async function handleChargeRefundUpdated(sr, tenantId) {
     return;
   }
 
-  // Same defense-in-depth check as handlePaymentSucceeded/handleChargeRefunded
-  // — refuse to act on a refund that doesn't belong to the tenant whose
-  // webhook endpoint/secret Stripe just delivered against.
-  //
-  // NOTE (Task 3 fix): only enforced when a tenantId was actually supplied.
-  // Unlike handlePaymentSucceeded/handleChargeRefunded (only ever called
-  // from handleEvent's webhook dispatcher, always with a real tenantId),
-  // this function is ALSO called directly by
-  // refund.reconciliation.service.js#reconcileStuckRefunds with no
-  // tenantId at all (mirrors reconcileStripeRefund(sr, payment, order),
-  // which has no tenantId parameter to begin with) — that caller already
-  // resolved `refund` via its own trusted, DB-driven lookup, not from
-  // unauthenticated webhook input, so there's no external tenant claim to
-  // cross-check against. Before this fix the unconditional strict-equal
-  // check compared refund.tenant_id against the string "undefined" and
-  // always failed for that caller — meaning the reconciliation sweep's
-  // auto-reversal never actually ran, not just this test's direct call.
+  // Same defense-in-depth check as handlePaymentSucceeded/handleChargeRefunded, but only
+  // enforced when tenantId was actually supplied — refund.reconciliation.service.js also calls
+  // this directly with no tenantId, via its own trusted DB lookup with nothing to cross-check.
   if (tenantId != null && String(refund.tenant_id) !== String(tenantId)) {
     logger.error(
       `[stripe.webhook] tenant mismatch on charge.refund.updated for stripe refund ${sr.id}: ` +
@@ -504,8 +366,7 @@ async function handleChargeRefundUpdated(sr, tenantId) {
   }
 
   if (!refund.effects_applied_at) {
-    // Never actually applied (was still processing) — nothing to reverse,
-    // just record that it didn't go through.
+    // Never actually applied — nothing to reverse, just record that it didn't go through.
     refund.status = REFUND_STATUS.FAILED;
     refund.failure_reason = `Stripe refund ${sr.status}`;
     await refund.save();
@@ -515,19 +376,10 @@ async function handleChargeRefundUpdated(sr, tenantId) {
     return;
   }
 
-  // Effects were already applied (customer credited, stock restocked) and
-  // Stripe itself reversed the refund afterward — without this, we'd be
-  // left having restocked goods and credited a customer who was never
-  // actually paid back. Auto-reverse via the same void path an admin would
-  // use (§3.8), and alert loudly — this is exactly the scenario §4.2 exists
-  // to catch automatically instead of relying on someone noticing.
-  // source: "stripe_reversal" — this is the one legitimate exception to
-  // voidRefund's "never void a settled Stripe refund" guard (corrections
-  // round). Everywhere else, a settled Stripe allocation means real money
-  // already moved and can't be un-refunded; HERE, Stripe itself is
-  // reporting that this specific refund just moved to failed/canceled —
-  // i.e. the money genuinely came back — so voiding to match that is
-  // correct, not a desync.
+  // Effects were already applied and Stripe itself reversed the refund afterward — auto-reverse
+  // via the same void path an admin would use, and alert loudly. source: "stripe_reversal" is the
+  // one legitimate exception to voidRefund's "never void a settled Stripe refund" guard, since
+  // Stripe is reporting the money genuinely came back.
   await refundService.voidRefund(
     refund._id,
     {
@@ -548,13 +400,8 @@ module.exports = {
   constructEvent,
   constructEventWithFallback,
   handleEvent,
-  // Exported for refund.reconciliation.service.js (corrections round) — the
-  // stuck-refund sweep reconciles a Stripe-allocation refund whose webhook
-  // never arrived by re-fetching its real status from Stripe and running it
-  // through the exact same handlers a webhook delivery would have used
-  // (reconcileStripeRefund for a succeeded/still-pending refund,
-  // handleChargeRefundUpdated for a failed/canceled one), rather than
-  // duplicating either's logic.
+  // Exported for refund.reconciliation.service.js's stuck-refund sweep, which reuses these
+  // same handlers rather than duplicating their logic.
   reconcileStripeRefund,
   handleChargeRefundUpdated,
 };

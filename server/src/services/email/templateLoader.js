@@ -37,12 +37,7 @@ function render(templateName, vars) {
   let templates = loadTemplates();
   let t = templates[templateName];
 
-  // Templates are compiled once and cached, so a .hbs file added after a
-  // long-running process started (the email worker, typically) was invisible
-  // to it until a restart — the job just failed "template not found" on every
-  // retry. A miss re-scans the directory once before giving up, which costs
-  // nothing on the hit path and makes a genuinely missing template still fail
-  // loudly.
+  // A .hbs file added after the worker started was invisible until restart — re-scan once on a miss.
   if (!t) {
     compiled = null;
     templates = loadTemplates();

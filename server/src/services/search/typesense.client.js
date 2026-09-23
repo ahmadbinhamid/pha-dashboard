@@ -1,7 +1,5 @@
 // services/search/typesense.client.js
-//
-// Lazy singleton client, same pattern as the Stripe/eBay service files (no
-// dedicated loaders/typesense.js — there isn't one for Stripe/eBay either).
+// Lazy singleton client, same pattern as the Stripe/eBay service files.
 
 const Typesense = require("typesense");
 const config = require("../../config");

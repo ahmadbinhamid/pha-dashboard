@@ -47,8 +47,7 @@ const baseSchema = new Schema(
     // URL's query string in place of this tenant's real _id — see
     // EbaySettings.webhook_token's original comment. Globally unique (not
     // just per tenant+platform): the URL carries no tenant id of its own, so
-    // this is the ONLY lookup key an inbound webhook delivery can be
-    // resolved by.
+    // this is the ONLY lookup key an inbound webhook delivery can be resolved by.
     webhook_token: { type: String, default: null },
 
     connected_at: { type: Date, default: null },

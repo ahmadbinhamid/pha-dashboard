@@ -79,8 +79,7 @@ async function makeFixture({ stockControl, stockCount }) {
     condition: "NEW",
     // ebay_category_id deliberately left unset — update() then returns
     // right after the inventory-item write (the part this test cares
-    // about), before touching offer/policy machinery this test doesn't
-    // need to mock.
+    // about), before touching offer/policy machinery this test doesn't need to mock.
   });
 
   return { tenantId, product, listing };

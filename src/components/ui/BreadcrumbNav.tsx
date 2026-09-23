@@ -11,8 +11,7 @@ export interface BreadcrumbItem {
 interface BreadcrumbNavProps {
   items: BreadcrumbItem[];
   className?: string;
-  // Set false to hide the back button — e.g. a page that's always a direct
-  // entry point rather than reached by drilling in from somewhere.
+  // Set false to hide the back button, e.g. a page that's always a direct entry point.
   showBack?: boolean;
 }
 

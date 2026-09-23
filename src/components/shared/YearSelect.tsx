@@ -10,11 +10,7 @@ interface YearSelectProps {
   "aria-invalid"?: boolean;
 }
 
-// Replaces a free-text `<input type="number">` for a vehicle model year —
-// typed numeric inputs let a user enter "19", "20500", or "-1", none of
-// which are real model years. A bounded dropdown makes an invalid year
-// structurally impossible instead of relying on validation to catch it
-// after the fact.
+// Replaces a free-text number input for a vehicle model year — a bounded dropdown makes an invalid year structurally impossible instead of relying on validation after the fact.
 export function YearSelect({ value, onChange, placeholder = "Select year…", disabled, id, ...rest }: YearSelectProps) {
   return (
     <NativeSelect

@@ -2,10 +2,7 @@ import { Hammer, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
-// Stands in for a settings area the product doesn't have a backend for yet.
-// It deliberately shows no inputs at all: a disabled-looking form implies the
-// data is there and merely locked, whereas nothing here is stored or applied.
-// What it does show is what the area will cover, so the tab isn't a dead end.
+// Stands in for a settings area with no backend yet. Shows no inputs at all (a disabled form would imply the data exists and is just locked); shows what the area will cover instead, so the tab isn't a dead end.
 export function ComingSoonPanel({
   title,
   summary,

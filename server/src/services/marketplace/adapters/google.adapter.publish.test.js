@@ -1,13 +1,6 @@
 // services/marketplace/adapters/google.adapter.publish.test.js
 //
-// Exercises publish()/loadSettings() end to end against real fixtures
-// (Mongo — this is unavoidable here: resolveProductUrl needs a real Domain
-// query, resolveQuantity needs real Inventory records, and the whole point
-// of several of these tests is proving the adapter reads real stored data
-// correctly), with `fetch` stubbed so no real network call is ever made.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/adapters/google.adapter.publish.test.js
+// Exercises publish()/loadSettings() end to end against real Mongo fixtures (URL/quantity resolution need real data), with fetch stubbed; needs a live Mongo connection to run.
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -33,8 +26,7 @@ const registry = require("../registry");
 const googleAdapter = require("./google.adapter");
 registry.register(googleAdapter);
 
-// Records every call made to the stubbed fetch so assertions can inspect
-// what was actually sent, without a real network call ever happening.
+// Records every call made to the stubbed fetch so assertions can inspect what was sent.
 let fetchCalls = [];
 function installFetchStub(handler) {
   fetchCalls = [];
@@ -123,10 +115,7 @@ async function makeFixture({ stockControl = true, stockCount = 5, withDomain = t
   return { tenantId, product, listing };
 }
 
-// TASK 1 (this run): a real, usable HTTPS image — every fixture below now
-// carries one so these tests exercise the actual success path (a product
-// with NO image is a rejection now, not a null-imageLink success — see
-// google.adapter.image-validation.test.js for that case specifically).
+// Every fixture carries a real HTTPS image now — a photo-less product is a rejection, not a null-imageLink success (see image-validation.test.js).
 const VALID_HTTPS_IMAGE_URL = "https://cdn.example.com/photo.jpg";
 
 async function resolveFor(listing, product, { photos = [{ type: "image", url: VALID_HTTPS_IMAGE_URL }] } = {}) {
@@ -243,13 +232,7 @@ test("google adapter: a listing with no resolvable public product URL (no defaul
   assert.equal(fetchCalls.length, 0, "no Merchant API call must happen when the product URL can't be resolved");
 });
 
-// TASK 1 (this run): a product with ZERO photos is now rejected the same
-// way a bad-URL photo is — Google's real API accepts a null imageLink and
-// only disapproves the product later, so a photo-less product used to fail
-// exactly as silently as a bad-URL one did before TASK 2 (previous run)
-// closed that gap. This is the end-to-end counterpart to
-// google.adapter.image-validation.test.js's pure-builder version of the
-// same case.
+// A zero-photo product is rejected like a bad-URL one (Google accepts a null imageLink and only disapproves later); end-to-end counterpart to image-validation.test.js's builder-level case.
 test("google adapter: a product with ZERO photos fails loudly (GoogleImageValidationError), never pushes", async (t) => {
   await mongoose.connect(config.mongoUri);
   installFetchStub(VALID_MERCHANT_API_HANDLER);
@@ -280,10 +263,7 @@ test("google adapter: loadSettings returns null for a tenant with no ChannelConn
   const settings = await googleAdapter.loadSettings(tenantId);
   assert.equal(settings, null);
 
-  // Full integration through the generic dispatcher — proves
-  // sync.service.js#syncListing's existing "not connected" skip path
-  // (built for the generic contract already) handles Google's null
-  // loadSettings without an unhandled rejection.
+  // Proves sync.service.js#syncListing's "not connected" skip path handles Google's null loadSettings without an unhandled rejection.
   const marketplaceSync = require("../sync.service");
   const product = await Product.create({
     tenant_id: tenantId,
@@ -312,8 +292,7 @@ test("google adapter, via sync.service.js: untracked-stock skip writes a Channel
   installFetchStub(VALID_MERCHANT_API_HANDLER);
   t.after(() => mongoose.disconnect());
 
-  // logSuccesses must be true for this run so the (non-failure) skip row
-  // actually gets written — see sync.service.js#logSyncEvent.
+  // logSuccesses must be true so the (non-failure) skip row gets written — see sync.service.js#logSyncEvent.
   const originalLogSuccesses = config.channels.logSuccesses;
   config.channels.logSuccesses = true;
   t.after(() => {

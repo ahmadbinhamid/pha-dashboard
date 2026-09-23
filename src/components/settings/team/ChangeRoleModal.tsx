@@ -54,8 +54,7 @@ export function ChangeRoleModal({
           <FormField label="Role" required>
             <NativeSelect value={roleId} onChange={(e) => setRoleId(e.target.value)}>
               {roles
-                // Super Admin can't be handed out from here — it's the role
-                // that can't be edited or removed afterwards.
+                // Super Admin can't be handed out from here — can't be edited or removed afterwards.
                 .filter((role) => role.name !== SYSTEM_ROLE_SUPER_ADMIN)
                 .map((role) => (
                   <option key={role._id} value={role._id}>

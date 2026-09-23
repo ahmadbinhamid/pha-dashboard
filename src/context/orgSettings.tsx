@@ -16,11 +16,7 @@ type OrgSettingsApi = {
 
 const OrgSettingsContext = createContext<OrgSettingsApi | null>(null);
 
-// Backed by the authenticated user's own Tenant record (Settings → Business
-// Info) — replaces the old localStorage-only mock, which meant every tenant
-// saw the same hardcoded "Parts Hub Australia" name/logo in the sidebar
-// regardless of who was actually logged in. Only fetched once authenticated:
-// pre-login there is no tenant context yet (see AppLogoMark for that screen).
+// Backed by the authenticated user's own Tenant record, replacing the old localStorage-only mock that showed every tenant the same hardcoded name/logo. Only fetched once authenticated (see AppLogoMark for pre-login).
 export function OrgSettingsProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
 

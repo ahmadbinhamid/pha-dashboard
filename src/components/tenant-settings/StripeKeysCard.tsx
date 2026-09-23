@@ -63,8 +63,7 @@ export function StripeKeysCard({
   const status = data?.data;
 
   useEffect(() => {
-    // Never pre-fill the secret key input — the API never returns it, so
-    // leaving it blank means "unchanged" on save (see onSubmit below).
+    // Never pre-fill the secret key input — the API never returns it, so blank means "unchanged" on save (see onSubmit below).
     reset({ secret_key: "", publishable_key: status?.publishable_key ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.publishable_key]);
@@ -95,8 +94,7 @@ export function StripeKeysCard({
   });
 
   const onSubmit = (form: StripeKeysFormValues) => {
-    // secret_key omitted entirely (not sent as "") when left blank, so the
-    // previously-saved key stays in place unless the tenant deliberately types a new one.
+    // secret_key omitted entirely (not sent as "") when blank, so the previously-saved key stays unless the tenant types a new one.
     const payload: UpdateStripeKeysPayload = { publishable_key: form.publishable_key };
     if (form.secret_key) payload.secret_key = form.secret_key;
     keysMutation.mutate(payload);

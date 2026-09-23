@@ -14,8 +14,7 @@
 // PENDING: the PROCESSING refund still reserves (blocking a conflicting
 // second refund), and once its "webhook" finally lands, settlement
 // completes normally rather than being auto-voided — because the
-// reservation did its job and there was never a real double-claim to begin
-// with.
+// reservation did its job and there was never a real double-claim to begin with.
 //
 // Needs a live Mongo connection — run with:
 //   node --test src/services/refund.service.stale-processing.test.js

@@ -1,10 +1,6 @@
 import type { RefundReason } from "@/types/refund";
 
-// refund-redesign-spec.md §1.4 — one unified reason list for the one
-// unified refund dialog (§7), replacing the old split between a
-// Stripe-only list (REFUND_REASONS, "other" excluded) and a manual-only one
-// (MANUAL_REFUND_REASONS, "other" included) — the new dialog doesn't branch
-// on settlement method at all, so neither should this.
+// refund-redesign-spec.md §1.4: one unified reason list for the unified refund dialog (§7), replacing the old Stripe-only/manual-only split, since the dialog no longer branches on settlement method.
 export const REFUND_REASONS: { value: RefundReason; label: string }[] = [
   { value: "customer_return", label: "Customer Return" },
   { value: "order_cancelled", label: "Order Cancelled" },
@@ -19,10 +15,7 @@ export const REFUND_REASONS: { value: RefundReason; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-// UI default only — pre-checks each refund line's restock checkbox when the
-// selected reason implies goods are physically coming back. The server
-// never infers restock from reason (§3.5) — this only ever sets the
-// checkbox's *starting* state; an admin can always override it per line.
+// UI default only: pre-checks the restock checkbox when the reason implies goods are coming back. Server never infers restock from reason (§3.5); an admin can always override per line.
 export const RESTOCK_DEFAULT_REASONS = new Set<RefundReason>([
   "customer_return",
   "order_cancelled",

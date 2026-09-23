@@ -15,10 +15,7 @@ interface ProductImagesProps {
 const tileBase =
   "group relative cursor-move overflow-hidden rounded-md border border-border bg-bg-2 transition-colors hover:border-accent/50";
 
-// Layout modeled on tenant-dashboard's product media picker: a large cover
-// tile plus a mini-grid of the rest, restyled with our own tokens (accent
-// instead of primary, warn/danger for the star/remove controls) and wired to
-// our real upload-from-device flow rather than a shared media-library modal.
+// Large cover tile plus a mini-grid of the rest, restyled with our own tokens, wired to a real upload-from-device flow rather than a shared media-library modal.
 export function ProductImages({ images, onChange, onUploadingChange }: ProductImagesProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);

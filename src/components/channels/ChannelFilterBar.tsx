@@ -64,7 +64,7 @@ function ChannelPill({
   onClick,
 }: {
   label: string;
-  /** Real channel key ("ebay", "google", ...) — shows that brand's own logo before the label. */
+  /** Real channel key ("ebay", "google", ...) — shows that brand's own logo... */
   channelKey?: string;
   count?: number;
   active: boolean;

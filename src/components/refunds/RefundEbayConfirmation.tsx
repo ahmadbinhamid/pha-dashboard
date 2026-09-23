@@ -5,13 +5,7 @@ interface RefundEbayConfirmationProps {
   onChange: (value: boolean) => void;
 }
 
-// refund-redesign-spec.md §5 — an eBay-channel payment settles through eBay
-// Managed Payments, so this refund is bookkeeping only: there's no gateway
-// call, and restocking pushes the SKU's quantity back UP on the live eBay
-// listing. If the refund hasn't actually been issued in eBay Seller Hub,
-// that restock is a lie — stock rises while the sale (and eBay's cut) still
-// stands. The server independently enforces this same requirement
-// (refund.service.js#createRefund) regardless of what this checkbox sends.
+// refund-redesign-spec.md §5: eBay payments settle through eBay Managed Payments, so this is bookkeeping only — no gateway call, and restocking is a lie unless the refund was actually issued in Seller Hub. Server enforces this too (refund.service.js#createRefund).
 export function RefundEbayConfirmation({ confirmed, onChange }: RefundEbayConfirmationProps) {
   return (
     <div className="rounded-md border border-warn/30 bg-warn/10 p-3">

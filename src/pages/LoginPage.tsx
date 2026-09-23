@@ -3,48 +3,13 @@ import { LoginCard } from "@/components/auth/LoginCard";
 
 const HIGHLIGHTS = ["Inventory", "Pricing", "Orders"];
 
-// Split layout: a brand panel + a form panel — the industry-standard shape
-// for a B2B dashboard login (Linear, Vercel, Stripe all use this pairing).
-// Brand panel goes on the left since that's the reading-order convention
-// (brand first, action second).
-//
-// Below `lg` there isn't room for a side-by-side split, so it collapses to
-// a stacked layout instead of just hiding the brand panel outright: a
-// short version of it stays as a header (logo + headline only — the
-// subtext/pills/copyright are cut for space), and the form becomes a
-// full-bleed sheet with rounded top corners pulled up slightly over that
-// header, the same "brand header + bottom sheet" shape most B2B apps use
-// on mobile rather than shrinking the desktop card down. LoginCard's own
-// logo block is never shown — on every screen size, some version of this
-// page's own brand header already carries the mark, so a second one inside
-// the card would be a duplicate.
-//
-// The dark panel's ink/white colors below are literal, not `bg-bg`/`text-fg`
-// tokens — same exception CLAUDE.md already carves out for full-bleed dark
-// overlays (modal scrims, lightboxes): it's meant to stay the "ink + accent"
-// treatment regardless of the viewer's own light/dark preference, and
-// confirmed by testing that theme tokens can't actually do that here —
-// Tailwind's `bg-bg`/`text-fg` utilities resolve through a
-// `--color-bg: hsl(var(--bg))` alias that's substituted once at `:root` and
-// inherited as an already-resolved value, so wrapping a nested element in a
-// `.dark` class (which correctly overrides the raw `--bg`/`--fg` variables)
-// does NOT flow through to those utility classes — only `<html>.dark`
-// (where useThemePreference actually toggles it) does. --accent is exempt
-// since it's the same value in both themes, so `text-accent`/`bg-accent`
-// below are the real tokens, not a literal.
+// Split layout: brand panel (left, reading-order convention) + form panel, the standard B2B login shape.
+// Below `lg`, collapses to a stacked layout: a short brand header (logo + headline only) plus a full-bleed form sheet pulled up over it, the "brand header + bottom sheet" mobile pattern. LoginCard's own logo is never shown since the page's header already carries the mark.
+// The dark panel's ink/white colors are literal, not tokens — same exception CLAUDE.md carves out for full-bleed dark overlays, confirmed here because `bg-bg`/`text-fg` resolve through a `:root`-substituted alias that a nested `.dark` class can't override (only `<html>.dark` can). `--accent` is exempt since it's identical in both themes.
 export default function LoginPage() {
   return (
     <main className="min-h-dvh bg-bg lg:grid lg:grid-cols-2">
-      {/* Full brand panel — lg and up only. Three flex zones (logo / headline
-          block / copyright) instead of one vertically-centered group with an
-          absolutely-positioned copyright: that combination looked fine at
-          "normal" viewport heights, but on a tall one the centered group
-          floats in the upper half with a huge dead gap before the copyright,
-          since the copyright's offset was fixed rather than tied to the
-          panel's actual height. A flex column with the headline block as the
-          only flex-1 (self-centering within whatever space is actually left)
-          keeps the logo pinned near the top and the copyright pinned to the
-          bottom at any height. */}
+      {/* Full brand panel — lg and up. Three flex zones (logo/headline/copyright), headline as the only flex-1, keeps the logo pinned top and copyright pinned bottom at any viewport height. */}
       <div className="relative hidden overflow-hidden bg-[hsl(220_20%_6%)] lg:flex lg:flex-col lg:p-12 xl:p-20">
         <div
           className="pointer-events-none absolute inset-0"
@@ -54,8 +19,7 @@ export default function LoginPage() {
               "radial-gradient(900px 560px at 12% 8%, hsl(var(--accent) / 0.38), transparent 60%), radial-gradient(760px 520px at 88% 92%, hsl(var(--accent) / 0.20), transparent 55%)",
           }}
         />
-        {/* Faint graph-paper grid instead of the dot noise texture — reads as
-            more "product/dashboard" and less like a generic marketing bg. */}
+        {/* Faint graph-paper grid instead of dot noise — reads more "product/dashboard", less generic marketing bg. */}
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           aria-hidden="true"
@@ -105,12 +69,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Compact brand header — below `lg` only. Same dark/grid treatment,
-          logo + headline only (no subtext/pills/copyright — there isn't
-          room, and the sheet below needs the space more). Sized to land
-          around ~30% of a typical phone viewport — big enough for the logo
-          and headline to actually read, without pushing the form itself
-          below the fold. */}
+      {/* Compact brand header — below `lg` only. Same dark/grid treatment, logo + headline only; sized to ~30% of a phone viewport so the form stays above the fold. */}
       <div className="relative overflow-hidden bg-[hsl(220_20%_6%)] px-6 pb-10 pt-[max(2rem,env(safe-area-inset-top))] lg:hidden">
         <div
           className="pointer-events-none absolute inset-0"
@@ -145,9 +104,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Form. Below `lg` this is a full-bleed sheet pulled up over the
-          header above (rounded top corners on LoginCard's own Card — see
-          there); at `lg` and up it's the usual centered floating card. */}
+      {/* Form. Below `lg` a full-bleed sheet pulled up over the header (rounded top corners on LoginCard's Card); at `lg`+ a centered floating card. */}
       <div className="relative -mt-6 min-w-0 lg:mt-0 lg:flex lg:min-h-dvh lg:items-center lg:justify-center lg:overflow-y-auto lg:px-10 lg:py-10">
         <LoginCard />
       </div>

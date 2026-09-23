@@ -7,10 +7,8 @@ const { connectMongo } = require("./loaders/mongoose");
 const { logger } = require("./loaders/logging");
 const webSocketService = require("./services/websocket.service");
 
-// NOTE (lint fix): `void` on the IIFE — its own try/catch already routes
-// every failure through process.exit(1), so the promise it returns never
-// actually rejects; this documents that the top level deliberately doesn't
-// await it (there's nothing to await into — this IS the entry point).
+// `void` on the IIFE: its own try/catch already routes every failure through process.exit(1),
+// so the promise never actually rejects — this documents the deliberate non-await.
 void (async () => {
   try {
     await connectMongo();

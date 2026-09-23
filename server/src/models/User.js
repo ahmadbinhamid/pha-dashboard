@@ -7,8 +7,7 @@ const { hashPassword } = require("../utils/auth/crypto");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
 const userSchema = buildSchema({
-  // Backfilled onto every existing User by scripts/backfillTenantId.js —
-  // email's unique partial index below is compound with this.
+  // Backfilled via scripts/backfillTenantId.js; email's unique partial index below is compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   first_name: { type: String, required: true, trim: true },
   last_name: { type: String, required: true, trim: true },

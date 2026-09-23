@@ -181,8 +181,7 @@ export interface EbayListingFormState {
   // Vehicle info is NOT part of the listing's own form state — the
   // Technical Specifications section always reads the product's live
   // `vehicle` field directly (see ebayDescriptionGenerator.ts), so it can
-  // never go stale or diverge from the Product page's own data.
-  // eBay-specific
+  // never go stale or diverge from the Product page's own data. eBay-specific
   ebay_category_id: string;
   store_category_id: string;
   store_sku: string;

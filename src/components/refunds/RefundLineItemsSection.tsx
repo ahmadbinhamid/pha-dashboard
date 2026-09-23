@@ -18,12 +18,7 @@ interface RefundLineItemsSectionProps {
   restockDefault: boolean;
 }
 
-// refund-redesign-spec.md §7 — "searchable checkbox list of lines with
-// refundable_quantity > 0. Per line: a quantity stepper capped at
-// refundable_quantity, and its own restock checkbox defaulted from the
-// reason. Disable the restock checkbox with a tooltip when
-// has_inventory_record is false. Lines already fully refunded show as
-// struck through, not hidden."
+// refund-redesign-spec.md §7: searchable checkbox list of refundable lines; per line, a quantity stepper capped at refundable_quantity and a restock checkbox (defaulted from reason, disabled with a tooltip if no inventory record). Fully-refunded lines show struck through, not hidden.
 export function RefundLineItemsSection({ lines, selection, onChange, restockDefault }: RefundLineItemsSectionProps) {
   const [search, setSearch] = useState("");
 

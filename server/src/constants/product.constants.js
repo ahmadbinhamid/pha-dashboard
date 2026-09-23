@@ -41,9 +41,8 @@ const STOCK_STATUS = Object.freeze({
   OUT_OF_STOCK: "out_of_stock",
 });
 
-// Display-only threshold for the computed stock_status label: >3 => in_stock,
-// 1-3 => low_stock, 0 => out_of_stock. Deliberately separate from
-// InventorySettings.low_stock_threshold, which only drives restock email alerts.
+// Display-only stock_status threshold; separate from InventorySettings.low_stock_threshold,
+// which only drives restock email alerts.
 const STOCK_LOW_THRESHOLD = 3;
 
 module.exports = {

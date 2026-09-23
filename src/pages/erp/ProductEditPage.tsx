@@ -110,7 +110,7 @@ function formToFD(form: ProductEditFormValues): FormData {
   fd.append("type", form.type);
   fd.append("status", form.status);
   fd.append("is_published_online", String(form.is_published_online));
-  // Stock is always tracked — there's no "track stock" toggle in the UI.
+  // Stock is always tracked — no "track stock" toggle in the UI.
   fd.append("stock_control", "true");
   fd.append("has_variants", String(form.has_variants));
   fd.append("categories", JSON.stringify(form.categories));
@@ -169,14 +169,7 @@ function ProductEditSkeleton() {
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
-// Thin data-loading shell — the real form (ProductEditForm below) only ever
-// mounts once `product` is guaranteed non-null, so useForm's defaultValues
-// can be built from real data on its very first render. Building the form
-// with product-or-undefined defaultValues and reset()-ing once data arrives
-// (the naive approach) leaves a render frame, right after the query
-// resolves but before the effect runs, where the loading guard has already
-// passed but the form is still empty — this sidesteps that race entirely
-// rather than patching around it.
+// Thin data-loading shell — ProductEditForm only mounts once `product` is guaranteed non-null, so useForm's defaultValues build from real data on the first render, sidestepping the reset()-after-load race.
 export default function ProductEditPage() {
   const { slug } = useParams<{ slug: string }>();
 
@@ -219,18 +212,11 @@ function ProductEditForm({
   const [imagesUploading, setImagesUploading] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
 
-  // Same queryKey GoogleConnectCard uses — shares its cache, so this doesn't
-  // fire a second request if the tenant already loaded Settings this
-  // session, and vice versa.
+  // Same queryKey GoogleConnectCard uses, sharing its cache so this doesn't fire a second request if Settings was already loaded this session.
   const { data: channelsData } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
   const googleConnected = channelsData?.data.find((c) => c.key === "google")?.connection.status === "connected";
 
-  // "Lightweight toggle" — see google.listing.service.js's own module
-  // header: unlike eBay's multi-step form-then-push flow (the "List on
-  // eBay" button below just navigates to that form), this one action both
-  // creates the listing and queues its first sync. Safe to click again —
-  // the backend's own idempotency check returns the existing listing rather
-  // than erroring or duplicating it.
+// "Lightweight toggle" (google.listing.service.js): unlike eBay's multi-step form-then-push flow, this one action creates the listing and queues its first sync; safe to click again since the backend is idempotent.
   const listOnGoogleMutation = useMutation({
     mutationFn: () => createGoogleListing(product._id, null, GOOGLE_LISTING_FORM_INITIAL),
     onSuccess: () => {
@@ -264,10 +250,7 @@ function ProductEditForm({
     },
   });
 
-  // Immediate, independent of the main Save flow — mirrors the Products list's
-  // publish/hide toggle. Rebases the form's dirty-tracking baseline (via
-  // reset) to include the new status, so an in-progress edit's dirty state
-  // stays accurate and a later Save doesn't silently revert the status back.
+  // Immediate, independent of the main Save flow, mirroring the Products list's publish/hide toggle. Rebases dirty-tracking (via reset) so a later Save doesn't silently revert the status.
   const statusMutation = useMutation({
     mutationFn: (status: Product["status"]) => {
       const fd = new FormData();
@@ -296,10 +279,7 @@ function ProductEditForm({
         toast({ title: "Saved", tone: "success" });
         const newSlug = res.data?.slug;
         if (newSlug && newSlug !== slug) {
-          // Slug changed: just navigate — don't touch the old query.
-          // Removing it while the component is still subscribed causes RQ to
-          // immediately refetch the now-dead URL. Leaving it in cache is safe:
-          // it loses its subscriber on re-render and gets GC'd after gcTime.
+          // Slug changed: just navigate, don't touch the old query — removing it while still subscribed would make RQ refetch the dead URL; leaving it is safe, it loses its subscriber and GCs after gcTime.
           navigate(`/products/${newSlug}/edit`, { replace: true });
         } else {
           queryClient.invalidateQueries({ queryKey: ["product", slug] });
@@ -390,11 +370,7 @@ function ProductEditForm({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {/* NOTE: consolidated eBay + Google into one "List on Channel"
-                dropdown (was two separate buttons) — scales cleanly to more
-                channels later (one more DropdownMenuItem, not another
-                button), matching the DropdownMenu pattern already used
-                elsewhere in this header (status, Send Email). */}
+            {/* Consolidated eBay + Google into one "List on Channel" dropdown (was two buttons) — scales to more channels as one more item, not another button. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

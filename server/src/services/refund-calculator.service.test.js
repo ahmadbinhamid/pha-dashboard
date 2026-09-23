@@ -1,13 +1,7 @@
 // services/refund-calculator.service.test.js
-//
-// Run with: node --test src/services/refund-calculator.service.test.js
-// (or `node --test src` to run every *.test.js in the tree).
-//
-// This is the money-math file — refund-redesign-spec.md §9 explicitly calls
-// out "effective line amount across all four discount/price-edit
-// combinations" and "GST drift across three uneven partials on a
-// non-divisible total" as required unit tests. Covered below, plus the two
-// rounding-drift bugs found and fixed during this work (§3.2/§3.3 point 3).
+// The money-math file: covers effective line amount across discount/price-edit combinations
+// and GST drift across uneven partials, plus two rounding-drift bugs found during this work.
+// Run: node --test src/services/refund-calculator.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -39,11 +33,7 @@ test("lineDiscount: proportional share when not exhausting the line", () => {
 });
 
 test("lineDiscount: price-edited line — discount is independent of unit_price", () => {
-  // §3.2 point 3 of the edge matrix / §9's price-edit test: original_unit_price
-  // is irrelevant here since lineDiscount never reads unit_price at all —
-  // refund.service.js is responsible for always passing item.unit_price
-  // (current) into lineGross, never original_unit_price. This test exists to
-  // document that lineDiscount itself has no price coupling to get wrong.
+  // lineDiscount never reads unit_price at all; documents that it has no price coupling to get wrong.
   const item = { discount_amount: 500, quantity: 2, quantity_refunded: 0 };
   assert.equal(lineDiscount(item, 1, 0), 250);
 });
@@ -51,8 +41,7 @@ test("lineDiscount: price-edited line — discount is independent of unit_price"
 // ── lineDiscount — exhaustion-residual rounding fix (a) ─────────────────
 
 test("lineDiscount: three separate 1-of-3 refunds sum to exactly the discount (not 99/100)", () => {
-  // This is the exact bug found during Phase 0(c): round(100/3) three times
-  // is 33+33+33=99, one cent short. The exhaustion-residual fix must close it.
+  // round(100/3) three times is 33+33+33=99, one cent short — the exhaustion-residual fix closes it.
   const item = { discount_amount: 100, quantity: 3, quantity_refunded: 0 };
 
   const first = lineDiscount(item, 1, 0);
@@ -62,8 +51,7 @@ test("lineDiscount: three separate 1-of-3 refunds sum to exactly the discount (n
   const third = lineDiscount(item, 1, first + second); // this refund exhausts (2+1>=3)
 
   assert.equal(first + second + third, 100);
-  // The final (exhausting) refund is the one that absorbed the residual —
-  // not necessarily equal to a naive round(100/3).
+  // The final (exhausting) refund absorbed the residual, not a naive round(100/3).
   assert.equal(third, 100 - first - second);
 });
 
@@ -83,10 +71,7 @@ test("lineDiscount: refuses to go negative if priorLineDiscountRefunded overshoo
 // ── apportionOrderDiscount — largest-remainder rounding fix (b) ─────────
 
 test("apportionOrderDiscount: reproduces the exact Phase-0(c) one-cent bug and confirms the fix", () => {
-  // Same constructed order as the Phase 0(c) verification: three lines,
-  // gross $30.00/$7.77/$6.66, order.discount_amount = $1.37 (137 cents).
-  // Naive independent rounding gave 93+24+21=138, one cent over the true
-  // 137 — largest-remainder must sum to exactly 137.
+  // Naive independent rounding gave 93+24+21=138, one cent over the true 137 — largest-remainder fixes it.
   const refundLines = [
     { order_item_id: "a", line_gross: 3000 },
     { order_item_id: "b", line_gross: 777 },
@@ -113,8 +98,7 @@ test("apportionOrderDiscount: deterministic regardless of input array order (tie
   const sharesB = apportionOrderDiscount(101, linesB, gross);
 
   assert.deepEqual([...sharesA.entries()].sort(), [...sharesB.entries()].sort());
-  // "a-line" should win the tie (alphabetically first) per the documented
-  // tiebreak rule.
+  // "a-line" should win the tie (alphabetically first) per the documented tiebreak rule.
   assert.ok(sharesA.get("a-line") >= sharesA.get("z-line"));
 });
 
@@ -234,10 +218,8 @@ test("computeFullOrderRefund: second (final) full-order refund on top of a prior
   assert.equal(result.gst_amount, 909 - 455);
 });
 
-// ── §9's required invariant test — four uneven partial refunds exhaust an
-// order exactly, on a fixture designed to maximize rounding pressure:
-// subtotal not divisible by 11, odd discounts on BOTH layers, three lines
-// with uneven quantities. ─────────────────────────────────────────────────
+// ── Required invariant test: four uneven partial refunds exhaust an order exactly, on a
+// fixture designed to maximize rounding pressure. ─────────────────────────────────────────
 
 test("invariant: a sequence of partial refunds that exhausts an order sums exactly to order.total and order.tax_amount", () => {
   // Fixture, built the same way order.service.js would compute it:
@@ -255,8 +237,7 @@ test("invariant: a sequence of partial refunds that exhausts an order sums exact
 
   const allLineGrossInOrder = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
 
-  // Ledger state, mutated as we go — mirrors what refund.service.js would
-  // track across the Refund collection in reality.
+  // Ledger state, mutated as we go, mirroring what refund.service.js tracks across the Refund collection.
   const priorLineDiscountRefundedById = new Map(items.map((i) => [i._id, 0]));
   let priorTotalRefunded = 0;
   let priorGstRefunded = 0;
@@ -280,17 +261,14 @@ test("invariant: a sequence of partial refunds that exhausts an order sums exact
     );
 
     const naturalItemsAmount = computed.reduce((sum, c) => sum + c.line_amount, 0);
-    // Exact-quantity signal, NOT a dollar comparison — see
-    // reconcileExhaustingTotal's own comment for why a dollar-based check is
-    // wrong here (it's exactly the bug this fixture caught).
+    // Exact-quantity signal, not a dollar comparison — see reconcileExhaustingTotal's comment
+    // for why a dollar-based check is wrong here (the bug this fixture caught).
     const isExhausting = items.every((i) => {
       const thisPassQty = lines.find((l) => l.item === i)?.refundQuantity || 0;
       return i.quantity_refunded + thisPassQty >= i.quantity;
     });
-    // Generalized fix (a) — see reconcileExhaustingTotal's own comment: the
-    // transaction that exhausts the order's whole remaining balance takes
-    // the exact residual, regardless of whether it was literally requested
-    // as scope: full_order.
+    // The transaction that exhausts the order's whole remaining balance takes the exact
+    // residual, regardless of whether it was literally requested as scope: full_order.
     const { totalAmount } = reconcileExhaustingTotal({
       naturalItemsAmount,
       shippingAmount: 0,

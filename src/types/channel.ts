@@ -1,14 +1,6 @@
-// Generic channel/marketplace shape returned by GET /channels — mirrors
-// services/marketplace/channel.service.js#listChannelsForTenant on the
-// backend. One entry per registered adapter (eBay, Google Shopping, ...),
-// so this stays the shared type for any channel-status UI rather than a
-// per-platform duplicate.
+// Generic channel/marketplace shape from GET /channels, mirroring services/marketplace/channel.service.js#listChannelsForTenant. One entry per registered adapter, the shared type for any channel-status UI.
 
-// "pending": OAuth consent succeeded and a token is saved, but the tenant
-// hasn't picked which Merchant Center account to finish connecting yet —
-// see server/docs/channel-architecture.md §9 (TASK 4, connect flow) and
-// constants/channel.constants.js's own comment. Currently only ever set by
-// the Google adapter's connect flow; eBay never produces it.
+// "pending": OAuth consent succeeded and a token is saved, but the tenant hasn't picked a Merchant Center account yet (channel-architecture.md §9). Only the Google adapter produces this; eBay never does.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
 
 export interface ChannelConnectionInfo {
@@ -41,10 +33,7 @@ export interface ChannelSummary {
   authType: string;
   setupSteps: string[];
   requiredTenantData: string[];
-  // TASK 5 (requiresStorefront capability) — true unless this channel needs
-  // something the tenant doesn't have yet (Google Shopping: a verified
-  // storefront domain). `unavailable_reason` is a ready-to-show, human-
-  // readable string whenever this is false — never null in that case.
+  // True unless this channel needs something the tenant doesn't have yet (Google Shopping: a verified storefront domain). `unavailable_reason` is a ready-to-show string whenever this is false.
   requiresStorefront?: boolean;
   available: boolean;
   unavailable_reason: string | null;
@@ -52,16 +41,10 @@ export interface ChannelSummary {
   connection: ChannelConnectionInfo;
   health: ChannelHealthInfo;
   listing_counts: Record<string, number>;
-  // Catalogue redesign — real per-platform "most recent listing sync"
-  // timestamp (distinct from health.last_success_at, which is the
-  // connection-level "last successful API call", not tied to a listing).
+  // Real per-platform "most recent listing sync" timestamp, distinct from health.last_success_at (connection-level "last successful API call").
   last_synced_at: string | null;
-  // Sum of this channel's listings in sync_status error/price_locked —
-  // computed server-side (channel.service.js) so the frontend never
-  // reimplements "what counts as needing attention".
+  // Sum of this channel's listings in sync_status error/price_locked, computed server-side (channel.service.js).
   needs_attention_count: number;
-  // Folds needs_attention_count together with connection-level trouble (a
-  // tripped circuit breaker, any recorded failure streak) into one verdict
-  // for the channel summary card's health line/dot.
+  // Folds needs_attention_count with connection-level trouble (tripped circuit breaker, failure streak) into one verdict for the summary card.
   health_status: "healthy" | "needs_attention";
 }

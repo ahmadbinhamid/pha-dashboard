@@ -1,13 +1,7 @@
 // services/order.service.notifyBestEffort.test.js
-//
-// notifyNewOrder is called best-effort (try/catch) from
-// createManualOrder/createOrderFromEbayOrder — a broken notification
-// pipeline must never fail order creation itself. Proves that guarantee by
-// forcing notifyNewOrder to throw and confirming the order still comes back
-// successfully created.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/order.service.notifyBestEffort.test.js
+// notifyNewOrder is called best-effort; a broken notification pipeline must never fail order
+// creation. Proves it by forcing notifyNewOrder to throw and checking the order still comes back.
+// Needs a live Mongo connection. Run: node --test src/services/order.service.notifyBestEffort.test.js
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");

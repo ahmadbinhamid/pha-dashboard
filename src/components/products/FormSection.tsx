@@ -9,9 +9,7 @@ interface FormSectionProps {
   children: React.ReactNode;
 }
 
-// Numbered section wrapper shared by the product create/edit forms — the
-// number chip is what distinguishes this from the plain icon-badge SectionLabel
-// used elsewhere, matching the step-like "1 Basics / 2 Classification…" layout.
+// Numbered section wrapper for product create/edit forms; the number chip distinguishes it from the plain icon-badge SectionLabel used elsewhere.
 export function FormSection({
   number,
   title,

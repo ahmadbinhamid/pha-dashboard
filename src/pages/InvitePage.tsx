@@ -13,14 +13,7 @@ import { useAuth, useToast } from "@/context";
 import { acceptInvitation, declineInvitation, getInvitationByToken, registerFromInvitation } from "@/lib/api/access";
 import { setToken } from "@/lib/api/client";
 
-/**
- * Where an invite link lands. Public — the token IS the credential, and the
- * address it was sent to comes back from the API so this page can prefill
- * either path:
- *
- *   no account yet  -> sign up here, which joins the organisation in one step
- *   has an account  -> sign in as that address, then accept
- */
+/** Where an invite link lands. Public — the token is the credential; no account signs up here (joining in one step), an existing account signs in then accepts. */
 export default function InvitePage() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
@@ -45,7 +38,7 @@ export default function InvitePage() {
   const registerMutation = useMutation({
     mutationFn: () => registerFromInvitation(token, { first_name: firstName, last_name: lastName, password }),
     onSuccess: (res) => {
-      // The API signs them in as part of joining, so there's no second step.
+      // The API signs them in as part of joining — no second step.
       if (res.data?.token) setToken(res.data.token);
       toast({ title: `Welcome to ${orgName}`, tone: "success" });
       navigate("/dashboard");
@@ -73,13 +66,7 @@ export default function InvitePage() {
 
   const orgName = invite?.organisation?.company_name || invite?.organisation?.name || "the organisation";
 
-  /**
-   * Send them to sign in, and bring them back here afterwards. /login sits
-   * behind GuestRoute, which redirects anyone already authenticated to the
-   * dashboard — so when this is a "wrong account" switch, the current session
-   * has to end first or the button silently lands them back in the app as
-   * themselves. LoginCard reads `state.from.pathname` for where to return.
-   */
+  /** Send them to sign in and back afterwards; /login's GuestRoute redirects an already-authenticated user, so a "wrong account" switch must log out first. LoginCard reads `state.from.pathname` to return here. */
   const goSignIn = ({ switchAccount }: { switchAccount: boolean }) => {
     if (switchAccount) logout();
     navigate("/login", {
@@ -122,8 +109,7 @@ export default function InvitePage() {
     );
   }
 
-  // Signed in as someone else — the link is bound to one address, so the only
-  // honest options are to switch accounts or walk away.
+  // Signed in as someone else — the link is bound to one address, so the only options are switch accounts or walk away.
   const signedInAsOther = user && user.email?.toLowerCase() !== invite.email.toLowerCase();
 
   return (

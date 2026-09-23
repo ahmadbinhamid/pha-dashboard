@@ -22,8 +22,7 @@ export function IntegrationCard({
   icon,
   // Brand logos (eBay/Google/a tenant's own uploaded storefront logo) sit on
   // a neutral chip instead of the accent-tinted circle — a partner's logo
-  // (or a tenant's own) tinted orange would read as broken branding, not
-  // "on theme".
+  // (or a tenant's own) tinted orange would read as broken branding, not "on theme".
   logoTile = false,
   status = "unknown",
   onManage,

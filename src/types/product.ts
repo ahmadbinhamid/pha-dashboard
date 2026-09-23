@@ -28,8 +28,7 @@ export interface Category {
   sort_order: number;
 }
 
-// The /category endpoint now returns a paginated payload (matching
-// ProductListData) instead of a bare Category[] array.
+// The /category endpoint returns a paginated payload (matching ProductListData), not a bare Category[] array.
 export interface CategoryListData {
   items: Category[];
   total: number;
@@ -51,8 +50,7 @@ export interface Choice {
   items: string[];
 }
 
-// Internal staff comment thread — never shown to customers. Mirrors
-// OrderInternalNote in @/types/orders.
+// Internal staff comment thread, never shown to customers. Mirrors OrderInternalNote in @/types/orders.
 export interface ProductInternalNote {
   _id: string;
   text: string;
@@ -164,8 +162,7 @@ export interface ProductCreateFormState {
   categories: string[];
   tags: string[];
   images: Attachment[];
-  // Drafted before the product exists — posted as real notes right after
-  // creation succeeds (addProductNote needs a productId, which doesn't exist yet).
+  // Drafted before the product exists, posted as real notes right after creation succeeds (addProductNote needs a productId).
   notes: string[];
 }
 

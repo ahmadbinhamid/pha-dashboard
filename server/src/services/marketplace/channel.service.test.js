@@ -1,15 +1,7 @@
 // services/marketplace/channel.service.test.js
-//
-// Regression guard: POST /api/v1/channels/:platform/retry/:logId
-// (channel.service.js#retryChannelLog) must always actually enqueue a job —
-// even when a failed job for that exact listing is still sitting under the
-// debounced jobId (`sync:<platform>:<listingId>`). retryChannelLog bypasses
-// the debounce entirely (see channel.queue.js's bypassDebounce option)
-// specifically so a manual retry is never silently swallowed by whatever
-// state that jobId happens to be in.
-//
-// Needs a live Mongo connection AND a reachable Redis — run with:
-//   node --test src/services/marketplace/channel.service.test.js
+// Regression guard: retryChannelLog must always enqueue a job, even when a failed job for that
+// listing already sits under the debounced jobId — it bypasses the debounce entirely.
+// Needs a live Mongo connection and reachable Redis. Run: node --test src/services/marketplace/channel.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -36,11 +28,8 @@ test("retryChannelLog enqueues a fresh job even when a failed job for that listi
     await mongoose.disconnect();
   });
 
-  // Force a job into the FAILED state under the debounced jobId for this
-  // listing — added directly (not via enqueueChannelJob) with
-  // removeOnFail: false so it's guaranteed to still be sitting there,
-  // unambiguously reproducing "a failed job for that listing already
-  // exists" rather than relying on timing against the queue's own cleanup.
+  // Force a job into the FAILED state under the debounced jobId, added directly with
+  // removeOnFail: false so it's guaranteed to still be sitting there.
   queue.process("sync_listing", 1, async () => {
     throw new Error("boom");
   });
@@ -69,16 +58,14 @@ test("retryChannelLog enqueues a fresh job even when a failed job for that listi
   assert.equal(result.requeued, true);
   assert.equal(result.listingId, listingId.toString());
 
-  // The retry must have actually created a NEW, runnable job — not been
-  // silently swallowed by the pre-existing failed job's jobId.
+  // The retry must create a new, runnable job, not be swallowed by the pre-existing failed job's jobId.
   const jobCounts = await queue.getJobCounts();
   assert.ok(
     jobCounts.waiting + jobCounts.active + jobCounts.delayed >= 1,
     "retry must enqueue a real, runnable job rather than being dropped",
   );
 
-  // And it must not have needed (or touched) the debounced jobId at all —
-  // the stuck failed job is still exactly where it was.
+  // And it must not have touched the debounced jobId at all.
   const stillStuck = await queue.getJob(jobId);
   assert.ok(stillStuck);
   assert.equal(await stillStuck.getState(), "failed");

@@ -26,8 +26,7 @@ export const updateEbaySettings = async (payload: UpdateEbaySettingsPayload) => 
   return data;
 };
 
-// Returns eBay's hosted consent-screen URL — the caller navigates the
-// browser there directly (window.location.href), it's not fetched via XHR.
+// Returns eBay's hosted consent-screen URL; the caller navigates there directly (window.location.href), not via XHR.
 export const getEbayConnectUrl = async (sandbox: boolean) => {
   const { data } = await apiClient.get<BeResponse<EbayConnectUrlResponse>>("/ebay/oauth/connect-url", {
     params: { sandbox },

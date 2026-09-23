@@ -1,11 +1,7 @@
 // services/role.service.test.js
 //
-// System roles are the safety net: a tenant can always get back into its own
-// settings, so they can't be edited away or deleted. Custom roles can be
-// anything the catalogue allows — and nothing it doesn't.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/role.service.test.js
+// System roles can't be edited or deleted; custom roles may use any catalogue permission.
+// Needs a live Mongo connection — run with: node --test src/services/role.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

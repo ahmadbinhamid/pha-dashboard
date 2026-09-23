@@ -1,31 +1,8 @@
 // services/marketplace/adapters/google.adapter.js
-//
-// Implements the marketplace adapter interface for Google Shopping
-// (Merchant API). Mirrors ebay.adapter.js's shape and conventions — see
-// that file's own module header for the shared contract every adapter
-// conforms to (registry.js is the source of truth for what's required).
-//
-// Google is feed-shaped, not listing-shaped: there is no offer/publish
-// lifecycle the way eBay has create-offer/publish-offer as separate steps.
-// publish() and update() are both just productInputs.insert (Merchant API's
-// own upsert semantics) — kept as two exports only because the registry
-// contract requires both; they do the same thing here.
-//
-// NOTE on API shape confidence: this adapter originally targeted v1beta,
-// written without live Google credentials to verify against. Migrated to
-// v1 after v1beta was actually discontinued (2026-02-28) and a real connect
-// attempt surfaced it — see google.merchant.api.service.js and
-// google.datasource.service.js's own comments. Confirmed against real API
-// responses/errors (not guessed) during that and subsequent live pushes:
-// `channel` field removal (ProductInput and PrimaryProductDataSource),
-// `gtin` -> `gtins` rename, and `availabilityFor`'s enum (a real
-// productInputs.insert rejected the old lowercase "in stock" with 400
-// INVALID_ARGUMENT — see that function's own comment for the fix). What's
-// STILL not verified against a live call: the rest of ProductAttributes'
-// field names/casing (price, condition, shippingLabel, customLabel0-4,
-// googleProductCategory) — cross-check buildProductInputFromResolved's full
-// payload against a real successful productInputs.insert response before
-// relying on those.
+// Marketplace adapter for Google Shopping (Merchant API); mirrors ebay.adapter.js's shape.
+// Google is feed-shaped: publish()/update() are both just productInputs.insert (upsert).
+// Migrated v1beta -> v1 after v1beta's 2026-02-28 discontinuation; some ProductAttributes
+// field names (price, condition, shippingLabel, etc.) are still unverified against a live call.
 
 const { logger } = require("../../../loaders/logging");
 const config = require("../../../config");
@@ -35,18 +12,9 @@ const googleMerchantApi = require("../../google/google.merchant.api.service");
 const { resolveProductUrl, resolveIdentifiers } = require("../listing.resolver");
 const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");
 
-// TASK 2: Google will silently ACCEPT a productInputs.insert whose imageLink
-// isn't a public HTTPS URL and only disapprove the product later (async,
-// off this app's radar) — the exact same silent-failure shape eBay already
-// guards against on its own side (ebay.api.service.js#resolveImageUrls:
-// warns and drops non-HTTPS entries, throws if nothing usable is left).
-// Google has no such guard today. Mirrors eBay's status/code convention
-// (see ebay.adapter.js's ConditionUnverifiedError) so this is classified as
-// a per-item data problem, not a transport failure — status 400 keeps
-// circuitBreaker.js#isTransportOrAuthFailure from tripping the breaker over
-// a bad photo, and sync.service.js already writes a ChannelSyncLog FAILURE
-// row for any thrown adapter error, keyed by this error's `.code`, so no
-// separate logging call is needed here.
+// Google silently accepts a bad imageLink and only disapproves the product later (async);
+// this guards against that like ebay.api.service.js#resolveImageUrls does. status 400 keeps
+// circuitBreaker.js from tripping over a bad photo (a per-item data problem, not transport).
 class GoogleImageValidationError extends Error {
   constructor(message) {
     super(message);
@@ -56,11 +24,8 @@ class GoogleImageValidationError extends Error {
   }
 }
 
-// Deliberately stricter than "starts with https://" (what eBay's own check
-// uses) — an absolute-URL parse also catches a value that merely CONTAINS
-// that prefix without actually being one (e.g. a relative path someone
-// concatenated wrong), which a plain startsWith would let through as a
-// false "looks fine".
+// Stricter than a plain startsWith("https://") — an absolute-URL parse also catches a value
+// that merely contains that prefix without actually being one.
 function isAbsoluteHttpsUrl(url) {
   if (typeof url !== "string" || !url) return false;
   try {
@@ -85,15 +50,8 @@ const manifest = {
     "A product data source is created automatically on connect",
   ],
   requiredTenantData: ["merchant_id", "feed_label", "content_language", "target_country"],
-  // TASK 5: Merchant Center requires a claimed AND verified website with
-  // real product pages — a tenant with no verified default Domain has
-  // nothing for Google to crawl/verify, and every product push would end
-  // up disapproved. Absent/false (the registry contract's default for any
-  // adapter that doesn't set this — see registry.js's own header) means a
-  // platform genuinely doesn't need one; eBay never sets this. Read by
-  // channel.service.js#listChannelsForTenant (marks the channel
-  // unavailable with a reason) and google.controller.js#getConnectUrl
-  // (refuses to start OAuth at all) — see server/docs/channel-architecture.md §9.
+  // Merchant Center requires a claimed, verified website; a tenant with no verified default
+  // Domain would get every product disapproved. Read by channel.service.js and google.controller.js.
   requiresStorefront: true,
 };
 
@@ -107,24 +65,12 @@ const capabilities = {
   variants: true,
 };
 
-// Google Merchant Center expires a product that isn't refreshed within 30
-// days (https://support.google.com/merchants/answer/6324473's own guidance:
-// "you should update or refresh them with a regular cadence (at least every
-// 30 days)"). Deliberately defaults UNDER that cap — see
-// config/index.js#channels.refreshIntervalDays's own comment — to leave
-// headroom for a missed sweep run or a transient failure before Google's
-// real deadline hits. Consumed by refresh.service.js / channel.worker.js;
-// see registry.js's interface comment for the field's generic contract.
+// Google expires a product not refreshed within 30 days; defaults under that cap for headroom.
+// Consumed by refresh.service.js / channel.worker.js.
 const refreshIntervalDays = config.channels.refreshIntervalDays;
 
-// Follows the GENERIC contract (registry.js), unlike eBay's deliberately
-// non-generic loadSettings (see that file's own comment on why it never
-// returns null) — Google has no legacy pre-ChannelConnection source to
-// preserve compatibility with, so there's no reason to deviate: a tenant
-// with no ChannelConnection row at all returns null, and
-// sync.service.js#syncListing's existing "not connected" skip path (already
-// there for exactly this contract — see that file) handles it without ever
-// reaching publish()/update() at all.
+// Follows the generic registry.js contract (unlike eBay's non-generic loadSettings) — no
+// ChannelConnection row returns null, and sync.service.js's "not connected" skip handles it.
 async function loadSettings(tenantId) {
   const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: key })
     .select("+access_token_ct +refresh_token_ct")
@@ -141,50 +87,29 @@ function assertConfigured(settings) {
   }
 }
 
-// v1's product resource id format DROPS the channel segment entirely —
-// contentLanguage~feedLabel~offerId (confirmed against the real API's own
-// migration docs; the old v1beta format was
-// channel~contentLanguage~feedLabel~offerId). Getting this wrong is
-// silent: a wrong resource name 404s on delete, and end() already (validly)
-// treats 404 as "already gone" success — so a stale 4-segment name would
-// never actually remove the listing from Google while looking like it did.
-// This is just our OWN identifier string composition, not itself an API
-// request field.
+// v1 drops the channel segment: contentLanguage~feedLabel~offerId (v1beta had a leading channel~).
+// Getting this wrong is silent — a wrong name 404s on delete, and end() treats 404 as success.
 function buildProductResourceName(settings, sku) {
   return `${settings.content_language}~${settings.feed_label}~${sku}`;
 }
 
-// Full Merchant API resource name (accounts/{merchant}/products/{name}) —
-// needed by productInputs.delete (end()), which addresses a product by its
-// complete path, unlike insert (which takes the short name as `offerId` in
-// the request body and derives the rest from channel/dataSource).
+// Full resource name needed by productInputs.delete, which addresses a product by its complete
+// path, unlike insert (which takes the short name as `offerId`).
 function buildFullProductResourceName(settings, sku) {
   return `accounts/${settings.merchant_id}/products/${buildProductResourceName(settings, sku)}`;
 }
 
-// Merchant API v1's Availability is a real ALL_CAPS enum (IN_STOCK /
-// OUT_OF_STOCK / PREORDER / LIMITED_AVAILABILITY / BACKORDER) — NOT the
-// classic Content API's literal lowercase strings ("in stock"/"out of
-// stock") this originally shipped with, based on that historical shape
-// without a live call to verify against (see this file's own module NOTE).
-// Confirmed live: a real productInputs.insert call rejected "in stock" with
-// 400 INVALID_ARGUMENT — cross-checked against Google's own generated
-// client library docs (google.shopping.merchant.products.v1.Availability)
-// to get the exact enum names, not guessed a second time.
+// v1's Availability is an ALL_CAPS enum (IN_STOCK/OUT_OF_STOCK/...), not the old Content API's
+// lowercase strings — confirmed live after a real insert rejected "in stock" with 400.
 function availabilityFor(quantity) {
   return quantity > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
 }
 
-// Decision 2 (identifiers): gtin when present; otherwise mpn+brand when
-// BOTH present; otherwise identifierExists: false. Never invents/derives an
-// identifier — resolveIdentifiers (listing.resolver.js) only ever returns
-// what's actually stored. Logged at debug so which branch fired is
-// traceable without being noisy at info level for the common case.
+// gtin when present; otherwise mpn+brand when both present; otherwise identifierExists: false.
+// Never invents an identifier. Logged at debug so the branch taken is traceable.
 function applyIdentifiers(attributes, identifiers, sku) {
   if (identifiers.gtin) {
-    // v1 renamed ProductAttributes.gtin -> gtins (now an array) — see
-    // buildProductInputFromResolved's own comment on the v1 migration.
-    // This app only ever has one GTIN per listing.
+    // v1 renamed gtin -> gtins (now an array); this app only ever has one GTIN per listing.
     attributes.gtins = [identifiers.gtin];
     logger.debug(`[GoogleAdapter] ${sku}: identifier branch = gtin`);
     return;
@@ -199,27 +124,11 @@ function applyIdentifiers(attributes, identifiers, sku) {
   logger.debug(`[GoogleAdapter] ${sku}: identifier branch = identifierExists:false (no gtin, no complete mpn+brand pair)`);
 }
 
-// Builds the full ProductInput resource body. `productUrl` and
-// `identifiers` are resolved by the caller (publish/update/publishBatch) —
-// kept out of this pure builder so it stays a plain, easily-testable
-// function with no DB access of its own.
-//
-// TASK 1 (this run) / TASK 2 (previous run): throws GoogleImageValidationError
-// (never invents a placeholder — see that class's own comment) whenever
-// there is no usable public HTTPS primary image — a present-but-unusable
-// URL (non-HTTPS, malformed) AND a product with zero photos at all are
-// BOTH rejected here now, the same way and for the same reason: Google's
-// real API accepts a null/bad imageLink at insert time and only
-// disapproves the product later, asynchronously, off this app's radar — a
-// photo-less product fails that exact same way, just as reliably as a bad
-// URL does, so leaving it unvalidated was the same silent-failure gap this
-// whole check exists to close. (Previously left as pre-existing behavior —
-// corrected this run; see google.adapter.publish.test.js/
-// google.adapter.batch.test.js, whose `attachments: []` fixtures were
-// updated alongside this to include a real HTTPS photo, and
-// google.adapter.image-validation.test.js's own new zero-photo test.) A
-// non-HTTPS ADDITIONAL image is still just dropped with a warning, not
-// fatal — Google can still list the product on its primary photo alone.
+// Builds the full ProductInput resource body. `productUrl`/`identifiers` are resolved by the
+// caller so this stays a pure, testable function with no DB access.
+// Throws GoogleImageValidationError for any unusable or missing primary image — Google otherwise
+// accepts a bad imageLink and disapproves the product later, asynchronously. A bad additional
+// image is just dropped with a warning; the product can still list on its primary photo alone.
 function buildProductInputFromResolved(resolved, settings, quantity, identifiers, productUrl) {
   const { sku, title, description, price, photos, listing, product } = resolved;
 
@@ -252,20 +161,9 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
       amountMicros: String(Math.round((price || 0) * 1_000_000)),
       currencyCode: settings.target_country ? currencyForCountry(settings.target_country) : "USD",
     },
-    // NOTE: per-product shipping override — Google flagged that we weren't
-    // sending this at all. product.shipping_cost already exists (settable
-    // in the product edit form) but was never mapped into the Merchant API
-    // payload until now. Same Price shape (amountMicros/currencyCode) v1
-    // uses for the `price` field above, not the older Content API v2.1's
-    // "value"/"currency" naming Google's own support message used.
-    // Omitted (not sent as 0) when unset, so a product with no override
-    // just falls back to whatever shipping rule Google account-level
-    // settings/shippingLabel already resolve to — never silently claims
-    // free shipping for a product nobody actually priced that way.
-    // maxHandlingTime/maxTransitTime deliberately left out — this app
-    // tracks neither anywhere, and fabricating a delivery-speed estimate
-    // Google shows to buyers is worse than omitting it (Google marks both
-    // "Recommended", not required).
+    // Per-product shipping override, using the same Price shape as `price` above. Omitted (not
+    // sent as 0) when unset, so it falls back to Google's account-level shipping rules rather than
+    // claiming free shipping. maxHandlingTime/maxTransitTime left out — this app tracks neither.
     ...(product?.shipping_cost != null
       ? {
           shipping: [
@@ -290,11 +188,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
 
   applyIdentifiers(attributes, identifiers, sku);
 
-  // v1 removed `channel` from ProductInput entirely (confirmed against the
-  // real API's migration guide — see google.merchant.api.service.js's own
-  // comment on the v1beta -> v1 migration this app went through, forced by
-  // Google discontinuing v1beta on 2026-02-28). feedLabel/contentLanguage/
-  // offerId are unchanged.
+  // v1 removed `channel` from ProductInput entirely; feedLabel/contentLanguage/offerId unchanged.
   return {
     contentLanguage: settings.content_language,
     feedLabel: settings.feed_label,
@@ -303,25 +197,14 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
   };
 }
 
-// NOTE: no dedicated currency-per-country map/config exists anywhere else
-// in this codebase to reuse (unlike ebay.constants.js#EBAY_MARKETPLACE_CURRENCY,
-// which exists for eBay's own marketplace ids) — this is a minimal,
-// same-shaped fallback covering the handful of countries this app's own
-// tenants are realistically in, defaulting to USD. Extend as new target
-// countries are actually connected, same spirit as the eBay map's own
-// currencyForMarketplace.
+// No shared currency-per-country map exists to reuse; minimal fallback for realistic tenant countries.
 const COUNTRY_CURRENCY = { AU: "AUD", US: "USD", GB: "GBP", NZ: "NZD", CA: "CAD" };
 function currencyForCountry(countryCode) {
   return COUNTRY_CURRENCY[countryCode] || "USD";
 }
 
-// Decision 3 (untracked stock): a product with stock_control off must never
-// reach Google at all, not be published as in_stock. Enforced HERE (in the
-// adapter, per this run's own instruction), signaled back to
-// sync.service.js#syncListing as an explicit `{ skipped, reason }` result —
-// additive to the existing success/{external_listing_id,...}/throw contract
-// every adapter already returns; eBay's adapter never sets this, so
-// syncListing's new handling of it (see that file) is a no-op for eBay.
+// A product with stock_control off must never reach Google, not be published as in_stock —
+// signaled back as `{ skipped, reason }`, additive to the normal adapter return contract.
 function isUntrackedStock(resolved) {
   return resolved.product?.stock_control === false;
 }
@@ -343,9 +226,7 @@ async function publishOrUpdate(resolved, settings) {
   const { listing, product } = resolved;
   const quantity = await resolveQuantity(resolved);
   const identifiers = resolveIdentifiers(listing, product);
-  // Fails loudly (throws) if the tenant has no resolvable host (verified
-  // default domain or linkDomain fallback) or the product has no slug —
-  // see listing.resolver.js#resolveProductUrl's own comment.
+  // Throws if the tenant has no resolvable host or the product has no slug.
   const productUrl = await resolveProductUrl(listing.tenant_id, product.slug, resolved.sku, key);
 
   const token = await googleOauthService.getValidAccessToken(settings);
@@ -398,12 +279,8 @@ async function end(listing) {
   logger.info(`[GoogleAdapter] listing ended: ${sku}`);
 }
 
-// Batch path (Task 3) — see google.merchant.api.service.js's own NOTE on why
-// this is per-item calls under bounded concurrency rather than a single
-// physical batch HTTP request (no documented Merchant API batch endpoint
-// for productInputs). Returns one result per input item, in the SAME
-// order, so sync.service.js#syncBatch can map results back to the listings
-// it built `resolvedList` from without needing a shared key.
+// Per-item calls under bounded concurrency (no documented Merchant API batch endpoint). Returns
+// one result per input, in the same order, so sync.service.js#syncBatch can map results back.
 const BATCH_CONCURRENCY = 10;
 
 async function publishBatch(resolvedList, settings) {
@@ -443,10 +320,7 @@ async function publishBatch(resolvedList, settings) {
     }
   }
 
-  // Simple bounded-concurrency pool — no new dependency for this (e.g.
-  // p-limit); a chunk is already small (see sync.service.js's own
-  // CHANNEL_BATCH_CHUNK_SIZE), so a hand-rolled worker pool over an index
-  // cursor is enough.
+  // Hand-rolled worker pool over an index cursor — chunks are already small, no need for p-limit.
   let nextIndex = 0;
   async function worker() {
     while (nextIndex < resolvedList.length) {

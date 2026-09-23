@@ -2,11 +2,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { ThemeMode } from "@/hooks";
 
-// One selectable theme option: a miniature of what the app looks like in that
-// mode, above its name. The preview is drawn from literal light/dark values
-// rather than theme tokens on purpose — the dark tile has to keep looking dark
-// while the app itself is in light mode, which is exactly what tokens would
-// undo (same reasoning as the print-only invoice's hardcoded palette).
+// One selectable theme option: a miniature preview above its name. Drawn from literal light/dark values, not theme tokens, since the dark tile must stay dark even while the app is in light mode.
 export function ThemeModeCard({
   mode,
   label,
@@ -54,7 +50,7 @@ export function ThemeModeCard({
   );
 }
 
-// The miniatures themselves. Literal zinc/white values, for the reason above.
+// The miniatures themselves, literal zinc/white values for the reason above.
 export function LightPreview() {
   return (
     <div className="flex h-full flex-col justify-between bg-zinc-100 p-2.5">

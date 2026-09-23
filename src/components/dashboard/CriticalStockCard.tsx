@@ -43,31 +43,13 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
             Nothing below your low-stock threshold right now.
           </div>
         ) : (
-          // No sticky/pinned first column here — unlike the app's larger data
-          // tables, this is always just 3 narrow columns that comfortably
-          // fit the card width, so the sticky-column chrome (an opaque fill
-          // + a divider line down the first column) would only add visual
-          // weight this compact widget doesn't need.
+          // No sticky first column: unlike the app's larger tables, this is always just 3 narrow columns, so the sticky-column chrome would only add weight.
           <div className="max-h-80 overflow-x-auto">
-            {/* text-xs — Table.tsx defaults to text-sm; the reference wraps
-                its whole table in text-xs, which is what actually keeps its
-                rows this compact (smaller font -> shorter line-height ->
-                shorter rows), not just the cell padding. */}
+            {/* text-xs overrides Table.tsx's default text-sm to keep rows this compact. */}
             <Table className="text-xs">
               <TableHeader className="bg-transparent">
                 <TableRow className="hover:bg-transparent">
-                  {/* px-0 everywhere, not just the first/last edges — the
-                      reference's <td>/<th> carry NO horizontal padding at
-                      all (px-4 on Table.tsx's base TableHead/TableCell is a
-                      gutter this table was never supposed to have; even the
-                      *middle* column had it, which is what was still
-                      showing as "too much horizontal padding" after the
-                      first pass only fixed the two edges). Column spacing
-                      instead comes purely from content width + the
-                      text-center/text-right alignment, same as the
-                      reference. first:/last: modifier still needed (see
-                      below) since a plain px-0 doesn't dedupe against the
-                      base's first:pl-5/last:pr-5 in tailwind-merge. */}
+                  {/* px-0 on every edge (not just first/last) since Table.tsx's base px-4 gutter isn't wanted here; first:/last: still needed so plain px-0 dedupes against base's first:pl-5/last:pr-5 in tailwind-merge. */}
                   <TableHead className="h-auto px-0 pb-1.5 first:pl-0">
                     Part &amp; SKU
                   </TableHead>

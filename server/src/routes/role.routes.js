@@ -9,8 +9,7 @@ const ctrl = require("../controllers/role.controller");
 
 router.use(auth());
 
-// The catalogue the permission matrix renders from. Readable by anyone who
-// can see roles — it's a static list of capability names, not tenant data.
+// A static list of capability names, not tenant data — readable by anyone who can see roles.
 router.get("/permissions", requirePermission("roles.view"), asyncHandler(ctrl.listPermissions));
 
 router.get("/", requirePermission("roles.view"), asyncHandler(ctrl.listRoles));

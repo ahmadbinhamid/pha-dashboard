@@ -61,22 +61,10 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
     [points],
   );
 
-  // Revenue is always the soft background bar (context) — the selected
-  // metric is the foreground trend line on top of it. When Revenue itself
-  // is selected there's nothing distinct left to overlay, so the bar alone
-  // carries the chart rather than drawing a redundant line on top of itself.
+  // Revenue is the soft background bar; the selected metric is the foreground line — unless Revenue itself is selected, then the bar alone carries the chart.
   const showTrendLine = metric !== "revenueCents";
 
-  // Bar and line ride on separate y-axes so their unrelated units (dollars
-  // vs. a count) don't fight over one scale — but with both domains topping
-  // out just above their own max, the bar's peak (~87% of the chart height)
-  // actually reached higher than the line's (~74%), so the "background" bar
-  // visually collided with the "foreground" line instead of sitting under
-  // it. Squashing the bar axis's domain to 4x its max (bars occupy only the
-  // bottom quarter) while giving the line axis just 1.2x (it uses nearly
-  // the full height) keeps the line floating clearly above — but only when
-  // a line is actually drawn; with Revenue selected the bar is the only
-  // series on screen and should use the normal, comfortable height.
+  // Bar/line ride separate y-axes for their unrelated units; bar's domain is squashed to 4x max (bottom quarter) so it sits visibly under the line's 1.2x domain — but only when a line is drawn, else the bar gets a normal height.
   const revenueDomainMultiplier = showTrendLine ? 4 : 1.15;
 
   return (

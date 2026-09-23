@@ -1,11 +1,6 @@
 // routes/google.routes.js
-//
-// OAuth connect flow + listing CREATE/UPDATE, mirroring routes/ebay.routes.js's
-// own shape. Status/logs/retry are already generic — see
-// routes/channel.routes.js, reused as-is rather than duplicated here.
-// Listing browse/read/delete/push are ALSO generic — see
-// routes/listing.routes.js and services/marketplace/listing.query.service.js's
-// own module header for why only create/update stay platform-specific.
+// OAuth connect flow + listing CREATE/UPDATE, mirroring ebay.routes.js. Status/logs/retry and
+// listing browse/read/delete/push are generic — see channel.routes.js and listing.routes.js.
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -16,8 +11,7 @@ const oauthV = require("../validators/google.oauth.validation");
 const ctrl = require("../controllers/google.controller");
 const listingCtrl = require("../controllers/google.listing.controller");
 
-// ── OAuth consent flow (TASK 4: consent first, account picked after — see
-// google.controller.js's own module header for the full step list) ─────────
+// ── OAuth consent flow (consent first, account picked after) ─────────
 router.get("/oauth/connect-url", auth(), asyncHandler(ctrl.getConnectUrl));
 // Public — Google redirects the browser here directly, no JWT available.
 router.get("/oauth/callback", asyncHandler(ctrl.oauthCallback));

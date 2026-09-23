@@ -1,10 +1,7 @@
 import { cn } from "@/utils/cn";
 import { Image } from "@/components/ui/Image";
 
-// Replaces the old hardcoded PartsHubLogoImage — every tenant has their own
-// logo_url (Settings → Business Info → Branding), so nothing here may assume
-// a specific tenant's asset. Falls back to an initial-letter badge when a
-// tenant hasn't uploaded a logo yet, rather than showing another tenant's mark.
+// Every tenant has its own logo_url (Settings → Business Info → Branding); falls back to an initial-letter badge when none is uploaded.
 export function TenantLogo({
   logoUrl,
   name,
@@ -12,12 +9,7 @@ export function TenantLogo({
   sizeClass = "h-12",
   maxWidthClass = "max-w-[220px]",
   priority,
-  // "contain" (default) preserves the full logo without cropping — right
-  // for a standalone logo display. "cover" fills the box edge-to-edge —
-  // needed for a compact square/rounded badge slot (Sidebar, MobileSidebar):
-  // with "contain", a non-square logo gets letterboxed, and its own sharp
-  // rectangular corners end up visible floating inside the rounded ring
-  // around it, even though that ring is clipping correctly.
+  // "contain" (default): full logo, no cropping. "cover": fills the box edge-to-edge, needed for compact square/rounded badge slots (Sidebar) so a non-square logo's corners don't show inside the rounded ring.
   objectFit = "contain",
 }: {
   logoUrl?: string | null;
@@ -30,10 +22,7 @@ export function TenantLogo({
 }) {
   if (logoUrl) {
     if (objectFit === "cover") {
-      // fill mode: fills the nearest positioned ancestor edge-to-edge
-      // (that ancestor — Sidebar/MobileSidebar's badge wrapper — must be
-      // `relative` with an explicit square size for this to crop into a
-      // filled square/circle rather than leaving letterboxed gaps).
+      // fill mode: ancestor (Sidebar/MobileSidebar's badge wrapper) must be `relative` with an explicit square size to crop correctly.
       return <Image src={logoUrl} alt={name || "Business logo"} priority={priority} fill objectFit="cover" className={className} />;
     }
     return (

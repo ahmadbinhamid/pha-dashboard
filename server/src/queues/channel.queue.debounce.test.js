@@ -1,14 +1,7 @@
 // queues/channel.queue.debounce.test.js
-//
-// Regression guard for Task 4's debounce contract: N rapid sync_listing
-// enqueues for the SAME listing collapse into exactly one Bull job (keyed
-// by jobId `sync:<platform>:<listingId>`, removeOnComplete: true —
-// mandatory per the Bull gotcha documented in channel.queue.js), and the
-// job-payload shape ({ listingId, seq }) — unchanged since before this
-// migration — still round-trips through enqueueChannelJob correctly.
-//
-// Needs a live Redis connection (see queues/channel.queue.js) — run with:
-//   node --test src/queues/channel.queue.debounce.test.js
+// Regression guard: N rapid sync_listing enqueues for the same listing collapse into exactly
+// one Bull job, and the { listingId, seq } payload shape still round-trips correctly.
+// Needs a live Redis connection. Run: node --test src/queues/channel.queue.debounce.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,9 +10,7 @@ const { enqueueChannelJob, getQueue } = require("./channel.queue");
 
 const queue = getQueue("ebay");
 
-// Bull's underlying ioredis client keeps its connection open indefinitely by
-// design — without closing it, this process never exits on its own, which
-// hangs any multi-file `node --test` run waiting on this one.
+// Bull's ioredis client stays open indefinitely by design; close it or the process never exits.
 test.after(async () => {
   await queue.close();
 });
@@ -28,9 +19,7 @@ test("debounced sync_listing enqueue collapses N rapid calls into one job, carry
   const listingId = `debounce-test-${crypto.randomUUID()}`;
   const jobId = `sync:ebay:${listingId}`;
 
-  // Guard against a stale job left behind by a previous failed run under
-  // this exact id (won't happen in practice — the id is randomized above —
-  // but keeps this test self-cleaning either way).
+  // Guard against a stale job left behind by a previous failed run; keeps this test self-cleaning.
   const preExisting = await queue.getJob(jobId);
   if (preExisting) await preExisting.remove();
 
@@ -46,18 +35,12 @@ test("debounced sync_listing enqueue collapses N rapid calls into one job, carry
   assert.ok(job, "exactly one job must exist under the debounced jobId");
   assert.equal(job.opts.delay > 0, true, "the debounced job must carry a delay");
   assert.equal(job.opts.removeOnComplete, true, "removeOnComplete must be true — see channel.queue.js's Bull gotcha comment");
-  // removeOnFail: true (not false) — a failed job left sitting under this
-  // jobId would otherwise permanently block every future sync_listing call
-  // for this listing (add() returns the existing job for a jobId present in
-  // ANY state, including failed). ChannelSyncLog is the durable failure
-  // record now, so nothing is lost by letting Bull drop it. See the
-  // "still be re-enqueued" test below for the actual failure scenario.
+  // removeOnFail: true — a failed job left under this jobId would otherwise permanently block
+  // every future call for this listing. ChannelSyncLog is the durable failure record now.
   assert.equal(job.opts.removeOnFail, true);
 
-  // Old-shape payload ({ listingId, seq }) — whichever of the N rapid calls
-  // actually won the dedup, its data is still the same shape a
-  // pre-migration job always carried; the worker re-reads current state
-  // rather than trusting this seq anyway (see sync.service.js#syncListing).
+  // Old-shape payload; whichever of the N calls won the dedup, its data is still the same
+  // shape a pre-migration job carried — the worker re-reads current state anyway.
   assert.deepEqual(Object.keys(job.data).sort(), ["listingId", "seq"].sort());
   assert.equal(job.data.listingId, listingId);
 
@@ -65,9 +48,7 @@ test("debounced sync_listing enqueue collapses N rapid calls into one job, carry
 });
 
 test("a listing whose debounced sync_listing job has failed (exhausted its retries) can still be re-enqueued", async (t) => {
-  // A dedicated platform/queue (not "ebay") so this test can attach its own
-  // processor and force a real failure without interfering with anything
-  // else using the shared "ebay" queue.
+  // A dedicated platform/queue so this test can force a real failure without touching "ebay".
   const platform = `test-fail-reenqueue-${crypto.randomUUID()}`;
   const listingId = `fail-reenqueue-${crypto.randomUUID()}`;
   const jobId = `sync:${platform}:${listingId}`;
@@ -83,18 +64,13 @@ test("a listing whose debounced sync_listing job has failed (exhausted its retri
     return { ok: true };
   });
 
-  // First enqueue: attempts:1 so it fails on the very first (and only) try,
-  // no retry/backoff wait. delay:10 keeps the test fast — the debounce
-  // mechanism itself isn't what's under test here.
+  // attempts:1 so it fails on the first try with no retry wait; delay:10 keeps the test fast.
   await enqueueChannelJob(platform, "sync_listing", { listingId }, { attempts: 1, delay: 10 });
   await new Promise((resolve) => testQueue.once("failed", resolve));
   assert.equal(attempts, 1);
 
-  // The Bull gotcha this fixes: add() returns the EXISTING job for a jobId
-  // present in ANY state, including "failed" — without removeOnFail: true
-  // (and the defensive cleanup for jobs that failed before this fix
-  // deployed), this second call would be silently swallowed forever and the
-  // listing could never sync again, with no error raised anywhere.
+  // The Bull gotcha this fixes: add() returns the existing job for a jobId in any state,
+  // including failed — without removeOnFail: true, this call would be silently swallowed forever.
   await enqueueChannelJob(platform, "sync_listing", { listingId }, { delay: 10 });
 
   const result = await new Promise((resolve) => testQueue.once("completed", (job, r) => resolve(r)));

@@ -10,12 +10,7 @@ import { useToast } from "@/context";
 import { createDomain } from "@/lib/api/domains";
 import { addDomainSchema, type AddDomainFormValues } from "@/lib/validation/domain";
 
-// Reference implementation for this app's react-hook-form + zod pattern:
-// schema lives in src/lib/validation/*.ts (shared, reusable, independent of
-// any one component), zodResolver wires it into RHF, and field errors flow
-// into the existing FormField component exactly like the hand-rolled
-// useState forms elsewhere already do — no visual/behavioral difference to
-// the user, just a validated, typed form instead of a manually-checked one.
+// Reference react-hook-form + zod pattern: schema in src/lib/validation/*.ts, zodResolver wires it in, errors flow into FormField same as the hand-rolled forms elsewhere.
 export function AddDomainModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -31,9 +26,7 @@ export function AddDomainModal({ open, onOpenChange }: { open: boolean; onOpenCh
     defaultValues: { hostname: "" },
   });
 
-  // Modal stays mounted between opens (Radix Dialog convention in this
-  // app) — reset the form each time it closes so a re-open never shows the
-  // previous attempt's value or error.
+  // Modal stays mounted between opens (Radix Dialog convention) — reset on close so a re-open never shows the previous attempt.
   useEffect(() => {
     if (!open) reset({ hostname: "" });
   }, [open, reset]);
@@ -46,8 +39,7 @@ export function AddDomainModal({ open, onOpenChange }: { open: boolean; onOpenCh
       onOpenChange(false);
     },
     onError: (err: Error) => {
-      // Server-side rejection (e.g. "already registered") — surfaced on the
-      // same field so it reads identically to a client-side validation error.
+      // Server-side rejection surfaced on the same field, reading like a client-side validation error.
       setError("hostname", { message: err.message || "Could not add this domain" });
     },
   });

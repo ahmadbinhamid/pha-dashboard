@@ -14,38 +14,20 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// vehicle comes from the PRODUCT's own `vehicle` field, fetched fresh by the
-// caller (never a copy stored on the listing/form) — this is what guarantees
-// Technical Specifications always matches the Product page and is never
-// affected by the listing's own (unrelated) Vehicle Fitment compatibility list.
+// vehicle comes from the PRODUCT's own `vehicle` field, fetched fresh by the caller (never copied onto the listing/form), so Technical Specifications always matches the Product page.
 export function generateListingHtml(
   form: EbayListingFormState,
   vehicle: ProductVehicle | null | undefined,
-  // This tenant's own branding (TenantSettings.company_name/logo_url) — every
-  // tenant shares this one generator, so nothing here may hardcode a specific
-  // tenant's name/logo.
+  // This tenant's own branding (TenantSettings.company_name/logo_url) — every tenant shares this generator, so nothing here may hardcode one tenant's name/logo.
   businessName?: string | null,
   logoUrl?: string | null,
-  // embedImages is intentionally true for BOTH the in-app preview
-  // (EbayDescriptionSection.tsx) and the real payload sent to eBay
-  // (lib/api/listings.ts#formStateToPayload) — product/tenant photos are
-  // hosted on our own domain over HTTPS and get embedded directly. Note:
-  // eBay's description sandbox has previously been observed rejecting
-  // hotlinked third-party images on some listings (renders as a broken
-  // icon there); this was a deliberate reversion of that restriction
-  // (2026-08-04) so real photos show wherever eBay allows them.
-  // fallbackImageUrl: product/variant photo to use when the listing has no
-  // photo_overrides of its own — mirrors the fallback the backend already
-  // applies when actually pushing to eBay (listing.resolver.js#resolvePhotos).
+  // embedImages is true for both the in-app preview and the real eBay payload — our own hosted HTTPS photos embed directly; hotlink rejection was deliberately reverted (2026-08-04) so real photos show.
+  // fallbackImageUrl: product/variant photo used when the listing has no photo_overrides, mirroring the backend's own fallback (listing.resolver.js#resolvePhotos).
   { embedImages = false, fallbackImageUrl }: { embedImages?: boolean; fallbackImageUrl?: string } = {},
 ): string {
   const business = esc(businessName?.trim() || "Your Store");
   const businessNameSpan = `<span style="display:inline-block;vertical-align:middle;font-family:Georgia,serif;font-size:26px;color:#f8e19b;letter-spacing:1px;">${business}</span>`;
-  // Kept flat (no nested <table>) — eBay's live listing-description sanitizer
-  // has been observed dropping content inside a <table> nested another
-  // level deep inside the outer layout table, even though it renders fine
-  // in our own preview iframe. inline-block siblings are far more likely to
-  // survive whatever HTML sanitizer eBay runs on the saved description.
+  // Kept flat (no nested <table>) — eBay's sanitizer has dropped doubly-nested table content before, even though it renders fine in our preview iframe.
   const headerLogo = embedImages && logoUrl?.startsWith("https://")
     ? `<div style="white-space:nowrap;">
         <img src="${esc(logoUrl)}" alt="${business}" style="max-height:80px;max-width:200px;vertical-align:middle;display:inline-block;margin-right:16px;">
@@ -93,13 +75,7 @@ export function generateListingHtml(
         <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
       </tr>`;
 
-  // See the embedImages doc-comment above — the actual eBay submission
-  // (embedImages: false) never gets here with a real image; only our own
-  // preview does. The real product photo also displays correctly on eBay
-  // itself regardless, via its own native gallery (see
-  // ebay.api.service.js#resolveImageUrls, a separate Inventory API path that
-  // eBay re-hosts on i.ebayimg.com) — this placeholder only affects this
-  // description block.
+  // Only our own preview reaches here with a real image (embedImages: false on the real eBay submission); the photo still shows on eBay via its own gallery (ebay.api.service.js#resolveImageUrls).
   const rawImage = form.photo_overrides?.[0]?.url || fallbackImageUrl || "";
   const firstImage = embedImages && rawImage.startsWith("https://") ? rawImage : "";
   const imageCell = firstImage

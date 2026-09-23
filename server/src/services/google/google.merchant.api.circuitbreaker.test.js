@@ -5,8 +5,7 @@
 // end-to-end path (sync.service.js#syncListing -> google.adapter.js ->
 // google.merchant.api.service.js), not just the classifier function in
 // isolation, so this proves the actual ChannelConnection.consecutive_failures
-// counter behaves correctly, not just that the error carries the right
-// `.status`.
+// counter behaves correctly, not just that the error carries the right `.status`.
 //
 // Needs a live Mongo connection — run with:
 //   node --test src/services/google/google.merchant.api.circuitbreaker.test.js

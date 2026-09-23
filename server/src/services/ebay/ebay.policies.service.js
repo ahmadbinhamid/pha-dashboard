@@ -1,14 +1,6 @@
 // services/ebay/ebay.policies.service.js
-// eBay Sell Account API — business policies (fulfillment / payment / return)
-//
-// API reference: https://developer.ebay.com/api-docs/sell/account/resources/
-//   fulfillment_policy GET  /sell/account/v1/fulfillment_policy?marketplace_id=…
-//   payment_policy     GET  /sell/account/v1/payment_policy?marketplace_id=…
-//   return_policy      GET  /sell/account/v1/return_policy?marketplace_id=…
-//
-// All three require the sell.account OAuth scope, which is already included in
-// the refresh-token grant in ebay.api.service.js. Tenant-scoped — each
-// seller's own business policies live under their own access token.
+// eBay Sell Account API — business policies (fulfillment/payment/return), tenant-scoped via sell.account OAuth scope.
+// Reference: https://developer.ebay.com/api-docs/sell/account/resources/
 
 const { getAccessToken, ebayHeaders, apiBaseUrlFor } = require("./ebay.api.service");
 const { logger } = require("../../loaders/logging");

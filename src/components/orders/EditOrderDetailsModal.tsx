@@ -38,9 +38,7 @@ function orderToForm(order: OrderDetail): EditOrderDetailsFormValues {
   };
 }
 
-// Edits the order's OWN customer/address snapshot — deliberately never the
-// linked Customer profile (if any), same separation the backend already
-// keeps (see order.service.js#updateOrderCustomerDetails).
+// Edits the order's own customer/address snapshot, never the linked Customer profile — same separation the backend keeps (order.service.js#updateOrderCustomerDetails).
 export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDetailsModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -62,8 +60,7 @@ export function EditOrderDetailsModal({ order, open, onOpenChange }: EditOrderDe
 
   const useDifferentBilling = watch("useDifferentBilling");
 
-  // Re-sync from the order every time the modal opens — not on every order
-  // change, since a background refetch mid-edit shouldn't clobber in-progress input.
+  // Re-sync only when the modal opens, not on every order change — a background refetch mid-edit shouldn't clobber in-progress input.
   useEffect(() => {
     if (open) reset(orderToForm(order));
     // eslint-disable-next-line react-hooks/exhaustive-deps

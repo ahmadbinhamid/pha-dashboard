@@ -1,10 +1,6 @@
 // services/stripe/stripe.keys.service.js
-//
-// This is the only place in the codebase that touches a tenant's encrypted
-// Stripe credentials directly. Every consumer that needs to actually call
-// Stripe (stripe.payment.service.js, refund.service.js, webhook handling,
-// ...) goes through getDecryptedSecretKey/getStripeClientForTenant below —
-// none of them ever see the ciphertext fields on the Tenant document.
+// The only place that touches a tenant's encrypted Stripe credentials directly; every consumer
+// goes through getDecryptedSecretKey/getStripeClient below instead.
 
 const crypto = require("crypto");
 const Tenant = require("../../models/Tenant");
@@ -17,8 +13,7 @@ const SECRET_KEY_FIELDS = "+stripe_secret_key_ciphertext +stripe_secret_key_iv +
 const WEBHOOK_SECRET_FIELDS =
   "+stripe_webhook_secret_ciphertext +stripe_webhook_secret_iv +stripe_webhook_secret_tag";
 
-// Every event stripe.webhook.service.js actually handles — kept in sync with
-// its switch statement so the auto-registered endpoint doesn't silently miss one.
+// Every event stripe.webhook.service.js handles; kept in sync with its switch statement.
 const WEBHOOK_ENABLED_EVENTS = [
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
@@ -52,22 +47,15 @@ async function getDecryptedSecretKey(tenantId) {
   return decryptSecretKey(tenant);
 }
 
-// Every other Stripe-calling service uses this — never stripe.client.service
-// directly — so a tenant's key is always resolved from their own settings.
+// Every other Stripe-calling service uses this, never stripe.client.service directly.
 async function getStripeClient(tenantId) {
   const secretKey = await getDecryptedSecretKey(tenantId);
   return getStripeClientForTenant(tenantId, secretKey);
 }
 
-// Registers our shared webhook URL (this tenant's own opaque ?wt= token
-// already baked in) directly on the tenant's Stripe account and stores the
-// signing secret Stripe hands back — so a tenant never has to go find
-// Developers → Webhooks themselves. Best-effort: a restricted API key
-// without webhook_endpoints:write permission will fail here even though the
-// key is otherwise perfectly valid for payments, so this never blocks
-// saving the secret key itself — it just leaves webhook_configured false,
-// surfaced to the tenant so they (or we, manually) can finish it via
-// updateWebhookSecret.
+// Registers our shared webhook URL directly on the tenant's Stripe account. Best-effort: a
+// restricted API key without webhook_endpoints:write fails here without blocking key save,
+// leaving webhook_configured false for manual completion via updateWebhookSecret.
 async function registerWebhookEndpoint(tenantId, stripe, webhookUrl) {
   if (!webhookUrl) return;
   try {
@@ -84,10 +72,8 @@ async function registerWebhookEndpoint(tenantId, stripe, webhookUrl) {
   }
 }
 
-// Validates the key against Stripe itself (a cheap, read-only call) before
-// persisting — catching a typo'd/revoked key at save time instead of on the
-// next real charge. `webhookUrl`, if provided, triggers automatic webhook
-// registration (see registerWebhookEndpoint) whenever a new secret key is set.
+// Validates the key against Stripe (a cheap read-only call) before persisting, catching a
+// typo'd/revoked key at save time. `webhookUrl`, if provided, triggers automatic webhook registration.
 async function updateStripeKeys(tenantId, { secret_key, publishable_key }, webhookUrl) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant) throw httpError("Tenant not found", 404);
@@ -166,9 +152,8 @@ async function updateWebhookSecret(tenantId, webhookSecret) {
   logger.info("[stripe.keys] Webhook secret updated", { tenantId: String(tenantId) });
 }
 
-// Resolves the tenant/webhook-secret pair a Stripe webhook delivery belongs
-// to, purely from the opaque token in its URL — the real tenant_id never
-// appears there. Mirrors ebay.settings.service.js#findByWebhookToken.
+// Resolves the tenant/webhook-secret pair purely from the opaque URL token, mirroring
+// ebay.settings.service.js#findByWebhookToken.
 async function findByWebhookToken(webhookToken) {
   if (!webhookToken) return null;
   const tenant = await Tenant.findOne({ stripe_webhook_token: webhookToken }).select(WEBHOOK_SECRET_FIELDS);

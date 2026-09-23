@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Base shape shared by every address (shipping/billing) across the app's
-// forms — AddressFields.tsx is the one shared component that renders these
-// four fields everywhere, so this is the one schema every form composes.
+// Base shape shared by every address (shipping/billing) — AddressFields.tsx renders these four fields everywhere, so every form composes this one schema.
 export const addressFieldsSchema = z.object({
   address: z.string(),
   suburb: z.string(),
@@ -18,8 +16,7 @@ export function isAddressFilled(a: AddressFieldsValues): boolean {
   return !!(a.address.trim() || a.suburb.trim() || a.state.trim() || a.postcode.trim());
 }
 
-// All four fields required — used when an address section is mandatory
-// (e.g. storefront checkout shipping address).
+// All four fields required, used when an address section is mandatory (e.g. storefront checkout shipping).
 export const requiredAddressSchema = z.object({
   address: z.string().trim().min(1, "Address is required"),
   suburb: z.string().trim().min(1, "Suburb is required"),
@@ -27,11 +24,7 @@ export const requiredAddressSchema = z.object({
   postcode: z.string().trim().min(1, "Postcode is required"),
 });
 
-// Optional as a whole, but "all or nothing" — if the merchant/customer
-// started filling ANY field, the rest are then required too, so a half-typed
-// address can't silently save as if it were empty. Attach with
-// `.superRefine` at the point each field's error needs a specific path
-// (e.g. prefixed for a billing address) — see customer.ts for the pattern.
+// Optional as a whole, but "all or nothing": filling any field makes the rest required, so a half-typed address can't save as empty. Attach with `.superRefine` for a path-specific error (see customer.ts).
 export function validatePartialAddress(a: AddressFieldsValues): Partial<Record<keyof AddressFieldsValues, string>> {
   if (!isAddressFilled(a)) return {};
   const errors: Partial<Record<keyof AddressFieldsValues, string>> = {};

@@ -77,10 +77,8 @@ exports.register = async (req, res) => {
   }
 };
 
-// Self-service signup — creates a brand-new tenant plus its first (admin)
-// user, unlike register() above which joins an existing tenant. The new
-// user is active immediately (no admin exists yet on a brand-new tenant to
-// approve them) and logged in right away, same response shape as login().
+// Self-service signup: creates a brand-new tenant plus its first admin user, active immediately,
+// unlike register() above which joins an existing tenant.
 exports.registerTenant = async (req, res) => {
   try {
     const { company_name, first_name, last_name, email, password } = req.body || {};
@@ -119,10 +117,8 @@ function issueLoginToken(user) {
   });
 }
 
-// Shared by login() (single-match branch) and selectOrganization() — an
-// account with two_factor_enabled set sends an OTP and defers issuing a
-// token until it's verified via verifyOTP; everyone else logs straight in,
-// same as before 2FA existed.
+// Shared by login() and selectOrganization(): 2FA sends an OTP and defers the token until
+// verifyOTP; everyone else logs straight in.
 async function maybeIssueOtpOrToken(res, user) {
   if (user.two_factor_enabled) {
     const otp = generateOTP();
@@ -138,21 +134,10 @@ async function maybeIssueOtpOrToken(res, user) {
   return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
 }
 
-// email is unique per-tenant, not globally (User.js's compound index
-// deliberately allows the same person to hold a separate account under more
-// than one tenant — e.g. staff at more than one of our clients). Previously
-// this looked up a single `User.findOne({email})`, which — if the same email
-// existed under two tenants — resolved to whichever one Mongo happened to
-// return first, risking authenticating someone into the WRONG tenant's
-// dashboard. Found in a tenant-isolation audit (Aug 2026), not live-reported.
-//
-// Fix: verify the password against EVERY account sharing this email. Exactly
-// one match (the overwhelming common case) logs in exactly as before, no
-// behavior change. More than one match means this identity genuinely holds
-// multiple organization memberships — industry-standard handling
-// (Slack/Notion/Linear-style) is to authenticate the PERSON here, then let
-// them pick which organization to enter via exports.selectOrganization,
-// rather than guessing one for them.
+// email is unique per-tenant, not globally, so a single findOne risked authenticating someone
+// into the wrong tenant's dashboard when the same email existed under two. Found in an audit.
+// Fix: verify the password against every account sharing this email; more than one match
+// authenticates the person, then lets them pick via exports.selectOrganization.
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -181,11 +166,8 @@ exports.login = async (req, res) => {
     const tenants = await tenantService.findTenantsByIds(active.map((u) => u.tenant_id));
     const tenantById = new Map(tenants.map((t) => [t._id.toString(), t]));
 
-    // Short-lived — carries no access, just proof that THIS email+password
-    // pair already cleared credential checks for exactly this set of
-    // accounts. selectOrganization only trusts a tenant_id choice that
-    // appears in user_ids below, so it can't be used to pick an account
-    // whose password was never actually verified above.
+    // Short-lived, carries no access — just proof this email+password pair cleared credential
+    // checks for this set of accounts. selectOrganization only trusts a tenant_id in user_ids.
     const pendingToken = signJwt(
       { purpose: "org_selection", email, user_ids: active.map((u) => u._id.toString()) },
       { expiresIn: "10m" },
@@ -209,10 +191,8 @@ exports.login = async (req, res) => {
   }
 };
 
-// Completes login for a multi-organization account — see exports.login.
-// Trusts tenant_id only if it belongs to the pending_token's user_ids set,
-// which was itself only populated for accounts whose password already
-// verified during login(); this endpoint never re-checks a password.
+// Completes login for a multi-organization account. Trusts tenant_id only if it's in the
+// pending_token's user_ids set; never re-checks a password.
 exports.selectOrganization = async (req, res) => {
   try {
     const { pending_token, tenant_id } = req.body || {};
@@ -287,8 +267,7 @@ exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
 
-    // Scoped to the calling superadmin's own tenant — verifying a
-    // self-registered user in another tenant is not this endpoint's job.
+    // Scoped to the calling superadmin's own tenant; another tenant's user is not this endpoint's job.
     const user = await findUserByEmail(email, req.tenantId);
     if (!user) return unauthorized(res, "Invalid email");
 
@@ -320,11 +299,8 @@ exports.verifyAccount = async (req, res) => {
   }
 };
 
-// Same email-not-globally-unique reasoning as login() — sends a SEPARATE
-// reset link per matching account instead of guessing which one tenant the
-// person meant, since (unlike login) there's no password yet to narrow
-// candidates down to one. Whoever owns the inbox ends up with one email per
-// organization membership and resets whichever they meant.
+// Same email-not-globally-unique reasoning as login(); sends a separate reset link per matching
+// account since there's no password yet to narrow candidates to one.
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body || {};
@@ -411,11 +387,8 @@ exports.changePassword = async (req, res) => {
     const user = await findUserByIdWithPassword(userId);
     if (!user) return unauthorized(res, "Unauthorized");
 
-    // 400, not 401 — a wrong current-password entry is a validation
-    // rejection on an otherwise-valid session, not an expired/invalid
-    // token. The frontend's axios interceptor treats any 401 as "session
-    // expired" and force-logs the user out, which would silently bounce
-    // them to /login before they ever saw this error.
+    // 400, not 401 — a wrong current password is a validation rejection, not an expired token.
+    // The frontend's interceptor treats 401 as "session expired" and force-logs out.
     const ok = await comparePassword(current_password, user.password);
     if (!ok) return badRequest(res, "Current password is incorrect");
 

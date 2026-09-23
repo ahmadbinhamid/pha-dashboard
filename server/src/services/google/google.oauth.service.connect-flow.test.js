@@ -1,15 +1,7 @@
 // services/google/google.oauth.service.connect-flow.test.js
-//
-// TASK 4: covers the restructured two-step connect flow — consent first
-// (buildConsentUrl/resolveState no longer carry merchant fields, only
-// tenant_id + purpose, but the signed/verified/purpose-checked state
-// mechanism itself is unchanged), then savePendingConnection (saves a
-// PENDING ChannelConnection with just the token), listAccessibleAccounts
-// (accounts.list, keyed off that saved token), and completeConnection
-// (upgrades PENDING -> CONNECTED once a Merchant Center account is chosen).
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/google/google.oauth.service.connect-flow.test.js
+// Covers the two-step connect flow: consent (state carries only tenant_id + purpose), then
+// savePendingConnection, listAccessibleAccounts, and completeConnection (PENDING -> CONNECTED).
+// Needs a live Mongo connection. Run: node --test src/services/google/google.oauth.service.connect-flow.test.js
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -60,11 +52,7 @@ test("savePendingConnection: saves a PENDING connection with just the token, no 
     .lean();
   assert.ok(conn, "a ChannelConnection row must exist after savePendingConnection");
   assert.equal(conn.status, "pending");
-  // Not $set at all by savePendingConnection (no merchant account has been
-  // chosen yet) — a base-model upsert doesn't apply a discriminator-only
-  // field's schema default for a field it never touched, so this reads
-  // back as genuinely absent (undefined), not an explicit null. Either way
-  // reads as "missing" to assertConfigured's `!settings?.merchant_id` check.
+  // Not $set at all by savePendingConnection, so this reads back as genuinely absent (undefined).
   assert.equal(conn.merchant_id, undefined);
   assert.equal(conn.data_source_id, undefined);
   assert.equal(decrypt(unpackCiphertext(conn.access_token_ct)), "acc-1");

@@ -12,11 +12,7 @@ import { sendInvitation } from "@/lib/api/access";
 import { inviteMemberSchema, type InviteMemberFormValues } from "@/lib/validation/access";
 import type { Invitation, Role } from "@/types/access";
 
-/**
- * Invites are keyed on the address: inviting someone who already has a
- * pending, declined or revoked invite reopens that same invite with the new
- * role and a fresh link, rather than creating a second one.
- */
+/** Invites are keyed on the address: inviting someone with a pending/declined/revoked invite reopens it with the new role and a fresh link, not a second one. */
 export function InviteMemberModal({
   open,
   onOpenChange,
@@ -43,8 +39,7 @@ export function InviteMemberModal({
     defaultValues: { email: "", role_id: "" },
   });
 
-  // The modal stays mounted between opens (Radix Dialog convention here), so
-  // reset on close keeps the next open clean.
+  // Modal stays mounted between opens (Radix Dialog convention), so reset on close keeps the next open clean.
   useEffect(() => {
     if (!open) reset({ email: "", role_id: "" });
   }, [open, reset]);

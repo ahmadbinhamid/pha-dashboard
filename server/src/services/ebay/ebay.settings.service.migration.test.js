@@ -53,8 +53,7 @@ test("lazy EbaySettings -> ChannelConnection read-through: identical shape, idem
   assert.equal(await ChannelConnection.findOne({ tenant_id: tenantId }).lean(), null, "no ChannelConnection yet");
 
   // 10 concurrent reads for a tenant with no ChannelConnection row yet —
-  // must never create duplicates, and every one must resolve to the
-  // identical shape.
+  // must never create duplicates, and every one must resolve to the identical shape.
   const results = await Promise.all(Array.from({ length: 10 }, () => svc.getSettings(tenantId)));
 
   for (const settings of results) {

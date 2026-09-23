@@ -1,10 +1,6 @@
 // scripts/reindexProducts.js
-//
-// (Re)creates the Typesense `products` collection (if missing) and upserts
-// every product across every tenant into it. Run after first deploying
-// Typesense search, or any time the index needs a full rebuild (e.g. after
-// changing the collection schema).
-//
+// (Re)creates the Typesense `products` collection and upserts every product into it. Run
+// after first deploying Typesense search, or any time the index needs a full rebuild.
 // Usage: node scripts/reindexProducts.js
 
 require("dotenv").config();

@@ -1,18 +1,7 @@
 // services/marketplace/listing.query.service.group.test.js
-//
-// TASK 6: listListingsGroupedByProduct returns one row per PRODUCT with all
-// of that product's listings nested under it, instead of one row per
-// listing — and paginates over distinct products, not listing rows.
-//
-// TASK 3 (this run): a filter (platform/state/sync_status/search) narrows
-// WHICH PRODUCTS qualify for a page, never which of a qualifying product's
-// channels are shown in its row — a product's row always carries its FULL
-// listing set. See listing.query.service.js#listListingsGroupedByProduct's
-// own comment for why (a grey "not listed" cell must always mean exactly
-// that, never "filtered out").
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/listing.query.service.group.test.js
+// listListingsGroupedByProduct returns one row per product (paginating over distinct products,
+// not listing rows); a filter narrows which products qualify, never which of a product's channels show.
+// Needs a live Mongo connection. Run: node --test src/services/marketplace/listing.query.service.group.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -119,10 +108,7 @@ test("listListingsGroupedByProduct: platform filter narrows WHICH PRODUCTS quali
   assert.equal(total, 1, "only the product with a matching google listing should qualify for the page");
   assert.equal(items[0].product._id.toString(), productWithBoth._id.toString());
 
-  // TASK 3: the row must NOT be silently narrowed to just the google
-  // listing — its ebay listing (which doesn't match the filter) must still
-  // be present, so an absent THIRD channel on this row is unambiguously
-  // "not listed", never "filtered out by the platform dropdown".
+  // The row must not be narrowed to just the google listing — its ebay listing must still be present.
   const platforms = items[0].listings.map((l) => l.platform).sort();
   assert.deepEqual(platforms, ["ebay", "google"], "a qualifying product's row must show ALL its listings, not just the one that matched the filter");
 });
@@ -132,8 +118,7 @@ test("listListingsGroupedByProduct: pagination (skip/limit) counts DISTINCT PROD
   t.after(() => mongoose.disconnect());
 
   const tenantId = new mongoose.Types.ObjectId();
-  // 3 products, each with 2 listings (ebay + google) = 6 listing rows total,
-  // but only 3 distinct products.
+  // 3 products, each with 2 listings, so 6 listing rows but only 3 distinct products.
   for (let i = 0; i < 3; i++) {
     const product = await makeProduct(tenantId);
     await MarketplaceListing.create({ tenant_id: tenantId, product: product._id, variant: null, platform: "ebay", state: LISTING_STATE.ACTIVE, condition: "NEW" });

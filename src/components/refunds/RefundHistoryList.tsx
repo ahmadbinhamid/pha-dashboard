@@ -18,9 +18,7 @@ const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger" | "mu
   voided: "muted",
 };
 
-// refund-redesign-spec.md §1.3/§2.3 — order-scoped history (scope, refund_number,
-// total_amount, needs_reconciliation), with a void action for a succeeded
-// refund (§3.8). Replaces the old payment-scoped, `amount`-only version.
+// refund-redesign-spec.md §1.3/§2.3: order-scoped history with a void action for succeeded refunds (§3.8), replacing the old payment-scoped, amount-only version.
 export function RefundHistoryList({ orderId, refunds }: { orderId: string; refunds: Refund[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

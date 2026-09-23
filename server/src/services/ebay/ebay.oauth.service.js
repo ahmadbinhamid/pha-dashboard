@@ -1,14 +1,6 @@
 // services/ebay/ebay.oauth.service.js
-//
-// eBay OAuth 2.0 authorization-code consent flow — replaces the old workflow
-// where an admin manually generated a refresh_token via eBay's developer
-// tools and pasted it into Settings. The tenant instead clicks "Connect
-// eBay", authorizes on eBay's own consent screen, and lands back here with a
-// short-lived `code` this service exchanges for a refresh_token.
-//
-// `state` carries which tenant/sandbox flag initiated the request — signed
-// (not just base64'd) so a forged state can't be used to attach the
-// resulting refresh_token to someone else's tenant.
+// eBay OAuth 2.0 consent flow: tenant authorizes on eBay's screen, we exchange the returned code for a refresh_token.
+// `state` carries the tenant/sandbox flag and is signed (not just base64'd) so it can't be forged to another tenant.
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
@@ -38,9 +30,7 @@ function assertConfigured() {
   }
 }
 
-// Returns the URL the frontend should navigate the browser to. `sandbox`
-// picks which eBay environment this tenant is connecting to; it travels
-// inside the signed state so the callback knows which token endpoint to hit.
+// Returns the consent URL to navigate to; `sandbox` travels in the signed state for the callback.
 function buildConsentUrl({ tenantId, sandbox }) {
   assertConfigured();
 
@@ -57,9 +47,7 @@ function buildConsentUrl({ tenantId, sandbox }) {
   return `${authorizeBaseFor(sandbox)}?${params.toString()}`;
 }
 
-// Verifies the round-tripped `state` and returns the tenant it belongs to.
-// Throws on a missing/expired/tampered/wrong-purpose token — callers should
-// treat that as a rejected callback, never as "no tenant."
+// Verifies the round-tripped `state`; throws (never returns "no tenant") on any invalid token.
 function resolveState(state) {
   if (!state) throw new Error("Missing OAuth state");
   const payload = verifyJwt(state);
@@ -67,8 +55,7 @@ function resolveState(state) {
   return { tenantId: payload.tenant_id, sandbox: !!payload.sandbox };
 }
 
-// Authorization-code exchange — one-time use, distinct from the
-// refresh_token grant ebay.api.service.js uses on every subsequent call.
+// One-time authorization-code exchange, distinct from the refresh_token grant used on later calls.
 async function exchangeCodeForRefreshToken(code, sandbox) {
   assertConfigured();
 

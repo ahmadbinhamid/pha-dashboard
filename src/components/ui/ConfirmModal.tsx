@@ -42,13 +42,7 @@ interface ConfirmModalProps {
   confirming?: boolean;
 }
 
-// Generic yes/no confirmation dialog — the one place in the app that stands
-// in for window.confirm()/alert(). Native browser dialogs can't be themed,
-// block the JS thread, and read as a bug on a dashboard this polished, so
-// this is what every "are you sure?" prompt should reach for instead. A
-// dialog that needs its own inputs or a more complex body (e.g. a delete
-// confirmation with a "this is still listed elsewhere" branch) still gets
-// its own one-off Modal — this is only for the plain confirm/cancel case.
+// Generic yes/no confirmation dialog, the one place standing in for window.confirm()/alert(). A dialog needing its own inputs or a more complex body still gets its own one-off Modal.
 export function ConfirmModal({
   open,
   onOpenChange,

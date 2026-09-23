@@ -63,8 +63,7 @@ exports.updateSettings = async (req, res) => {
       fallback_image_url,
     } = req.body || {};
 
-    // refresh_token is intentionally not accepted here — it's only ever set
-    // via the OAuth callback (oauthCallback below), never pasted by an admin.
+    // refresh_token is intentionally not accepted here — only set via the OAuth callback below.
     const update = {};
     if (marketplace_id !== undefined) update.marketplace_id = marketplace_id || "EBAY_AU";
     if (sandbox !== undefined) update.sandbox = !!sandbox;
@@ -91,11 +90,8 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-// Webhook URL carries an opaque `wt` (webhook_token) instead of this
-// tenant's real _id — see EbaySettings.webhook_token. Anyone who guesses/
-// enumerates it still can't do anything without also forging the HMAC
-// signature checked in handleWebhook, but not leaking a real database id in
-// a public URL closes off tenant enumeration entirely.
+// Webhook URL carries an opaque `wt` instead of the tenant's real _id, closing off enumeration
+// even though a guessed token still can't forge the HMAC signature checked in handleWebhook.
 exports.handleWebhookChallenge = async (req, res) => {
   try {
     const { challenge_code, wt } = req.query;
@@ -105,8 +101,7 @@ exports.handleWebhookChallenge = async (req, res) => {
     const settings = await settingsService.findByWebhookToken(wt);
     if (!settings || !settings.verification_token) return notFound(res, "Webhook not configured");
 
-    // Must byte-for-byte match the URL eBay was given when registering this
-    // subscription (see subscribeWebhook below) — including the query string.
+    // Must byte-for-byte match the URL eBay was given when registering this subscription.
     const endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook?wt=${wt}`;
 
     const challengeResponse = webhookService.verifyChallenge(
@@ -136,23 +131,14 @@ exports.handleWebhook = async (req, res) => {
       settings.verification_token,
     );
     if (!valid) {
-      // Diagnostic, not a fix: verifySignature checks HMAC-SHA256 against
-      // the shared verification_token, but eBay's Notification API is
-      // documented (unverified against real traffic — see PR/audit notes)
-      // to sign POST deliveries with an asymmetric scheme (public key
-      // fetched by keyId), not a shared secret. If that's correct, every
-      // genuine eBay delivery 401s here, permanently, and the real-time
-      // path silently never runs. Rather than guess at re-implementing an
-      // unverified crypto scheme (risking a DIFFERENT wrong implementation
-      // with false confidence), this logs what the header actually looks
-      // like so the very next real delivery gives hard evidence instead —
-      // check for a base64-decoded JSON payload containing a keyId/kid
-      // field, which would confirm the asymmetric-signature hypothesis.
+      // Diagnostic, not a fix: eBay may sign deliveries with an asymmetric scheme (keyId-fetched
+      // public key), not the shared secret verifySignature checks — logging the header lets the
+      // next real delivery confirm or rule that out rather than guessing at a re-implementation.
       let decodedPreview = null;
       try {
         decodedPreview = Buffer.from(signatureHeader || "", "base64").toString("utf8").slice(0, 500);
       } catch {
-        // signatureHeader wasn't valid base64 — decodedPreview stays null
+        // signatureHeader wasn't valid base64 — decodedPreview stays null.
       }
       logger.warn("[ebay.controller] Webhook signature verification failed — see decodedPreview for scheme diagnosis", {
         hasSignatureHeader: !!signatureHeader,
@@ -195,8 +181,7 @@ exports.subscribeWebhook = async (req, res) => {
 
 // ── OAuth consent flow ───────────────────────────────────────────────────────
 
-// Authenticated — returns the URL the dashboard should navigate to so the
-// tenant's admin can grant consent on eBay's own hosted screen.
+// Authenticated; returns the URL the dashboard navigates to for eBay's hosted consent screen.
 exports.getConnectUrl = async (req, res) => {
   try {
     const sandbox = req.query.sandbox === "true";
@@ -207,9 +192,7 @@ exports.getConnectUrl = async (req, res) => {
   }
 };
 
-// Public — eBay redirects the browser here directly after consent, so there
-// is no JWT to authenticate the request with. Trust is instead placed in the
-// signed `state` round-tripped through eBay (see ebay.oauth.service.js).
+// Public — eBay redirects here directly after consent, no JWT; trust is in the signed `state`.
 exports.oauthCallback = async (req, res) => {
   const dashboardUrl = config.emailBrand.clientUrl;
   const redirect = (params) => res.redirect(`${dashboardUrl}/settings?${new URLSearchParams(params).toString()}`);
@@ -237,11 +220,8 @@ exports.oauthCallback = async (req, res) => {
   }
 };
 
-// Best-effort — called right after a successful OAuth connect. If the seller
-// already has a merchant location set up on eBay (e.g. from their seller
-// hub), fill it in automatically so they don't have to copy the key by hand.
-// Never throws: a failure here shouldn't turn a successful connect into an
-// error redirect, since the key can still be entered manually in Settings.
+// Best-effort: auto-fills the seller's existing eBay merchant location if any. Never throws —
+// a failure shouldn't turn a successful connect into an error redirect.
 async function autoFillMerchantLocationKey(tenantId, settings) {
   try {
     const token = await ebayApiService.getAccessToken(settings);

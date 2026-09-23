@@ -1,14 +1,6 @@
 // services/ebay/ebay.settings.migration-script.test.js
-//
-// Regression guard for scripts/migrateEbaySettingsToChannelConnection.js:
-// --dry-run writes nothing, and a real run is idempotent (a second run
-// skips a tenant it already migrated, never overwriting it). Requires the
-// script's `run()` directly (mongoose connect/disconnect handled here, same
-// as this script's own CLI entry point does) rather than shelling out to it
-// as a subprocess.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/ebay/ebay.settings.migration-script.test.js
+// Regression guard: --dry-run writes nothing; a real run is idempotent (re-run skips already-migrated tenants).
+// Needs a live Mongo connection. Run: node --test src/services/ebay/ebay.settings.migration-script.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -38,12 +30,8 @@ test("migrateEbaySettingsToChannelConnection: --dry-run writes nothing, a real r
     refresh_token_tag: tag,
     connection_status: "connected",
     marketplace_id: "EBAY_AU",
-    // EbaySettings.webhook_token is unique+sparse — sparse only excludes a
-    // field that's entirely ABSENT, not one present with value null, so two
-    // rows both defaulting to null (any tenant that's never called
-    // ensureWebhookToken) collide. Explicit here so this test never depends
-    // on being the only such row in a shared dev database (confirmed live
-    // while writing this test).
+    // webhook_token is unique+sparse; sparse excludes only absent fields, not null, so two
+    // null-defaulted rows would collide. Set explicitly so this test doesn't depend on being the only such row.
     webhook_token: `wt-${suffix}`,
   });
 

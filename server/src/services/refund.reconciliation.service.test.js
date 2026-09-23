@@ -1,24 +1,8 @@
 // services/refund.reconciliation.service.test.js
-//
-// Corrections round — reconcileStuckRefunds must distinguish "Stripe
-// confirmed this refund doesn't exist" (code: 'resource_missing' — the only
-// answer that legitimately releases a PROCESSING reservation) from every
-// other error (rate limit, timeout, transient 500 — Stripe being briefly
-// unreachable, not proof the refund never happened). Misreading a transient
-// error as resource_missing would release money that's still genuinely
-// moving at Stripe — getReservingRefunds deliberately never age-bounds
-// PROCESSING for exactly this reason.
-//
-// Mocks stripe.keys.service#getStripeClient via node:test's built-in mock
-// support, since this needs to exercise a specific Stripe API failure mode
-// without a real Stripe account. The mock must be installed BEFORE
-// refund.reconciliation.service.js (and, transitively,
-// stripe.webhook.service.js) are first required in this process — both call
-// stripeKeysService.getStripeClient at their own module-load/call time, so
-// the mock has to already be in place for that to pick it up.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.reconciliation.service.test.js
+// reconcileStuckRefunds must distinguish "Stripe confirmed this refund doesn't exist"
+// (resource_missing, the only case that releases a reservation) from every other error, which
+// could just be Stripe being briefly unreachable. Mocks getStripeClient before first require.
+// Needs a live Mongo connection. Run: node --test src/services/refund.reconciliation.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,9 +28,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
     },
   }));
 
-  // Required only now — after the mock is installed — so its own (and
-  // stripe.webhook.service.js's) calls to stripeKeysService.getStripeClient
-  // pick up the mocked function, not the real one.
+  // Required only now, after the mock is installed, so getStripeClient calls pick it up.
   const { reconcileStuckRefunds } = require("./refund.reconciliation.service");
 
   const TEST_TENANT_ID = new mongoose.Types.ObjectId();
@@ -131,10 +113,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
       idempotency_key: `recon-test-${suffix}`,
     });
 
-    // Backdate past RESERVATION_STALE_AFTER_MS so this is exactly the
-    // refund reconcileStuckRefunds' query would pick up — created_at is
-    // immutable at the Mongoose schema level, so this goes through the
-    // native driver collection directly (same as refund.service.stale-processing.test.js).
+    // Backdate past RESERVATION_STALE_AFTER_MS via the native driver, since created_at is immutable at the schema level.
     const staleCreatedAt = new Date(Date.now() - refundService.RESERVATION_STALE_AFTER_MS - 10 * 60 * 1000);
     await Refund.collection.updateOne({ _id: refund._id }, { $set: { created_at: staleCreatedAt } });
 

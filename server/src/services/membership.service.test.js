@@ -1,12 +1,7 @@
 // services/membership.service.test.js
-//
-// The rules the whole access model rests on: a person can hold several
-// organisations at once with a different role in each; permissions only ever
-// come from an ACTIVE membership; and leaving one organisation never touches
-// the account or the others.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/membership.service.test.js
+// A person can hold several organisations with a different role in each; permissions only come
+// from an ACTIVE membership; leaving one organisation never touches the account or the others.
+// Needs a live Mongo connection. Run: node --test src/services/membership.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

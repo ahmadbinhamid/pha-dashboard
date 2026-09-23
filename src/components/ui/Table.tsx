@@ -47,8 +47,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         "h-9 px-3.5 text-left align-middle whitespace-nowrap",
         "text-[11px] font-medium text-fg/45",
-        // Extra breathing room at the card's edges, where the table meets its
-        // border.
+        // Extra breathing room at the card's edges, where the table meets its border.
         "first:pl-5 last:pr-5",
         className,
       )}

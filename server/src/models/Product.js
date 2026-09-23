@@ -28,8 +28,7 @@ const vehicleSchema = new Schema(
   { _id: false },
 );
 
-// Internal staff comment thread — never shown to customers. Mirrors
-// Order.js's internalNoteSchema exactly.
+// Internal staff comment thread, never shown to customers. Mirrors Order.js's internalNoteSchema.
 const internalNoteSchema = new Schema(
   {
     text: { type: String, required: true, trim: true },
@@ -40,8 +39,7 @@ const internalNoteSchema = new Schema(
 );
 
 const productSchema = buildSchema({
-  // Backfilled onto every existing Product by scripts/backfillTenantId.js —
-  // slug's unique index below is compound with this.
+  // Backfilled via scripts/backfillTenantId.js; slug's unique index below is compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   title: { type: String, required: true, trim: true },
   slug: { type: String },
@@ -96,8 +94,7 @@ const productSchema = buildSchema({
 
 productSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });
 productSchema.index({ sku: 1 }, { sparse: true });
-// partialFilterExpression, NOT sparse — sku is stored as literal null on
-// products without one, and sparse only excludes an entirely unset field.
+// partialFilterExpression, not sparse — sku is stored as literal null, and sparse only excludes an unset field.
 productSchema.index(
   { tenant_id: 1, sku: 1 },
   { unique: true, partialFilterExpression: { sku: { $type: "string" } } },
@@ -105,9 +102,8 @@ productSchema.index(
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });
-// Supports category.service.js#getProductCountsByCategory — every storefront
-// page load runs this $match, and autoIndex is off in production
-// (loaders/mongoose.js), so this index only takes effect once built manually.
+// Supports getProductCountsByCategory's per-page-load $match; autoIndex is off in production, so
+// this index only takes effect once built manually.
 productSchema.index({ tenant_id: 1, categories: 1, is_published_online: 1, status: 1 });
 
 module.exports = model("Product", productSchema);

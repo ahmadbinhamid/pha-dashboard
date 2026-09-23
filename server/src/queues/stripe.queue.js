@@ -12,11 +12,8 @@ const redisOpts = {
   connectTimeout: 3000,
 };
 
-// Lazy, same reasoning and same getter-based shape as email.queue.js's own
-// `emailQueue` — see that file's comment for the full story (found live:
-// requiring this module used to open a real, never-closed Redis socket
-// immediately, which was hanging test files that only wanted an unrelated
-// service several requires away from this one).
+// Lazy, same reasoning and getter-based shape as email.queue.js — requiring this module used
+// to open a real, never-closed Redis socket immediately, hanging unrelated test files.
 let _stripeQueue = null;
 function ensureStripeQueue() {
   if (_stripeQueue) return _stripeQueue;

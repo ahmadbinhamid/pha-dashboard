@@ -5,18 +5,11 @@ import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
 import { formatCurrency, getLineGst } from "@/utils/format";
 
-// The running order, pinned beside steps 1 and 2 of the wizard.
-//
-// It used to live inside the Add Products step, which meant it vanished the
-// moment you moved on to the customer — the one screen where "wait, what am I
-// actually selling?" comes up. Step 3 keeps its own richer summary instead of
-// this one, since discounts, shipping and payment are editable there.
+// The running order, pinned beside steps 1 and 2. Used to live only inside Add Products and vanished once you moved to Customer; Step 3 keeps its own richer summary since discounts/shipping/payment are editable there.
 export function OrderSummaryPanel({ className }: { className?: string }) {
   const { items, totalItems, totalPrice } = useCart();
 
-  // GST-inclusive AU pricing: the component is extracted from the total, never
-  // added on top (utils/format.ts#getLineGst). Shipping and discounts aren't
-  // known until step 3, so this is deliberately labelled as items-only.
+  // GST-inclusive AU pricing: extracted from the total, never added on top (utils/format.ts#getLineGst). Labelled items-only since shipping/discounts aren't known until step 3.
   const gst = getLineGst(Math.round(totalPrice * 100)) / 100;
 
   return (
@@ -35,8 +28,7 @@ export function OrderSummaryPanel({ className }: { className?: string }) {
           <p className="text-xs text-fg/40">Add products from the list to get started.</p>
         </div>
       ) : (
-        // Caps at roughly six lines before scrolling, so a large order can't
-        // push the totals below the fold on a laptop.
+        // Caps at roughly six lines before scrolling so a large order can't push totals below the fold.
         <div className="max-h-[26rem] divide-y divide-border/60 overflow-y-auto">
           {items.map((item) => (
             <CartItemRow key={item.key} item={item} />

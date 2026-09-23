@@ -13,14 +13,8 @@ import {
   Warehouse,
 } from "lucide-react";
 
-// The Settings page's top-level tabs, and the sub-sections inside Store
-// Settings. Split out of the page itself (matching config/nav.tsx's role for
-// the app sidebar) so the tab bar, the router's redirects and the page body
-// all read from one list instead of three hand-kept copies.
-//
-// `available: false` marks an area the product doesn't have a backend for
-// yet — the tab still renders and is still navigable, it just shows
-// <ComingSoonPanel> instead of controls that would save nowhere.
+// The Settings page's top-level tabs and Store Settings sub-sections. Split out (like config/nav.tsx) so the tab bar, router redirects and page body read from one list instead of three copies.
+// `available: false` marks an area with no backend yet — the tab still renders and navigates, just showing <ComingSoonPanel> instead of controls that would save nowhere.
 
 export type SettingsTabId =
   | "appearance"
@@ -46,11 +40,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
   { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
   { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  // Both fully built end-to-end (Membership/Role/Invitation models, invite
-  // email flow, permission matrix) but pulled behind Coming Soon for now —
-  // see SettingsPage.tsx for the matching fallback. The backend routes,
-  // services and UsersTab/RolesTab components are untouched and still work;
-  // this only stops the UI from being reachable.
+  // Both fully built end-to-end but pulled behind Coming Soon for now (see SettingsPage.tsx's fallback) — backend routes/services/components are untouched, this only stops the UI being reachable.
   {
     id: "users",
     label: "User Management",

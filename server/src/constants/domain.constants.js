@@ -1,10 +1,7 @@
 // constants/domain.constants.js
 
-// pending: created, not yet DNS-verified. active: TXT record confirmed —
-// safe to trust for CORS/payment-domain purposes. suspended: was active but
-// a re-verification found the TXT record missing (see domain.service.js) —
-// kept on record rather than deleted so the tenant can see what happened
-// and re-verify, instead of silently losing the domain.
+// pending: not yet DNS-verified. active: TXT record confirmed, safe for CORS/payment-domain use.
+// suspended: was active but re-verification found the TXT record missing; kept, not deleted.
 const DOMAIN_STATUS = Object.freeze({
   PENDING: "pending",
   ACTIVE: "active",

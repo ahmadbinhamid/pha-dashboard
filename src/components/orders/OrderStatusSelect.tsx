@@ -16,8 +16,7 @@ const DOT_COLOR: Record<OrderFulfillmentStatus, string> = {
   cancelled: "bg-tag-danger-fg",
 };
 
-// Pure order lifecycle — payment status is a separate, read-only concept
-// (see OrderPaymentStatusBadge) and is never touched by this control.
+// Pure order lifecycle; payment status is a separate, read-only concept (OrderPaymentStatusBadge) never touched by this control.
 export function OrderStatusSelect({ order }: { order: { _id: string; fulfillment_status: OrderFulfillmentStatus } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

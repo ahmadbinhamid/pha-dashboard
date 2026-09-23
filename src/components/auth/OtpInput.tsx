@@ -12,10 +12,7 @@ export interface OtpInputProps {
   className?: string;
 }
 
-// One box per digit instead of a single free-text field — each box
-// auto-advances to the next on entry, steps back on backspace/arrow keys,
-// and a full paste (password manager, OS one-time-code suggestion) fills
-// every box at once instead of only the box it landed in.
+// One box per digit: auto-advances on entry, steps back on backspace/arrows, and a full paste fills every box at once.
 export function OtpInput({ id, value, onChange, length = 6, disabled, autoFocus, className }: OtpInputProps) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const digits = Array.from({ length }, (_, i) => value[i] ?? "");

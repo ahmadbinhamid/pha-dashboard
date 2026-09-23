@@ -5,17 +5,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { downloadPdf } from "@/utils/pdf";
 
-// Real-data replacement for the reference mockup's "Recent Reports" panel
-// (a list of pre-generated PDFs with fixed timestamps) — this app has no
-// report-generation/storage feature, so instead of faking that history,
-// each row downloads a real PDF of data already loaded on the page.
+// Real-data replacement for the mockup's "Recent Reports" panel (pre-generated PDFs with fixed timestamps) — this app has no report storage, so each row downloads a real PDF from data already on the page.
 export interface ExportDataset {
   id: string;
   title: string;
   rows: Record<string, unknown>[];
-  // What the rows actually cover. Defaults to the page's date range, which
-  // is wrong for a dataset built from current stock levels rather than
-  // orders in the window — that one passes its own wording.
+  // What the rows cover. Defaults to the page's date range, which is wrong for stock-level (not order-window) datasets — those pass their own wording.
   scopeLabel?: string;
 }
 

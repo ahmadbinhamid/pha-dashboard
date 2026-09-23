@@ -12,12 +12,7 @@ import {
 import { INVITATION_STATUS_BADGE } from "@/config/access";
 import type { Invitation } from "@/types/access";
 
-/**
- * `link` only exists on an invitation this session just sent or resent — the
- * server stores the token hashed, so there is nothing to recover it from
- * afterwards. Copy is therefore offered only while we still hold it; resend
- * mints a new link.
- */
+/** `link` only exists on an invitation this session just sent/resent (server stores the token hashed); Copy is offered only while we hold it, resend mints a new one. */
 export function InvitationRow({
   invitation,
   link,
@@ -56,8 +51,7 @@ export function InvitationRow({
       <TableCell className="text-sm text-fg/80">{invitation.role_id?.name ?? "—"}</TableCell>
 
       <TableCell>
-        {/* Expiry isn't a status: a pending invite past its date is still
-            pending server-side, but its link is dead until it's resent. */}
+        {/* Expiry isn't a status: a pending invite past its date is still pending server-side, but its link is dead until resent. */}
         {pending && invitation.is_expired ? <Badge variant="danger">Expired</Badge> : <Badge variant={badge.variant}>{badge.label}</Badge>}
       </TableCell>
 

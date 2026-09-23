@@ -91,9 +91,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
         setEditing(true);
       }}
     >
-      {/* Absolutely positioned so it never reserves layout space — otherwise
-          this value would sit left of the column's right edge even while
-          the pencil itself is invisible at opacity-0. */}
+      {/* Absolutely positioned so it never reserves layout space, or this value would sit left of the column's right edge. */}
       <span className="relative">
         {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
         <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/price:opacity-100" />
@@ -174,9 +172,7 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
         setEditing(true);
       }}
     >
-      {/* Absolutely positioned so it never reserves layout space — otherwise
-          this value would sit left of the column's right edge even while
-          the pencil itself is invisible at opacity-0. */}
+      {/* Absolutely positioned so it never reserves layout space, or this value would sit left of the column's right edge. */}
       <span className="relative">
         {item.discount_amount > 0 ? `-${formatCurrencyFromCents(item.discount_amount)}` : formatCurrencyFromCents(0)}
         <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/discount:opacity-100" />
@@ -194,9 +190,7 @@ export function OrderItemsTable({
   orderId: string;
   channel: OrderChannel;
 }) {
-  // eBay and manual (in-store) order prices/discounts can be corrected after
-  // the fact — the backend rejects an edit for storefront orders, so don't
-  // offer it here.
+  // eBay and manual (in-store) order prices/discounts can be corrected after the fact; the backend rejects edits for storefront orders, so don't offer it here.
   const editable = channel === "ebay" || channel === "manual";
   const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 

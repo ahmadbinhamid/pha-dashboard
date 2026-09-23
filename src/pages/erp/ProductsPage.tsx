@@ -12,10 +12,7 @@ import { getProductStats } from "@/lib/api/products";
 import { formatCurrency } from "@/utils/format";
 import { ArrowRight, Blocks, Layers, Plus, Tag, TriangleAlert } from "lucide-react";
 
-// Fetches GET /channels here (shared ["channels"] query key — same one
-// ListingsPage.tsx/GoogleConnectCard.tsx/ProductEditPage.tsx already use) so
-// the stat cards and the channel filter bar both drive off a single source
-// of truth for "which channels exist" — never a hardcoded platform list.
+// Fetches GET /channels via the shared ["channels"] query key (also used by ListingsPage/GoogleConnectCard/ProductEditPage) so stat cards and the filter bar share one source of truth.
 export default function ProductsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,8 +36,7 @@ export default function ProductsPage() {
   );
   const hasOutOfStock = !!stats && stats.outOfStockCount > 0;
 
-  // Same p_channel/view query params ProductsTab itself reads — this bar and
-  // that tab just share the URL, no prop plumbing needed between them.
+  // Same p_channel/view query params ProductsTab reads — this bar and that tab share the URL, no prop plumbing needed.
   const channelFilter = searchParams.get("p_channel") ?? "";
   const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
 
@@ -127,10 +123,7 @@ export default function ProductsPage() {
       {isLoading ? (
         <Skeleton className="h-11 w-full rounded-2xl" />
       ) : channels.length === 0 ? (
-        // A blank strip here (the old behaviour — nothing rendered, with
-        // nothing to explain why) reads as a bug, not as "you haven't
-        // connected anything yet". This is the one place on this page that
-        // says so and points at where to fix it.
+        // A blank strip (the old behavior) reads as a bug, not "nothing connected yet" — this is the one place on the page that says so.
         <button
           type="button"
           onClick={() => navigate("/settings/integrations")}

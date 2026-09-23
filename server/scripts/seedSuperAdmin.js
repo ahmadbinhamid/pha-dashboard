@@ -6,10 +6,8 @@ const Location = require("../src/models/Location");
 const Category = require("../src/models/Category");
 const { USER_ROLE, USER_STATUS } = require("../src/constants/user.constants");
 
-// Every model below is tenant-scoped now (see Tenant.js / Location.js /
-// Category.js) — this script predates multi-tenancy and used to create a
-// bare superadmin with no tenant_id, which the schema now rejects. Seed (or
-// reuse) one default tenant to own everything this script creates.
+// Every model below is tenant-scoped now; this script predates multi-tenancy and used to
+// create a bare superadmin with no tenant_id, which the schema now rejects. Seed a default tenant instead.
 const DEFAULT_TENANT = { name: "Parts Hub Australia", slug: "parts-hub-australia", code: "PHA" };
 
 const LOCATIONS = [
@@ -29,8 +27,7 @@ const CATEGORIES = [
   { name: "Exhaust", slug: "exhaust" },
 ];
 
-// NOTE (lint fix): see server.js's identical comment — the try/catch/
-// process.exit(1) below already means this never actually rejects.
+// See server.js's identical comment — the try/catch/process.exit(1) below never actually rejects.
 void (async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);

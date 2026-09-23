@@ -13,10 +13,7 @@ import type { Product } from "@/types/product";
 
 interface AddToCartButtonProps {
   product: Product;
-  // "icon" for dense contexts (table rows); "labeled" for a full button
-  // (product detail page); "icon-solid" for a prominent circular action in
-  // a shopping list (Add Products step) — same icon-only content as "icon"
-  // but sized and colored to read as the row's primary action, not a minor one.
+  // "icon" for dense contexts; "labeled" for a full button; "icon-solid" for a prominent circular primary action (Add Products step).
   display?: "icon" | "labeled" | "icon-solid";
   className?: string;
 }
@@ -25,10 +22,7 @@ function cartKey(productId: string, variantId: string | null) {
   return `${productId}:${variantId ?? "base"}`;
 }
 
-// Handles both add paths: a plain product adds straight to the cart on
-// click; a has_variants product opens a popover to pick which variant (and
-// quantity) first, since a variant is what's actually sellable, not the
-// parent product itself.
+// Handles both add paths: a plain product adds straight to cart; a has_variants product opens a popover to pick variant + quantity first.
 export function AddToCartButton({ product, display = "icon", className }: AddToCartButtonProps) {
   const { addItem } = useCart();
   const [open, setOpen] = useState(false);
@@ -78,8 +72,7 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
       // No per-variant shipping rate — always the parent product's.
       shipping_cost: product.shipping_cost ?? 0,
       quantity,
-      // Variant-level stock isn't exposed by the list-variants endpoint —
-      // the backend re-validates real availability at order-creation time.
+      // Variant-level stock isn't exposed by list-variants; backend re-validates real availability at order-creation time.
       max_quantity: null,
     });
     setOpen(false);

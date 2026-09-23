@@ -1,8 +1,6 @@
 // models/StripeProcessedEvent.js
-//
-// Idempotency ledger for incoming Stripe webhook events — mirrors the
-// EbayProcessedOrder pattern (atomic create() + catch duplicate-key error
-// to detect an event already handled, instead of a read-then-write check).
+// Idempotency ledger for incoming Stripe webhooks, mirroring EbayProcessedOrder's atomic
+// create() + catch duplicate-key pattern instead of a read-then-write check.
 
 const { model, Schema } = require("mongoose");
 
@@ -10,10 +8,7 @@ const schema = new Schema(
   {
     stripe_event_id: { type: String, required: true },
     type: { type: String, required: true }, // e.g. "payment_intent.succeeded"
-    // Which tenant's webhook endpoint this event was delivered to (BYOK —
-    // resolved from the opaque `wt` token in the URL, not from the event
-    // payload). Not required for idempotency (stripe_event_id is already
-    // globally unique), kept for debugging.
+    // Which tenant's webhook endpoint this was delivered to; not required for idempotency, kept for debugging.
     tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", default: null },
     processedAt: { type: Date, default: Date.now },
   },

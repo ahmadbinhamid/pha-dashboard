@@ -1,9 +1,6 @@
 // controllers/member.controller.js
-//
-// The people in the current organisation. Everything here acts on the
-// MEMBERSHIP, never the user account: changing a role, suspending access or
-// removing someone affects this organisation only, and leaves the person's
-// account and their other organisations untouched.
+// The people in the current organisation. Everything here acts on the membership, never the
+// user account, so it affects this organisation only.
 
 const membershipService = require("../services/membership.service");
 const { success, notFound, systemfailure } = require("../utils/http/response");

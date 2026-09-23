@@ -11,9 +11,7 @@ import type { PasswordFormState } from "@/types/auth";
 
 const FORM_ID = "change-password-form";
 
-// Mirrors auth.validation.js#changePassword — 6–128 characters, and the new
-// one can't be the current one (the server rejects that outright, so checking
-// here turns a 400 into an inline message).
+// Mirrors auth.validation.js#changePassword (6–128 chars, new != current); checking here turns a 400 into an inline message.
 const MIN_LENGTH = 6;
 
 const EMPTY_FORM: PasswordFormState = { current_password: "", new_password: "", confirm_password: "" };
@@ -33,8 +31,7 @@ export function ChangePasswordForm() {
     onError: (err: Error) => setError(err.message),
   });
 
-  // Still computed — these gate the submit button and the inline messages,
-  // they just aren't listed as a checklist any more.
+  // Still computed to gate the submit button and inline messages, just not listed as a checklist any more.
   const longEnough = form.new_password.length >= MIN_LENGTH;
   const isDifferent = form.new_password.length > 0 && form.new_password !== form.current_password;
   const matches = form.confirm_password.length > 0 && form.new_password === form.confirm_password;
@@ -55,8 +52,7 @@ export function ChangePasswordForm() {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setForm((f) => ({ ...f, [key]: value }));
-      // Clears the server's message as soon as the input it referred to
-      // changes, rather than leaving a stale error under an edited field.
+      // Clears the server's error as soon as its input changes, rather than leaving it stale under an edited field.
       if (error) setError("");
     };
   }

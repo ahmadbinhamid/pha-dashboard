@@ -14,10 +14,7 @@ export function DashboardSectionLabel({
   /** Small pill next to the title — e.g. "Daily Cycle", "6 Months", "3 Urgent". */
   badge?: React.ReactNode;
   badgeVariant?: BadgeVariant;
-  // What this chart/section actually shows — surfaced via a small (i) icon's
-  // hover tooltip rather than a permanently-visible subheading line, so
-  // every dashboard/reports card header stays the same compact height
-  // whether or not it has one.
+  // Shown via a small (i) tooltip rather than a subheading, so card headers stay the same height whether or not one is set.
   description?: React.ReactNode;
 }) {
   return (

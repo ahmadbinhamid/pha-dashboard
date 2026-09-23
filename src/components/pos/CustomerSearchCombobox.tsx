@@ -14,12 +14,7 @@ interface CustomerSearchComboboxProps {
   className?: string;
 }
 
-// Unlike the generic Combobox (which filters a fixed local list), this
-// re-queries the customers API on every keystroke — so a customer who
-// wouldn't appear on the listing page's first page (pagination) is still
-// found as soon as their name/email/phone matches the search term. With no
-// search text yet, it shows the same first page (default 15) the Customers
-// list page would show, so staff can browse recent customers without typing.
+// Unlike the generic Combobox (filters a fixed local list), this re-queries the customers API on every keystroke, so paginated-out customers are still found by search. With no search text, shows the same first page as the Customers list.
 export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className }: CustomerSearchComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");

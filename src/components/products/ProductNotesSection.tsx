@@ -14,9 +14,7 @@ interface ProductNotesSectionProps {
   number: number;
 }
 
-// Internal staff comment thread — distinct from the customer-facing
-// description. Notes accumulate over time and are never shown to customers.
-// Mirrors OrderNotesSection.tsx exactly.
+// Internal staff comment thread, distinct from the customer-facing description; never shown to customers. Mirrors OrderNotesSection.tsx.
 export function ProductNotesSection({ productId, slug, notes, number }: ProductNotesSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

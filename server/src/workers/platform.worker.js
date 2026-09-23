@@ -1,10 +1,6 @@
 // src/workers/platform.worker.js
-//
-// Merged email + search worker — both are low-volume, unrelated job types
-// that don't need a dedicated process each; combined here to cut down the
-// number of always-on worker containers. Processing logic is unchanged from
-// the old workers/email.worker.js and workers/search.worker.js, just both
-// attached in one process.
+// Merged email + search worker; both are low-volume and don't need a dedicated process each,
+// cutting down always-on worker containers. Processing logic unchanged from the old files.
 
 require("dotenv").config();
 const { connectMongo } = require("../loaders/mongoose");
@@ -49,11 +45,8 @@ emailQueue.on("completed", (job) => logger.info(`[emailQueue] completed ${job.id
 emailQueue.on("failed", (job, err) => logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`));
 
 // ── low stock digest ─────────────────────────────────────────────────────────
-//
-// Reuses the existing emailQueue (a distinct job name, "send" is untouched)
-// rather than a whole new queue file — same reasoning channel.worker.js uses
-// putting its own refresh_stale sweep on the same per-platform queue as
-// sync_listing, not a separate one.
+// Reuses the existing emailQueue (a distinct job name) rather than a new queue file, same
+// reasoning channel.worker.js uses putting refresh_stale on the same queue as sync_listing.
 
 emailQueue.process("low_stock_digest_sweep", 1, async () => {
   logger.info("[emailQueue] low_stock_digest_sweep starting");
@@ -61,11 +54,8 @@ emailQueue.process("low_stock_digest_sweep", 1, async () => {
 });
 
 emailQueue.isReady().then(async () => {
-  // Bull keys a repeatable job by its INTERVAL, not just its jobId — clear
-  // any stale schedule before re-registering, same gotcha
-  // channel.worker.js#attachRefreshStaleScheduler already documents, or a
-  // config change (INVENTORY_DIGEST_SWEEP_INTERVAL_MINUTES) leaves two
-  // schedules running side by side in Redis.
+  // Bull keys a repeatable job by its interval, not just its jobId — clear any stale schedule
+  // first, or a config change leaves two schedules running side by side in Redis.
   const existing = await emailQueue.getRepeatableJobs();
   for (const job of existing) {
     if (job.name === "low_stock_digest_sweep") {
@@ -90,13 +80,10 @@ emailQueue.isReady().then(async () => {
 
 // ── search ────────────────────────────────────────────────────────────────────
 
-// Re-fetches the product at process time (rather than trusting the payload)
-// so a job that sat in the queue for a while still indexes the latest state.
+// Re-fetches the product at process time so a job that sat queued for a while still indexes the latest state.
 searchQueue.process("index_product", 4, async (job) => {
   const { productId } = job.data;
-  // findById already excludes soft-deleted docs (softDelete.plugin's default
-  // query filter), so a null here means "deleted since this job was
-  // enqueued" — clean up the index instead of throwing.
+  // findById excludes soft-deleted docs, so null means "deleted since this job was enqueued".
   const product = await Product.findById(productId);
   if (!product) {
     await deleteProductFromIndex(productId);

@@ -26,9 +26,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   const payment = data?.data;
   const order = payment && typeof payment.order === "object" ? payment.order : null;
   const remaining = payment ? payment.amount - payment.amount_refunded : 0;
-  // refund-redesign-spec.md §7 — one refund action regardless of settlement
-  // method now (the dialog auto-detects Stripe vs manual per payment
-  // allocation, and can even span more than just this one payment).
+  // refund-redesign-spec.md §7: one refund action regardless of settlement method (dialog auto-detects Stripe vs manual, can span more than this payment).
   const canRefund = payment?.status === "succeeded" && remaining > 0;
 
   function handleRefunded() {
@@ -103,10 +101,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
 
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Refund History</div>
-                {/* This payment's own refund attributions — a refund spanning
-                    several payments on the order shows fully on the Order
-                    Detail page's Refund History instead, which is
-                    order-scoped rather than filtered to one payment. */}
+                {/* This payment's own refund attributions; a multi-payment refund shows fully on the order-scoped Refund History instead. */}
                 <RefundHistoryList orderId={order?._id ?? ""} refunds={payment.refunds} />
               </div>
             </div>

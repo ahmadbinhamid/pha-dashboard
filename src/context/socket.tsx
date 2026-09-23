@@ -6,22 +6,13 @@ import { useAuth } from "@/context/auth";
 import { useToast } from "@/context/toast";
 import type { NotificationData } from "@/types/notification";
 
-// Socket.IO connects to the bare server origin, not the REST /api/v1 base
-// path — VITE_API_URL is the REST base, so strip it down to just the origin.
-// VITE_API_URL can be a full absolute URL (local dev: http://localhost:7001/api/v1)
-// OR a relative path (production, when the frontend and API share a domain
-// behind a reverse proxy: /api/v1) — `new URL()` throws "Invalid URL" on a
-// bare relative path with no base, which crashed the whole provider tree in
-// production. Passing window.location.origin as the base makes both forms
-// resolve correctly: an absolute apiUrl ignores the base entirely, a
-// relative one resolves against it.
+// Socket.IO connects to the bare server origin, not the REST /api/v1 base path, so strip VITE_API_URL down to just the origin. It can be absolute (dev) or relative (prod, behind a reverse proxy) — `new URL()` throws on a bare relative path with no base, so window.location.origin is passed as the base to make both forms resolve.
 function wsOrigin() {
   const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:7000/api/v1";
   try {
     return new URL(apiUrl, window.location.origin).origin;
   } catch {
-    // Last resort — never let a malformed env value crash the app; the
-    // socket connection just won't work, same as if the server were down.
+    // Last resort — never let a malformed env value crash the app; the socket just won't connect, same as a down server.
     return window.location.origin;
   }
 }
@@ -33,11 +24,7 @@ interface NotificationPushPayload {
   data: NotificationData;
 }
 
-// Pushes a toast + invalidates the notifications query when the server-side
-// dormant Socket.IO setup (server/src/services/websocket.service.js) emits
-// "notification:new" — the bell/panel (NotificationBell.tsx) itself just
-// reads from React Query, this only drives it live rather than waiting on
-// its own refetchInterval fallback.
+// Pushes a toast + invalidates the notifications query when websocket.service.js emits "notification:new" — NotificationBell.tsx just reads React Query; this drives it live instead of waiting on its refetchInterval fallback.
 export function NotificationSocketProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();

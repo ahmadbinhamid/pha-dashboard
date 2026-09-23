@@ -77,10 +77,7 @@ export const getInvitations = async () => {
   return data;
 };
 
-/**
- * The response carries `link` — the only moment a shareable link exists,
- * since the server stores only its hash. Copy it now or resend for a new one.
- */
+/** The response carries `link`, the only moment a shareable link exists since the server stores only its hash. */
 export const sendInvitation = async (payload: { email: string; role_id: string }) => {
   const { data } = await apiClient.post<BeResponse<Invitation>>("/invitations", payload);
   return data;

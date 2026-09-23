@@ -49,17 +49,13 @@ interface CustomerFormModalProps {
   onOpenChange: (open: boolean) => void;
   // null => create mode
   customer: Customer | null;
-  // Prefills the Name field in create mode — e.g. carrying over what staff
-  // already typed into a customer search that came up empty.
+  // Prefills the Name field in create mode, e.g. from a customer search that came up empty.
   initialName?: string;
-  // Called with the newly created customer, in addition to the default
-  // toast/invalidate/close — lets callers (e.g. the POS create-order flow)
-  // auto-select the customer they just created.
+  // Called with the newly created customer, in addition to the default toast/invalidate/close — lets callers (e.g. POS) auto-select it.
   onCreated?: (customer: Customer) => void;
 }
 
-// Shared create/edit form — rendered from both the customer list page and
-// the customer profile page so the two never drift out of sync.
+// Shared create/edit form, rendered from both the customer list and profile pages so they never drift.
 export function CustomerFormModal({ open, onOpenChange, customer, initialName, onCreated }: CustomerFormModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

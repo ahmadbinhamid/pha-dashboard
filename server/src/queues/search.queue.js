@@ -12,12 +12,8 @@ const redisOpts = {
   connectTimeout: 3000,
 };
 
-// Lazy, same reasoning and same getter-based shape as email.queue.js's own
-// `emailQueue` — see that file's comment for the full story (found live:
-// requiring this module used to open a real, never-closed Redis socket
-// immediately — this was the SECOND of the two eager queues confirmed
-// hanging controllers/product.controller.fanout.test.js, alongside
-// email.queue.js).
+// Lazy, same reasoning and getter-based shape as email.queue.js — requiring this module used
+// to open a real, never-closed Redis socket immediately, hanging tests.
 let _searchQueue = null;
 function ensureSearchQueue() {
   if (_searchQueue) return _searchQueue;
@@ -29,8 +25,7 @@ function ensureSearchQueue() {
   return _searchQueue;
 }
 
-// Fire-and-forget from product CRUD (see product.controller.js) — a slow or
-// unreachable Redis/Typesense must never block a product save.
+// Fire-and-forget from product CRUD; a slow or unreachable Redis/Typesense must never block a save.
 async function enqueueSearchJob(type, payload, opts = {}) {
   const job = ensureSearchQueue().add(type, payload, {
     attempts: 3,

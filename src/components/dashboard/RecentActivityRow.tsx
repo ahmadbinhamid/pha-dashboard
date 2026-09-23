@@ -6,18 +6,10 @@ import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
 import type { OrderChannel } from "@/types/orders";
 
-// A compact variant of ActivityEventRow for the dashboard's Recent Activity
-// card specifically (the full multi-line detail view — every adjustment
-// tag, not just channel/SKU — stays on the Activity Log page
-// ActivityEventRow was built for). Channel/SKU get their own row below the
-// description rather than sharing its line — squeezing a pill onto the same
-// line as the description left barely any room for it, so it was
-// truncating mid-word ("...Manual sal...") on nearly every row.
+// Compact variant of ActivityEventRow for the dashboard's Recent Activity card; channel/SKU get their own row below the description since sharing its line truncated it mid-word.
 export function RecentActivityRow({ event }: { event: ActivityEvent }) {
   const { icon: Icon, style } = eventVisual(event);
-  // Order events tag their channel as tags[0] (see mapOrderEvent in
-  // dashboard.service.js) — safe to read directly since that's only ever a
-  // real OrderChannel value for an "order" event.
+  // Order events tag their channel as tags[0] (mapOrderEvent in dashboard.service.js) — only ever a real OrderChannel for an "order" event.
   const channel = event.type === "order" ? (event.tags[0] as OrderChannel) : null;
 
   return (

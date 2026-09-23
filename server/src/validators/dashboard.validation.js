@@ -5,10 +5,8 @@ const Joi = require("joi");
 const getOrderVolume = {
   query: Joi.object({
     days: Joi.number().integer().min(1).max(90).default(7),
-    // Custom range — an alternative to `days` (getOrderVolumeTrend prefers
-    // from/to over days when both are present). .and() requires either both
-    // or neither, and to >= from stops an inverted range from silently
-    // producing a negative-length (empty) bucket series.
+    // Custom range, an alternative to `days`. .and() requires either both or neither;
+    // to >= from stops an inverted range from producing an empty bucket series.
     from: Joi.date().iso(),
     to: Joi.date().iso().min(Joi.ref("from")),
   }).and("from", "to"),

@@ -38,8 +38,7 @@ test("createDataSource: on GCP_NOT_REGISTERED, registers the GCP project and thr
   // successful registerGcp call) failed with the exact same
   // GCP_NOT_REGISTERED error. So createDataSource must register and then
   // surface a clear "try again shortly" error, never attempt a same-request
-  // retry that's essentially guaranteed to fail on the very first
-  // registration.
+  // retry that's essentially guaranteed to fail on the very first registration.
   const calls = [];
   mock.method(global, "fetch", async (url) => {
     calls.push(String(url));

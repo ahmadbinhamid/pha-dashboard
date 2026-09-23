@@ -39,10 +39,7 @@ export default function DomainsPage() {
   });
 
   return (
-    // Rendered inside Settings → Integrations → Custom Domains, which
-    // supplies its own page padding — this used to bleed to the edges of the
-    // settings bottom sheet with negative margins, which now have nothing to
-    // cancel out.
+    // Rendered inside Settings → Integrations → Custom Domains, which supplies its own page padding — the old negative margins for the bottom-sheet bleed no longer have anything to cancel out.
     <div className="space-y-6">
       <PageHeader
         title="Domains"

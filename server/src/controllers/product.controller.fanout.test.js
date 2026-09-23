@@ -74,8 +74,7 @@ require("../models/Category");
 
 // One connection for the whole file (matching the single-connect/disconnect
 // shape every other *.test.js in this repo uses) rather than one per test —
-// avoids cycling the Mongo driver's connection/monitor setup 4x in one
-// process.
+// avoids cycling the Mongo driver's connection/monitor setup 4x in one process.
 before(async () => {
   await mongoose.connect(config.mongoUri);
 });

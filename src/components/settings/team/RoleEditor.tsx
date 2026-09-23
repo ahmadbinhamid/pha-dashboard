@@ -13,11 +13,7 @@ import { createRole, updateRole } from "@/lib/api/access";
 import { roleFormSchema } from "@/lib/validation/access";
 import type { PermissionGroup, Role } from "@/types/access";
 
-/**
- * Create or edit one role. A system role opens read-only: the server refuses
- * to edit it (role.service.js), so the form shows what it grants rather than
- * pretending it can be changed.
- */
+/** Create or edit one role. A system role opens read-only since the server refuses to edit it (role.service.js), so the form shows what it grants, not that it can change. */
 export function RoleEditor({
   role,
   groups,

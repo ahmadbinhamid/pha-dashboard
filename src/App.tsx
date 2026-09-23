@@ -54,14 +54,10 @@ export default function App() {
     >
       <AppProviders>
         <Routes>
-          {/* Public — no login, no tenant context beyond the order id + guest
-              token in the URL. Shared across every tenant's payment links. */}
+          {/* Public — no login, no tenant context beyond the order id + guest token. Shared across every tenant's payment links. */}
           <Route path="/pay/:orderId" element={<PayOrderPage />} />
 
-          {/* Invite landing page. Deliberately NOT behind GuestRoute: the
-              link is equally valid for someone already signed in (they accept)
-              and for someone with no account yet (they sign up and join in one
-              step) — see InvitePage. The token in the URL is the credential. */}
+          {/* Invite landing page, deliberately not behind GuestRoute: valid both for someone signed in (accepts) and with no account (signs up and joins in one step) — see InvitePage. */}
           <Route path="/invite" element={<InvitePage />} />
 
           <Route
@@ -107,10 +103,7 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            {/* Redirect — /catalogue was this page's old name (Products and
-                Listings merged into one tabbed page). Kept as a redirect
-                (not removed) so any existing bookmark/deep link still lands
-                somewhere correct. */}
+            {/* /catalogue was this page's old name before Products/Listings merged; kept as a redirect so existing bookmarks still land correctly. */}
             <Route path="/catalogue" element={<Navigate to="/products" replace />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
@@ -129,10 +122,7 @@ export default function App() {
             <Route path="/activity-log" element={<ActivityLogPage />} />
             <Route path="/profile" element={<ProfilePage />} />
 
-            {/* Settings is one page with URL-driven tabs (/settings/:tab) and,
-                where a tab has a second level, /settings/:tab/:section. The
-                pre-redesign URLs below still resolve so existing links and
-                bookmarks land on the tab that replaced them. */}
+            {/* Settings is one page with URL-driven tabs (/settings/:tab, or /settings/:tab/:section); pre-redesign URLs below still resolve to whichever tab replaced them. */}
             <Route path="/settings" element={<Navigate to="/settings/store" replace />} />
             <Route path="/settings/business-info" element={<Navigate to="/settings/store/general" replace />} />
             <Route path="/settings/payment-account" element={<Navigate to="/settings/integrations/stripe" replace />} />

@@ -1,8 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-// Generic icon + label + value tile — e.g. the Order Total / Payment / Items
-// row on the order detail page. Reusable anywhere a small metric needs a
-// consistent card treatment.
+// Generic icon + label + value tile, reusable anywhere a small metric needs a consistent card treatment.
 export function StatCard({
   icon: Icon,
   label,

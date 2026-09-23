@@ -16,10 +16,7 @@ import { useToast } from "@/context";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings } from "@/types/tenantSettings";
 
-// Brand fields live in their own small form rather than the page-wide company
-// profile one, so this card's Save only ever PATCHes what it shows — the
-// tenant-settings endpoint takes partial bodies (every key optional), which is
-// what lets each settings card own its save instead of one giant submit.
+// Brand fields live in their own small form so this card's Save only PATCHes what it shows — the tenant-settings endpoint takes partial bodies, letting each card own its save instead of one giant submit.
 type BrandState = {
   logo_url: string | null;
   favicon_url: string | null;

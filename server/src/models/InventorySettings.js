@@ -20,8 +20,7 @@ const inventorySettingsSchema = buildSchema(
     // local time and converts at the load/save boundary (src/utils/timezone.ts
     // on the frontend). No per-tenant timezone field exists anywhere in this
     // single-market app, so Sydney is a hardcoded assumption, not read from
-    // here — this field itself carries no timezone info, it's UTC by
-    // convention only.
+    // here — this field itself carries no timezone info, it's UTC by convention only.
     notification_send_time: { type: String, default: "09:00" },
     // Dedup for the low-stock digest sweep (services/inventory-digest.service.js)
     // — set once per UTC calendar day a digest actually resolves (sent OR

@@ -32,10 +32,8 @@ router.put("/listings/:id", auth(), asyncHandler(listingCtrl.updateListing));
 router.delete("/listings/:id", auth(), asyncHandler(listingCtrl.deleteListing));
 router.post("/listings/:id/push", auth(), asyncHandler(listingCtrl.pushListing));
 
-// ── Webhook — no JWT auth (eBay calls these); HMAC-verified on POST. One
-// shared URL for every tenant; the tenant is resolved from the opaque `wt`
-// query param (see EbaySettings.webhook_token) rather than a real id in the
-// path, so the URL itself can't be enumerated to discover tenants. ─────────
+// ── Webhook — no JWT auth (eBay calls these); HMAC-verified on POST. One shared URL, tenant
+// resolved from the opaque `wt` query param so the URL can't be enumerated. ─────────
 router.get("/webhook", asyncHandler(ctrl.handleWebhookChallenge));
 router.post("/webhook", asyncHandler(ctrl.handleWebhook));
 

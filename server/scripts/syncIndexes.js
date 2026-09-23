@@ -1,13 +1,6 @@
 // scripts/syncIndexes.js
-//
-// One-off/idempotent: production disables Mongoose's autoIndex
-// (loaders/mongoose.js — autoIndex: config.env !== "production"), so a
-// schema change that adds/changes an index (e.g. this session's
-// Tenant.stripe_webhook_token, EbaySettings.webhook_token) never takes
-// effect in production until this is run explicitly. Safe to re-run any
-// time after a deploy that touches model indexes — syncIndexes() is a no-op
-// for indexes that already match the schema.
-//
+// Production disables Mongoose's autoIndex, so an index change never takes effect there until
+// this runs explicitly. Safe to re-run any time; a no-op for indexes that already match.
 // Usage: node scripts/syncIndexes.js
 
 require("dotenv").config();

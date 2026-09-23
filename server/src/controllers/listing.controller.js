@@ -1,11 +1,6 @@
 // controllers/listing.controller.js
-//
-// Thin HTTP layer over listing.query.service.js — the platform-agnostic
-// browse/read/delete/push counterpart to each platform's own listing
-// controller (ebay.listing.controller.js, google.listing.controller.js),
-// which stay platform-specific only for CREATE (see that service's own
-// module header for why). Mirrors ebay.listing.controller.js's shape for
-// the overlapping actions.
+// Thin HTTP layer over listing.query.service.js, the platform-agnostic browse/read/delete/push
+// counterpart to each platform's own listing controller (which stay platform-specific for CREATE).
 
 const { logger } = require("../loaders/logging");
 const listingQueryService = require("../services/marketplace/listing.query.service");
@@ -31,10 +26,7 @@ exports.getListings = async (req, res) => {
       req.tenantId,
     ];
 
-    // TASK 6: ?group_by=product returns one row per product (with all of
-    // its listings nested) instead of one row per listing — everything
-    // else about the request (filters, pagination, tenant scoping) is
-    // identical; only which service function shapes the response differs.
+    // ?group_by=product returns one row per product with all listings nested, instead of per listing.
     const { items, total } =
       group_by === "product"
         ? await listingQueryService.listListingsGroupedByProduct(...args)

@@ -1,7 +1,5 @@
 // routes/channel.routes.js
-//
-// Additive-only channel API — sits alongside routes/ebay.routes.js (left
-// untouched by this migration) behind the same auth/tenant middleware.
+// Additive-only channel API, sitting alongside routes/ebay.routes.js behind the same middleware.
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");

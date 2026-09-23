@@ -9,12 +9,7 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    // A real border, not `ring-1 ring-inset`: an inset ring is painted with
-    // the element's own background, i.e. BENEATH its descendants, so any
-    // full-bleed child with a background of its own paints straight over it.
-    // That was visible as the card's left and right edge vanishing alongside
-    // a table's header row, which reads as a broken border. A border sits
-    // outside the padding box, where no child can reach it.
+    // A real border, not `ring-1 ring-inset`: an inset ring paints beneath descendants, so a full-bleed child painted over it (card edges vanishing alongside a table header). A border sits outside the padding box.
     <div className={cn("rounded-2xl border border-border bg-card shadow-card", className)} {...rest}>
       {children}
     </div>
@@ -33,12 +28,7 @@ export function CardHeader({
   right?: React.ReactNode;
 }) {
   return (
-    // Always a row, even on mobile — `right` is usually a single small
-    // action (an Edit button, a menu trigger) that reads naturally next to
-    // the title; dropping it to its own line below (the previous
-    // flex-col/sm:flex-row behavior) looked broken rather than intentional.
-    // The title keeps min-w-0 so it can still wrap/truncate instead of
-    // pushing `right` off-screen if it's ever long.
+    // Always a row, even on mobile: `right` is usually a small action that reads naturally next to the title; dropping to its own line looked broken. Title keeps min-w-0 so it wraps/truncates instead of pushing `right` off-screen.
     <div
       className={cn(
         "flex flex-row items-start justify-between gap-3 border-b border-border px-4 py-4 sm:gap-4 sm:px-5",

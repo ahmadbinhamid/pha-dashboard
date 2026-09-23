@@ -23,8 +23,7 @@ stripeQueue.process("reconcile_stuck_refunds", 1, async () => {
   return reconcileStuckRefunds();
 });
 
-// Bull's Queue never emits a "ready" event (only the underlying redis client
-// does, internally) — isReady() is the real API for this.
+// Bull's Queue never emits a "ready" event; isReady() is the real API for this.
 stripeQueue.isReady().then(() => {
   logger.info("[stripeQueue] ready");
 
@@ -40,11 +39,8 @@ stripeQueue.isReady().then(() => {
     },
   );
 
-  // Stuck-refund reconciliation (corrections round) — every 15 minutes.
-  // Shorter than RESERVATION_STALE_AFTER_MS (1h, the age a refund has to
-  // reach before this job's own query even considers it stuck) so a refund
-  // that goes stuck gets picked up on close to the first sweep after
-  // crossing that threshold, not left for up to another hour on top.
+  // Every 15 minutes, shorter than RESERVATION_STALE_AFTER_MS (1h), so a newly-stuck refund
+  // gets picked up close to when it crosses that threshold, not left for another hour on top.
   stripeQueue.add(
     "reconcile_stuck_refunds",
     {},

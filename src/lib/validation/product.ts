@@ -4,10 +4,7 @@ import { vehicleYearRangeSchema } from "@/lib/validation/commonFields";
 import type { StockEntry } from "@/types/product";
 import type { Attachment } from "@/types/product";
 
-// Fields the original hand-written validators (ProductCreatePage/EditPage)
-// never checked (categories, images, stock entries, notes, etc.) stay
-// permissive here too — this migration fixes the price/year validation
-// gaps that were found live, not adds new restrictions nobody asked for.
+// Fields the original hand-written validators never checked stay permissive here too — this fixes the price/year validation gaps found live, not new restrictions.
 const productFormShape = {
   title: z.string().trim().min(1, "Title is required"),
   description: z.string(),
@@ -73,8 +70,7 @@ export const productCreateFormSchema = withPriceAndYearChecks({
   stock_entries: z.custom<StockEntry[]>(),
   notes: z.array(z.string()),
 }).superRefine((values, ctx) => {
-  // Stock is always tracked (no "track stock" toggle) — the opening
-  // quantity for the single Main Warehouse location is required.
+  // Stock is always tracked (no toggle) — opening quantity for the single Main Warehouse location is required.
   const entries = (values as { stock_entries: StockEntry[] }).stock_entries;
   const qty = entries[0]?.qty;
   if (entries.length === 0 || typeof qty !== "number" || qty < 0) {

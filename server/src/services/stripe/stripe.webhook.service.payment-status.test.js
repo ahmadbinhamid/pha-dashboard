@@ -58,8 +58,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
   // async-iterable (for findExistingStripeRefund's `for await` auto-
   // pagination) on the same value — see stripe.webhook.service.fixture.test.js's
   // makeListResponse for the full reasoning (a hang and a "not async
-  // iterable" TypeError were both hit live building that mock the first
-  // time).
+  // iterable" TypeError were both hit live building that mock the first time).
   function makeListResponse(items) {
     const response = {
       data: items,

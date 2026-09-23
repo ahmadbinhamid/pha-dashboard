@@ -9,11 +9,7 @@ function normaliseSpn(raw: unknown): string[] {
   return [""];
 }
 
-// Shared by every place that needs to resave a listing before pushing it to
-// eBay (ListingEditPage's own form, and ListingsPage's row-level "Push to
-// eBay" action) — description_override is generated client-side from this
-// form state, so any push path that skips regenerating it will resend
-// whatever HTML happens to already be stored (see ebayDescriptionGenerator.ts).
+// Shared by every place that resaves a listing before pushing to eBay (ListingEditPage, ListingsPage's row-level push) — description_override is generated client-side, so skipping this resends stale stored HTML.
 export function listingToForm(listing: EbayListing): EbayListingFormState {
   const productId =
     typeof listing.product === "object" ? listing.product._id : listing.product;
@@ -80,13 +76,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   };
 }
 
-// Product/variant photo to send to the server as the description-image
-// fallback when the listing has no photo_overrides of its own — same
-// variant -> product precedence as the backend's own
-// listing.resolver.js#resolvePhotos, kept in sync here so the description
-// HTML embeds a real photo under the same conditions the eBay photo gallery
-// already does. Requires the listing's `product`/`variant` to be populated
-// with `attachments` (see ebay.listing.service.js#getListingById).
+// Description-image fallback when the listing has no photo_overrides, same variant->product precedence as the backend's listing.resolver.js#resolvePhotos. Requires product/variant populated with attachments (ebay.listing.service.js#getListingById).
 export function getListingFallbackImageUrl(listing: EbayListing): string | undefined {
   const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
   const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;

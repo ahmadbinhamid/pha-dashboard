@@ -46,12 +46,7 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
-// ProductsPage's main content — product CRUD (grid/list, status/stock/
-// category filters, publish toggle, delete) merged with the per-channel
-// status view that used to be ListingsPage.tsx's default grouped-by-product
-// table. Channel SET comes from `channels` (GET /channels), never a
-// hardcoded platform list, so a newly-registered adapter appears here with
-// no changes to this file.
+// ProductsPage's main content: product CRUD merged with the per-channel status view from ListingsPage.tsx's old grouped-by-product table. Channel set comes from `channels` (GET /channels), never hardcoded, so new adapters appear with no changes here.
 export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -177,10 +172,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
 
   const pageProductIds = (data?.data?.items ?? []).map((p) => p._id);
 
-  // Full listing objects (not just platform names) so the expandable
-  // channel row can show real sync_status/synced_at, not just "is it on
-  // this channel at all" — same query ProductsPage.tsx always made, just no
-  // longer stripping the fields the new detail view needs.
+  // Full listing objects (not just platform names) so the expandable channel row can show real sync_status/synced_at, not just "is it on this channel".
   const { data: listingsData } = useQuery({
     queryKey: ["listings-for-products", pageProductIds],
     queryFn: () => getListings({ product_in: pageProductIds.join(",") }),
@@ -225,9 +217,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, tone: "danger" }),
   });
 
-  // Products tab's per-channel "List" action — Google is a one-click toggle
-  // (mirrors ListingsPage.tsx's own listOnGoogleMutation); eBay needs its
-  // full create form, so that one navigates instead.
+  // Products tab's per-channel "List" action — Google is a one-click toggle (mirrors ListingsPage.tsx); eBay needs its full create form, so that navigates instead.
   const listOnGoogleMutation = useMutation({
     mutationFn: (productId: string) => createGoogleListing(productId, null, GOOGLE_LISTING_FORM_INITIAL),
     onSuccess: () => {
@@ -318,11 +308,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                     Product
                   </StickyTableHead>
                   <TableHead>Status</TableHead>
-                  {/* "Storefront", not "Online" — a product being published
-                      here (your own shop) is a different question from
-                      whether it's LISTED anywhere, which is what the
-                      Channels column answers. The two used to share the
-                      word "online" and were easy to conflate. */}
+                  {/* "Storefront", not "Online": being published here (your own shop) is a different question from being listed anywhere (the Channels column). */}
                   <TableHead>Storefront</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>

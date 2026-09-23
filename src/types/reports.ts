@@ -1,6 +1,4 @@
-// Response shapes for /reports/* — mirrors server/src/services/reports.service.js.
-// Money is cents everywhere here (same convention as types/dashboard.ts),
-// converted from Product.price/cost_price's dollars server-side.
+// Response shapes for /reports/*, mirrors reports.service.js. Money is cents everywhere (types/dashboard.ts convention), converted from dollars server-side.
 
 export interface ReportsDateRangeParams {
   days?: number;

@@ -2,9 +2,7 @@
 
 const Joi = require("joi");
 
-// Shared by every Reports endpoint — either `days` (last N days ending
-// today) or an explicit `from`/`to` pair, same contract as
-// dashboard.validation.js#getOrderVolume.
+// Shared by every Reports endpoint: either `days` or an explicit `from`/`to` pair.
 const dateRangeQuery = {
   days: Joi.number().integer().min(1).max(90).default(30),
   from: Joi.date().iso(),
@@ -30,9 +28,7 @@ const getSalesPerformance = {
   query: Joi.object(dateRangeQuery).and("from", "to"),
 };
 
-// Same contract as every other report — previously `days`-only (and
-// min 7 / max 90), which meant the turnover card silently ignored the
-// page's date range, and 400'd outright on a range outside that span.
+// Previously `days`-only, so the turnover card ignored the page's date range and 400'd outside it.
 const getInventoryTurnover = {
   query: Joi.object(dateRangeQuery).and("from", "to"),
 };

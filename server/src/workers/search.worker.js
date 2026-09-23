@@ -18,13 +18,10 @@ ensureProductsCollection().catch((err) => {
   logger.error(`[searchWorker] failed to ensure Typesense collection: ${err.message}`);
 });
 
-// Re-fetches the product at process time (rather than trusting the payload)
-// so a job that sat in the queue for a while still indexes the latest state.
+// Re-fetches the product at process time so a job that sat queued for a while still indexes the latest state.
 searchQueue.process("index_product", 4, async (job) => {
   const { productId } = job.data;
-  // findById already excludes soft-deleted docs (softDelete.plugin's default
-  // query filter), so a null here means "deleted since this job was
-  // enqueued" — clean up the index instead of throwing.
+  // findById excludes soft-deleted docs, so null means "deleted since this job was enqueued".
   const product = await Product.findById(productId);
   if (!product) {
     await deleteProductFromIndex(productId);

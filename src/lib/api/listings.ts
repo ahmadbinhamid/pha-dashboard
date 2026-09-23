@@ -19,10 +19,7 @@ export interface ListingListParams {
   platform?: MarketplacePlatform;
   state?: string;
   sync_status?: string;
-  // Catalogue redesign — Listings tab's "Needs attention" segmented tab.
-  // Expands server-side to sync_status in [error, price_locked]; takes
-  // precedence over a plain sync_status if both are passed. See
-  // listing.query.service.js#NEEDS_ATTENTION_STATUSES.
+  // Listings tab's "Needs attention" tab; expands server-side to sync_status in [error, price_locked], taking precedence over a plain sync_status (listing.query.service.js#NEEDS_ATTENTION_STATUSES).
   needs_attention?: boolean;
   search?: string;
 }
@@ -30,11 +27,7 @@ export interface ListingListParams {
 async function formStateToPayload(
   form: EbayListingFormState,
   vehicle: ProductVehicle | null | undefined,
-  // Product/variant photo to embed when this listing has no photo_overrides
-  // of its own — mirrors the fallback the backend already applies for the
-  // real eBay photo gallery (listing.resolver.js#resolvePhotos). Without
-  // this, a listing with no override snapshot would save/push with no image
-  // in its description even though the product itself has real photos.
+  // Product/variant photo to embed when this listing has no photo_overrides, mirroring the backend's own fallback (listing.resolver.js#resolvePhotos) so the description isn't left imageless.
   fallbackImageUrl?: string | null,
 ) {
   const { data: tenant } = await getTenantSettings();
@@ -88,9 +81,7 @@ async function formStateToPayload(
   };
 }
 
-// eBay's own rich-form CREATE/UPDATE — stays on /ebay/listings since the
-// fields (category, fitment, business policies, ...) are eBay-specific. See
-// lib/api/googleListings.ts for Google's much smaller create/update.
+// eBay's own rich-form CREATE/UPDATE, staying on /ebay/listings since its fields (category, fitment, business policies) are eBay-specific. See lib/api/googleListings.ts for Google's smaller version.
 export const createListing = async (
   form: EbayListingFormState,
   vehicle?: ProductVehicle | null,
@@ -112,17 +103,13 @@ export const updateListing = async (
   return data;
 };
 
-// Browse/read/delete/push are platform-agnostic — /listings mixes every
-// platform's rows together (see server/src/services/marketplace/listing.query.service.js's
-// own module header for why only create/update stay per-platform).
+// Browse/read/delete/push are platform-agnostic — /listings mixes every platform's rows together (server/src/services/marketplace/listing.query.service.js).
 export const getListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<AnyMarketplaceListing>>>("/listings", { params });
   return data;
 };
 
-// TASK 6: same endpoint, `?group_by=product` — one row per product instead
-// of one per listing (listing.query.service.js#listListingsGroupedByProduct).
-// Same query params otherwise (pagination/filters/search all still apply).
+// Same endpoint, `?group_by=product` — one row per product instead of per listing (listing.query.service.js#listListingsGroupedByProduct); same query params otherwise.
 export const getGroupedListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<ProductListingGroup>>>("/listings", {
     params: { ...params, group_by: "product" },

@@ -48,8 +48,7 @@ function readStored(): CartItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    // `note`/`shipping_cost` predate carts persisted before they were added —
-    // normalize rather than drop those items.
+    // `note`/`shipping_cost` predate carts persisted before they were added — normalize rather than drop those items.
     return parsed.filter(isCartItem).map((i) => ({ ...i, note: i.note ?? null, shipping_cost: i.shipping_cost ?? 0 }));
   } catch {
     return [];
@@ -64,8 +63,7 @@ function persist(items: CartItem[]) {
   }
 }
 
-// For use outside the CartProvider tree (logout, 401 interceptor) where
-// there's no `clearCart()` action available to update in-memory state too.
+// For use outside the CartProvider tree (logout, 401 interceptor) where there's no `clearCart()` action to update in-memory state too.
 export function clearCartStorage() {
   try {
     localStorage.removeItem(STORAGE_KEY);
@@ -79,14 +77,7 @@ function clamp(quantity: number, max: number | null) {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  // Read during initialization, NOT in a mount effect. Effects run children
-  // first, so an effect here would leave every consumer seeing an empty cart
-  // on its own first render — which silently broke CreateOrderPage's resume:
-  // its "restored step 2/3 but the cart is empty, go back to step 1" guard is
-  // a mount effect, so it always fired, and reloading mid-wizard dropped you
-  // back to the product list. There's no SSR here, so reading localStorage
-  // during render is safe and removes the empty-then-filled flash for the
-  // Topbar's cart badge too.
+  // Read during initialization, not a mount effect — an effect here left every consumer seeing an empty cart on first render, breaking CreateOrderPage's "cart empty, go back to step 1" mount-effect guard on reload. No SSR here, so reading localStorage during render is safe.
   const [items, _setItems] = useState<CartItem[]>(readStored);
   const { toast } = useToast();
 

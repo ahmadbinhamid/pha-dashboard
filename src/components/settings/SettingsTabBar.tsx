@@ -1,9 +1,7 @@
 import { cn } from "@/utils/cn";
 import { SETTINGS_TABS, type SettingsTabId } from "@/config/settingsTabs";
 
-// Underlined horizontal tab bar across the top of Settings. Scrolls sideways
-// rather than wrapping — nine tabs don't fit a laptop width, and a wrapping
-// bar makes the page jump around as the active tab changes lines.
+// Underlined horizontal tab bar across the top of Settings. Scrolls sideways rather than wrapping, since nine tabs don't fit a laptop width and wrapping would make the page jump as the active tab changes lines.
 export function SettingsTabBar({
   activeId,
   onSelect,

@@ -11,12 +11,7 @@ import { getProducts } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { formatCurrency } from "@/utils/format";
 
-// Product picker for step 1. The running basket is NOT here — it's the
-// wizard's own summary panel (OrderSummaryPanel), which stays put across
-// steps 1 and 2 instead of disappearing when you move on.
-//
-// Continuing to step 2 needs no validation beyond "cart isn't empty", which
-// the page header's Next button checks directly.
+// Product picker for step 1. The running basket lives in OrderSummaryPanel instead, which stays put across steps 1 and 2. Continuing needs no validation beyond "cart isn't empty", checked directly by the page header's Next button.
 export function AddProductsStep() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -67,8 +62,7 @@ export function AddProductsStep() {
         </div>
       </div>
 
-      {/* Scrolls inside the card rather than growing the page, so the search
-          row and the summary panel beside it both stay in view. */}
+      {/* Scrolls inside the card rather than growing the page, so the search row and summary panel beside it both stay in view. */}
       <div className="min-h-[22rem] divide-y divide-border/60 overflow-y-auto lg:max-h-[calc(100vh-22rem)]">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (

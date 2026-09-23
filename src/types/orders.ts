@@ -1,11 +1,6 @@
 import type { PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
 
-// Legacy, derived-only rollup of fulfillment_status + payment_status (see
-// server/src/models/Order.js's `status` field comment) — still returned by
-// the API and still legitimately read wherever the exact combined semantics
-// (e.g. "refunded" overriding everything else) are what's needed, but never
-// written to directly from the frontend anymore. Prefer OrderFulfillmentStatus
-// / OrderPaymentStatus below for anything editable or badge-rendered.
+// Legacy rollup of fulfillment+payment status; use OrderFulfillmentStatus/OrderPaymentStatus for editing/badges instead.
 export type OrderStatus =
   | "pending_payment"
   | "partially_paid"
@@ -15,12 +10,10 @@ export type OrderStatus =
   | "refunded"
   | "partially_refunded";
 
-// Admin-editable order lifecycle — fully independent of payment status
-// (matches flowpos's split). Written via updateOrderStatus/OrderStatusSelect.
+// Admin-editable lifecycle, independent of payment status; written via updateOrderStatus/OrderStatusSelect.
 export type OrderFulfillmentStatus = "pending" | "processing" | "on_hold" | "completed" | "cancelled";
 
-// Always derived server-side from actual payments/refunds — never settable
-// by hand. See OrderPaymentStatusBadge for how this renders.
+// Derived server-side from payments/refunds, never settable by hand (see OrderPaymentStatusBadge).
 export type OrderPaymentStatus = "pending_payment" | "partially_paid" | "paid" | "partially_refunded" | "refunded";
 
 export type OrderChannel = "storefront" | "ebay" | "manual";
@@ -31,8 +24,7 @@ export interface OrderCustomer {
   name: string;
   // Shown on the invoice instead of `name` when present.
   company_name: string | null;
-  // Optional for "manual" orders — a walk-in Customer record may have
-  // neither on file. Always present for storefront/eBay orders.
+  // Optional for manual orders (walk-in customers); always present for storefront/eBay orders.
   email: string | null;
   phone: string | null;
 }
@@ -45,10 +37,7 @@ export interface OrderAddress {
 }
 
 export interface OrderItem {
-  // orderItemSchema was `{ _id: false }` before refund-redesign-spec.md §1.1
-  // — every item now carries a real, stable id (backend/models/Order.js).
-  // Not optional: the schema change is live, so every item the API returns
-  // from here on has one (older orders get theirs from the §6.2 backfill).
+  // Every item has a stable _id per refund-redesign-spec.md §1.1; older orders backfilled per §6.2.
   _id: string;
   product: string;
   variant: string | null;
@@ -58,32 +47,23 @@ export interface OrderItem {
   quantity: number;
   // Per-line discount (cents) — only ever set on manual/admin-created orders.
   discount_amount: number;
-  // Customer-facing note for this specific line — only ever set on
-  // manual/admin-created orders.
+  // Customer-facing note for this line; only set on manual/admin-created orders.
   note: string | null;
   ebay_sync_status: "not_applicable" | "pending" | "synced" | "failed";
   ebay_sync_error: string | null;
-  // Price-edit audit trail (storefront/eBay orders only — see
-  // order.service.js#updateOrderItemPrice). original_unit_price is captured
-  // once, on the first edit; unit_price itself is always the current price.
+  // Price-edit audit trail (storefront/eBay only, see order.service.js#updateOrderItemPrice); original_unit_price set once on first edit.
   original_unit_price: number | null;
   unit_price_updated_at: string | null;
   unit_price_updated_by: string | null;
-  // Refund ledger (refund-redesign-spec.md §1.1) — cumulative across every
-  // succeeded, non-voided refund touching this line. Derived/recomputed
-  // server-side, never something the frontend should compute itself.
+  // Refund ledger (spec §1.1): cumulative across succeeded, non-voided refunds; server-derived, never frontend-computed.
   quantity_refunded: number;
   amount_refunded: number; // cents, this line's share only
   quantity_restocked: number; // <= quantity_refunded; restock is opt-in per refund
-  // Virtual — quantity - quantity_refunded. Server-computed (orderItemSchema
-  // virtual, serialized via toJSON/toObject virtuals:true) so nothing on the
-  // frontend re-derives it and risks drifting from the same rule refund-
-  // calculator.service.js uses.
+  // Virtual (quantity - quantity_refunded), server-computed so the frontend can't drift from refund-calculator.service.js.
   refundable_quantity: number;
 }
 
-// Internal staff comment thread — distinct from Order.note (customer-facing,
-// captured once at creation).
+// Internal staff comment thread, distinct from Order.note (customer-facing, set at creation).
 export interface OrderInternalNote {
   _id: string;
   text: string;
@@ -107,13 +87,9 @@ export interface OrderPaymentSummary {
 
 export interface Order {
   _id: string;
-  // Bare zero-padded sequence ("00001") — no prefix baked in. Format with
-  // formatOrderNumber(order.order_number_prefix, order.order_number) from
-  // @/utils/format, never a hardcoded "ORD-".
+  // Bare zero-padded sequence ("00001"); format via formatOrderNumber() from @/utils/format, never a hardcoded prefix.
   order_number: string;
-  // Snapshotted from TenantSettings.order_number_prefix at creation time —
-  // stays whatever it was then even if the tenant's setting changes later,
-  // so old orders never get relabeled.
+  // Snapshotted from TenantSettings.order_number_prefix at creation; stays fixed even if the setting later changes.
   order_number_prefix: string;
   invoice_number: string;
   invoice_number_prefix: string;

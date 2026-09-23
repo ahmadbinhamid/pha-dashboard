@@ -1,22 +1,6 @@
-// Rich-text fields (Settings → Fitment & Warranty Policies) are stored as the
-// HTML TipTap produces. Nothing that renders them can take HTML as-is: the
-// invoice PDF is drawn by pdfkit, which paints strings. So the HTML is parsed
-// here into a tiny document model — blocks of styled runs — that both the
-// on-screen invoice and the PDF can draw, keeping them identical.
-// server/src/utils/richText.js mirrors this file; change them together.
-//
-// What's kept: paragraph/heading/list-item block structure (including a
-// numbered list's own numbering), bold and italic.
-// What's dropped: colours, alignment, headings' size (a heading becomes a bold
-// line). A 7pt invoice footer column has no room for more, and every mark kept
-// has to be drawable by pdfkit's standard-14 Courier family.
-//
-// Two things this has to survive:
-//   * Values saved BEFORE these fields became rich text, which are plain
-//     strings with real newlines. Anything with no tag in it is treated as
-//     exactly that.
-//   * TipTap's empty document, "<p></p>", which must read as empty, not as a
-//     blank line.
+// Rich-text fields (Settings → Fitment & Warranty Policies) store TipTap's HTML, but the invoice PDF is drawn by pdfkit, which only paints strings — so this parses the HTML into a tiny document model (blocks of styled runs) both the on-screen invoice and the PDF can draw identically. server/src/utils/richText.js mirrors this; change them together.
+// Kept: paragraph/heading/list-item structure (incl. numbered-list numbering), bold, italic. Dropped: colours, alignment, heading size — a 7pt invoice footer has no room, and pdfkit's standard-14 font can't draw more anyway.
+// Must survive: pre-rich-text plain strings with real newlines (no tags = treated as that), and TipTap's empty "<p></p>" reading as empty, not a blank line.
 
 export interface RichTextRun {
   text: string;
@@ -82,17 +66,13 @@ export function richTextToBlocks(value?: string | null): RichTextBlock[] {
 
   const blocks: RichTextBlock[] = [];
   let runs: RichTextRun[] = [];
-  // Counters, not booleans: <strong>a <em>b</em> c</strong> has to stay bold
-  // after the inner tag closes.
+  // Counters, not booleans: <strong>a <em>b</em> c</strong> must stay bold after the inner tag closes.
   let bold = 0;
   let italic = 0;
   let heading = 0;
-  // Open <ul>/<ol> elements, so an ordered list can number its own items and
-  // a nested list doesn't disturb its parent's count.
+  // Open <ul>/<ol> elements, so an ordered list numbers its own items without a nested list disturbing its parent's count.
   const lists: { ordered: boolean; count: number }[] = [];
-  // Set by <li>, consumed by the first block that actually has text in it.
-  // The editor writes <li><p>…</p></li>, so the marker has to survive the
-  // inner <p> opening — which is exactly what an eager reset got wrong.
+  // Set by <li>, consumed by the first block with text — must survive the inner <p> the editor writes as <li><p>…</p></li>.
   let pendingMarker: string | null = null;
 
   const endBlock = () => {
@@ -100,8 +80,7 @@ export function richTextToBlocks(value?: string | null): RichTextBlock[] {
     runs = [];
     if (!normalized.length) return;
     blocks.push({ marker: pendingMarker, runs: normalized });
-    // Only the FIRST line of a list item is marked; a second paragraph inside
-    // the same <li> continues underneath it unmarked.
+    // Only the first line of a list item is marked; a second paragraph in the same <li> continues unmarked.
     pendingMarker = null;
   };
 

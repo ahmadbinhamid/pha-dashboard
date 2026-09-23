@@ -1,6 +1,4 @@
-// Response shapes for the team surface — members, roles, invitations.
-// Mirrors server/src/models/{Membership,Role,Invitation}.js and
-// server/src/config/permissions.js.
+// Response shapes for the team surface — members, roles, invitations. Mirrors server/src/models/{Membership,Role,Invitation}.js and config/permissions.js.
 
 export type MembershipStatus = "active" | "suspended";
 export type InvitationStatus = "pending" | "accepted" | "declined" | "revoked";

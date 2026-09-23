@@ -480,8 +480,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
       // product-data problem (google.adapter.js#publishBatch already
       // catches per-item errors and never lets one propagate up to fail
       // the whole call), not evidence the connection is unhealthy. Only the
-      // OUTER batch call throwing (see syncBatch's own catch) counts
-      // toward the breaker.
+      // OUTER batch call throwing (see syncBatch's own catch) counts toward the breaker.
       await logSyncEvent({
         tenantId: listing.tenant_id,
         platform: listing.platform,

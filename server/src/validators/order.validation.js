@@ -37,8 +37,7 @@ const createOrder = {
     delivery_method: Joi.string()
       .valid(...Object.values(ORDER_DELIVERY_METHOD))
       .default(ORDER_DELIVERY_METHOD.DELIVERY),
-    // Pickup has nowhere to ship/bill to — forbid both instead of silently
-    // ignoring them if the client sends stale form state.
+    // Pickup has nowhere to ship/bill to — forbid both rather than silently ignore stale form state.
     shipping_address: Joi.when("delivery_method", {
       is: ORDER_DELIVERY_METHOD.PICKUP,
       then: Joi.forbidden(),
@@ -84,9 +83,8 @@ const adminByIdParam = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
 };
 
-// In-person/counter sale created by staff from the admin dashboard — always
-// tied to a known Customer record, and (unlike guest checkout) accepts a
-// per-line discount and an optional amount actually collected at the register.
+// In-person/counter sale; always tied to a known Customer record, and unlike guest checkout
+// accepts a per-line discount and an optional amount collected at the register.
 const createManualOrder = {
   body: Joi.object({
     customer_id: Joi.string().hex().length(24).required(),
@@ -118,27 +116,20 @@ const createManualOrder = {
     }),
     // Customer-facing note for the whole order.
     note: Joi.string().trim().allow("", null).default(null),
-    // How this order is being settled — required, always one of the three
-    // choices. "payment_link" means nothing is collected now (amount_paid is
-    // ignored server-side regardless of what's sent); cash/online_transfer
-    // may optionally record an amount actually collected at the register.
+    // How this order is being settled. "payment_link" means nothing is collected now
+    // (amount_paid ignored server-side); cash/online_transfer may record an amount collected.
     payment_method: Joi.string()
       .valid(...Object.values(ORDER_PAYMENT_CHOICE))
       .required(),
-    // Dollars — what the staff member actually collected right now. Omitted
-    // or 0 means the full invoice is left outstanding.
+    // Dollars collected right now; omitted or 0 leaves the full invoice outstanding.
     amount_paid: Joi.number().min(0).default(0),
-    // Dollars — overrides the per-item shipping_cost sum the service would
-    // otherwise compute. Omitted falls back to that computed total; ignored
-    // entirely for pickup orders (see order.service.js#createManualOrder).
+    // Dollars, overrides the computed per-item shipping sum; ignored entirely for pickup orders.
     shipping_cost: Joi.number().min(0),
   }),
 };
 
-// tracking_number/carrier_name are only meaningful for DELIVERY orders —
-// whether they're actually required depends on the order's own
-// delivery_method, which isn't part of this request body, so that check
-// happens in order.service.js#sendOrderNotification instead of here.
+// tracking_number/carrier_name are only meaningful for DELIVERY orders; whether they're
+// required depends on delivery_method (not in this body), so that check lives in the service.
 const sendOrderEmail = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -155,8 +146,7 @@ const sendPaymentLinkEmail = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
 };
 
-// Pure fulfillment lifecycle — payment_status is never settable here, it's
-// always derived from actual payments (see order.service.js#updateOrderStatus).
+// Pure fulfillment lifecycle — payment_status is never settable here, always derived from payments.
 const updateOrderStatus = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -166,9 +156,8 @@ const updateOrderStatus = {
   }),
 };
 
-// Records a follow-up cash/online-transfer payment against an order's
-// outstanding balance — see order.service.js#recordOrderPayment for the
-// remaining-balance check (can't be done here, it depends on DB state).
+// Records a follow-up cash/online-transfer payment; the remaining-balance check needs DB
+// state, so it lives in the service, not here.
 const recordPayment = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -179,9 +168,8 @@ const recordPayment = {
   }),
 };
 
-// Corrects a single line item's price on an eBay/manual order — see
-// order.service.js#updateOrderItemPrice for why storefront orders are
-// excluded (that check needs DB state, so it lives in the service, not here).
+// Corrects a single line item's price on an eBay/manual order; storefront exclusion needs DB
+// state, so that check lives in the service, not here.
 const updateOrderItemPrice = {
   params: Joi.object({
     id: Joi.string().hex().length(24).required(),
@@ -192,8 +180,7 @@ const updateOrderItemPrice = {
   }),
 };
 
-// See order.service.js#updateOrderShippingCost — negative-amount and
-// exceeds-total checks need DB state, so they live in the service, not here.
+// Negative-amount and exceeds-total checks need DB state, so they live in the service, not here.
 const updateOrderShippingCost = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -201,9 +188,8 @@ const updateOrderShippingCost = {
   }),
 };
 
-// Corrects a single line item's discount on an eBay/manual order — see
-// order.service.js#updateOrderItemDiscount for the exceeds-line-subtotal
-// check, which needs DB state so it lives in the service, not here.
+// Corrects a single line item's discount; the exceeds-line-subtotal check needs DB state,
+// so it lives in the service, not here.
 const updateOrderItemDiscount = {
   params: Joi.object({
     id: Joi.string().hex().length(24).required(),
@@ -214,8 +200,7 @@ const updateOrderItemDiscount = {
   }),
 };
 
-// See order.service.js#updateOrderReferenceNumber. Optional — blank/null
-// clears it.
+// Optional — blank/null clears it.
 const updateOrderReferenceNumber = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -233,8 +218,7 @@ const addOrderNote = {
   }),
 };
 
-// Edits the order's OWN customer/address snapshot — not the linked Customer
-// record (if any). See order.service.js#updateOrderCustomerDetails.
+// Edits the order's own customer/address snapshot, not the linked Customer record.
 const updateOrderCustomerDetails = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -243,9 +227,8 @@ const updateOrderCustomerDetails = {
       email: Joi.string().trim().email().allow("", null),
       phone: Joi.string().trim().allow("", null),
     }),
-    // Pickup orders carry no address at all — omit both fields rather than
-    // sending null/forbidden, since whether they're editable depends on the
-    // order's own delivery_method, which the service layer already knows.
+    // Pickup orders carry no address — omit both fields rather than null/forbidden, since
+    // editability depends on delivery_method, which the service already knows.
     shipping_address: addressSchema,
     billing_address: addressSchema.allow(null),
   }),

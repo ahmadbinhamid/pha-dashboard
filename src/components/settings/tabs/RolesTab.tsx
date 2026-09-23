@@ -113,8 +113,7 @@ export function RolesTab() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             destructive
-                            // Both are refused server-side too — a built-in
-                            // role, or one someone still holds.
+                            // Both are refused server-side too — a built-in role, or one someone still holds.
                             disabled={role.is_system || (role.members_count ?? 0) > 0}
                             onSelect={() => setDeleteTarget(role)}
                           >

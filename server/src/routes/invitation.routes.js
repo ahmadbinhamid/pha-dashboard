@@ -1,15 +1,6 @@
 // routes/invitation.routes.js
-//
-// Three audiences on one resource, which is why auth is applied per-route
-// rather than to the whole router (flowpos-backend splits the same surface
-// into public / user / tenant route files):
-//
-//   public  — the landing page reading a link, and signing up from it. No
-//             session exists yet, and the token IS the credential.
-//   signed in — accepting or declining. Needs a user, but no organisation:
-//             the invitee isn't a member of it yet, so a permission check
-//             would be nonsense.
-//   organisation — managing invitations you sent. Needs users.* permissions.
+// Three audiences on one resource, so auth is applied per-route: public (the token is the
+// credential), signed-in (accept/decline, no org yet), and organisation (users.* permissions).
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -41,8 +32,7 @@ router.post("/token/:token/accept", auth(), validate(V.invitationTokenParam), as
 router.post("/token/:token/decline", auth(), validate(V.invitationTokenParam), asyncHandler(ctrl.declineInvitation));
 
 // ── Public ──────────────────────────────────────────────────────────────────
-// Namespaced under /token so a 24-char id can never be read as a token, or
-// the reverse — the id routes above are permission-gated and these are not.
+// Namespaced under /token so a 24-char id can never be read as a token — those are permission-gated, these are not.
 router.get("/token/:token", validate(V.invitationTokenParam), asyncHandler(ctrl.getInvitationByToken));
 router.post("/token/:token/register", validate(V.registerFromInvitation), asyncHandler(ctrl.registerFromInvitation));
 

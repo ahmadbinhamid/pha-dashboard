@@ -51,9 +51,7 @@ router.post(
 // History
 router.get("/:inventoryId/history", asyncHandler(ctrl.getHistory));
 
-// eBay-side quantity drift flagged by the reconciliation poller — see
-// ebay.inventory-sync.service.js. Never auto-applied; a human accepts or
-// rejects each row here.
+// eBay-side quantity drift flagged by the reconciliation poller; never auto-applied.
 router.get("/reconciliations", asyncHandler(reconciliationCtrl.getReconciliations));
 router.post(
   "/reconciliations/:id/accept",

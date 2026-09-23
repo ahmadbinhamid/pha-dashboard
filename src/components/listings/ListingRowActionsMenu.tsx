@@ -8,11 +8,7 @@ import {
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import { Cloud, Pencil, Trash2, ExternalLink } from "lucide-react";
 
-// Platform-agnostic — the Listings table mixes every channel's rows
-// together (see listing.query.service.js), so this can't hardcode "eBay"
-// the way it originally did. `platform` drives the label text;
-// `externalUrl` is whichever platform's own "view live" link happens to be
-// populated (only eBay sets one today via ebay_item_url).
+// Platform-agnostic since the Listings table mixes every channel's rows (listing.query.service.js); `externalUrl` is whichever platform's "view live" link is populated (only eBay today, via ebay_item_url).
 export function ListingRowActionsMenu({
   platform,
   onPush,

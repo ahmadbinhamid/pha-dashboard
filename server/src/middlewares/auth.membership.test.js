@@ -1,12 +1,7 @@
 // middlewares/auth.membership.test.js
-//
-// How a request picks its organisation now that a user can belong to several.
-// The rule that matters for isolation: the X-Tenant-Id header only ever
-// SELECTS between organisations the caller already belongs to — it can never
-// grant access to one they don't.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/middlewares/auth.membership.test.js
+// How a request picks its organisation: X-Tenant-Id only selects between organisations the
+// caller already belongs to, never grants access to one they don't.
+// Needs a live Mongo connection. Run: node --test src/middlewares/auth.membership.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -23,7 +18,7 @@ const { SYSTEM_ROLE, MEMBERSHIP_STATUS } = require("../constants/access.constant
 const { signJwt } = require("../utils/auth/jwt");
 const { auth, requirePermission } = require("./auth");
 
-/** Minimal Express doubles — enough to see which branch the middleware took. */
+/** Minimal Express doubles, enough to see which branch the middleware took. */
 function makeReq(token, headers = {}) {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
   return {

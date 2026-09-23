@@ -28,10 +28,7 @@ function ResultSkeletonRows() {
   );
 }
 
-// One "PRODUCTS (5) / results-or-skeleton-or-error" group, shared by every
-// result section in CommandPalette — collapses what used to be three
-// (soon four) near-identical heading+loading+error+list blocks inline in
-// CommandPalette.tsx into one place.
+// One "PRODUCTS (5) / results-or-skeleton-or-error" group, shared by every result section in CommandPalette instead of near-identical inline blocks.
 export function CommandPaletteSection<T>({
   heading,
   total,
@@ -41,9 +38,7 @@ export function CommandPaletteSection<T>({
   renderItem,
 }: {
   heading: string;
-  // Shown as "heading (total)" once known — omitted (not "(0)") while the
-  // request is still in flight, so a section never claims zero results
-  // before it's actually checked.
+  // Shown as "heading (total)" once known; omitted while in flight so a section never claims zero results before it's checked.
   total?: number;
   isLoading: boolean;
   isError: boolean;

@@ -7,9 +7,7 @@ interface CreateProductNotesSectionProps {
   onChange: (notes: string[]) => void;
 }
 
-// Draft-only note thread for the create flow — there's no productId to post
-// against yet (ProductNotesSection/addProductNote needs one), so these are
-// held in form state and posted for real right after the product is created.
+// Draft-only note thread for the create flow — no productId to post against yet, so held in form state and posted for real right after creation.
 export function CreateProductNotesSection({ notes, onChange }: CreateProductNotesSectionProps) {
   const [text, setText] = useState("");
 

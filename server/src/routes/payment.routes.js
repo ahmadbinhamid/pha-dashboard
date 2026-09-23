@@ -20,16 +20,13 @@ router.post(
 );
 
 // ── Stripe webhook — no JWT auth (Stripe calls this), signature-verified ────
-// Raw body is already captured globally for every request in app.js
-// (express.json({ verify })), exactly like the eBay webhook — no express.raw()
-// needed on this route specifically. BYOK: one shared URL for every tenant,
-// resolved via the opaque ?wt= query param (see payment.controller.js).
+// Raw body already captured globally in app.js, like the eBay webhook. BYOK: one shared URL,
+// resolved via the opaque ?wt= query param.
 router.post("/webhook", asyncHandler(ctrl.handleWebhook));
 
 // ── Admin ─────────────────────────────────────────────────────────────────
 router.get("/", auth(), admin, pagination(), validate(v.listPayments), asyncHandler(ctrl.listPayments));
 router.get("/:id", auth(), admin, validate(v.byIdParam), asyncHandler(ctrl.getPayment));
-// /:id/refund and /:id/refund-manual removed (refund-redesign-spec.md §9) —
-// use POST /order/:orderId/refunds instead (order.routes.js).
+// /:id/refund and /:id/refund-manual removed — use POST /order/:orderId/refunds instead.
 
 module.exports = router;

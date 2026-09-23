@@ -4,19 +4,7 @@ const { model, Schema } = require("mongoose");
 const { buildSchema, stripInternalFields } = require("./base.model");
 const { INVITE_STATUS } = require("../constants/access.constants");
 
-/**
- * One invite per email per organisation. The row is REUSED: inviting an
- * address that was already invited, declined or revoked reopens the same row
- * with a fresh link, so the members screen shows one line per person rather
- * than a history of attempts. (Same rule as flowpos-backend's
- * tenant_user_invites — "one email, one tenant, one link".)
- *
- * Only the SHA-256 of the link's token is stored. A stolen database dump
- * therefore can't be used to join anyone's organisation, which is also why
- * "copy link" is only offered in the response to sending or resending —
- * there is nothing to recover it from afterwards. (flowpos-backend also keeps
- * an encrypted copy so the link can be re-shown; we deliberately don't.)
- */
+/** One invite row per email per org, reused across invite/decline/revoke; only the token's SHA-256 is stored, so a stolen dump can't join and links can't be recovered after sending. */
 const invitationSchema = buildSchema({
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
   email: { type: String, required: true, lowercase: true, trim: true },
@@ -28,8 +16,7 @@ const invitationSchema = buildSchema({
     default: INVITE_STATUS.PENDING,
     index: true,
   },
-  // Cleared the moment the invite stops being redeemable, so a link works at
-  // most once.
+  // Cleared once the invite stops being redeemable, so a link works at most once.
   token_hash: { type: String, default: null, select: false },
   expires_at: { type: Date, default: null },
   sent_at: { type: Date, default: null },
@@ -45,10 +32,7 @@ invitationSchema.index(
 // Redeeming a link is a lookup by hash.
 invitationSchema.index({ token_hash: 1 });
 
-/**
- * Expiry is not a status: a pending invite past `expires_at` reports itself
- * expired, its link is dead, and re-sending revives the same row.
- */
+/** Expiry isn't a status field: a pending invite past expires_at reports itself expired; re-sending revives the same row. */
 invitationSchema.virtual("is_expired").get(function isExpired() {
   return Boolean(this.expires_at && this.expires_at.getTime() < Date.now());
 });

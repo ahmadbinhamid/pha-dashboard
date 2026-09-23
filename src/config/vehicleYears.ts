@@ -1,8 +1,4 @@
-// Bounded, sane range for a vehicle model year — matches the min/max the
-// old free-text year inputs enforced (1900-2100), but as a real bounded
-// list rather than a validation range a text input could still violate.
-// Newest first: the vehicle being fitted is far more likely to be recent
-// than from 1900, so this minimizes scrolling for the common case.
+// Bounded, sane range for a vehicle model year, matching the old free-text inputs' 1900-2100 enforcement but as a real list, not a violable validation range. Newest first to minimize scrolling for the common case.
 const MIN_VEHICLE_YEAR = 1900;
 const MAX_VEHICLE_YEAR = new Date().getFullYear() + 1;
 

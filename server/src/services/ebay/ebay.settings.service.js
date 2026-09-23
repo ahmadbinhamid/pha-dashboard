@@ -1,24 +1,8 @@
 // services/ebay/ebay.settings.service.js
-//
-// Public contract (every exported function's shape/return value) is
-// UNCHANGED from the pre-ChannelConnection version — every consumer
-// (ebay.api.service.js, ebay.adapter.js, sync.service.js, controllers, ...)
-// keeps reading/writing the exact same plain object shape it always has
-// (marketplace_id, sandbox, refresh_token, connection_status, ...). This is
-// the ONLY file that knows storage moved to ChannelConnection (see
-// models/ChannelConnection.js) — see server/docs/channel-architecture.md.
-//
-// Migration strategy — lazy read-through, because the system is live:
-//   read:  ChannelConnection first; if absent, read legacy EbaySettings,
-//          upsert it into ChannelConnection (idempotent), return that.
-//   write: ChannelConnection ONLY (after ensuring migration has happened,
-//          so a partial update never creates a ChannelConnection row that's
-//          missing fields an already-connected tenant had in EbaySettings).
-//
-// EbaySettings.js itself is left in place, untouched, as the legacy source
-// — not deleted in this run. server/scripts/migrateEbaySettingsToChannelConnection.js
-// does the same migration in bulk, so this lazy path finishes early for
-// whichever tenants are actively used before that script ever runs.
+// Public contract is unchanged from pre-ChannelConnection; this is the only file that knows
+// storage moved to ChannelConnection (see models/ChannelConnection.js, docs/channel-architecture.md).
+// Lazy read-through migration: reads check ChannelConnection then fall back to EbaySettings and
+// upsert; writes go to ChannelConnection only, after ensureMigrated. EbaySettings stays as legacy source.
 
 const crypto = require("crypto");
 const ChannelConnection = require("../../models/ChannelConnection");
@@ -34,14 +18,8 @@ const SECRET_FIELDS = "+refresh_token_ciphertext +refresh_token_iv +refresh_toke
 const CONN_SECRET_FIELDS = "+refresh_token_ct";
 
 // ── ciphertext packing ───────────────────────────────────────────────────────
-//
-// tokenCipher.encrypt() returns {ciphertext, iv, tag} — three base64
-// strings. ChannelConnection's generic contract (see ChannelConnection.js)
-// has a single refresh_token_ct string shared across every future platform's
-// cipher shape, so the three parts are packed into one delimited string
-// here rather than widening that schema for one platform.
-// NOTE: base64 alphabets never contain ".", so joining/splitting on "." is
-// unambiguous and reversible.
+// Packs {ciphertext, iv, tag} into one delimited string for ChannelConnection's generic
+// refresh_token_ct field. Base64 never contains ".", so joining/splitting on it is safe.
 function packCiphertext({ ciphertext, iv, tag }) {
   if (!ciphertext) return null;
   return `${iv}.${tag}.${ciphertext}`;
@@ -54,16 +32,8 @@ function unpackCiphertext(packed) {
 }
 
 // ── status <-> legacy connection_status ──────────────────────────────────────
-//
-// 'degraded' (circuit breaker — see ChannelConnection.js) has no legacy
-// equivalent; mapped to ERROR (closest meaning: "something is currently
-// wrong with this connection") rather than inventing a new enum value the
-// frontend's ebaySettings.ts type doesn't know about — see the invariant
-// against frontend changes in this run.
-// NOTE: token_expired/revoked are never actually written anywhere in this
-// codebase (grepped before writing this) — CONNECTED/NOT_CONNECTED/ERROR
-// are the only legacy values ever set, so the mapping only needs to be
-// faithful for those three.
+// 'degraded' has no legacy equivalent, mapped to ERROR to avoid a new enum value the frontend
+// doesn't know. token_expired/revoked are never actually written, so only CONNECTED/NOT_CONNECTED/ERROR matter.
 function statusToLegacy(status) {
   switch (status) {
     case CHANNEL_CONNECTION_STATUS.CONNECTED:
@@ -90,9 +60,7 @@ function legacyToStatus(connectionStatus) {
   }
 }
 
-// Translates a ChannelConnection (base + eBay discriminator fields, lean
-// object, secret fields selected) into the exact shape every existing
-// consumer already expects from this service.
+// Translates a ChannelConnection doc into the plain shape every existing consumer expects.
 function toLegacyShape(conn) {
   if (!conn) return {};
   const refresh_token = decrypt(unpackCiphertext(conn.refresh_token_ct));
@@ -131,15 +99,11 @@ function toLegacyShape(conn) {
   };
 }
 
-// Builds the ChannelConnection field set for a tenant from their legacy
-// EbaySettings doc — used by both the lazy per-tenant migration below and
-// (independently) by the bulk migration script.
+// Builds the ChannelConnection field set from a legacy EbaySettings doc; shared by the lazy
+// per-tenant migration below and the bulk migration script.
 function fieldsFromLegacy(legacy) {
   const hasToken = !!legacy.refresh_token_ciphertext;
-  // Edge case: a legacy row with a null/empty token must migrate as
-  // 'disconnected', never 'connected' — connection_status on the legacy row
-  // itself isn't trusted for this (it could be stale/out of sync), the
-  // actual presence of a token is.
+  // A legacy row with no token must migrate as 'disconnected' — trust actual token presence, not the stale status field.
   const status = hasToken
     ? (legacy.connection_status === EBAY_CONNECTION_STATUS.ERROR
         ? CHANNEL_CONNECTION_STATUS.ERROR
@@ -150,8 +114,7 @@ function fieldsFromLegacy(legacy) {
     tenant_id: legacy.tenant_id,
     platform: PLATFORM,
     status,
-    // Copied VERBATIM — packed as-is from the legacy ciphertext/iv/tag,
-    // never decrypted/re-encrypted (see tokenCipher.js, left unchanged).
+    // Copied verbatim from legacy ciphertext/iv/tag, never decrypted/re-encrypted.
     refresh_token_ct: packCiphertext({
       ciphertext: legacy.refresh_token_ciphertext,
       iv: legacy.refresh_token_iv,
@@ -177,11 +140,7 @@ function fieldsFromLegacy(legacy) {
   };
 }
 
-// Idempotent, race-safe: two concurrent requests for the same tenant must
-// never create duplicate ChannelConnection docs. Relies on the
-// {tenant_id, platform} unique index — $setOnInsert means a doc that
-// already exists (created by a racing call, or by a direct write like
-// oauthCallback -> upsertSettings) is returned untouched, never clobbered.
+// Idempotent, race-safe via the {tenant_id, platform} unique index and $setOnInsert.
 async function migrateFromLegacy(tenantId) {
   const legacy = await EbaySettings.findOne({ tenant_id: tenantId }).select(SECRET_FIELDS).lean();
   if (!legacy) return null;
@@ -197,21 +156,15 @@ async function migrateFromLegacy(tenantId) {
       .lean();
   } catch (err) {
     if (err.code === 11000) {
-      // Lost the race — another request's upsert (or migration script run)
-      // won. Re-read instead of erroring; that doc is what we want anyway.
+      // Lost the race to another upsert — re-read instead of erroring.
       return ChannelConnection.findOne({ tenant_id: tenantId, platform: PLATFORM }).select(CONN_SECRET_FIELDS).lean();
     }
     throw err;
   }
 }
 
-// Ensures a ChannelConnection row exists for this tenant before a write is
-// applied — without this, a partial `upsertSettings` update (e.g. "just
-// change the warehouse phone number") on a tenant who has an existing,
-// already-connected legacy EbaySettings row but no ChannelConnection row yet
-// would create a bare ChannelConnection missing the refresh_token/policies/
-// etc. that tenant already had, silently orphaning their live eBay
-// connection. Never throws into the caller — see getSettings' own comment.
+// Ensures a ChannelConnection row exists before a write, so a partial update on an already-connected
+// legacy tenant doesn't create a bare row missing their refresh_token/policies. Never throws.
 async function ensureMigrated(tenantId) {
   const existing = await ChannelConnection.findOne({ tenant_id: tenantId, platform: PLATFORM }).select("_id").lean();
   if (existing) return;
@@ -219,11 +172,8 @@ async function ensureMigrated(tenantId) {
 }
 
 // ── legacy fallback (EbaySettings-only reads) ────────────────────────────────
-//
-// Used only when a ChannelConnection read/write itself errors — see
-// getSettings' catch block. Deliberately duplicates the pre-migration
-// getSettings body rather than sharing code with the new path, so a
-// ChannelConnection outage can never take the fallback down with it.
+// Used only when ChannelConnection itself errors (see getSettings' catch); deliberately
+// duplicates the pre-migration logic so a ChannelConnection outage can't break the fallback.
 function withDecryptedRefreshTokenLegacy(doc) {
   if (!doc) return doc;
   const refresh_token = decrypt({
@@ -250,9 +200,7 @@ async function getSettings(tenantId) {
     if (!conn) conn = await migrateFromLegacy(tenantId);
     return toLegacyShape(conn);
   } catch (err) {
-    // The lazy migration must never throw into the caller's request path —
-    // fall back to reading EbaySettings directly, same as before this
-    // migration existed.
+    // Never throw into the caller's request path — fall back to legacy EbaySettings directly.
     logger.warn("[ebay.settings] ChannelConnection read failed — falling back to legacy EbaySettings", {
       tenantId: String(tenantId),
       error: err.message,
@@ -292,10 +240,8 @@ async function upsertSettings(tenantId, update) {
   return toLegacyShape(conn);
 }
 
-// Records a connection failure surfaced by the API/poller (e.g. a revoked or
-// expired refresh_token) so Settings can show it instead of failing silently.
-// Signature unchanged: `status` is still an EBAY_CONNECTION_STATUS value —
-// translated to the generic ChannelConnection status internally.
+// Records a connection failure (e.g. revoked token) so Settings shows it instead of failing silently.
+// `status` stays an EBAY_CONNECTION_STATUS value, translated internally to the generic status.
 async function markConnectionError(tenantId, { status = EBAY_CONNECTION_STATUS.ERROR, message } = {}) {
   await ensureMigrated(tenantId).catch(() => {});
   await ChannelConnection.updateOne(
@@ -320,8 +266,7 @@ async function ensureVerificationToken(tenantId) {
   return conn.verification_token;
 }
 
-// Opaque, unguessable identifier used in the shared webhook URL's query
-// string in place of this tenant's real _id (see ChannelConnection.webhook_token).
+// Opaque identifier used in the shared webhook URL in place of the tenant's real _id.
 async function ensureWebhookToken(tenantId) {
   await ensureMigrated(tenantId).catch(() => {});
   let conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: PLATFORM });
@@ -336,13 +281,8 @@ async function ensureWebhookToken(tenantId) {
   return conn.webhook_token;
 }
 
-// Resolves the tenant/settings pair a webhook delivery belongs to, purely
-// from the opaque token in its URL — the real tenant_id never appears there.
-// Falls back to EbaySettings so a tenant who set up their webhook long ago
-// and hasn't triggered any other lazy migration yet (no GET/PUT to Settings
-// since this deploy) still resolves correctly — a real eBay webhook delivery
-// must keep working immediately after deploy, not just after the migration
-// script has run.
+// Resolves the tenant a webhook belongs to purely from its opaque token; falls back to
+// EbaySettings so a tenant not yet lazily migrated still resolves correctly.
 async function findByWebhookToken(webhookToken) {
   if (!webhookToken) return null;
 
@@ -365,16 +305,9 @@ async function findByWebhookToken(webhookToken) {
   }
 }
 
-// Every tenant that has completed enough setup to actually call eBay's API —
-// used by the worker's poll loop and anywhere else that needs to iterate
-// "every eBay-enabled store" rather than operate on one already-known
-// tenant. Sourced from EbaySettings (the legacy list is authoritative until
-// the migration script runs — every already-connected tenant has a row
-// there), lazily migrating each one into ChannelConnection along the way, so
-// the poll loop opportunistically finishes the migration even before the
-// script runs. Also includes any tenant connected directly through
-// ChannelConnection with no legacy row at all (e.g. onboarded after this
-// migration).
+// Every eBay-enabled tenant, for the worker's poll loop. Sourced from EbaySettings (authoritative
+// until the migration script runs), lazily migrating each one, plus any tenant connected directly
+// through ChannelConnection with no legacy row.
 async function listConfiguredTenants() {
   const legacyDocs = await EbaySettings.find({ refresh_token_ciphertext: { $ne: null } }).select(SECRET_FIELDS).lean();
   const results = [];
@@ -421,10 +354,7 @@ module.exports = {
   ensureWebhookToken,
   findByWebhookToken,
   listConfiguredTenants,
-  // Exported for server/scripts/migrateEbaySettingsToChannelConnection.js so
-  // the bulk migration script and this file's own lazy read-through share
-  // ONE implementation of "how to turn a legacy EbaySettings doc into a
-  // ChannelConnection", rather than two that can drift apart.
+  // Exported so the bulk migration script shares this implementation instead of duplicating it.
   fieldsFromLegacy,
   migrateFromLegacy,
 };

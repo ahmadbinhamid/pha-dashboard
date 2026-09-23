@@ -19,8 +19,7 @@ import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { InventoryRecord } from "@/types/inventory";
 import { Search, Boxes, Settings } from "lucide-react";
 
-// Product (sticky) and Actions are structural, not part of this list — every
-// other column can be hidden via "Manage Columns", persisted per browser.
+// Product (sticky) and Actions are structural, not part of this list; every other column can be hidden via "Manage Columns", persisted per browser.
 const INVENTORY_COLUMNS: ColumnDef[] = [
   { key: "sku", label: "SKU" },
   { key: "location", label: "Location", alwaysVisible: true },

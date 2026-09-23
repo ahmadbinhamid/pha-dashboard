@@ -20,11 +20,8 @@ async function ensureUniqueSlug(Model, baseSlug, excludeId = null, tenantId = nu
     if (excludeId) query._id = { $ne: excludeId };
     if (tenantId) query.tenant_id = tenantId;
 
-    // withDeleted: the unique slug index covers soft-deleted documents, so
-    // a slug one of them holds is genuinely taken even though the default
-    // find filter hides it. Without this the check returns a slug the
-    // insert then rejects, and the retry below can never converge because
-    // it recomputes the same answer every time.
+    // withDeleted: the unique index covers soft-deleted docs too, so a slug one holds is
+    // genuinely taken even though the default filter hides it, or the retry below never converges.
     const exists = await Model.findOne(query).setOptions({ withDeleted: true });
     if (!exists) return slug;
 
@@ -33,13 +30,8 @@ async function ensureUniqueSlug(Model, baseSlug, excludeId = null, tenantId = nu
   }
 }
 
-// ensureUniqueSlug checks then the caller inserts — not atomic, so two
-// near-simultaneous creates for the same base slug (double-submit, retry,
-// concurrent requests) can both pass the check before either commits, and
-// the loser hits a duplicate-key error on the real unique index. Instead of
-// trusting the pre-check alone, retry the whole check-then-create cycle on
-// a genuine slug conflict — ensureUniqueSlug will see the just-committed
-// competitor on the next attempt and bump the suffix further.
+// check-then-insert isn't atomic, so two near-simultaneous creates can both pass the check
+// before either commits; retry the whole cycle on a genuine conflict so the loser converges.
 async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5, tenantId = null } = {}) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const slug = await ensureUniqueSlug(Model, baseSlug, null, tenantId);
@@ -52,11 +44,8 @@ async function createWithUniqueSlug(Model, baseSlug, buildDoc, { maxAttempts = 5
   }
 }
 
-// Same race as createWithUniqueSlug, but for renaming an existing document:
-// two concurrent renames landing on the same target slug can both pass the
-// check before either commits. Retries the slug-then-save cycle on a
-// genuine conflict so the loser converges on the next free suffix instead
-// of surfacing a confusing "slug already exists" error.
+// Same race as createWithUniqueSlug, but for renaming an existing document; retries the
+// slug-then-save cycle instead of surfacing a confusing "slug already exists" error.
 async function saveWithUniqueSlug(doc, Model, baseSlug, excludeId, { maxAttempts = 5, tenantId = null } = {}) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     doc.slug = await ensureUniqueSlug(Model, baseSlug, excludeId, tenantId);

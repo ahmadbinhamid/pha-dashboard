@@ -18,9 +18,7 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: "channels", label: "Channels" },
 ];
 
-// Categorical palette (globals.css --cat-1..6) — same tokens
-// ProductChannelStatus.tsx uses to identify a channel by dot color. Cycled
-// in case a tenant somehow has more channels than the palette has slots.
+// Categorical palette (globals.css --cat-1..6), same tokens ProductChannelStatus.tsx uses; cycled in case a tenant has more channels than slots.
 const CHANNEL_COLOR_VARS = [
   "var(--color-cat-1)",
   "var(--color-cat-2)",
@@ -91,10 +89,7 @@ export function RevenueTrendChart({
 }: {
   points: OrderVolumePoint[];
   previousPeriodRevenueCents?: number;
-  // The dashboard's shared date-range filter, already formatted (see
-  // formatDateRangeLabel in utils/dateRange.ts) — this chart and Order
-  // Volume both read the exact same range, so the badge always shows the
-  // real applied window instead of a value that can drift from the filter.
+  // Dashboard's shared date-range filter, pre-formatted (formatDateRangeLabel) so this and Order Volume always show the same applied window.
   rangeLabel: string;
   loading?: boolean;
 }) {
@@ -109,9 +104,7 @@ export function RevenueTrendChart({
         totals.set(key, (totals.get(key) || 0) + cents);
       }
     }
-    // Every ORDER_CHANNEL is pre-seeded at 0 server-side so lines don't
-    // break on a zero-order day — but a channel this tenant has never once
-    // used shouldn't clutter the legend/chart with a flat zero line.
+    // Every ORDER_CHANNEL is pre-seeded at 0 so lines don't break on a zero-order day, but a never-used channel shouldn't clutter the legend with a flat zero line.
     return Array.from(totals.entries())
       .filter(([, cents]) => cents > 0)
       .sort((a, b) => b[1] - a[1])
@@ -126,9 +119,7 @@ export function RevenueTrendChart({
       null,
     );
 
-    // Which channel contributed the most revenue on the peak day
-    // specifically (not across the whole period) — matches "Top performing
-    // channel: eBay" sitting under the Peak Day figure.
+    // Channel with the most revenue on the peak day specifically, for the "Top performing channel" caption.
     let peakChannel: string | null = null;
     if (peak) {
       for (const [key, cents] of Object.entries(peak.byChannel)) {
@@ -136,15 +127,13 @@ export function RevenueTrendChart({
       }
     }
 
-    // Real period-over-period comparison — vs the same-length window
-    // immediately before this one, computed server-side.
+    // Period-over-period comparison vs the same-length prior window, computed server-side.
     const hasPriorPeriod = typeof previousPeriodRevenueCents === "number" && previousPeriodRevenueCents > 0;
     const periodChangePct = hasPriorPeriod
       ? ((totalRevenueCents - previousPeriodRevenueCents!) / previousPeriodRevenueCents!) * 100
       : null;
 
-    // "Pacing" caption for the average tile — real signal (is the latest
-    // day running hot/cold vs the period average), not a static string.
+    // "Pacing" caption: is the latest day running hot/cold vs the period average.
     const latest = points[points.length - 1] ?? null;
     let pacing: "up" | "down" | "steady" = "steady";
     if (latest && dailyAverageCents > 0) {

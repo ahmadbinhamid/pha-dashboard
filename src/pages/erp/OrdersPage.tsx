@@ -21,8 +21,7 @@ import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart, Banknote, Clock, CreditCard } from "lucide-react";
 
-// Order lifecycle — independent of payment status (see PAYMENT_STATUS_FILTERS
-// below and OrderStatusSelect for the same 5-state split on the detail page).
+// Order lifecycle, independent of payment status (see PAYMENT_STATUS_FILTERS below and OrderStatusSelect's same split on the detail page).
 const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = [
   { label: "All Status", value: "" },
   { label: "Pending", value: "pending" },
@@ -54,8 +53,7 @@ const MODE_FILTERS: { label: string; value: OrderDeliveryMethod | "" }[] = [
   { label: "Pickup", value: "pickup" },
 ];
 
-// Order ID (sticky) and Actions are structural, not part of this list — every
-// other column can be hidden via "Manage Columns", persisted per browser.
+// Order ID (sticky) and Actions are structural, not part of this list; every other column can be hidden via "Manage Columns", persisted per browser.
 const ORDER_COLUMNS: ColumnDef[] = [
   { key: "customer", label: "Customer", alwaysVisible: true },
   { key: "channel", label: "Channel" },

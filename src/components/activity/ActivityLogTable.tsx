@@ -4,17 +4,8 @@ import { eventVisual, formatTime } from "@/components/activity/ActivityEventRow"
 import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
 
-// The audit trail as a table rather than a feed — same columns the reference
-// design uses (when, what, the detail, and a trailing column), reading the
-// event's icon and tone through eventVisual so this and the dashboard's
-// compact feed can't drift apart.
-//
-// The reference also has User and IP Address columns. Nothing records either:
-// ActivityEvent carries no actor and no request metadata (see
-// dashboard.service.js, which derives events from orders and stock history).
-// Columns that would print "—" on every row for the life of the feature earn
-// their place once that's captured, not before — so the trailing column shows
-// the event's own tags instead.
+// Audit trail as a table; reads icon/tone through eventVisual so it can't drift from the dashboard's compact feed.
+// No User/IP Address columns: ActivityEvent carries no actor/request metadata (dashboard.service.js derives events from orders/stock history) — shows tags instead of all-"—" columns.
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });

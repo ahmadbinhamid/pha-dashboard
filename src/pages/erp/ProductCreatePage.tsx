@@ -63,7 +63,7 @@ function formToFD(form: ProductCreateFormValues, status: ProductStatus): FormDat
   if (form.shipping_cost) fd.append("shipping_cost", form.shipping_cost);
   fd.append("is_taxable", String(form.is_taxable));
   fd.append("barcode", form.barcode);
-  // Stock is always tracked — there's no "track stock" toggle in the UI.
+  // Stock is always tracked — no "track stock" toggle in the UI.
   fd.append("stock_control", "true");
   if (form.mpn) fd.append("mpn", form.mpn.trim());
   fd.append("condition", form.condition);
@@ -111,10 +111,7 @@ export default function ProductCreatePage() {
   });
 
   const form = watch();
-  // Notes are drafted before the product exists (addProductNote needs a
-  // productId, which doesn't exist yet) — captured here right before
-  // mutate() so onSuccess can post them once creation succeeds, without
-  // relying on react-query's onMutate-only `context` mechanism.
+  // Notes are drafted before the product exists (addProductNote needs a productId) — captured here so onSuccess can post them once creation succeeds.
   const pendingNotesRef = useRef<string[]>([]);
   const [imagesUploading, setImagesUploading] = useState(false);
 

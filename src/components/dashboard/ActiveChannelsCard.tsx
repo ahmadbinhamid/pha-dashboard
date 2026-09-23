@@ -103,7 +103,7 @@ export function ActiveChannelsCard({
 }: {
   channels: ChannelHealth[];
   loading?: boolean;
-  /** Tenant's own uploaded logo (Branding settings) — shown for the "storefront" channel. */
+  /** Tenant's own uploaded logo (Branding settings) — shown for the "storef... */
   tenantLogoUrl?: string | null;
 }) {
   const navigate = useNavigate();

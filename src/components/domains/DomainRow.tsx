@@ -11,10 +11,7 @@ import { DOMAIN_STATUS_CONFIG } from "@/config/domainStatus";
 import type { Domain } from "@/types/domain";
 import { RefreshCw, Trash2 } from "lucide-react";
 
-// A domain's TXT verification host is always this fixed prefix + its own
-// hostname — see server/src/services/domain.service.js#getVerificationRecordName.
-// Kept in sync manually (no shared package between FE/BE in this repo); if
-// that prefix ever changes, update it here too.
+// TXT verification host = this fixed prefix + hostname (server/src/services/domain.service.js#getVerificationRecordName); kept in sync manually, no shared FE/BE package.
 const VERIFICATION_SUBDOMAIN = "_pha-verify";
 
 export function DomainRow({ domain, onRequestDelete }: { domain: Domain; onRequestDelete: (domain: Domain) => void }) {

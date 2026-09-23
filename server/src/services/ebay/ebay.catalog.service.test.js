@@ -8,8 +8,7 @@
 // (ebay.adapter.js) fell back to the raw unverified condition, and the
 // mismatch only ever surfaced much later at publishOffer (errorId 25021).
 // Also guards the per-tenant/environment cache key so a sandbox tenant's
-// cached policy list can never be served to a production tenant, or vice
-// versa.
+// cached policy list can never be served to a production tenant, or vice versa.
 //
 // No Mongo/Redis needed: getAccessToken is mocked directly (module
 // property, patched BEFORE ebay.catalog.service.js is first required so

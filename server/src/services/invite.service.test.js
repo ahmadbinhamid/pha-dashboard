@@ -1,11 +1,7 @@
 // services/invite.service.test.js
-//
-// The invite lifecycle, and the three things it must never get wrong:
-// a link redeems at most once, it is bound to the address it was sent to,
+// The invite lifecycle: a link redeems at most once, is bound to the address it was sent to,
 // and re-inviting reuses the row rather than piling up a history.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/invite.service.test.js
+// Needs a live Mongo connection. Run: node --test src/services/invite.service.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

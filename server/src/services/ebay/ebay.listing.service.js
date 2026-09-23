@@ -26,11 +26,8 @@ function buildEbayItemUrl(externalListingId, settings) {
   return `https://www.${domain}/itm/${externalListingId}`;
 }
 
-// Best-effort: adds each fitment row's make/model/model_code/year combo to
-// this tenant's OWN vehicle catalog (covers custom values typed into the
-// fitment row Combobox) without letting a catalog write failure block the
-// listing save. Never writes to the shared/global catalog — see
-// vehicle-model.service.js.
+// Best-effort: adds fitment rows to this tenant's own vehicle catalog (never the shared/global one)
+// without letting a catalog write failure block the listing save.
 async function syncFitmentCatalog(fitment, tenantId) {
   if (!Array.isArray(fitment) || fitment.length === 0) return;
   try {
@@ -74,16 +71,8 @@ async function createListing(payload, tenantId) {
   const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
   if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
 
-  // Idempotency — a double-click or retried "Create Listing" request must
-  // not create a second listing for the same product/variant. This used to
-  // silently succeed twice (the Aug 2026 duplicate-listing incident — two
-  // local records ended up sharing one real eBay offer and corrupted stock
-  // via the reconciliation job). Now that MarketplaceListing.js enforces one
-  // listing per (product, variant, platform) at the DB level, a second
-  // attempt would instead fail loudly with a raw duplicate-key error — safer
-  // than silent corruption, but still a bad UX for the common "just
-  // double-clicked" case. Check first so that case returns the existing
-  // listing cleanly, no error, no new record.
+  // Idempotency: prevents a double-click from creating a second listing for the same product/variant
+  // (caused the Aug 2026 duplicate-listing incident). Check first for a clean return, not a raw duplicate-key error.
   const existing = await MarketplaceListing.findOne({
     tenant_id: tenantId,
     product,
@@ -133,11 +122,8 @@ async function createListing(payload, tenantId) {
 
     return listing;
   } catch (err) {
-    // The check-then-create above isn't atomic — two truly simultaneous
-    // requests can both pass the check before either one's insert commits.
-    // The unique index still catches that at the DB level; recover the same
-    // way, by returning whichever request actually won, instead of
-    // surfacing a raw E11000 to the client.
+    // check-then-create isn't atomic; the unique index catches true races — recover by
+    // returning whichever request won, instead of surfacing a raw E11000.
     if (err.code === 11000 && err.keyPattern?.product) {
       const winner = await MarketplaceListing.findOne({
         tenant_id: tenantId,
@@ -168,21 +154,13 @@ async function getListingById(id, tenantId) {
     .populate("photo_overrides");
 }
 
-// Aggregation (not .find()) because `search` must match against the
-// populated product's title/sku, which Mongoose .populate() can't filter on
-// — mirrors inventory.service.js's listInventory pattern.
+// Aggregation, not .find(), because `search` must match the populated product's title/sku
+// (mirrors inventory.service.js's listInventory pattern).
 async function listListings({ skip, limit, product, product_in, state, sync_status, search } = {}, tenantId, settings) {
   const match = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
   if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
-  // Batch lookup for "which of these specific products have an eBay listing"
-  // (e.g. the Products list page rendering a Channels column for its current
-  // page of products) — deliberately bypasses skip/limit below, since the
-  // caller already bounded the input to a known-small set of product ids
-  // (one page's worth), not "give me some page of the whole listings table".
-  // Passing that same small set through the normal paginated path silently
-  // truncated to the newest 100 listings tenant-wide, which is why some
-  // products that were genuinely synced still showed no Channel badge —
-  // their listing just wasn't among the 100 most recently created.
+  // Batch lookup for "which of these products have a listing" (e.g. Products list Channels column) —
+  // bypasses skip/limit since the caller already bounded input to one page's product ids.
   if (product_in?.length) {
     match.product = { $in: product_in.map((id) => mongoose.Types.ObjectId.createFromHexString(id)) };
   }
@@ -226,9 +204,7 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
 
   const countPipeline = [...pipeline, { $count: "total" }];
   pipeline.push({ $sort: { created_at: -1 } });
-  // product_in already bounds the result set to a known-small number of
-  // products (see above) — no pagination needed, and applying it would
-  // reintroduce the exact truncation this parameter exists to avoid.
+  // product_in already bounds the result set — pagination would reintroduce the truncation it avoids.
   if (!product_in?.length) pipeline.push({ $skip: skip }, { $limit: limit });
 
   const [items, countResult] = await Promise.all([
@@ -278,8 +254,7 @@ async function updateListing(id, payload, tenantId) {
     };
   }
 
-  // Expand item_specifics into dot-notation keys so Mongoose doesn't
-  // try to cast the whole subdoc through the old in-memory schema path
+  // Expand item_specifics into dot-notation keys to skip Mongoose's whole-subdoc cast path.
   if (update.item_specifics) {
     const specs = update.item_specifics;
     update["item_specifics.brand"] = specs.brand ?? null;

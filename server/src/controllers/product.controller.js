@@ -53,10 +53,7 @@ const {
   systemfailure,
 } = require("../utils/http/response");
 
-// Best-effort: adds this make/model/model_code/year combo to this tenant's
-// OWN vehicle catalog (covers custom values typed into the vehicle
-// Combobox) without letting a catalog write failure block the product save.
-// Never writes to the shared/global catalog — see vehicle-model.service.js.
+// Best-effort: adds this vehicle combo to the tenant's own catalog without blocking the product save on failure.
 async function syncVehicleModelCatalog(vehicle, tenantId) {
   if (!vehicle) return;
   try {
@@ -66,9 +63,7 @@ async function syncVehicleModelCatalog(vehicle, tenantId) {
   }
 }
 
-// Fire-and-forget, same as syncVehicleModelCatalog above — a slow/unreachable
-// search queue must never block a product save. The worker re-fetches the
-// product itself (see search.worker.js), so only the id needs to travel here.
+// Fire-and-forget like above; the worker re-fetches the product itself, so only the id travels here.
 async function syncSearchIndex(productId) {
   try {
     await enqueueSearchJob("index_product", { productId: productId.toString() });
@@ -85,36 +80,9 @@ async function removeFromSearchIndex(productId) {
   }
 }
 
-// ── Marketplace fan-out on product/variant edits (TASK 1) ──────────────────
-//
-// BUG being fixed: updateProduct saved the product, synced the vehicle
-// catalog, and reindexed search, but never told eBay/Google anything
-// changed. Only a stock change (inventory.service.js#fanOutMarketplaceInventory,
-// called from adjustStock/setStock), a listing-level edit, or Google's
-// 25-day refresh sweep ever re-pushed a listing — so a plain price/title/
-// photo edit silently drifted the channel feed from the Product for up to
-// 25 days (worse for Google: a Google listing has almost no fields of its
-// own, so title/description/price/photos come from the Product with no
-// per-listing override at all in the common case).
-//
-// Fields below mirror exactly what listing.resolver.js#resolveListing/
-// resolveIdentifiers and resolveProductUrl read off Product when building a
-// channel payload: title, description, price, brand, mpn, attachments
-// (photos — resolvePhotos falls back to product.attachments whenever a
-// variant/listing has none of its own; order matters too, since Google's
-// imageLink is photos[0]) and slug (resolveProductUrl). This controller
-// never accepts `slug` as its own body field — the only way a product's
-// slug changes here is as a side effect of a title change (pendingSlugBase
-// below) — so watching `title` already covers `slug`.
-//
-// NOTE: `condition` is included per the review's explicit list even though
-// no adapter reads Product.condition today — both eBay's and Google's
-// listing discriminators carry their OWN `condition` field (edited via the
-// listing itself, defaulting to "NEW"), and listing.resolver.js never
-// merges Product.condition into a resolved payload. Kept in the watch list
-// anyway: a false-positive fan-out here just enqueues a same-data no-op
-// push, while dropping it silently breaks the moment any adapter starts
-// reading it.
+// Marketplace fan-out on product/variant edits: without this, a plain price/title/photo edit could silently
+// drift eBay/Google listings from the Product for up to 25 days. Fields below mirror what listing.resolver.js
+// reads off Product for a channel payload (title covers slug, since slug only changes via title here).
 const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = ["title", "description", "price", "brand", "mpn", "condition"];
 
 function snapshotMarketplaceProductFields(product) {
@@ -136,12 +104,7 @@ function marketplaceProductFieldsChanged(before, after) {
   return !arraysEqual(before.attachments, after.attachments);
 }
 
-// Variant counterpart: variant has no title/description/brand/mpn/condition
-// of its own (those always come from the parent Product — see
-// ProductVariant.js), so only its own price/photo/sku overrides matter here
-// — resolvePrice/resolvePhotos prefer these over the product's when present,
-// and resolveSku reads variant.sku directly as the offerId fallback whenever
-// the listing itself has no store_sku override.
+// Variant counterpart: only price/sku/photo overrides matter here, since title/description/brand/mpn always come from the parent Product.
 const MARKETPLACE_RELEVANT_VARIANT_FIELDS = ["price", "sku"];
 
 function snapshotMarketplaceVariantFields(variant) {
@@ -158,8 +121,7 @@ function marketplaceVariantFieldsChanged(before, after) {
   return !arraysEqual(before.attachments, after.attachments);
 }
 
-// Best-effort single fan-out call — never lets a queue/DB hiccup fail the
-// product/variant update response, same convention as syncSearchIndex above.
+// Best-effort single fan-out call; a queue/DB hiccup never fails the update response.
 async function bestEffortFanOut(productId, variantId, tenantId) {
   try {
     await fanOutMarketplaceInventory(productId, variantId, tenantId);
@@ -171,12 +133,7 @@ async function bestEffortFanOut(productId, variantId, tenantId) {
   }
 }
 
-// A product-level field change can affect listings across every variant
-// (variants without their own price/photo override fall back to the
-// product's), not just the base no-variant listings — so this fans out to
-// the base listings AND every variant's listings. fanOutMarketplaceInventory
-// itself is a no-op per call when a given product/variant combo has no
-// active listings, so this is cheap for a product with no variants.
+// A product-level change can affect every variant's listings too, so this fans out to base listings and all variants.
 async function fanOutProductChangeToListings(productId, tenantId) {
   await bestEffortFanOut(productId, null, tenantId);
   try {
@@ -189,9 +146,7 @@ async function fanOutProductChangeToListings(productId, tenantId) {
   }
 }
 
-// In-memory equivalent of a Mongo `{field: 1|-1, ...}` sort spec, for
-// re-ordering the already-hydrated/stock-filtered search results (Typesense
-// itself only ranks by relevance).
+// In-memory equivalent of a Mongo sort spec, applied to already-hydrated search results (Typesense only ranks by relevance).
 function sortByFields(items, sortSpec) {
   const entries = Object.entries(sortSpec);
   return [...items].sort((a, b) => {
@@ -203,11 +158,7 @@ function sortByFields(items, sortSpec) {
   });
 }
 
-// Bounds how many Typesense hits are hydrated/paginated in JS below — the
-// stock filter (not indexed in Typesense) has to be applied after hydration,
-// so this caps how much of the catalog a single search page reads. Fine for
-// a per-tenant auto-parts catalog; would need a real Typesense-side stock
-// field if a tenant's catalog grows far beyond this.
+// Caps how many Typesense hits get hydrated/stock-filtered in JS per search page; revisit if a catalog outgrows this.
 const SEARCH_CANDIDATE_LIMIT = 250;
 
 exports.getProducts = async (req, res) => {
@@ -240,8 +191,7 @@ exports.getProducts = async (req, res) => {
 
       const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
 
-      // Typesense's relevance order is the default ("best match") — only
-      // override it with an explicit sort spec if the caller asked for one.
+      // Only override Typesense's default relevance order if the caller asked for a sort.
       const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
       const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
 
@@ -312,13 +262,7 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-// NOTE (TASK 1): createProduct and duplicateProduct (below) deliberately do
-// NOT fan out to marketplace listings. Checked: a MarketplaceListing is
-// always created via its own separate "list on eBay/Google" action, never
-// as a side effect of createProductRecordWithSlug — so at the moment either
-// of these returns, hasMarketplaceListings(product._id) is unconditionally
-// false and fanOutMarketplaceInventory would find zero listings to push to.
-// Adding a call here would be a guaranteed no-op on every single call.
+// createProduct/duplicateProduct deliberately skip marketplace fan-out: a new product never has listings yet, so it'd be a no-op.
 exports.createProduct = async (req, res) => {
   try {
     const body = req.body || {};
@@ -407,8 +351,7 @@ exports.createProduct = async (req, res) => {
 
     return created(res, await getPopulatedProduct(product._id, req.tenantId), "Product created");
   } catch (err) {
-    // Name the index that actually rejected the write: slug and sku are both
-    // unique here, so a hardcoded slug message misreports sku collisions.
+    // Names the index that actually rejected the write, since slug and sku are both unique here.
     const conflict = duplicateKeyMessage(err, "Product", { slug: "slug", sku: "SKU" });
     if (conflict) return requestConflict(res, conflict);
     return systemfailure(res, err);
@@ -420,8 +363,7 @@ exports.updateProduct = async (req, res) => {
     const product = await findProductById(req.params.id, req.tenantId);
     if (!product) return notFound(res, "Product not found");
 
-    // Snapshot BEFORE any mutation below — compared against the same fields
-    // post-save to decide whether this edit needs to reach eBay/Google (TASK 1).
+    // Snapshot before mutation, compared post-save to decide if this edit needs to reach eBay/Google.
     const beforeMarketplaceFields = snapshotMarketplaceProductFields(product);
 
     const body = req.body || {};
@@ -510,9 +452,7 @@ exports.updateProduct = async (req, res) => {
     if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle, req.tenantId);
     await syncSearchIndex(product._id);
 
-    // TASK 1: fan out to marketplace listings only if something a channel
-    // payload actually reads changed — an internal-notes/vehicle-catalog/
-    // categories/tags-only edit must not queue a push for every listing.
+    // Only fan out if a field a channel payload actually reads changed — skip notes/categories/tags-only edits.
     if (marketplaceProductFieldsChanged(beforeMarketplaceFields, snapshotMarketplaceProductFields(product))) {
       await fanOutProductChangeToListings(product._id, req.tenantId);
     }
@@ -616,8 +556,7 @@ exports.updateVariant = async (req, res) => {
     const variant = await findVariant(req.params.variantId, req.params.id, req.tenantId);
     if (!variant) return notFound(res, "Variant not found");
 
-    // TASK 1: same before/after snapshot as updateProduct, scoped to the
-    // fields this variant can actually override for a channel payload.
+    // Same before/after snapshot as updateProduct, scoped to fields this variant can override.
     const beforeMarketplaceFields = snapshotMarketplaceVariantFields(variant);
 
     const body = req.body || {};
@@ -651,8 +590,7 @@ exports.updateVariant = async (req, res) => {
 
     await saveVariant(variant);
 
-    // TASK 1: fan out only to THIS variant's own listings — a variant price/
-    // photo/sku change never affects a sibling variant's listing.
+    // Fan out only to this variant's own listings; a variant change never affects a sibling's listing.
     if (marketplaceVariantFieldsChanged(beforeMarketplaceFields, snapshotMarketplaceVariantFields(variant))) {
       await bestEffortFanOut(variant.product, variant._id, req.tenantId);
     }

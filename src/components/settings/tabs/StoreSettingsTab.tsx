@@ -9,9 +9,7 @@ import { findStoreSection, type StoreSectionId } from "@/config/settingsTabs";
 import { getLocations } from "@/lib/api/locations";
 import type { TenantSettings } from "@/types/tenantSettings";
 
-// Store Settings is the only tab with a second level of navigation. The
-// section lives in the URL (/settings/store/:section) rather than local state,
-// so a section is linkable and survives a refresh like every other tab.
+// Store Settings is the only tab with a second nav level. Section lives in the URL (/settings/store/:section) rather than local state, so it's linkable and survives a refresh.
 export function StoreSettingsTab({
   sectionId,
   onSelectSection,
@@ -23,8 +21,7 @@ export function StoreSettingsTab({
   settings?: TenantSettings;
   loading?: boolean;
 }) {
-  // Only for the pill's count badge — the section itself refetches through the
-  // same query key, so this doesn't cause a second request.
+  // Only for the pill's count badge — shares a query key with the section itself, so this doesn't cause a second request.
   const { data: locationsRes } = useQuery({ queryKey: ["locations"], queryFn: getLocations });
   const section = findStoreSection(sectionId);
 

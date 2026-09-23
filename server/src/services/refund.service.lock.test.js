@@ -1,20 +1,9 @@
 // services/refund.service.lock.test.js
-//
-// Corrections round — the fencing-token requirement: without it, a holder
-// (A) whose critical section outlasted REFUND_LOCK_STALE_MS would have its
-// lock reclaimed by a new caller (B), and A's own `finally { releaseRefundLock }`
-// would then clear B's lock out from under it. Two callers would both
-// believe they hold the lock — the exact admission race acquireRefundLock
-// exists to prevent, reintroduced by the lock's own cleanup.
-//
-// This exercises the lock primitives directly (acquireRefundLock/
-// releaseRefundLock, exported from refund.service.js for this test only)
-// rather than indirectly through createRefund's full path, since the
-// scenario being proven is specifically about the mutex's own token
-// bookkeeping, not the refund business logic built on top of it.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.service.lock.test.js
+// The fencing-token requirement: without it, a stale holder's own `finally` release would clear
+// a new caller's reclaimed lock, reintroducing the exact admission race the lock exists to prevent.
+// Exercises acquireRefundLock/releaseRefundLock directly, since this is about the mutex's own
+// token bookkeeping, not the refund business logic on top.
+// Needs a live Mongo connection. Run: node --test src/services/refund.service.lock.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -62,9 +51,7 @@ test("refund lock: a stale holder's release does not clear a new holder's lock",
   const order = await createDisposableOrder();
 
   try {
-    // Simulate holder A having acquired the lock a while ago (older than the
-    // 30s staleness window) and never releasing it — a crashed/hung request,
-    // the exact scenario the staleness window exists to recover from.
+    // Simulate holder A acquiring the lock a while ago and never releasing it — a crashed/hung request.
     const STALE_MS = 30_000;
     const tokenA = "token-A";
     await Order.updateOne(
@@ -85,9 +72,7 @@ test("refund lock: a stale holder's release does not clear a new holder's lock",
     });
 
     await t.test("A's own (late) release does not clear B's lock", async () => {
-      // This is exactly what createRefund's `finally` block would do if A's
-      // critical section only just finished after being reclaimed —
-      // without the fencing token, this would null out B's lock.
+      // What createRefund's `finally` block would do if A's section finished after being reclaimed.
       await refundService.releaseRefundLock(order._id.toString(), tokenA);
 
       const afterAsRelease = await Order.findById(order._id);

@@ -12,8 +12,7 @@ export interface PickupLocation {
   trading_hours: string[];
 }
 
-// Shared by every "tenant supplies their own credentials" integration
-// (Stripe keys, SMTP) — mirrors CONNECTION_STATUS in tenant.constants.js.
+// Shared by every BYOK integration (Stripe keys, SMTP) — mirrors CONNECTION_STATUS in tenant.constants.js.
 export type ConnectionStatus = "not_connected" | "connected" | "error";
 
 // Mirrors PAYMENT_DOMAIN_MODE in tenant.constants.js.
@@ -43,17 +42,12 @@ export interface TenantSettings {
   brand_colour: string;
   accent_colour: string;
   payment_domain_mode: PaymentDomainMode;
-  // Only affects orders/invoices created AFTER this is changed — each order
-  // snapshots the prefix that was active at creation time onto its own
-  // order_number_prefix/invoice_number_prefix (see types/orders.ts), so
-  // changing this never relabels an existing order.
+  // Only affects orders/invoices created after this changes — each order snapshots its own prefix at creation time (types/orders.ts), so changing this never relabels an existing order.
   order_number_prefix: string;
   invoice_number_prefix: string;
-  // Sample URLs for both modes, built server-side from PAYMENT_LINK_DOMAIN —
-  // not itself saved, just returned alongside settings for the picker's preview.
+  // Sample URLs for both modes, built server-side from PAYMENT_LINK_DOMAIN — not saved, just returned for the picker's preview.
   payment_link_preview: PaymentLinkPreview;
-  // BYOK — the secret key itself is never returned to the client (select:
-  // false on the backend); only what's safe/useful to show in Settings.
+  // BYOK: the secret key itself is never returned to the client (select: false on the backend); only what's safe to show in Settings.
   stripe_publishable_key: string | null;
   stripe_connection_status: ConnectionStatus;
   stripe_connected_at: string | null;

@@ -1,8 +1,6 @@
 // controllers/invitation.controller.js
-//
-// Thin: validates what the route didn't, calls invite.service, shapes the
-// response. Split across three audiences, matching how the routes are
-// mounted — the inviting organisation, and the invitee (signed in or not).
+// Thin: validates, calls invite.service, shapes the response. Split across three audiences:
+// the inviting organisation, and the invitee (signed in or not).
 
 const config = require("../config");
 const { signJwt } = require("../utils/auth/jwt");
@@ -11,20 +9,13 @@ const { getCompanyProfile } = require("../services/tenantSettings.service");
 const { sendTeamInvite } = require("../services/email/email.service");
 const { success, created, notFound, systemfailure } = require("../utils/http/response");
 
-/**
- * The link the invitee clicks. The dashboard owns the landing page, so this
- * points at CLIENT_URL — the same base the other account emails use.
- */
+/** The link the invitee clicks; points at CLIENT_URL, same base the other account emails use. */
 function buildInviteUrl(token) {
   return `${config.emailBrand.clientUrl.replace(/\/$/, "")}/invite?token=${encodeURIComponent(token)}`;
 }
 
-/**
- * Email the link, from the inviting organisation's own brand. Deliberately
- * not awaited-into-failure: the invite itself is already saved, so a mail
- * problem shouldn't fail the request and leave the dashboard thinking nothing
- * happened — the link comes back in the response either way.
- */
+/** Emails the link from the inviting organisation's brand. Not awaited-into-failure — the
+ * invite is already saved and the link comes back in the response either way. */
 async function deliverInvite({ tenantId, invitation, token, inviter }) {
   const companyProfile = await getCompanyProfile(tenantId);
   const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : null;
@@ -63,8 +54,7 @@ exports.sendInvitation = async (req, res) => {
 
     await deliverInvite({ tenantId: req.tenantId, invitation, token, inviter: req.user });
 
-    // The only moment a shareable link exists — only its hash is stored, so
-    // it can't be recovered afterwards (see models/Invitation.js).
+    // The only moment a shareable link exists — only its hash is stored afterward.
     return created(res, { ...invitation, link: buildInviteUrl(token) });
   } catch (err) {
     return systemfailure(res, err);
@@ -132,8 +122,7 @@ exports.declineInvitation = async (req, res) => {
 exports.registerFromInvitation = async (req, res) => {
   try {
     const { user } = await inviteService.registerFromInvite(req.params.token, req.body);
-    // Signing them in here is what makes the link a one-step join; the token
-    // shape matches auth.controller's own login response.
+    // Signing them in here makes the link a one-step join; token shape matches login's response.
     const token = signJwt({ sub: String(user._id), role: user.role });
     return created(res, { user, token }, "Account created");
   } catch (err) {

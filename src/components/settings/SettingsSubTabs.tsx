@@ -2,10 +2,7 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/utils/cn";
 import { STORE_SECTIONS, type StoreSectionId } from "@/config/settingsTabs";
 
-// Pill row inside Store Settings, sitting in its own card above the section
-// body — the second level of navigation under <SettingsTabBar>. `counts`
-// lets a section show how many records it holds (e.g. "Warehouses & Hubs (4)")
-// without this component knowing where that number comes from.
+// Pill row inside Store Settings, the second nav level under <SettingsTabBar>. `counts` lets a section show a record count without this component knowing where the number comes from.
 export function SettingsSubTabs({
   activeId,
   onSelect,

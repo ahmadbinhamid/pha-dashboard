@@ -7,9 +7,7 @@ import { useToast } from "@/context";
 import { addOrderNote } from "@/lib/api/orders";
 import type { OrderInternalNote } from "@/types/orders";
 
-// Internal staff comment thread — distinct from the customer-facing order
-// note captured once at creation. Notes accumulate over time and are never
-// shown to the customer.
+// Internal staff comment thread, distinct from the customer-facing order note captured at creation; never shown to the customer.
 export function OrderNotesSection({ orderId, notes }: { orderId: string; notes: OrderInternalNote[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

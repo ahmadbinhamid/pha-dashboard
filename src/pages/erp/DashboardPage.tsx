@@ -24,10 +24,7 @@ import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
 import { Boxes, AlertTriangle, Clock, Radio } from "lucide-react";
 
-// Recent Activity polls rather than push — good enough at this scale, and
-// honest about not actually being a websocket-driven live feed. Faster than
-// the page-wide PAGE_REFETCH_MS on purpose: it's the one panel where a
-// several-minute lag reads as "nothing is happening".
+// Recent Activity polls rather than push, faster than page-wide PAGE_REFETCH_MS since a several-minute lag here reads as "nothing is happening".
 const ACTIVITY_REFETCH_MS = 30_000;
 
 export default function DashboardPage() {
@@ -46,19 +43,13 @@ export default function DashboardPage() {
     refetchInterval: PAGE_REFETCH_MS,
   });
 
-  // Shared ["tenant-settings"] query key — same one AppearanceTab.tsx/
-  // ProductEditPage.tsx already use — just here for the "storefront" row's
-  // logo in ActiveChannelsCard below.
+  // Shared ["tenant-settings"] query key (also used by AppearanceTab.tsx/ProductEditPage.tsx), here for the "storefront" row's logo in ActiveChannelsCard.
   const { data: tenantSettingsRes } = useQuery({
     queryKey: ["tenant-settings"],
     queryFn: getTenantSettings,
   });
 
-  // Single query for the whole date-range-filtered section of the dashboard
-  // — Order Volume and Revenue Trends & Channel Analytics both render off
-  // this same per-day series, so they always agree on what period they're
-  // showing instead of drifting apart (Revenue Trends used to be pinned to a
-  // fixed trailing 6 months regardless of what the picker said).
+  // Single query for the date-range-filtered section: Order Volume and Revenue Trends both render off this same series, so they always agree on the period shown.
   const { data: volumeRes, isLoading: volumeLoading } = useQuery({
     queryKey: ["dashboard", "order-volume", orderVolumeRange],
     queryFn: () => getOrderVolume(orderVolumeRange),

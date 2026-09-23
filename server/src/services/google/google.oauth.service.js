@@ -1,17 +1,7 @@
 // services/google/google.oauth.service.js
-//
-// Google OAuth 2.0 consent flow + token management for the Merchant API —
-// mirrors services/ebay/ebay.oauth.service.js's shape (buildConsentUrl,
-// resolveState, code exchange), plus access-token refresh/caching, which
-// eBay keeps entirely in-memory (see ebay.api.service.js#getAccessToken) —
-// Google's access token is instead PERSISTED on ChannelConnection
-// (access_token_ct/token_expires_at) so it survives a process restart and
-// every worker process shares one source of truth, refreshed proactively
-// rather than lazily on every call.
-//
-// Unlike eBay's OAuth ("RuName" indirection — the redirect_uri sent is an
-// opaque identifier, not a literal URL), Google's redirect_uri really is
-// the literal callback URL registered in the Google Cloud Console.
+// Google OAuth 2.0 consent flow + token management, mirroring ebay.oauth.service.js's shape.
+// Unlike eBay's in-memory token cache, Google's access token is persisted on ChannelConnection
+// so it survives restarts and is shared across worker processes.
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
@@ -26,16 +16,13 @@ const PLATFORM = MARKETPLACE_PLATFORM.GOOGLE;
 const AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
-// Content API for Shopping / Merchant API scope — the one scope this
-// integration needs (insert/delete product inputs, manage data sources).
+// The one scope this integration needs: insert/delete product inputs, manage data sources.
 const MERCHANT_SCOPE = "https://www.googleapis.com/auth/content";
 
 const OAUTH_STATE_PURPOSE = "google_oauth";
 const OAUTH_STATE_TTL = "10m";
 
-// How far ahead of actual expiry a cached/stored access token is treated as
-// "needs refresh" — mirrors the 30s buffer ebay.api.service.js#getAccessToken
-// uses for its own in-memory cache.
+// How far ahead of expiry a stored access token is treated as needing refresh.
 const EXPIRY_BUFFER_MS = 60_000;
 
 function assertConfigured() {
@@ -46,26 +33,10 @@ function assertConfigured() {
   }
 }
 
-// Returns the URL the frontend should navigate the browser to. access_type
-// offline + prompt consent are both required to get a refresh_token back at
-// all — Google only issues one on a user's FIRST consent (or when force-
-// reconsented like this), silently omitting it on a repeat authorization
-// otherwise, which would leave a reconnect attempt with no way to get a new
-// refresh_token if the old one had been revoked.
-//
-// TASK 4: consent now happens FIRST, before the tenant has chosen a
-// Merchant Center account at all — merchantId/feedLabel/contentLanguage/
-// targetCountry used to travel inside this signed state (the only way the
-// callback could otherwise learn them, since Google's OAuth response never
-// carries them), which forced the tenant to type a Merchant Center ID
-// (typo-prone, and a wrong one either failed confusingly or silently
-// pointed at the wrong account) before ever seeing which accounts the
-// token they're about to grant can actually reach. State now carries only
-// `tenant_id` + `purpose` — the CSRF-relevant part of this mechanism (a
-// signed, time-limited, purpose-checked token round-tripped through
-// Google, verified on the way back — see resolveState below) is completely
-// unchanged, just smaller. Account selection moves to AFTER consent — see
-// listAccessibleAccounts/completeConnection below.
+// Returns the consent URL. access_type offline + prompt consent are both required to get a
+// refresh_token back, since Google only issues one on first consent (or forced reconsent).
+// Consent happens before Merchant Center account selection — state carries only tenant_id +
+// purpose; account selection moves to listAccessibleAccounts/completeConnection below.
 function buildConsentUrl({ tenantId }) {
   assertConfigured();
 
@@ -87,9 +58,7 @@ function buildConsentUrl({ tenantId }) {
   return `${AUTH_BASE}?${params.toString()}`;
 }
 
-// Verifies the round-tripped `state` and returns the tenant it belongs to.
-// Throws on a missing/expired/tampered/wrong-purpose token — callers should
-// treat that as a rejected callback, never as "no tenant."
+// Verifies the round-tripped `state`; throws (never returns "no tenant") on any invalid token.
 function resolveState(state) {
   if (!state) throw new Error("Missing OAuth state");
   const payload = verifyJwt(state);
@@ -97,12 +66,7 @@ function resolveState(state) {
   return { tenantId: payload.tenant_id };
 }
 
-// Wraps a fetch Response's failure into an Error carrying `.status` so the
-// circuit breaker (services/marketplace/circuitBreaker.js) can classify it —
-// >=500/401/403 count toward the breaker, everything else (a malformed
-// request, an expired/revoked code) doesn't. Same convention as eBay's
-// EbayApiError, without introducing a parallel error class hierarchy for one
-// field.
+// Wraps a fetch failure into an Error carrying `.status` so the circuit breaker can classify it.
 async function throwForResponse(res, action) {
   const text = await res.text();
   logger.error(`[google.oauth] ${action} failed`, { status: res.status, body: text });
@@ -111,11 +75,8 @@ async function throwForResponse(res, action) {
   throw err;
 }
 
-// One-time authorization-code exchange. Returns BOTH tokens — unlike eBay's
-// exchange (which only ever returns a refresh_token, since eBay mints access
-// tokens fresh on every call), Google's code exchange also returns a usable
-// access_token + expires_in immediately, so the caller can persist a
-// complete, already-valid ChannelConnection without a second round trip.
+// One-time code exchange. Returns both tokens, unlike eBay's (which only returns a refresh_token),
+// so the caller can persist a complete ChannelConnection without a second round trip.
 async function exchangeCodeForTokens(code) {
   assertConfigured();
 
@@ -145,19 +106,9 @@ async function exchangeCodeForTokens(code) {
   return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: data.expires_in || 3600 };
 }
 
-// In-flight refresh de-duplication, keyed by tenant id — two jobs racing to
-// refresh the SAME tenant's token (e.g. two sync_batch/sync_listing jobs
-// picked up around the same time) await the SAME underlying refresh instead
-// of both hitting Google's token endpoint and both writing back a token
-// (harmless individually — Google allows concurrent refreshes of one
-// refresh_token — but wasteful, and the failure mode this exists to avoid:
-// two racing writes with no ordering guarantee "clobbering" each other with
-// whichever finishes last). NOTE: this de-dupes within ONE process only; two
-// separate worker processes could still both refresh around the same
-// moment. That's still safe (Mongo's own single-document writes are atomic,
-// and a stale-but-still-valid access token from the "losing" refresh is
-// simply not reused past its own real expiry), just not fully eliminated —
-// a cross-process lock would need Redis, which this run doesn't add.
+// In-flight refresh de-duplication, keyed by tenant id, so two racing jobs share one refresh
+// instead of both hitting Google's endpoint. Only de-dupes within one process; cross-process
+// races are still safe (Mongo writes are atomic) but not fully eliminated without Redis.
 const _refreshInFlight = new Map();
 
 async function refreshAccessToken(tenantId, refreshToken) {
@@ -210,11 +161,8 @@ async function refreshAccessToken(tenantId, refreshToken) {
   }
 }
 
-// Returns a valid (not near-expiry) plaintext access token for this
-// connection, refreshing and persisting proactively if needed. `connection`
-// is the lean ChannelConnection doc (with access_token_ct/refresh_token_ct
-// selected) — same shape google.merchant.api.service.js's callers already
-// have from loadSettings.
+// Returns a valid plaintext access token, refreshing and persisting proactively if needed.
+// `connection` is the lean ChannelConnection doc with access_token_ct/refresh_token_ct selected.
 async function getValidAccessToken(connection) {
   if (!connection) return null;
 
@@ -233,12 +181,8 @@ async function getValidAccessToken(connection) {
   return accessToken;
 }
 
-// TASK 4, step 1 of 2: runs right after the OAuth redirect lands back —
-// exchanges the code and saves JUST the token, under a PENDING connection
-// row. Nothing Merchant-Center-specific has been chosen yet (that's the
-// whole point of reordering this flow), so there's no data source to
-// create and no merchant_id to store yet — completeConnection below does
-// that once the tenant has actually picked an account.
+// Step 1 of 2, right after the OAuth redirect: exchanges the code and saves just the token
+// under a PENDING connection row — nothing Merchant-Center-specific chosen yet.
 async function savePendingConnection({ tenantId, code }) {
   const { accessToken, refreshToken, expiresIn } = await exchangeCodeForTokens(code);
 
@@ -263,11 +207,8 @@ async function savePendingConnection({ tenantId, code }) {
   logger.info("[google.oauth] OAuth consent completed, awaiting account selection", { tenantId: String(tenantId) });
 }
 
-// Shared by listAccessibleAccounts and completeConnection below: both need
-// a valid access token for whatever connection (pending OR already
-// connected — reconnect/switch-account re-uses this same path) this tenant
-// currently has on file. Throws a clear, named error if there's nothing to
-// load from — both callers require the OAuth step to have already run.
+// Shared by listAccessibleAccounts and completeConnection: both need a valid access token for
+// whatever connection this tenant has on file. Throws a named error if the OAuth step never ran.
 async function loadTokenForTenant(tenantId) {
   const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: PLATFORM })
     .select("+access_token_ct +refresh_token_ct")
@@ -281,34 +222,18 @@ async function loadTokenForTenant(tenantId) {
   return getValidAccessToken(conn);
 }
 
-// TASK 4: lists the Merchant Center accounts the just-granted token can
-// access, for the tenant to pick from instead of typing a Merchant Center
-// ID blind. Thin pass-through to google.datasource.service.js#listAccounts
-// (kept there, not duplicated here, alongside registerGcp/
-// getAccountForGcpRegistration — every raw accounts/v1 HTTP call lives in
-// one place).
+// Lists the Merchant Center accounts the just-granted token can access, for the tenant to
+// pick from. Thin pass-through to google.datasource.service.js#listAccounts.
 async function listAccessibleAccounts(tenantId) {
   const token = await loadTokenForTenant(tenantId);
   const { listAccounts } = require("./google.datasource.service");
   return listAccounts(token);
 }
 
-// TASK 4, step 2 of 2: the tenant has now picked a Merchant Center account
-// (+ confirmed/overridden feed settings) — ensures the data source exists
-// (Task 2 — "a data source must exist before any product push... during
-// connect, not lazily on first sync") and upgrades the PENDING connection
-// to CONNECTED. No `code` here any more — the token was already saved by
-// savePendingConnection above; this just loads and reuses it (refreshing
-// first if it's gone stale between the two steps).
-//
-// `verifiedAccountIds`: when the caller already has a fresh
-// listAccessibleAccounts() result (the normal dropdown path), pass its
-// account ids here so a mismatched merchantId is rejected BEFORE ever
-// calling ensureDataSource — belt-and-suspenders on top of ensureDataSource
-// itself naturally failing for an inaccessible account. Omit entirely
-// (undefined, not an empty array) for the manual-entry fallback path (see
-// google.controller.js#completeConnect) where accounts.list itself wasn't
-// usable — an empty array here would incorrectly reject every merchantId.
+// Step 2 of 2: the tenant picked a Merchant Center account — ensures the data source exists
+// and upgrades the PENDING connection to CONNECTED, reusing the token savePendingConnection saved.
+// `verifiedAccountIds`: pass the caller's fresh account ids to reject a mismatched merchantId early;
+// omit (not empty array) for the manual-entry fallback where accounts.list wasn't usable.
 async function completeConnection({ tenantId, merchantId, feedLabel, contentLanguage, targetCountry, verifiedAccountIds }) {
   if (verifiedAccountIds && !verifiedAccountIds.includes(String(merchantId))) {
     const err = new Error(`This Google account does not have access to Merchant Center account ${merchantId}.`);
@@ -336,19 +261,8 @@ async function completeConnection({ tenantId, merchantId, feedLabel, contentLang
         target_country: targetCountry,
       },
     },
-    // merchant_id/data_source_id/feed_label/content_language/target_country
-    // are Google-discriminator-only fields (declared on the google schema
-    // in models/ChannelConnection.js, not the base schema) — a base-model
-    // update casts $set against the base schema only and silently drops
-    // anything it doesn't recognize under Mongoose's default strict mode.
-    // Same fix, same reasoning as ebay.adapter.js#updateSyncBaseline's own
-    // strict: false — kept consistent with that established pattern rather
-    // than switching to ChannelConnection.discriminators[...]. No upsert
-    // here (unlike savePendingConnection) — completeConnection always
-    // expects the PENDING row savePendingConnection already created; a
-    // missing row means the tenant skipped straight to this call, which is
-    // itself worth surfacing as null rather than silently creating a
-    // connection with no token history.
+    // strict: false, since these fields are Google-discriminator-only and a base-model update
+    // would otherwise silently drop them. No upsert — a missing PENDING row should surface as null.
     { new: true, strict: false },
   );
 

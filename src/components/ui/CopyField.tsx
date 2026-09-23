@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 
-// Read-only value with a copy-to-clipboard button — used for things like a
-// webhook URL that a user needs to paste elsewhere, not edit here.
+// Read-only value with a copy-to-clipboard button, for things like a webhook URL that gets pasted elsewhere, not edited here.
 export function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
 

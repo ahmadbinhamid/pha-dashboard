@@ -32,20 +32,15 @@ function buildAttachmentUrl(fileName) {
   return `${config.uploads.url}/${fileName}`;
 }
 
-// Absolute on-disk path for an uploaded file — same base dir removeAttachmentFile
-// (attachment.service.js) already deletes from. Workers share this volume with
-// the API (see docker-compose.yml), so it's also safe to hand straight to
-// nodemailer as an attachment `path` (see product.service.js#sendProductInfoEmail).
+// Absolute on-disk path for an uploaded file; workers share this volume with the API, so it's
+// also safe to hand straight to nodemailer as an attachment `path`.
 function buildAttachmentFilePath(fileName) {
   if (!fileName) return null;
   return path.join(config.uploads.dir, fileName);
 }
 
-// `url` is a Mongoose virtual on the Attachment model (derived from
-// file_name) — it's only computed automatically when a full Mongoose
-// document is serialized. Anywhere attachments come back as plain objects
-// instead (aggregation $lookup, or a query using .lean()), the virtual never
-// runs and `url` is silently missing. Use this to backfill it explicitly.
+// `url` is a Mongoose virtual, only computed when a full document is serialized; a .lean()
+// query or $lookup returns a plain object where it's silently missing, so backfill it explicitly.
 function withAttachmentUrl(attachment) {
   if (!attachment) return attachment;
   return { ...attachment, url: attachment.url ?? buildAttachmentUrl(attachment.file_name) };

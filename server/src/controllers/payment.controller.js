@@ -18,9 +18,7 @@ const {
 
 exports.createIntent = async (req, res) => {
   try {
-    // Same guest-token gate as GET /orders/:id — generic 404 on a bad/missing
-    // token so a guessed order_id can't be used to probe order existence,
-    // read its total, or start a payment on someone else's order.
+    // Same guest-token gate as GET /orders/:id — generic 404 so a guessed order_id can't probe existence.
     const order = await orderService.getOrderForGuest(req.body.order_id, req.body.token, req.tenantId);
 
     const { payment, client_secret, stripe_publishable_key } = await createPaymentIntentForOrder(order);
@@ -52,15 +50,10 @@ exports.getPayment = async (req, res) => {
   }
 };
 
-// refundPayment/refundPaymentManual removed (refund-redesign-spec.md §9) —
-// use POST /order/:orderId/refunds (refund.controller.js#createRefund) instead.
+// refundPayment/refundPaymentManual removed — use POST /order/:orderId/refunds instead.
 
-// BYOK — each tenant's own Stripe account delivers webhooks to this one
-// shared URL with their own opaque `?wt=` token appended (see
-// tenantSettings.controller.js#getStripeStatus for where a tenant gets this
-// URL to paste into their Stripe Dashboard), resolved here before signature
-// verification so the right tenant's own webhook secret gets used — mirrors
-// ebay.controller.js's handleWebhook.
+// BYOK: each tenant's Stripe account delivers webhooks to this shared URL with an opaque `?wt=`
+// token, resolved here before signature verification so the right tenant's secret is used.
 exports.handleWebhook = async (req, res) => {
   const { wt } = req.query;
   if (!wt) return badRequest(res, "Missing wt");
@@ -71,10 +64,8 @@ exports.handleWebhook = async (req, res) => {
 
   const signature = req.headers["stripe-signature"];
 
-  // The tenant's real secret is always tried first and is the only candidate
-  // in production — STRIPE_DEV_WEBHOOK_SECRET is a second attempt purely for
-  // local `stripe listen` testing, which mints its own signing secret that
-  // can never match a tenant's real one. See stripe.webhook.service.js.
+  // The tenant's real secret is tried first and is the only candidate in production;
+  // STRIPE_DEV_WEBHOOK_SECRET is a second attempt purely for local `stripe listen` testing.
   const candidateSecrets =
     config.env === "production" ? [webhookSecret] : [webhookSecret, config.stripe.devWebhookSecret];
 
@@ -86,21 +77,10 @@ exports.handleWebhook = async (req, res) => {
     return badRequest(res, "Invalid signature");
   }
 
-  // Process synchronously and only ack after it actually succeeds — the
-  // eBay push inside order-stock-sync is already queued/fire-and-forget, so
-  // this is just fast DB writes plus one Stripe retrieve. A 200 here is a
-  // durability promise: Stripe won't retry a 200, so if we ack before
-  // processing finishes and then crash, the event is lost forever even
-  // though the idempotency ledger says it was handled. Returning 500 on
-  // failure makes Stripe retry instead.
-  //
-  // Residual gap: release-on-error (see handleEvent's catch) only fires for
-  // errors actually thrown during processing. A hard process kill (OOM kill,
-  // deploy restart, host crash) between the claim succeeding and processing
-  // finishing can still strand a claimed-but-unprocessed event with no
-  // release and no thrown error to trigger one. That window is only the
-  // handful of DB writes' worth of wall-clock time (low hundreds of ms) —
-  // accepted as-is at current volume rather than adding a claim-expiry sweep.
+  // Process synchronously and only ack after it succeeds — a 200 here is a durability promise,
+  // since Stripe won't retry one. Returning 500 on failure makes Stripe retry instead.
+  // Residual gap: a hard process kill between claim and processing finishing can still strand
+  // a claimed-but-unprocessed event with no release. Accepted at current volume.
   try {
     await handleEvent(event, tenant._id);
     return success(res, { received: true });

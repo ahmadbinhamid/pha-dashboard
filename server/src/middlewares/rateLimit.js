@@ -1,8 +1,6 @@
 // middlewares/rateLimit.js
 //
-// Brute-force / abuse guards for endpoints that don't otherwise have a cost
-// (login attempts, payment intent creation). Keyed by IP by default since
-// these routes run before auth (or are hit by unauthenticated guests).
+// Brute-force/abuse guards for cost-free endpoints (login, payment intents), keyed by IP by default.
 
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
@@ -29,9 +27,7 @@ const paymentLimiter = rateLimit({
   handler: tooManyRequests("Too many payment requests. Please slow down."),
 });
 
-// 1 hour / 5 attempts — a public, unauthenticated form that queues a real
-// email send (platform SMTP mailbox + worker-platform capacity) otherwise
-// has no cost to spam. A genuine lead submits once.
+// 1 hour / 5 attempts — public form queues a real email send, otherwise free to spam.
 const publicFormLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,

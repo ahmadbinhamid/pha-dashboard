@@ -3,10 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 
-// Right-side slide-out panel — same Radix Dialog primitive Modal.tsx uses,
-// but sliding in from the edge instead of scaling in centered. For content
-// better suited to a scrollable list (e.g. an activity/history feed) than a
-// centered confirm-style dialog.
+// Right-side slide-out panel, same Radix Dialog primitive as Modal.tsx but sliding from the edge — for scrollable list content rather than a centered confirm dialog.
 
 const Sheet = DialogPrimitive.Root;
 const SheetPortal = DialogPrimitive.Portal;

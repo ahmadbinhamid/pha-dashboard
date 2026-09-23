@@ -3,9 +3,7 @@ interface ProductEssentialsProgressProps {
   total: number;
 }
 
-// "Essentials" = title, price, at least one category, at least one image —
-// the fields that make a product presentable, not the strict backend-required
-// set (only title/price are actually required to save).
+// "Essentials" = title, price, ≥1 category, ≥1 image — what makes a product presentable, not the strict backend-required set (only title/price).
 export function ProductEssentialsProgress({ completed, total }: ProductEssentialsProgressProps) {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 

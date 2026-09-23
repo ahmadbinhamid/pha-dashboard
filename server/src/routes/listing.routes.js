@@ -1,11 +1,6 @@
 // routes/listing.routes.js
-//
-// Platform-agnostic listing browse/read/delete/push — see
-// services/marketplace/listing.query.service.js's module header. CREATE
-// stays on each platform's own routes (POST /ebay/listings,
-// POST /google/listings) since the fields a tenant fills in genuinely
-// differ per platform; eBay's own PUT (the full form) also stays on
-// /ebay/listings for the same reason.
+// Platform-agnostic listing browse/read/delete/push. CREATE stays on each platform's own routes
+// since the fields a tenant fills in differ per platform; eBay's PUT stays there for the same reason.
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");

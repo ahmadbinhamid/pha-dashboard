@@ -195,8 +195,7 @@ function attachRefreshStaleScheduler(adapter, queue) {
     // interval, not just its jobId — changing
     // CHANNEL_REFRESH_SWEEP_INTERVAL_HOURS between deploys would register a
     // second schedule in Redis alongside the old one rather than replacing
-    // it. Clear any stale refresh_stale schedule before registering the
-    // current one.
+    // it. Clear any stale refresh_stale schedule before registering the current one.
     const existing = await queue.getRepeatableJobs();
     for (const job of existing) {
       if (job.name === "refresh_stale") {

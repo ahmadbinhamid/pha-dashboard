@@ -4,9 +4,7 @@ import { formatCurrencyFromCents } from "@/utils/format";
 import { getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 import type { OrderPaymentSummary } from "@/types/orders";
 
-// Every Payment doc recorded against an order — a manual sale can have more
-// than one (a deposit, then a later top-up or payment-link remainder), so
-// this always renders a history rather than assuming a single payment.
+// Every Payment doc recorded against an order — a manual sale can have more than one (deposit, then top-up), so this always renders a history.
 export function PaymentHistoryList({
   payments,
   onSelect,

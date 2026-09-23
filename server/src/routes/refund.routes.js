@@ -1,8 +1,5 @@
 // routes/refund.routes.js
-//
-// refund-redesign-spec.md §2.3 — these two act ON a specific refund by its
-// own id (not nested under an order), unlike GET/POST .../refunds in
-// order.routes.js.
+// These two act on a specific refund by its own id, not nested under an order like order.routes.js.
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");

@@ -21,11 +21,7 @@ import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GoogleListing, GoogleListingFormState } from "@/types/marketplace";
 import { Search, Cloud } from "lucide-react";
 
-// NOTE: reverted to the app's standard dropdown-filter toolbar (matching
-// the original ListingsPage.tsx exactly) instead of a sidebar + segmented
-// triage control — per explicit feedback after the first pass. `platform`
-// options are still sourced from `channels` (GET /channels), never a
-// hardcoded list, so a newly-registered adapter appears here automatically.
+// Standard dropdown-filter toolbar (matches original ListingsPage.tsx); `platform` options come from `channels` (GET /channels), never hardcoded, so new adapters appear automatically.
 const SYNC_STATUS_FILTERS = [
   { label: "All", value: "" },
   { label: "Synced", value: "synced" },
@@ -36,12 +32,7 @@ const SYNC_STATUS_FILTERS = [
   { label: "Not listed", value: "not_listed" },
 ];
 
-// ListingsPage's content — the flat, listing-centric view (every real
-// MarketplaceListing row, one per row), as opposed to the Products page's
-// product-centric grouped view. Reuses the exact mutations the old
-// ListingsPage.tsx already had (push/edit/delete) — only the presentation
-// (flat table instead of grouped-by-product) changed; the filter toolbar
-// itself is the app's standard pattern, unchanged in spirit from before.
+// ListingsPage's content: flat, listing-centric view (one row per MarketplaceListing), vs. the Products page's product-centric grouped view. Reuses the old ListingsPage.tsx's mutations unchanged.
 export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -241,9 +232,7 @@ export function ListingsTab({ channels }: { channels: ChannelSummary[] }) {
                     <TableRow key={listing._id}>
                       <TableCell className="max-w-64 truncate font-medium text-fg">{productTitle}</TableCell>
                       <TableCell className="whitespace-nowrap text-fg/70">
-                        {/* Icon only, no name label — the brand mark already
-                            identifies the channel, so text repeating it was
-                            redundant. Kept as a title tooltip on hover. */}
+                        {/* Icon only — the brand mark already identifies the channel; name kept as a title tooltip. */}
                         <span
                           className="inline-flex items-center"
                           title={PLATFORM_LABEL[listing.platform] ?? listing.platform}

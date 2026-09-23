@@ -1,6 +1,5 @@
 // constants/ebay.constants.js
-// eBay OAuth scope identifiers — fixed strings defined by eBay's OAuth spec,
-// never change between sandbox and production.
+// eBay OAuth scope identifiers, fixed by eBay's OAuth spec, never change between environments.
 
 const EBAY_SCOPES = Object.freeze({
   SELL_INVENTORY: "https://api.ebay.com/oauth/api_scope/sell.inventory",
@@ -10,33 +9,20 @@ const EBAY_SCOPES = Object.freeze({
   BASE: "https://api.ebay.com/oauth/api_scope",
 });
 
-// Named eBay Inventory/Offer API error codes we branch on elsewhere in the
-// codebase — kept here as a single source of truth instead of the magic
-// numbers previously scattered across comments in ebay.adapter.js.
+// Named eBay Inventory/Offer API error codes branched on elsewhere, kept as a single source of truth.
 const EBAY_ERROR_CODE = Object.freeze({
-  // "createOffer" fails because an offer already exists for the SKU —
-  // recovered by switching to updateOffer with the offerId eBay reports back.
+  // "createOffer" fails because an offer already exists; recovered via updateOffer with the returned offerId.
   OFFER_ALREADY_EXISTS: 25002,
-  // "updateOffer" (price/quantity) rejected because the offer is currently
-  // part of an active eBay sale/promotion — eBay blocks price revisions on
-  // listings that are on sale rather than applying them. Not a hard failure:
-  // the listing itself is untouched and still live, just not price-refreshed
-  // until the sale ends or is configured to allow price updates.
+  // "updateOffer" rejected because the offer is part of an active eBay sale/promotion — not a
+  // hard failure, it self-resolves once the sale ends or allows price updates.
   PRICE_LOCKED_BY_ACTIVE_SALE: 25019,
-  // "updateOffer" rejects a stored external_offer_id eBay no longer
-  // recognizes (deleted/expired on eBay's side, or a stale/bad ID) — surfaces
-  // as either a generic input-validation error (message varies: "Offer not
-  // found" / "Availability not found" / "AdditionalInformation not found")
-  // or, more specifically, a 404 "resource/entity not found". Both mean the
-  // same thing for our purposes: this offerId is dead, recreate it — see
-  // isOfferMissingError in ebay.adapter.js.
+  // "updateOffer" rejects a stored external_offer_id eBay no longer recognizes — either an
+  // input-validation error or a 404; both mean this offerId is dead, recreate it.
   OFFER_NOT_FOUND_INPUT: 25604,
   OFFER_NOT_FOUND_RESOURCE: 25710,
 });
 
-// A tenant's eBay connection health — surfaced in Settings so a revoked
-// consent or a broken refresh shows up as a visible state, not a silently
-// failing background sync.
+// A tenant's eBay connection health, surfaced in Settings instead of a silently failing sync.
 const EBAY_CONNECTION_STATUS = Object.freeze({
   NOT_CONNECTED: "not_connected",
   CONNECTED: "connected",
@@ -45,17 +31,9 @@ const EBAY_CONNECTION_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-// Every eBay marketplace this app's UI lets a tenant pick (EbaySettings.
-// marketplace_id has no enum restricting it to AU) mapped to that
-// marketplace's transaction currency. Listing publish (buildOfferFromResolved)
-// and eBay order import (createOrderFromEbayOrder) previously hardcoded
-// "AUD"/"aud" regardless of this setting — a tenant configured for a non-AU
-// marketplace would get mislabeled order currency and, worse, listings
-// published with a currency eBay likely rejects for that marketplace. Found
-// live. Order import prefers the currency eBay's own order payload reports
-// (see ebay.order.mapper.js) and only falls back to this map when that's
-// absent; listing publish has no per-offer currency from eBay to prefer, so
-// this map is the only source there.
+// Every eBay marketplace the UI lets a tenant pick, mapped to its transaction currency.
+// Previously hardcoded "AUD" regardless, mislabeling non-AU marketplace orders. Found live.
+// Order import prefers eBay's own reported currency and only falls back to this map.
 const EBAY_MARKETPLACE_CURRENCY = Object.freeze({
   EBAY_AU: "AUD",
   EBAY_US: "USD",

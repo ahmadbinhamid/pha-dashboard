@@ -30,11 +30,7 @@ function toFormState(listing: GoogleListing): GoogleListingFormState {
   };
 }
 
-// Google's own edit surface — deliberately just these few fields (see
-// google.listing.service.js's module header for why title/description/price/
-// photos aren't here: they're inherited from the product itself). A modal
-// rather than a dedicated page/route, matching the "lightweight toggle"
-// design — there's no eBay-style multi-section form to justify one.
+// Google's edit surface: just these fields, since title/description/price/photos are inherited from the product (see google.listing.service.js). A modal, not a page — no eBay-style multi-section form to justify one.
 export function GoogleListingEditModal({
   listing,
   open,

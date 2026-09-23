@@ -20,8 +20,7 @@ export const Radio = React.forwardRef<HTMLInputElement, RadioProps>(function Rad
   { className, label, description, id, size = "md", ...props },
   ref,
 ) {
-  // NOTE (lint fix): same real rules-of-hooks bug as Checkbox.tsx — see
-  // that file's comment.
+  // Same rules-of-hooks fix as Checkbox.tsx — see that file's comment.
   const generatedId = React.useId();
   const inputId = id ?? generatedId;
   const s = radioSizes[size];

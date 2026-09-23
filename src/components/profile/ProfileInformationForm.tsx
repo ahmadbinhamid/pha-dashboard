@@ -11,16 +11,13 @@ import type { AuthUser, ProfileFormState } from "@/types/auth";
 
 const FORM_ID = "profile-information-form";
 
-// Owns its own save, the same way each Settings card does — PUT /user only
-// takes the name fields, so a page-wide submit would have nothing else to
-// carry and would just couple this card to the password one.
+// Owns its own save like every Settings card — PUT /user only takes name fields, so a page-wide submit would just couple this card to the password one.
 export function ProfileInformationForm({ user }: { user: AuthUser }) {
   const { setAuth, token } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState<ProfileFormState>({ first_name: user.first_name, last_name: user.last_name });
 
-  // Re-syncs when the signed-in user changes underneath the form — e.g. the
-  // save below writes a new user into auth context.
+  // Re-syncs when the signed-in user changes underneath the form, e.g. after the save below writes a new user into auth context.
   useEffect(() => {
     setForm({ first_name: user.first_name, last_name: user.last_name });
   }, [user]);

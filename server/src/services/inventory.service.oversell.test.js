@@ -1,17 +1,8 @@
 // services/inventory.service.oversell.test.js
 //
-// Regression guard: an oversell (deducting more than exists) must leave an
-// honest audit trail. Before this fix, InventoryHistory could effectively
-// record "nothing happened" for the uncovered portion — either the exact
-// requested amount got silently capped with no trace of the shortfall, or
-// (for a SKU whose every location record was already at 0) no
-// InventoryHistory row was written for the attempt at all. Now: stock still
-// clamps at 0, but the row's `adjustment` field is always the TRUE
-// requested delta, and `clamped_shortfall` carries the uncovered amount
-// separately.
+// Regression guard: oversell must clamp stock at 0 but keep the true delta in `adjustment` and log the uncovered amount in `clamped_shortfall`, never silently dropping it.
 //
-// Needs a live Mongo connection — run with:
-//   node --test src/services/inventory.service.oversell.test.js
+// Needs a live Mongo connection — run: node --test src/services/inventory.service.oversell.test.js
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -20,15 +11,11 @@ const mongoose = require("mongoose");
 const crypto = require("node:crypto");
 const config = require("../config");
 
-// adjustStockForSku fans out to enqueueEbayJob("sync_listing", ...) on every
-// real stock change — mock it so this test doesn't need a live Redis, same
-// pattern as the other suites in this repo that exercise inventory.service.js.
+// Mock the eBay job enqueue (fans out on every stock change) so no live Redis is needed, same pattern as other inventory.service.js suites.
 const ebayQueueModule = require("../queues/ebay.queue");
 mock.method(ebayQueueModule, "enqueueEbayJob", async () => {});
 
-// Bull's underlying ioredis client keeps its connection open indefinitely by
-// design — without closing it, this process never exits on its own, which
-// hangs any multi-file `node --test` run waiting on this one.
+// Bull's ioredis client stays open by design — must close it or the process never exits.
 test.after(async () => {
   await ebayQueueModule.ebayQueue.close();
 });

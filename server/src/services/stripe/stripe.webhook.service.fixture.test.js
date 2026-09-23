@@ -340,8 +340,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
       assert.equal(afterFirst.items[0].quantity_refunded, 1);
 
       // The exact same event, redelivered — claimEvent's unique index on
-      // stripe_event_id must reject it before handleChargeRefunded ever runs
-      // again.
+      // stripe_event_id must reject it before handleChargeRefunded ever runs again.
       await handleEvent(event, TEST_TENANT_ID);
       const afterSecond = await Order.findById(order._id);
       assert.equal(afterSecond.items[0].quantity_refunded, 1, "redelivery must be a complete no-op");

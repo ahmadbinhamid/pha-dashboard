@@ -50,7 +50,7 @@ export function ChannelAvatar({
   /** Position among the channels being shown together — picks the fallback color. */
   index: number;
   size?: "sm" | "md";
-  /** e.g. "ebay" | "google" | "storefront" — resolves to a real logo instead of initials. */
+  /** e.g. "ebay" | "google" | "storefront" — resolves to a real logo instea... */
   channelKey?: string;
   logoUrl?: string | null;
 }) {

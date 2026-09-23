@@ -1,13 +1,6 @@
 // services/role.service.js
-//
-// Owns every Role query. Roles are per-tenant: two organisations can both
-// have an "Admin", and neither can see or touch the other's.
-//
-// Every tenant is seeded with the three SYSTEM_ROLEs, which are protected —
-// renaming, re-permissioning or deleting them is refused, so a tenant can
-// never lock itself out of its own settings. Tenants add their own roles on
-// top. (flowpos-backend protects its super-admin role the same way, and
-// likewise refuses to delete a role that still has users.)
+// Owns every Role query. Roles are per-tenant; every tenant is seeded with three protected
+// SYSTEM_ROLEs that can't be renamed/re-permissioned/deleted, so a tenant can't lock itself out.
 
 const { Types } = require("mongoose");
 const Role = require("../models/Role");
@@ -22,10 +15,7 @@ function toObjectId(id) {
   return typeof id === "string" ? new Types.ObjectId(id) : id;
 }
 
-// What each seeded role can do. Super Admin is listed as everything for
-// display purposes; permission checks short-circuit on it anyway
-// (see membership.service.js#hasPermission), so it stays correct as the
-// catalogue grows.
+// What each seeded role can do. Super Admin lists everything for display; checks short-circuit on it anyway.
 const SYSTEM_ROLE_DEFINITIONS = [
   {
     name: SYSTEM_ROLE.SUPER_ADMIN,
@@ -35,8 +25,7 @@ const SYSTEM_ROLE_DEFINITIONS = [
   {
     name: SYSTEM_ROLE.ADMIN,
     description: "Runs the store day to day and manages the team, but can't redefine what roles may do.",
-    // Everything except restructuring permissions themselves — that stays a
-    // Super Admin concern, so an Admin can't quietly widen their own access.
+    // Everything except restructuring permissions themselves, so an Admin can't widen their own access.
     permissions: () => ALL_PERMISSIONS.filter((p) => !["roles.create", "roles.update", "roles.delete"].includes(p)),
   },
   {
@@ -69,11 +58,7 @@ function assertPermissionsAreKnown(permissions = []) {
   }
 }
 
-/**
- * Give a tenant its system roles. Idempotent — safe to call on every tenant
- * creation and from the backfill script, and it repairs a tenant that is
- * missing one. Returns the tenant's system roles by name.
- */
+/** Gives a tenant its system roles; idempotent, and repairs a tenant missing one. */
 async function seedSystemRoles(tenantId) {
   const existing = await Role.find({ tenant_id: tenantId, is_system: true }).lean();
   const byName = new Map(existing.map((r) => [r.name, r]));
@@ -143,13 +128,7 @@ async function updateRole(roleId, tenantId, { name, description, permissions }) 
   return role.toObject();
 }
 
-/**
- * Refused for system roles, for any role still held by a member, and for any
- * role a pending invite still promises — the alternative is silently
- * stranding people with no permissions (a member who is demoted away from a
- * deleted role, or an invitee who accepts one, would resolve to no role at
- * all).
- */
+/** Refused for system roles, roles still held by a member, or roles a pending invite promises. */
 async function deleteRole(roleId, tenantId) {
   const role = await Role.findOne({ _id: roleId, tenant_id: tenantId });
   if (!role) return null;

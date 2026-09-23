@@ -5,10 +5,7 @@ import { cn } from "@/utils/cn";
 
 export type PasswordInputProps = Omit<InputProps, "type">;
 
-// Single source of truth for the show/hide-password affordance — used
-// anywhere a user types a password (login, change/reset password) so the
-// toggle behaves and looks identical everywhere instead of being
-// reimplemented per form.
+// Single source of truth for the show/hide-password affordance so it behaves and looks identical across every form instead of being reimplemented per form.
 export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(function PasswordInput(
   { className, ...props },
   ref,

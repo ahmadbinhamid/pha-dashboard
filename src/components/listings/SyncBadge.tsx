@@ -4,10 +4,7 @@ import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 
 interface SyncBadgeProps {
   status: ListingSyncStatus;
-  // Optional platform name prefix (e.g. "eBay: Live") — the TASK 6 grouped
-  // Listings view uses this so a product's per-channel badges each say
-  // which channel they're for; every existing single-platform-context
-  // caller omits it and keeps the exact same "Live"/"Pending"/etc. text.
+  // Optional platform name prefix (e.g. "eBay: Live") — used by the grouped Listings view so each per-channel badge says which channel it's for.
   label?: string;
 }
 

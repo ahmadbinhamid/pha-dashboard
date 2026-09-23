@@ -46,26 +46,14 @@ function formatDayLabel(dateStr: string) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-AU", { month: "short", day: "numeric" });
 }
 
-// Days-of-inventory is a ratio with COGS in the denominator (via
-// turnoverRate) — a product/category with little-to-no recorded cost data
-// (Product.cost_price is optional) sends this toward a meaningless
-// thousands-of-days figure rather than a real "how long this sits on the
-// shelf" estimate. Capping the display (not the underlying number, which
-// stays real for the tooltip/PDF export) keeps the KPI tiles readable
-// instead of printing something like "1130451.8 days". Found live against
-// this tenant's dev data, where only a handful of products have cost set.
+// Days-of-inventory divides by COGS, so little/no recorded cost data (Product.cost_price is optional) sends it toward a meaningless thousands-of-days figure. Capping the display (not the underlying number, kept real for tooltip/PDF) keeps the KPI tiles readable.
 const DSI_DISPLAY_CAP = 365;
 function formatDsi(days: number) {
   if (!Number.isFinite(days) || days > DSI_DISPLAY_CAP) return `${DSI_DISPLAY_CAP}+ days`;
   return `${days.toFixed(1)} days`;
 }
 
-// A capped "365+ days" is the WORST reading this card can produce, so it
-// can't share the success tone with a genuinely fast-turning figure — the
-// caption color was previously fixed at "ok", which painted a category that
-// barely moves in green. Capped falls back to neutral rather than danger:
-// it usually means missing Product.cost_price data (see the service's own
-// caveat), not a real inventory problem worth alarming about.
+// A capped "365+ days" is the worst reading this card can produce, so it can't share the success tone with a fast-turning figure. Falls back to neutral, not danger, since it usually means missing cost_price data, not a real problem.
 function dsiTone(days: number): StatTileTone {
   return Number.isFinite(days) && days <= DSI_DISPLAY_CAP ? "ok" : "neutral";
 }
@@ -115,11 +103,7 @@ export function InventoryTurnoverCard({
     [turnover],
   );
 
-  // A point's `categoryRates` is a nested object, which the PDF table could
-  // only render as "[object Object]" — flattened here into one column per
-  // category, in categoryRanking's order so every row carries the same
-  // columns. Days-of-inventory is exported UNCAPPED (the tiles cap the
-  // display; the file keeps the real figure).
+  // categoryRates is a nested object the PDF table could only render as "[object Object]", so flattened here into one column per category. Days-of-inventory exports uncapped (only the tiles cap the display).
   const exportRows = useMemo(
     () =>
       (turnover?.points ?? []).map((point) => ({

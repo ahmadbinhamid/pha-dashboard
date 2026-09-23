@@ -32,8 +32,7 @@ export function optionalNonNegativePriceSchema(label = "Price") {
 // year_to specifically, "" also means "present/ongoing", not an error).
 // Validates: year_from must be a real 4-digit year if present, year_to must
 // be a real 4-digit year if present, and when both are present, year_to
-// cannot be before year_from — a vehicle can't stop being made before it
-// started.
+// cannot be before year_from — a vehicle can't stop being made before it started.
 export const vehicleYearRangeSchema = z
   .object({
     year_from: z.string(),

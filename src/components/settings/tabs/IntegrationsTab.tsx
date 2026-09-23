@@ -117,8 +117,7 @@ export function IntegrationsTab({
 }) {
   // Stripe's status rides along on tenant settings; SMTP has its own endpoint.
   const { data: smtpRes } = useQuery({ queryKey: ["smtp-status"], queryFn: getSmtpStatus });
-  // Shared queryKeys with EbayConnectCard/GoogleConnectCard/DomainsPage, so
-  // visiting a detail panel warms the cache the overview grid reads from.
+  // Shared queryKeys with EbayConnectCard/GoogleConnectCard/DomainsPage, so visiting a detail panel warms the cache the overview grid reads from.
   const { data: ebayRes } = useQuery({ queryKey: ["ebay-settings"], queryFn: getEbaySettings });
   const { data: channelsRes } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
   const { data: domainsRes } = useQuery({ queryKey: ["domains"], queryFn: getDomains });
@@ -175,10 +174,7 @@ export function IntegrationsTab({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {INTEGRATION_CATALOGUE.map((integration) => {
-        // "Custom Domains" stands in for the tenant's own storefront — once
-        // they've uploaded a logo (Branding settings), show that instead of
-        // the generic Globe fallback, same idea as eBay/Google showing their
-        // own mark rather than a placeholder shopping-bag icon.
+        // "Custom Domains" stands in for the tenant's storefront: once they've uploaded a logo, show that instead of the generic Globe fallback.
         const icon =
           integration.id === "domains" && settings?.logo_url ? (
             <img src={settings.logo_url} alt="" className="h-full w-full object-contain" />

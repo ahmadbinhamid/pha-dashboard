@@ -246,8 +246,7 @@ export default function ReportsPage() {
               loading={performanceLoading || categoriesLoading || channelLoading}
               // Titles double as the PDF filename (see ReportsExportPanel)
               // and as the row label, which truncates in this card's share of
-              // the row — so they drop the "Report" suffix the card heading
-              // already implies.
+              // the row — so they drop the "Report" suffix the card heading already implies.
               datasets={[
                 {
                   id: "sales-summary",

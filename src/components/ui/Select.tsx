@@ -143,8 +143,7 @@ const SelectSeparator = React.forwardRef<
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
-// NativeSelect — styled wrapper around a plain <select> element.
-// Use this for simple dropdowns where Radix Select is overkill.
+// NativeSelect — styled wrapper around a plain <select>, for simple dropdowns where Radix Select is overkill.
 const NativeSelect = React.forwardRef<
   HTMLSelectElement,
   React.SelectHTMLAttributes<HTMLSelectElement>

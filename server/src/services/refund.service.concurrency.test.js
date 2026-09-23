@@ -148,8 +148,7 @@ test("concurrency: N parallel single-unit refunds on a 5-unit line — exactly 5
         // Every rejection should be the lock timing out, the line's quantity
         // being exhausted, or — once the order itself has fully transitioned
         // to "refunded" for a later racer that got its turn after the 5th
-        // unit already went through — the payment_status check. Never an
-        // unrelated crash.
+        // unit already went through — the payment_status check. Never an unrelated crash.
         for (const msg of result.rejectedMessages) {
           assert.ok(
             /Another refund is already in progress/.test(msg) ||

@@ -10,8 +10,7 @@ interface RefundFullOrderSectionProps {
   onRefundShippingChange: (value: boolean) => void;
 }
 
-// refund-redesign-spec.md §7 — "Whole invoice: read-only line list, one
-// 'restock all returned items' checkbox, plus a shipping toggle."
+// refund-redesign-spec.md §7: "Whole invoice" is a read-only line list, one "restock all" checkbox, plus a shipping toggle.
 export function RefundFullOrderSection({
   summary,
   restockAll,

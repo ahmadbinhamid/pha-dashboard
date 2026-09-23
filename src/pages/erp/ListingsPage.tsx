@@ -48,8 +48,7 @@ export default function ListingsPage() {
       ) : channels.length === 0 ? (
         // A blank strip here (nothing rendered, with nothing to explain why)
         // reads as a bug, not as "you haven't connected anything yet". This
-        // is the one place on this page that says so and points at where to
-        // fix it.
+        // is the one place on this page that says so and points at where to fix it.
         <button
           type="button"
           onClick={() => navigate("/settings/integrations")}

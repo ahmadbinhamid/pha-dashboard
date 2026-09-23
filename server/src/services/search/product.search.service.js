@@ -1,21 +1,13 @@
 // services/search/product.search.service.js
-//
-// All Typesense reads/writes live here — controllers/queue workers never
-// touch the client directly, same discipline as Mongoose calls staying in
-// *.service.js files.
+// All Typesense reads/writes live here; controllers/workers never touch the client directly.
 
 const { getTypesenseClient } = require("./typesense.client");
 const { PRODUCTS_COLLECTION } = require("./product.search.schema");
 
-// SKU/OEM(mpn) matches outrank title/brand, which outrank a description hit —
-// mirrors an eBay/Amazon-style boost order (SKU highest, then OEM/mpn, then
-// name, brand, description). title_flat (compound-word/infix fallback — see
-// the schema field's comment) sits at the same weight as title itself.
+// SKU/OEM(mpn) matches outrank title/brand, which outrank description (eBay/Amazon-style boost order).
 const QUERY_BY = "sku,mpn,title,brand,description,title_flat";
 const QUERY_BY_WEIGHTS = "5,4,3,2,1,3";
-// Positionally aligned with QUERY_BY — infix runs on sku/mpn (partial part
-// numbers) and title_flat (compound words), "always" alongside the regular
-// token search on every field (never instead of it).
+// Positionally aligned with QUERY_BY — infix runs alongside regular token search, never instead of it.
 const INFIX = "always,always,off,off,off,always";
 
 function toSearchDocument(product) {
@@ -57,13 +49,12 @@ async function deleteProductFromIndex(productId) {
       .documents(productId.toString())
       .delete();
   } catch (err) {
-    // Already gone (never indexed, or deleted twice) — not an error for callers.
+    // Already gone — not an error for callers.
     if (err.httpStatus !== 404) throw err;
   }
 }
 
-// Structured filters mirror buildProductFilter's own field names/semantics
-// so callers can pass the same req.query through untouched.
+// Mirrors buildProductFilter's field names/semantics so callers can pass req.query through untouched.
 function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin, priceMax, make, model, publishedOnly }) {
   const clauses = [`tenant_id:=${tenantId}`];
   if (publishedOnly) clauses.push("is_published_online:=true", "status:=active");
@@ -77,19 +68,9 @@ function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin
   return clauses.join(" && ");
 }
 
-// Typesense scores every infix match at the same low, flat floor regardless
-// of which field matched or how deep into it — so a query like "033" gets
-// identical scores whether it's a real substring of the product's own SKU
-// ("PHA-000033"), an unrelated product's OEM/mpn number ("LR033415"), or
-// just happens to appear inside some product's title. query_by_weights can't
-// break that tie (weights only matter between different scores), and every
-// product's `rating` sits at 0 (nothing sets the default_sorting_field
-// tiebreaker either), so results land in arbitrary order — a product's own
-// SKU match can end up ranked below (or after) an unrelated product that
-// merely contains the digits somewhere else. Fix: search progressively
-// narrower/higher-intent fields first — sku alone, then mpn alone, then
-// everything — and stop at the first tier that finds anything, so a real SKU
-// hit always wins outright instead of being tied against weaker matches.
+// Typesense scores every infix match at the same flat floor, so a real SKU match can tie with an
+// unrelated product's OEM/mpn hit and land in arbitrary order. Fix: search narrower/higher-intent
+// fields first (sku, then mpn, then everything) and stop at the first tier that finds anything.
 const PART_NUMBER_TIERS = [
   { query_by: "sku", query_by_weights: "5", infix: "always" },
   { query_by: "mpn", query_by_weights: "4", infix: "always" },
@@ -128,16 +109,13 @@ async function runPartNumberFirstSearch(client, { q, filterBy, page, perPage, pr
     });
 }
 
-// Returns ordered product ids + total — callers hydrate full documents from
-// Mongo themselves (see product.service.js#getProductsByIds) so joins (stock,
-// attachments, categories) stay on the existing aggregation pipeline.
+// Returns ordered product ids + total; callers hydrate full documents from Mongo themselves.
 async function searchProducts({ q, page = 1, perPage = 20, ...filters }) {
   const client = getTypesenseClient();
   const searchTerm = q || "*";
   const filterBy = buildFilterBy(filters);
 
-  // "*" (browse-all, no query) has no part number to prioritize — skip
-  // straight to the normal search, no point running an extra empty pass.
+  // "*" (browse-all) has no part number to prioritize — skip straight to the normal search.
   const result = searchTerm === "*"
     ? await client.collections(PRODUCTS_COLLECTION).documents().search({
         q: searchTerm,
@@ -157,11 +135,8 @@ async function searchProducts({ q, page = 1, perPage = 20, ...filters }) {
   };
 }
 
-// Returns ordered ids only, same as searchProducts — the controller hydrates
-// full (title/slug/sku/price/image) documents from Mongo via
-// product.service.js#getProductSuggestions, so Typesense stays purely the
-// ranking/matching layer and there's only one place that shapes a "product
-// card" response.
+// Returns ordered ids only; the controller hydrates full documents so Typesense stays purely
+// the ranking layer and there's one place that shapes a "product card" response.
 async function suggestProducts({ tenantId, q, limit = 6 }) {
   const client = getTypesenseClient();
   const result = await runPartNumberFirstSearch(client, {

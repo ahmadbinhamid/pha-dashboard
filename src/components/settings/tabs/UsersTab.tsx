@@ -33,8 +33,7 @@ export function UsersTab() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Member | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
-  // A link exists only in the response that minted it — the server keeps just
-  // its hash — so it's held here for the rest of the session and nowhere else.
+  // A link exists only in the response that minted it (server keeps just its hash), so it's held here for the session and nowhere else.
   const [links, setLinks] = useState<Record<string, string>>({});
 
   const { data: membersRes, isLoading: membersLoading } = useQuery({ queryKey: ["members"], queryFn: getMembers });
@@ -58,8 +57,7 @@ export function UsersTab() {
     });
   }, [members, search]);
 
-  // Accepted and revoked invites are history; the list is about what's still
-  // in flight, which is what "one row per person" is for.
+  // Accepted and revoked invites are history; this list is only what's still in flight.
   const openInvitations = useMemo(() => invitations.filter((i) => i.status !== "accepted"), [invitations]);
 
   const rememberLink = (invitation: Invitation) => {

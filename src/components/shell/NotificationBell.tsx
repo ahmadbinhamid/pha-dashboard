@@ -13,10 +13,7 @@ import { getNotifications, markNotificationRead, markAllNotificationsRead } from
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { AppNotification } from "@/types/notification";
 
-// The socket push (context/socket.tsx) is the primary delivery mechanism —
-// this refetchInterval is only a defensive fallback if that connection
-// drops, same honesty-about-polling spirit as DashboardPage.tsx's own
-// ACTIVITY_REFETCH_MS comment.
+// Socket push (context/socket.tsx) is the primary delivery mechanism; this refetchInterval is only a defensive fallback if that connection drops.
 const FALLBACK_REFETCH_MS = 60_000;
 
 function timeAgo(iso: string) {
@@ -45,8 +42,7 @@ export function NotificationBell() {
 
   async function handleSelect(notification: AppNotification) {
     if (!notification.read_at) {
-      // Optimistic — the panel closes immediately on click, so there's no
-      // window where a stale "unread" state would visibly linger.
+      // Optimistic: the panel closes immediately on click, so a stale "unread" state never visibly lingers.
       queryClient.setQueryData(["notifications", { page: 1, limit: 10 }], (prev: typeof data) =>
         prev
           ? {

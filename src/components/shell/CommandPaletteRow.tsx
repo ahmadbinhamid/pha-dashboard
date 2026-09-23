@@ -1,8 +1,6 @@
 import { cn } from "@/utils/cn";
 
-// One row shape shared by every result section in CommandPalette
-// (Products/Orders/Customers/Pages) so they don't each hand-roll the same
-// icon-avatar/title/subtitle/trailing layout.
+// One row shape shared by every CommandPalette result section so they don't each hand-roll the same icon/title/subtitle/trailing layout.
 export function PaletteRow({
   active,
   onClick,

@@ -40,11 +40,7 @@ async function deleteUser(id, tenantId) {
 
 // ── Auth-related lookups ──────────────────────────────────────────────────
 
-// tenantId is required at registration (a new user always belongs to exactly
-// one tenant) but optional for login/password-reset lookups, which are
-// email-only today — see auth.controller.js's login/verifyOTP/forgotPassword
-// for the known ambiguity risk if the same email is ever registered against
-// more than one tenant.
+// tenantId is required at registration but optional for login/reset lookups, which are email-only.
 async function findUserByEmail(email, tenantId = null) {
   const filter = { email };
   if (tenantId) filter.tenant_id = tenantId;
@@ -59,21 +55,13 @@ async function findUserByEmailWithPassword(email) {
   return User.findOne({ email }).select("+password");
 }
 
-// email is unique per-tenant, not globally (see User.js's compound index) —
-// the same person can legitimately hold a separate account under more than
-// one tenant (staff at more than one client business). Returns EVERY
-// matching account rather than picking one arbitrarily, so the caller can
-// verify credentials against each and disambiguate properly instead of
-// risking authenticating into the wrong tenant. See
-// auth.controller.js#login's multi-organization handling.
+// email is unique per-tenant, not globally, so the same person can hold accounts under multiple
+// tenants. Returns every matching account so the caller can verify and disambiguate properly.
 async function findAllUsersByEmailWithPassword(email) {
   return User.find({ email }).select("+password");
 }
 
-// Same reasoning as findAllUsersByEmailWithPassword — used by forgotPassword,
-// which (unlike login) doesn't need to disambiguate up front: it just sends
-// a separate reset link per matching account, letting the person reset
-// whichever org's password they meant.
+// Same reasoning as findAllUsersByEmailWithPassword; forgotPassword sends a separate reset link per account.
 async function findAllUsersByEmail(email) {
   return User.find({ email });
 }
@@ -82,10 +70,7 @@ async function findUserByEmailWithOtp(email) {
   return User.findOne({ email }).select("+otp +otp_expiry");
 }
 
-// Used by auth.controller.js#selectOrganization — `userIds` is the
-// already-password-verified candidate set from login()'s pending_token, so
-// this only needs to confirm the chosen tenantId matches one of them, never
-// re-checks a password.
+// `userIds` is the already-password-verified candidate set; this only confirms the chosen tenantId matches one.
 async function findUserAmongIdsForTenant(userIds, tenantId) {
   return User.findOne({ _id: { $in: userIds }, tenant_id: tenantId });
 }
