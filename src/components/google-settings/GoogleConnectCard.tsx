@@ -18,6 +18,7 @@ import {
   type GoogleCompleteConnectFormValues,
 } from "@/lib/validation/googleConnectForm";
 import type { ChannelConnectionStatus } from "@/types/channel";
+import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
 
 const STATUS_VARIANT: Record<ChannelConnectionStatus, "ok" | "warn" | "danger" | "muted"> = {
   connected: "ok",
@@ -42,7 +43,7 @@ const DEFAULT_VALUES: GoogleCompleteConnectFormValues = {
   contentLanguage: "en",
 };
 
-// Maps `reason` codes from oauthCallback's redirect query string or completeConnect's error response (via the axios interceptor's `error.reason`) to a friendlier message; falls back to the raw reason otherwise.
+// Maps oauth redirect / completeConnect `reason` codes; unknown ones show raw.
 function connectErrorMessage(reason: string | null | undefined): string {
   switch (reason) {
     case "registration_pending":
@@ -66,7 +67,7 @@ export function GoogleConnectCard() {
   const callbackReason = searchParams.get("reason");
   const choosingAccount = callbackResult === "choose_account";
 
-  // Clear the one-time error banner's params (mirrors EbayConnectCard); `choose_account` is NOT auto-cleared — it must survive a refresh during step 2, cleared explicitly in completeMutation.onSuccess.
+  // Only error params auto-clear; choose_account must survive a step-2 refresh.
   useEffect(() => {
     if (callbackResult !== "error") return;
     queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -77,18 +78,18 @@ export function GoogleConnectCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callbackResult]);
 
-  // No dedicated GET /google/settings yet (see types/googleSettings.ts) — the channels list is the only source of connection status/health.
+  // No GET /google/settings yet; the channels list is the only status source.
   const { data: channelsData, isLoading: channelsLoading } = useQuery({
     queryKey: ["channels"],
     queryFn: getChannels,
   });
   const googleChannel = channelsData?.data.find((c) => c.key === "google");
   const connectionStatus = googleChannel?.connection.status ?? "disconnected";
-  // googleChannel.available is false only while channelsData is still loading — default true so the card doesn't flash "unavailable".
+  // Treat as available while loading so the card doesn't flash unavailable.
   const unavailable = googleChannel ? !googleChannel.available : false;
   const unavailableReason = googleChannel?.unavailable_reason ?? null;
 
-  // Step 1: no form — consent happens before any Merchant Center account is chosen (lib/api/google.ts#getGoogleConnectUrl).
+  // Step 1: no form; consent comes before a Merchant Center account is chosen.
   const connectMutation = useMutation({
     mutationFn: getGoogleConnectUrl,
     onSuccess: (res) => {
@@ -96,7 +97,7 @@ export function GoogleConnectCard() {
     },
   });
 
-  // Step 2: only fetched once we've landed back with ?google_connect=choose_account.
+  // Step 2: fetched only after returning with ?google_connect=choose_account.
   const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ["google-accounts"],
     queryFn: getGoogleAccounts,
@@ -110,7 +111,7 @@ export function GoogleConnectCard() {
     defaultValues: DEFAULT_VALUES,
   });
 
-  // feedLabel defaults to the chosen target country, pre-filled (not just placeholder) until the tenant types their own value.
+  // Prefill feedLabel from the target country until the user edits it.
   const targetCountry = watch("targetCountry");
   useEffect(() => {
     if (!formState.dirtyFields.feedLabel) setValue("feedLabel", targetCountry);
@@ -144,7 +145,9 @@ export function GoogleConnectCard() {
           unavailable ? (
             <Badge variant="muted">Unavailable</Badge>
           ) : (
-            <Badge variant={STATUS_VARIANT[connectionStatus]}>{STATUS_LABEL[connectionStatus]}</Badge>
+            <Badge variant={STATUS_VARIANT[connectionStatus]}>
+              {googleChannel?.connection.status_reason ? "Needs attention" : STATUS_LABEL[connectionStatus]}
+            </Badge>
           )
         }
       />
@@ -170,8 +173,13 @@ export function GoogleConnectCard() {
               </p>
             )}
 
-            {googleChannel?.connection.last_error && connectionStatus !== "connected" && (
-              <p className="text-xs font-medium text-danger">{googleChannel.connection.last_error}</p>
+            {googleChannel?.connection.status_reason ? (
+              <ChannelAttentionNotice channel={googleChannel} />
+            ) : (
+              googleChannel?.connection.last_error &&
+              connectionStatus !== "connected" && (
+                <p className="text-xs font-medium text-danger">{googleChannel.connection.last_error}</p>
+              )
             )}
 
             {unavailable ? (

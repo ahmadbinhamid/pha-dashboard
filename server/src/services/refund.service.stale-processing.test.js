@@ -1,27 +1,10 @@
 // services/refund.service.stale-processing.test.js
-//
-// Corrections round — getReservingRefunds must NEVER age a PROCESSING
-// refund out of its reservation, unlike PENDING. PROCESSING means Stripe
-// already accepted the refund and money is moving at Stripe's end; there is
-// no "un-refund" API, so if a second refund were admitted for the same
-// quantity/money while the first's webhook is merely delayed (Stripe
-// incident, queue backlog, endpoint misconfigured), the first's webhook
-// landing late would recompute the ledger, find a real violation, and
-// auto-void ITSELF — even though Stripe had already paid it out. That's a
-// customer refunded twice at Stripe with the books showing only one.
-//
-// This proves the fix holds even past the staleness window used for
-// PENDING: the PROCESSING refund still reserves (blocking a conflicting
-// second refund), and once its "webhook" finally lands, settlement
-// completes normally rather than being auto-voided — because the
-// reservation did its job and there was never a real double-claim to begin with.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.service.stale-processing.test.js
+// PROCESSING refunds never age out of their reservation (no un-refund). Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -32,7 +15,7 @@ const { REFUND_STATUS } = require("../constants/refund.constants");
 
 const UNIT_PRICE = 1000;
 const LINE_QUANTITY = 2;
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not auto-voided on late confirmation", async (t) => {
   await mongoose.connect(config.mongoUri);
@@ -44,7 +27,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
     invoice_number: `TEST-STALEPROC-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Stale-processing test item",
         sku: null,
@@ -83,10 +66,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
   });
 
   try {
-    // Refund A: a Stripe allocation that Stripe already accepted (PROCESSING),
-    // for the FULL line quantity — created directly rather than through
-    // createRefund, since we're simulating a webhook that's simply very
-    // late, not exercising the create path itself.
+    // Refund A: Stripe-accepted (PROCESSING), full qty; inserted, not createRefund.
     const refundNumberA = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refundA = await Refund.create({
       tenant_id: TEST_TENANT_ID,
@@ -122,12 +102,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
       idempotency_key: `stale-proc-test-a-${suffix}`,
     });
 
-    // Age it well past RESERVATION_STALE_AFTER_MS to simulate a webhook
-    // that's been overdue for hours. created_at is immutable at the
-    // Mongoose schema level (the timestamps plugin's default) — even a raw
-    // Model.updateOne silently drops it, so this goes through the native
-    // driver collection directly, bypassing Mongoose's cast/immutability
-    // handling entirely.
+    // created_at is immutable in Mongoose, so age it via the native driver.
     const staleCreatedAt = new Date(Date.now() - refundService.RESERVATION_STALE_AFTER_MS - 10 * 60 * 1000);
     await Refund.collection.updateOne({ _id: refundA._id }, { $set: { created_at: staleCreatedAt } });
 
@@ -135,10 +110,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
       const reserving = await Refund.find({ order: order._id }); // sanity: refund actually persisted stale
       assert.equal(reserving.length, 1);
 
-      // getReservingRefunds isn't exported directly, but createRefund's own
-      // admission math is driven by it — the next subtest proves this
-      // behaviourally. This subtest asserts the raw fact the fix depends
-      // on: the document really is older than the cutoff.
+      // Raw fact the fix relies on: the doc really is older than the cutoff.
       const fresh = await Refund.findById(refundA._id);
       assert.ok(Date.now() - fresh.created_at.getTime() > refundService.RESERVATION_STALE_AFTER_MS, "must actually be stale");
       assert.equal(fresh.status, REFUND_STATUS.PROCESSING);
@@ -159,9 +131,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
             TEST_TENANT_ID,
           ),
         (err) => {
-          // Rejected for exceeding what's left refundable — refund A's
-          // (stale) PROCESSING reservation must still be counted, leaving
-          // zero refundable, not the full line.
+          // Stale PROCESSING reservation still counts, so nothing is left refundable.
           assert.match(err.message, /exceeds what's left refundable|Invalid quantity/);
           return true;
         },
@@ -169,12 +139,7 @@ test("stale PROCESSING refund: still reserved, blocks a conflicting refund, not 
     });
 
     await t.test("late webhook confirmation settles normally — no violation, no auto-void", async () => {
-      // Simulate the webhook finally landing: the allocation settles and the
-      // refund flips to SUCCEEDED (what stripe.webhook.service.js#reconcileStripeRefund
-      // would do on confirmation), then applyRefundEffects runs — exactly
-      // like a normal, on-time confirmation would. Because the conflicting
-      // refund above was correctly rejected, there was never a real
-      // double-claim, so this must settle clean.
+      // Late webhook settles A; the conflict was rejected, so this settles clean.
       const stale = await Refund.findById(refundA._id);
       stale.payment_allocations[0].settled = true;
       stale.status = REFUND_STATUS.SUCCEEDED;

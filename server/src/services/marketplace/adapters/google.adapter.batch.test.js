@@ -1,12 +1,11 @@
 // services/marketplace/adapters/google.adapter.batch.test.js
-// Batch path coverage: a per-item failure inside publishBatch must not fail the rest of the
-// batch, and syncBatch must respect each listing's fencing token, dropping a stale one.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/adapters/google.adapter.batch.test.js
+// publishBatch isolates item failures; syncBatch drops stale seqs. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../../config");
 
@@ -37,9 +36,7 @@ function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) };
 }
 
-// A zero-photo product is now rejected like a bad-URL one, so makeTenantWithListings gives every
-// product a real Attachment to exercise the success path. UPLOADS_URL is overridden to a fake
-// https:// host for this file's life (real env value is plain http://), restored after.
+// Zero-photo products are rejected, so fixtures get https photos (env is http).
 let originalUploadsUrl;
 before(() => {
   originalUploadsUrl = config.uploads.url;
@@ -51,7 +48,7 @@ after(() => {
 
 async function makeTenantWithListings(count) {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Domain.create({
     tenant_id: tenantId,
@@ -138,7 +135,7 @@ test("publishBatch: a per-item failure is isolated — the rest of the batch sti
     ),
   );
 
-  // Stock/URL lookups now happen in hydration, not in the adapter.
+  // Stock/URL lookups happen in hydration, not in the adapter.
   await hydrateResolved(resolvedList, googleAdapter, tenantId);
   const results = await googleAdapter.publishBatch(resolvedList, settings);
   assert.equal(results.length, 3);
@@ -181,7 +178,7 @@ test("sync.service.js#syncBatch: respects the per-listing fencing token — a st
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  // Skips are opt-in logged (logSuccesses), unlike failures — needed so the log-row assertion below finds something.
+  // Skips log only with logSuccesses, so the log-row assertion below finds one.
   const originalLogSuccesses = config.channels.logSuccesses;
   config.channels.logSuccesses = true;
   t.after(() => {
@@ -191,7 +188,7 @@ test("sync.service.js#syncBatch: respects the per-listing fencing token — a st
   const { tenantId, listings } = await makeTenantWithListings(1);
   const { listing } = listings[0];
 
-  // Simulate a newer concurrent sync_listing job: push_seq lower than last_pushed_seq.
+  // Simulate a newer concurrent sync_listing job: push_seq < last_pushed_seq.
   await MarketplaceListing.updateOne({ _id: listing._id }, { $set: { push_seq: 3, last_pushed_seq: 5 } });
 
   const calls = [];

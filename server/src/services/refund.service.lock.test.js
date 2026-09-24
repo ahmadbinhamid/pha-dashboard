@@ -1,19 +1,16 @@
 // services/refund.service.lock.test.js
-// The fencing-token requirement: without it, a stale holder's own `finally` release would clear
-// a new caller's reclaimed lock, reintroducing the exact admission race the lock exists to prevent.
-// Exercises acquireRefundLock/releaseRefundLock directly, since this is about the mutex's own
-// token bookkeeping, not the refund business logic on top.
-// Needs a live Mongo connection. Run: node --test src/services/refund.service.lock.test.js
+// Fencing token stops a stale holder releasing a reclaimed lock. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
 const refundService = require("./refund.service");
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 async function createDisposableOrder() {
   const suffix = crypto.randomUUID();
@@ -23,7 +20,7 @@ async function createDisposableOrder() {
     invoice_number: `TEST-LOCK-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Lock test item",
         sku: null,
@@ -51,7 +48,7 @@ test("refund lock: a stale holder's release does not clear a new holder's lock",
   const order = await createDisposableOrder();
 
   try {
-    // Simulate holder A acquiring the lock a while ago and never releasing it — a crashed/hung request.
+    // Holder A took the lock long ago and never released it (crashed/hung request).
     const STALE_MS = 30_000;
     const tokenA = "token-A";
     await Order.updateOne(
@@ -72,7 +69,7 @@ test("refund lock: a stale holder's release does not clear a new holder's lock",
     });
 
     await t.test("A's own (late) release does not clear B's lock", async () => {
-      // What createRefund's `finally` block would do if A's section finished after being reclaimed.
+      // What createRefund's `finally` does if A finishes after being reclaimed.
       await refundService.releaseRefundLock(order._id.toString(), tokenA);
 
       const afterAsRelease = await Order.findById(order._id);

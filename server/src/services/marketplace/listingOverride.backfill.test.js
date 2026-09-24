@@ -5,6 +5,7 @@ const test = require("node:test");
 const { before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -39,7 +40,7 @@ function listingFor(product, platform, fields) {
 
 test("backfill: an override equal to the product value is cleared by the script", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const product = await makeProduct(tenantId, suffix);
   const listing = await listingFor(product, "ebay", {
     title_override: product.title,
@@ -62,7 +63,7 @@ test("backfill: an override equal to the product value is cleared by the script"
 
 test("backfill: a genuinely different override is preserved", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const product = await makeProduct(tenantId, suffix);
   const otherPhoto = await Attachment.create({ tenant_id: tenantId, uid: `bf-other-${suffix}`, file_name: `o-${suffix}.jpg` });
   const listing = await listingFor(product, "google", {
@@ -84,7 +85,7 @@ test("backfill: a genuinely different override is preserved", async () => {
 
 test("backfill: --dry-run reports what it would clear but writes nothing", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const product = await makeProduct(tenantId, suffix);
   const listing = await listingFor(product, "google", { title_override: product.title, description_override: product.description });
 
@@ -99,7 +100,7 @@ test("backfill: --dry-run reports what it would clear but writes nothing", async
 
 test("backfill: a generated eBay description is only cleared with --include-generated-descriptions", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const product = await makeProduct(tenantId, suffix);
   const generated = renderEbayDescription(descriptionInputFromResolved({ title: product.title, listing: {}, product, photos: [] }));
   const listing = await listingFor(product, "ebay", { description_override: generated });

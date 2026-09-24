@@ -1,12 +1,10 @@
 // services/refund.service.ebay-confirmation.test.js
-// An eBay refund is bookkeeping only (no gateway call), and restocking pushes quantity back up
-// on the live listing — a lie if the admin hasn't actually issued the refund in Seller Hub.
-// createRefund must require ebay_refund_confirmed: true for any eBay allocation.
-// Needs a live Mongo connection. Run: node --test src/services/refund.service.ebay-confirmation.test.js
+// eBay refunds need ebay_refund_confirmed, else restock lies. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -14,7 +12,7 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 test("eBay refund confirmation gate", async (t) => {
   await mongoose.connect(config.mongoUri);
@@ -26,7 +24,7 @@ test("eBay refund confirmation gate", async (t) => {
     invoice_number: `TEST-EBAYCONF-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "eBay confirmation test item",
         sku: null,

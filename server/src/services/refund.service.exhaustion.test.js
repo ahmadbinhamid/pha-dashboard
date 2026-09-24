@@ -1,12 +1,10 @@
 // services/refund.service.exhaustion.test.js
-// Quantity-exhaustion isn't dollar-exhaustion: `isExhausting` used to fire on quantities alone,
-// which could silently fold unclaimed shipping into a line_items-only refund. Fixed: exhaustion
-// now requires quantities AND shipping AND no pending manual adjustment all covered.
-// Needs a live Mongo connection. Run: node --test src/services/refund.service.exhaustion.test.js
+// Exhaustion needs qty, shipping and no manual adjustment covered. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -14,7 +12,7 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 async function createDisposableOrder({ unitPrice, quantity, shippingCost }) {
   const suffix = crypto.randomUUID();
@@ -26,7 +24,7 @@ async function createDisposableOrder({ unitPrice, quantity, shippingCost }) {
     invoice_number: `TEST-EXHAUST-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Exhaustion test item",
         sku: null,
@@ -77,8 +75,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
   await mongoose.connect(config.mongoUri);
 
   try {
-    // Refund every unit individually (never scope: full_order), shipping never explicitly
-    // refunded — total_amount must be items-only; the order must not read as fully refunded.
+    // Units refunded singly, shipping never: items-only total, not fully refunded.
     await t.test("all quantities claimed, shipping outstanding — total_amount stays items-only", async () => {
       const { order, payment } = await createDisposableOrder({ unitPrice: 1000, quantity: 3, shippingCost: 500 });
       const itemId = order.items[0]._id.toString();
@@ -112,8 +109,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
       }
     });
 
-    // Same quantity-exhaustion signal, but shipping genuinely has nothing outstanding — the
-    // pre-existing rounding-drift residual correction must still fire correctly.
+    // Same qty exhaustion, no shipping outstanding: residual fix must still fire.
     await t.test("shipping covered (none owed) — legitimate exhaustion still takes the exact GST residual", async () => {
       const { order, payment } = await createDisposableOrder({ unitPrice: 101, quantity: 3, shippingCost: 0 });
       const itemId = order.items[0]._id.toString();
@@ -156,8 +152,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
       }
     });
 
-    // A manual adjustment on what would otherwise be the exhausting refund must disable the
-    // residual shortcut; natural proportional math is used instead, with the adjustment on top.
+    // Manual adjustment disables the residual shortcut: proportional math + adj.
     await t.test("a manual adjustment on the final refund disables the exhaustion shortcut", async () => {
       const { order, payment } = await createDisposableOrder({ unitPrice: 101, quantity: 3, shippingCost: 0 });
       const itemId = order.items[0]._id.toString();
@@ -175,8 +170,7 @@ test("exhaustion: unclaimed shipping is never silently folded into a line_items-
         );
         assert.equal(refund1.gst_amount, 9);
 
-        // Quantities are now fully claimed — it would be the exhausting refund, except it
-        // also carries a $0.50 restocking-fee deduction.
+        // Would be the exhausting refund, but has a $0.50 restocking-fee deduction.
         const refund2 = await refundService.createRefund(
           order._id.toString(),
           {

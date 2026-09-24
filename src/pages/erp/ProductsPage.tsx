@@ -13,7 +13,7 @@ import { getProductStats } from "@/lib/api/products";
 import { formatCurrency } from "@/utils/format";
 import { Blocks, Layers, Plus, Tag, TriangleAlert } from "lucide-react";
 
-// Fetches GET /channels via the shared ["channels"] query key (also used by ListingsPage/GoogleConnectCard/ProductEditPage) so stat cards and the filter bar share one source of truth.
+// Shared ["channels"] query key, so stat cards and filter bar share one source.
 export default function ProductsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,7 +37,7 @@ export default function ProductsPage() {
   );
   const hasOutOfStock = !!stats && stats.outOfStockCount > 0;
 
-  // Same p_channel/view query params ProductsTab reads — this bar and that tab share the URL, no prop plumbing needed.
+  // Same p_channel/view URL params ProductsTab reads, so no prop plumbing.
   const channelFilter = searchParams.get("p_channel") ?? "";
   const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
 
@@ -99,7 +99,7 @@ export default function ProductsPage() {
           subLabel={`Across ${connectedChannelCount || channels.length} channel${(connectedChannelCount || channels.length) !== 1 ? "s" : ""}`}
           icon={<Blocks className="h-4 w-4" />}
           loading={isLoading}
-          onClick={() => navigate("/listings")}
+          onClick={() => navigate("/channel-sync?status=all")}
         />
         <MetricCard
           size="sm"

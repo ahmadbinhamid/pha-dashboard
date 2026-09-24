@@ -1,10 +1,11 @@
 // services/marketplace/sync.service.baseline.test.js
-// syncListing stamps the baseline on a confirmed push, never for untracked stock. Needs Mongo.
+// Baseline set on a confirmed push, not for untracked stock. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -28,7 +29,7 @@ after(() => mongoose.disconnect());
 
 async function makeFixture({ stockControl, stockCount }) {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const product = await Product.create({
     tenant_id: tenantId, title: `Baseline ${suffix}`, slug: `baseline-${suffix}`, sku: `BL-${suffix}`, status: "active", stock_control: stockControl,
   });

@@ -1,11 +1,10 @@
 // services/marketplace/channel.service.test.js
-// Regression guard: retryChannelLog must always enqueue a job, even when a failed job for that
-// listing already sits under the debounced jobId — it bypasses the debounce entirely.
-// Needs a live Mongo connection and reachable Redis. Run: node --test src/services/marketplace/channel.service.test.js
+// retryChannelLog enqueues over a failed debounced job. Needs Mongo+Redis.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -19,8 +18,8 @@ test("retryChannelLog enqueues a fresh job even when a failed job for that listi
   await mongoose.connect(config.mongoUri);
 
   const platform = `test-retry-${crypto.randomUUID()}`;
-  const tenantId = new mongoose.Types.ObjectId();
-  const listingId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
+  const listingId = fixtureId();
   const jobId = `sync:${platform}:${listingId.toString()}`;
   const queue = getQueue(platform);
   t.after(async () => {
@@ -28,8 +27,7 @@ test("retryChannelLog enqueues a fresh job even when a failed job for that listi
     await mongoose.disconnect();
   });
 
-  // Force a job into the FAILED state under the debounced jobId, added directly with
-  // removeOnFail: false so it's guaranteed to still be sitting there.
+  // Park a FAILED job under the debounced jobId (removeOnFail: false keeps it).
   queue.process("sync_listing", 1, async () => {
     throw new Error("boom");
   });
@@ -58,7 +56,7 @@ test("retryChannelLog enqueues a fresh job even when a failed job for that listi
   assert.equal(result.requeued, true);
   assert.equal(result.listingId, listingId.toString());
 
-  // The retry must create a new, runnable job, not be swallowed by the pre-existing failed job's jobId.
+  // Retry must create a new runnable job, not be swallowed by the failed jobId.
   const jobCounts = await queue.getJobCounts();
   assert.ok(
     jobCounts.waiting + jobCounts.active + jobCounts.delayed >= 1,

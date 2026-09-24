@@ -2,7 +2,9 @@
 
 const registry = require("../services/marketplace/registry");
 const channelService = require("../services/marketplace/channel.service");
-const { success, notFound, systemfailure } = require("../utils/http/response");
+const mongoose = require("mongoose");
+const { success, notFound, badRequest, systemfailure } = require("../utils/http/response");
+const { CHANNEL_SYNC_LOG_STATUS } = require("../constants/channel.constants");
 
 exports.listChannels = async (req, res) => {
   try {
@@ -18,8 +20,12 @@ exports.getLogs = async (req, res) => {
     const { platform } = req.params;
     if (!registry.has(platform)) return notFound(res, `Unknown platform: ${platform}`);
 
+    const { entity_id: entityId, status } = req.query;
+    if (entityId && !mongoose.isValidObjectId(entityId)) return badRequest(res, "entity_id must be an ObjectId");
+    if (status && !Object.values(CHANNEL_SYNC_LOG_STATUS).includes(status)) return badRequest(res, "Unknown log status");
+
     const { page, limit } = req.pagination;
-    const result = await channelService.getChannelLogs(req.tenantId, platform, { page, limit });
+    const result = await channelService.getChannelLogs(req.tenantId, platform, { page, limit, entityId, status });
     return success(res, result);
   } catch (err) {
     return systemfailure(res, err);

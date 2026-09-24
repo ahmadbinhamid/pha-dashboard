@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { AlertTriangle, ExternalLink, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import Link from "@/components/ui/Link";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
-import { ChannelFieldsPanel } from "@/components/channels/ChannelFieldsPanel";
+import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
+import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
+import { ChannelSettingsDrawer } from "@/components/channels/ChannelSettingsDrawer";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { useToast } from "@/context";
 import { useChannelFieldSources } from "@/hooks/useChannelFieldSources";
+import { isAwaitingSync } from "@/hooks/useProductChannelListings";
 import { deleteListing, getListing } from "@/lib/api/listings";
 import { CHANNEL_FORM_ADAPTERS, ChannelPushError, type ChannelFormState } from "@/lib/marketplace/channelForms";
 import { validateChannelFields } from "@/lib/validation/channelFields";
@@ -28,6 +31,8 @@ interface Props {
   // The product's base (non-variant) listing on this channel.
   listingSummary: AnyMarketplaceListing | null;
   mappedCategory: MappedCategory | null | undefined;
+  // Last product save; row shows "Syncing" until the channel catches up.
+  syncingSince: number | null;
   defaultOpen?: boolean;
 }
 
@@ -36,22 +41,38 @@ function fieldErrorsFrom(err: unknown): Record<string, string> {
   return Object.fromEntries((source?.errors ?? []).map(({ field, message }) => [field, message]));
 }
 
-// One Sales Channels row: tick to list, untick to end the listing.
-export function SalesChannelRow({ channel, index, product, productDefaults, listingSummary, mappedCategory, defaultOpen = false }: Props) {
+// Where to fix a channel that can't be used yet.
+function fixLink(channel: ChannelSummary) {
+  const reason = channel.connection.status_reason;
+  if (reason) return CHANNEL_STATUS_REASON_ACTION[reason].href;
+  return channel.available ? `/settings/integrations/${channel.key}` : "/settings/integrations/domains";
+}
+
+// Sales channels row: tick to list, untick to end, "Edit listing" for settings.
+export function SalesChannelRow({
+  channel,
+  index,
+  product,
+  productDefaults,
+  listingSummary,
+  mappedCategory,
+  syncingSince,
+  defaultOpen = false,
+}: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const adapter = CHANNEL_FORM_ADAPTERS[channel.key];
   const listed = !!listingSummary;
   const schema = channel.fieldSchema ?? [];
   const categoryKey = schema.find((d) => d.type === "category")?.key;
-  const sources = useChannelFieldSources(channel.key, categoryKey, mappedCategory);
+  const sources = useChannelFieldSources(channel.key, categoryKey, mappedCategory, product);
 
-  const [open, setOpen] = useState(defaultOpen);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(defaultOpen);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<ChannelFormState | null>(() => (adapter && !listed ? adapter.initialForm(product) : null));
 
-  // Full listing: the list row's photos aren't populated, so it can't round-trip a save.
+  // Full listing: list-row photos aren't populated, so can't round-trip a save.
   const { data: listingRes } = useQuery({
     queryKey: ["listing", listingSummary?._id],
     queryFn: () => getListing(listingSummary!._id),
@@ -59,10 +80,14 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
   });
   const listing = listingRes?.data ?? null;
 
+  function freshForm() {
+    if (!adapter) return null;
+    return listing ? adapter.fromListing(listing) : listed ? null : adapter.initialForm(product);
+  }
+
   useEffect(() => {
-    if (!adapter) return;
-    if (listing) setForm(adapter.fromListing(listing));
-    else if (!listed) setForm(adapter.initialForm(product));
+    setForm(freshForm());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adapter, listing, listed, product]);
 
   function refresh() {
@@ -73,7 +98,7 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
 
   function onMutationError(err: unknown) {
     setErrors(fieldErrorsFrom(err));
-    setOpen(true);
+    setDrawerOpen(true);
     if (err instanceof ChannelPushError) refresh(); // the listing exists even though the push was rejected
     toast({ title: (err as Error).message, tone: "danger" });
   }
@@ -82,8 +107,9 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
     mutationFn: (f: ChannelFormState) => adapter!.create(product, f),
     onSuccess: () => {
       setErrors({});
+      setDrawerOpen(false);
       refresh();
-      toast({ title: `Listed on ${channel.name} — sync queued`, tone: "success" });
+      toast({ title: `Listed on ${channel.name} · syncing`, tone: "success" });
     },
     onError: onMutationError,
   });
@@ -92,20 +118,20 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
     mutationFn: (f: ChannelFormState) => adapter!.saveAndSync(listingSummary!._id, f),
     onSuccess: () => {
       setErrors({});
+      setDrawerOpen(false);
       refresh();
-      toast({ title: `${channel.name} updated — sync queued`, tone: "success" });
+      toast({ title: `${channel.name} settings saved · syncing`, tone: "success" });
     },
     onError: onMutationError,
   });
 
-  // Same delete flow as the Listings page (ends on the platform, then soft-deletes).
-  const removeMutation = useMutation({
+  // Same delete flow as Listings page (ends on platform, then soft-deletes).
+  const endMutation = useMutation({
     mutationFn: () => deleteListing(listingSummary!._id),
     onSuccess: () => {
-      setConfirmRemove(false);
-      setOpen(false);
+      setConfirmEnd(false);
       refresh();
-      toast({ title: `Removed from ${channel.name}`, tone: "success" });
+      toast({ title: `${channel.name} listing ended`, tone: "success" });
     },
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
   });
@@ -117,141 +143,155 @@ export function SalesChannelRow({ channel, index, product, productDefaults, list
       productDefaults,
     });
     setErrors(errs);
-    if (Object.keys(errs).length) setOpen(true);
     return Object.keys(errs).length === 0;
   }
 
-  function handleToggle(checked: boolean) {
-    if (!checked) {
-      if (listed) setConfirmRemove(true);
-      return;
-    }
-    if (form && validate(form)) createMutation.mutate(form);
+  function submit() {
+    if (!form) return;
+    if (!validate(form)) return setDrawerOpen(true);
+    if (listed) saveMutation.mutate(form);
+    else createMutation.mutate(form);
   }
 
-  function patchForm(patch: Partial<ChannelFormState>) {
-    setForm((prev) => (prev ? ({ ...prev, ...patch } as ChannelFormState) : prev));
+  function handleToggle(checked: boolean) {
+    if (!checked) return listed && setConfirmEnd(true);
+    submit();
+  }
+
+  function cancelDrawer() {
+    setDrawerOpen(false);
+    setErrors({});
+    setForm(freshForm());
   }
 
   const connected = channel.connection.status === "connected";
   // NOTE: not-connected only blocks NEW listings; existing ones stay manageable.
-  const blockedReason = !channel.available
-    ? channel.unavailable_reason
-    : !adapter
-      ? `${channel.name} can't be managed from the product form yet.`
-      : !connected && !listed
-        ? "not connected"
-        : null;
-  const busy = createMutation.isPending || saveMutation.isPending || removeMutation.isPending;
+  const blocked = !channel.available || !adapter || (!connected && !listed);
+  const blockedReason = channel.connection.status_reason
+    ? "Needs attention"
+    : !channel.available
+      ? "Needs a verified storefront domain"
+      : !adapter
+        ? `${channel.name} can't be managed from the product form yet`
+        : "Not connected";
+  const busy = createMutation.isPending || saveMutation.isPending || endMutation.isPending;
+  const awaiting = !!listingSummary && isAwaitingSync(listingSummary, syncingSince);
 
   const listingCategory = categoryKey ? ((listingSummary as unknown as Record<string, unknown> | null)?.[categoryKey] as string | null) : null;
-  const categoryText = listingCategory
-    ? `${listingCategory} (set on this product)`
-    : mappedCategory
-      ? `${mappedCategory.name ?? mappedCategory.id} (from default)`
-      : categoryKey
-        ? "not set"
-        : null;
+  const categoryId = listingCategory || mappedCategory?.id || null;
+  const categorySource = listingCategory ? "Set on this product" : mappedCategory ? "From default" : null;
 
   return (
-    <div className="py-3">
-      <div className="flex flex-wrap items-center gap-3">
+    <div>
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
         <Checkbox
           checked={listed || createMutation.isPending}
-          disabled={!!blockedReason || busy || !form}
+          disabled={blocked || busy || !form}
           onChange={(e) => handleToggle(e.target.checked)}
           aria-label={`List on ${channel.name}`}
         />
-        <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="sm" />
+        <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="md" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-fg">{channel.name}</p>
-          {blockedReason === "not connected" ? (
-            <p className="text-xs text-fg/55">
-              Not connected —{" "}
-              <Link href={`/settings/integrations/${channel.key}`} className="font-medium text-accent hover:underline">
-                Connect
-              </Link>
+          <p className={cn("text-sm font-semibold", blocked ? "text-fg/60" : "text-fg")}>{channel.name}</p>
+          {blocked ? (
+            <p className="text-xs text-fg/50">{blockedReason}</p>
+          ) : categoryKey ? (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-fg/50">
+              {categoryId ? (
+                <>
+                  <span>
+                    Category <span className="font-mono text-fg/70">{categoryId}</span>
+                  </span>
+                  {categorySource && <Badge variant="muted" className="px-1.5 py-0.5 text-[11px] font-medium">{categorySource}</Badge>}
+                </>
+              ) : (
+                <span className="text-warn">Category not set</span>
+              )}
             </p>
-          ) : blockedReason ? (
-            <p className="text-xs text-fg/55">{blockedReason}</p>
-          ) : categoryText ? (
-            <p className={cn("truncate text-xs", categoryText === "not set" ? "text-warn" : "text-fg/55")}>Category: {categoryText}</p>
           ) : null}
         </div>
 
-        {listed && listingSummary && (
-          <div className="flex items-center gap-2">
-            <SyncBadge status={listingSummary.sync_status} />
-            <span className="whitespace-nowrap text-xs text-fg/50">
-              {listingSummary.synced_at ? `synced ${formatRelativeTime(listingSummary.synced_at)}` : "not synced yet"}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1 px-2 text-xs"
-              disabled={busy || !form}
-              onClick={() => form && validate(form) && saveMutation.mutate(form)}
-              title="Save this panel and queue a sync"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", saveMutation.isPending && "animate-spin")} />
-              Re-sync
+        {blocked ? (
+          <Link href={fixLink(channel)} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+            {!channel.available ? "Verify domain in Settings › Domains" : "Connect"}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        ) : (
+          <>
+            {listed && listingSummary && (
+              <div className="flex items-center gap-3 text-xs text-fg/50">
+                <SyncBadge status={awaiting ? "pending" : listingSummary.sync_status} />
+                <span className="whitespace-nowrap">
+                  {awaiting
+                    ? "Syncing…"
+                    : listingSummary.synced_at
+                      ? `Synced ${formatRelativeTime(listingSummary.synced_at)}`
+                      : "Not synced yet"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2 text-xs"
+                  disabled={busy || !form}
+                  onClick={() => form && validate(form) && saveMutation.mutate(form)}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", saveMutation.isPending && "animate-spin")} />
+                  Re-sync
+                </Button>
+              </div>
+            )}
+            <Button type="button" variant="secondary" size="sm" className="gap-1.5" disabled={!form} onClick={() => setDrawerOpen(true)}>
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Edit listing
             </Button>
-          </div>
-        )}
-
-        {adapter && !blockedReason && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setOpen((v) => !v)}
-            aria-label={open ? `Hide ${channel.name} details` : `Show ${channel.name} details`}
-          >
-            <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
-          </Button>
+          </>
         )}
       </div>
 
-      {listed && listingSummary?.sync_error && <p className="mt-2 pl-8 text-xs text-danger">Sync error: {listingSummary.sync_error}</p>}
+      <ChannelAttentionNotice channel={channel} className="mx-5 mb-3" />
 
-      {open && form && adapter && (
-        <div className="mt-4 space-y-4 rounded-xs border border-border bg-bg-2/40 p-4">
-          <ChannelFieldsPanel
-            channel={channel}
-            form={form}
-            onChange={patchForm}
-            errors={errors}
-            sources={sources}
-            mappedCategory={mappedCategory}
-            productDefaults={productDefaults}
-            supportsPhotos={adapter.supportsPhotoOverrides}
-          />
-          <div className="flex justify-end gap-2">
-            {listed ? (
-              <Button type="button" size="sm" disabled={busy} onClick={() => validate(form) && saveMutation.mutate(form)}>
-                {saveMutation.isPending ? "Saving…" : `Save & sync ${channel.name}`}
-              </Button>
-            ) : (
-              <Button type="button" size="sm" disabled={busy} onClick={() => handleToggle(true)}>
-                {createMutation.isPending ? "Listing…" : `List on ${channel.name}`}
-              </Button>
-            )}
-          </div>
+      {listed && listingSummary?.sync_status === "error" && listingSummary.sync_error && !awaiting && !channel.connection.status_reason && (
+        <p className="mx-5 mb-3 flex items-start gap-2 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {listingSummary.sync_error}
+        </p>
+      )}
+
+      {confirmEnd && (
+        <div className="mx-5 mb-4 flex flex-wrap items-center gap-2 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">
+            End the {channel.name} listing? Buyers will no longer see it.
+          </span>
+          <Button type="button" variant="secondary" size="sm" className="h-7" onClick={() => setConfirmEnd(false)} disabled={endMutation.isPending}>
+            Keep listed
+          </Button>
+          <Button type="button" variant="danger" size="sm" className="h-7" onClick={() => endMutation.mutate()} disabled={endMutation.isPending}>
+            {endMutation.isPending ? "Ending…" : "End listing"}
+          </Button>
         </div>
       )}
 
-      <ConfirmModal
-        open={confirmRemove}
-        onOpenChange={setConfirmRemove}
-        title={`Remove from ${channel.name}?`}
-        description={`This ends the live ${channel.name} listing for this product. The product itself is unaffected.`}
-        confirmLabel="Remove listing"
-        tone="danger"
-        confirming={removeMutation.isPending}
-        onConfirm={() => removeMutation.mutate()}
-      />
+      {form && adapter && (
+        <ChannelSettingsDrawer
+          open={drawerOpen}
+          onCancel={cancelDrawer}
+          onSubmit={submit}
+          submitting={createMutation.isPending || saveMutation.isPending}
+          channel={channel}
+          index={index}
+          status={listed && listingSummary ? (awaiting ? "pending" : listingSummary.sync_status) : null}
+          product={product}
+          form={form}
+          onChange={(patch) => setForm((prev) => (prev ? ({ ...prev, ...patch } as ChannelFormState) : prev))}
+          errors={errors}
+          sources={sources}
+          mappedCategory={mappedCategory}
+          productDefaults={productDefaults}
+          supportsPhotos={adapter.supportsPhotoOverrides}
+        />
+      )}
     </div>
   );
 }

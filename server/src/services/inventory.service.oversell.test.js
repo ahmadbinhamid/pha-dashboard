@@ -1,13 +1,11 @@
 // services/inventory.service.oversell.test.js
-//
-// Regression guard: oversell must clamp stock at 0 but keep the true delta in `adjustment` and log the uncovered amount in `clamped_shortfall`, never silently dropping it.
-//
-// Needs a live Mongo connection — run: node --test src/services/inventory.service.oversell.test.js
+// Oversell clamps stock at 0 but records true delta and shortfall. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -25,7 +23,7 @@ test("oversell: deducting more than available stock clamps to 0 but records the 
   const { adjustStockForSku } = require("./inventory.service");
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const sku = `OVERSELL-${suffix}`;
 
   const product = await Product.create({

@@ -1,19 +1,17 @@
 // services/marketplace/channel.service.summary.test.js
-// listChannelsForTenant returns last_synced_at (max MarketplaceListing.synced_at), needs_attention_count
-// (error/price_locked listings), and health_status, folding in both listing- and connection-level trouble.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/channel.service.summary.test.js
+// listChannelsForTenant last_synced_at, attention count, health. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ChannelConnection = require("../../models/ChannelConnection");
 const registry = require("./registry");
-// register() makes an adapter show up in listChannelsForTenant's output; this file must be
-// independently runnable (`node --test` isolates one process per file), so register both directly.
+// Register both adapters here so this file runs standalone under node --test.
 const ebayAdapter = require("./adapters/ebay.adapter");
 const googleAdapter = require("./adapters/google.adapter");
 registry.register(ebayAdapter);
@@ -26,7 +24,7 @@ const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants
 function makeListing(tenantId, overrides = {}) {
   return {
     tenant_id: tenantId,
-    product: new mongoose.Types.ObjectId(),
+    product: fixtureId(),
     platform: "ebay",
     state: LISTING_STATE.ACTIVE,
     sync_status: LISTING_SYNC_STATUS.SYNCED,
@@ -37,7 +35,7 @@ function makeListing(tenantId, overrides = {}) {
 
 test("listChannelsForTenant: last_synced_at is the real max MarketplaceListing.synced_at across every sync_status bucket, not health.last_success_at", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await MarketplaceListing.deleteMany({ tenant_id: tenantId });
     await mongoose.disconnect();
@@ -48,7 +46,7 @@ test("listChannelsForTenant: last_synced_at is the real max MarketplaceListing.s
 
   await MarketplaceListing.create([
     makeListing(tenantId, { synced_at: older, sync_status: LISTING_SYNC_STATUS.SYNCED }),
-    // The most recent activity is an ERROR row — last_synced_at must still pick it up.
+    // Most recent activity is an ERROR row; last_synced_at must still pick it up.
     makeListing(tenantId, { synced_at: newer, sync_status: LISTING_SYNC_STATUS.ERROR }),
   ]);
 
@@ -60,7 +58,7 @@ test("listChannelsForTenant: last_synced_at is the real max MarketplaceListing.s
 
 test("listChannelsForTenant: last_synced_at is null for a channel with no synced listings at all", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await mongoose.disconnect();
   });
@@ -72,7 +70,7 @@ test("listChannelsForTenant: last_synced_at is null for a channel with no synced
 
 test("listChannelsForTenant: needs_attention_count sums only error + price_locked, never synced/pending/not_listed/out_of_stock", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await MarketplaceListing.deleteMany({ tenant_id: tenantId });
     await mongoose.disconnect();
@@ -97,7 +95,7 @@ test("listChannelsForTenant: needs_attention_count sums only error + price_locke
 
 test("listChannelsForTenant: health_status is healthy when there are zero bad listings and no connection trouble", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await MarketplaceListing.deleteMany({ tenant_id: tenantId });
     await mongoose.disconnect();
@@ -117,7 +115,7 @@ test("listChannelsForTenant: health_status is healthy when there are zero bad li
 
 test("listChannelsForTenant: health_status is needs_attention from a tripped circuit breaker alone, even with zero bad listings", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await MarketplaceListing.deleteMany({ tenant_id: tenantId });
     await ChannelConnection.deleteMany({ tenant_id: tenantId });
@@ -130,7 +128,7 @@ test("listChannelsForTenant: health_status is needs_attention from a tripped cir
     platform: "ebay",
     status: CHANNEL_CONNECTION_STATUS.DEGRADED,
     consecutive_failures: 12,
-    // Other ebay discriminator fields left at schema defaults — only status/consecutive_failures matter here.
+    // Other ebay fields left at defaults; only status/consecutive_failures matter.
     connected_at: new Date(),
   });
 
@@ -143,7 +141,7 @@ test("listChannelsForTenant: health_status is needs_attention from a tripped cir
 
 test("listChannelsForTenant: health_status is needs_attention from consecutive_failures > 0 even while connection.status is still 'connected'", async (t) => {
   await mongoose.connect(config.mongoUri);
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   t.after(async () => {
     await ChannelConnection.deleteMany({ tenant_id: tenantId });
     await mongoose.disconnect();

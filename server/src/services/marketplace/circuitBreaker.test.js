@@ -1,11 +1,10 @@
 // services/marketplace/circuitBreaker.test.js
-// Regression guard: only transport/auth failures count toward the breaker, never 400-level
-// validation errors. Also covers the explicit resume path.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/circuitBreaker.test.js
+// Only transport/auth failures trip the breaker, not 400s. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
@@ -27,11 +26,11 @@ function validationError() {
 test("circuit breaker: item validation errors never trip it, transport/auth errors do at the threshold", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const platform = "ebay";
   const threshold = config.channels.circuitBreakerThreshold;
 
-  // A burst of 400-level validation failures, well past the threshold, must never increment consecutive_failures.
+  // A burst of 400s well past the threshold must never bump consecutive_failures.
   for (let i = 0; i < threshold + 5; i++) {
     await circuitBreaker.recordFailure(tenantId, platform, validationError());
   }
@@ -39,18 +38,18 @@ test("circuit breaker: item validation errors never trip it, transport/auth erro
   const afterValidation = await ChannelConnection.findOne({ tenant_id: tenantId, platform }).lean();
   assert.equal(afterValidation, null, "validation errors that never count must never even create a ChannelConnection row");
 
-  // Fewer than threshold transport errors — not tripped yet.
+  // Fewer than threshold transport errors: not tripped yet.
   for (let i = 0; i < threshold - 1; i++) {
     await circuitBreaker.recordFailure(tenantId, platform, transportError(503));
   }
   assert.equal(await circuitBreaker.isOpen(tenantId, platform), false, "must not trip before reaching the threshold");
 
-  // One more (401, exercising the auth branch) reaches the threshold and trips it.
+  // One more (401, the auth branch) reaches the threshold and trips it.
   const { tripped } = await circuitBreaker.recordFailure(tenantId, platform, transportError(401));
   assert.equal(tripped, true);
   assert.equal(await circuitBreaker.isOpen(tenantId, platform), true, "must be open once the threshold is reached");
 
-  // A success does not resume a tripped breaker on its own — only an explicit resume does.
+  // A success doesn't resume a tripped breaker; only an explicit resume does.
   await circuitBreaker.recordSuccess(tenantId, platform);
   const afterSuccess = await ChannelConnection.findOne({ tenant_id: tenantId, platform }).lean();
   assert.equal(afterSuccess.consecutive_failures, 0);

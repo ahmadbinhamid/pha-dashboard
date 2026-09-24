@@ -1,13 +1,11 @@
 // services/inventory-digest.service.test.js
-// Tests the sweep + per-tenant send-time/dedup logic. Mocks emailService's sendLowStockDigest
-// so tests only exercise decision logic. notification_send_time is compared against the real
-// current UTC clock (no injected "now"), so fixtures set send_time relative to Date.now().
-// Needs a live Mongo connection. Run: node --test src/services/inventory-digest.service.test.js
+// Digest sweep/dedup on a fixed clock, fixture tenants only. Needs Mongo.
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -18,10 +16,14 @@ const Location = require("../models/Location");
 
 const emailServiceModule = require("./email/email.service");
 
-// One connection for the whole file — node:test runs t.after() hooks in registration order
-// (not LIFO), so a per-test disconnect registered early would break a later cleanup delete.
+// One connection per file: t.after() runs in registration order, not LIFO.
 before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
+
+// Fixed clock so results never depend on the real time of day.
+const FIXED_NOW = new Date("2026-03-10T09:30:00.000Z");
+const FIXED_MINUTES = 9 * 60 + 30;
+const FIXED_TODAY = new Date("2026-03-10T00:00:00.000Z");
 
 function hhmm(date) {
   return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
@@ -53,7 +55,7 @@ test("inventory-digest.service: kill switch — no query, no send, when digestSw
   });
   t.after(() => findSpy.mock.restore());
 
-  // Fresh require after the config flip and mock are in place; config is a live object either way.
+  // Fresh require after the config flip and mock; config is live either way.
   const { sweepLowStockDigests } = require("./inventory-digest.service");
   const result = await sweepLowStockDigests();
 
@@ -67,9 +69,9 @@ test("inventory-digest.service: not due yet — never sends, never stamps last_d
   });
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   // 2 hours in the future (UTC), never "due" relative to nowMinutes.
-  const future = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const future = new Date(FIXED_NOW.getTime() + 2 * 60 * 60 * 1000);
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -79,9 +81,9 @@ test("inventory-digest.service: not due yet — never sends, never stamps last_d
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const now = new Date();
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const now = FIXED_NOW;
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "not_due");
@@ -96,14 +98,14 @@ test("inventory-digest.service: due now, has low stock — sends once with the r
   const sendSpy = mock.method(emailServiceModule, "sendLowStockDigest", async () => ({ queued: true }));
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const { product } = await makeLowStockFixture(tenantId, 5);
   t.after(async () => {
     await Product.deleteOne({ _id: product._id });
     await Inventory.deleteMany({ product: product._id });
   });
 
-  const now = new Date();
+  const now = FIXED_NOW;
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -113,8 +115,8 @@ test("inventory-digest.service: due now, has low stock — sends once with the r
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "sent");
@@ -122,7 +124,7 @@ test("inventory-digest.service: due now, has low stock — sends once with the r
   const callArgs = sendSpy.mock.calls[0].arguments[0];
   assert.equal(callArgs.to, "owner@example.com");
   assert.ok(callArgs.items.some((i) => i.title === product.title));
-  // Sent from the platform mailbox, never BYOK SMTP, so no tenantId for mailer.js to route through.
+  // Platform mailbox, never BYOK SMTP, so no tenantId for mailer.js.
   assert.equal(callArgs.tenantId, undefined);
   assert.ok(callArgs.pdfBase64, "must attach the low-stock report PDF");
   assert.match(callArgs.pdfFilename, /^low-stock-report-\d{4}-\d{2}-\d{2}\.pdf$/);
@@ -138,8 +140,8 @@ test("inventory-digest.service: due now, zero low-stock items — no send, but s
   });
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
-  const now = new Date();
+  const tenantId = fixtureId();
+  const now = FIXED_NOW;
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -149,8 +151,8 @@ test("inventory-digest.service: due now, zero low-stock items — no send, but s
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "no_low_stock");
@@ -167,8 +169,8 @@ test("inventory-digest.service: dedup — already sent today, does not send agai
   });
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
-  const now = new Date();
+  const tenantId = fixtureId();
+  const now = FIXED_NOW;
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -179,8 +181,8 @@ test("inventory-digest.service: dedup — already sent today, does not send agai
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "already_sent_today");
@@ -192,14 +194,14 @@ test("inventory-digest.service: dedup resets across a day rollover — sent yest
   const sendSpy = mock.method(emailServiceModule, "sendLowStockDigest", async () => ({ queued: true }));
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const { product } = await makeLowStockFixture(tenantId, 5);
   t.after(async () => {
     await Product.deleteOne({ _id: product._id });
     await Inventory.deleteMany({ product: product._id });
   });
 
-  const now = new Date();
+  const now = FIXED_NOW;
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -210,8 +212,8 @@ test("inventory-digest.service: dedup resets across a day rollover — sent yest
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "sent");
@@ -225,8 +227,8 @@ test("inventory-digest.service: notification_email empty — skips with no send,
   });
   t.after(() => sendSpy.mock.restore());
 
-  const tenantId = new mongoose.Types.ObjectId();
-  const now = new Date();
+  const tenantId = fixtureId();
+  const now = FIXED_NOW;
   const settings = await InventorySettings.create({
     tenant_id: tenantId,
     email_notifications: true,
@@ -236,8 +238,8 @@ test("inventory-digest.service: notification_email empty — skips with no send,
   });
   t.after(() => InventorySettings.deleteOne({ _id: settings._id }));
 
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const nowMinutes = FIXED_MINUTES;
+  const today = FIXED_TODAY;
 
   const result = await maybeSendDigest(settings, nowMinutes, today);
   assert.equal(result, "no_recipient");
@@ -249,31 +251,24 @@ test("inventory-digest.service: full sweep — one tenant's failure does not blo
   const sendSpy = mock.method(emailServiceModule, "sendLowStockDigest", async () => ({ queued: true }));
   t.after(() => sendSpy.mock.restore());
 
-  const tenantBad = new mongoose.Types.ObjectId();
-  const tenantGood = new mongoose.Types.ObjectId();
+  const tenantBad = fixtureId();
+  const tenantGood = fixtureId();
+  // Due but not passed in: the sweep must leave it untouched.
+  const tenantOutside = fixtureId();
   const { product: goodProduct } = await makeLowStockFixture(tenantGood, 5);
   t.after(async () => {
     await Product.deleteOne({ _id: goodProduct._id });
     await Inventory.deleteMany({ product: goodProduct._id });
   });
 
-  const now = new Date();
-  const settingsBad = await InventorySettings.create({
-    tenant_id: tenantBad,
-    email_notifications: true,
-    notification_email: "bad@example.com",
-    notification_send_time: hhmm(now),
-    low_stock_threshold: 5,
-  });
-  const settingsGood = await InventorySettings.create({
-    tenant_id: tenantGood,
-    email_notifications: true,
-    notification_email: "good@example.com",
-    notification_send_time: hhmm(now),
-    low_stock_threshold: 5,
-  });
+  const due = { email_notifications: true, notification_send_time: hhmm(FIXED_NOW), low_stock_threshold: 5 };
+  const [settingsBad, settingsGood, settingsOutside] = await Promise.all([
+    InventorySettings.create({ ...due, tenant_id: tenantBad, notification_email: "bad@example.com" }),
+    InventorySettings.create({ ...due, tenant_id: tenantGood, notification_email: "good@example.com" }),
+    InventorySettings.create({ ...due, tenant_id: tenantOutside, notification_email: "outside@example.com" }),
+  ]);
   t.after(async () => {
-    await InventorySettings.deleteMany({ _id: { $in: [settingsBad._id, settingsGood._id] } });
+    await InventorySettings.deleteMany({ _id: { $in: [settingsBad._id, settingsGood._id, settingsOutside._id] } });
   });
 
   const originalGetLowStockItems = inventoryServiceModule.getLowStockItems.bind(inventoryServiceModule);
@@ -286,8 +281,11 @@ test("inventory-digest.service: full sweep — one tenant's failure does not blo
   t.after(() => getLowStockSpy.mock.restore());
 
   const { sweepLowStockDigests } = require("./inventory-digest.service");
-  const result = await sweepLowStockDigests();
+  const result = await sweepLowStockDigests({ now: FIXED_NOW, tenantIds: [tenantBad, tenantGood] });
 
   assert.equal(result.sent, 1, "the good tenant must still get its digest");
   assert.equal(result.errored, 1, "the bad tenant's failure must be counted, not swallowed silently or thrown");
+  assert.deepEqual(sendSpy.mock.calls.map((c) => c.arguments[0].to), ["good@example.com"]);
+  assert.ok((await InventorySettings.findById(settingsGood._id)).last_digest_sent_at, "good tenant stamped");
+  assert.equal((await InventorySettings.findById(settingsOutside._id)).last_digest_sent_at, null, "tenant outside the sweep untouched");
 });

@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/Button";
 import type { EbayListingFormState, FitmentRowFormState } from "@/types/marketplace";
+import type { ProductVehicle } from "@/types/product";
 import { Plus, Car } from "lucide-react";
 import { FitmentRow } from "@/components/listings/platforms/ebay/FitmentRow";
 
 interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
+  // Enables "Copy from product" when the product has a vehicle set.
+  productVehicle?: ProductVehicle | null;
 }
 
 const EMPTY_ROW: FitmentRowFormState = {
@@ -16,8 +19,25 @@ const EMPTY_ROW: FitmentRowFormState = {
   year_to: "",
 };
 
-export function EbayVehicleFitmentSection({ form, onChange }: Props) {
+export function EbayVehicleFitmentSection({ form, onChange, productVehicle }: Props) {
   const rows = form.fitment;
+  const canCopy = !!(productVehicle?.make || productVehicle?.model);
+
+  function copyFromProduct() {
+    if (!productVehicle) return;
+    onChange({
+      fitment: [
+        ...rows,
+        {
+          make: productVehicle.make ?? "",
+          model: productVehicle.model ?? "",
+          model_code: productVehicle.model_code ?? "",
+          year_from: productVehicle.year_from != null ? String(productVehicle.year_from) : "",
+          year_to: productVehicle.year_to != null ? String(productVehicle.year_to) : "",
+        },
+      ],
+    });
+  }
 
   function updateRow(index: number, patch: Partial<FitmentRowFormState>) {
     const next = rows.map((r, i) => (i === index ? { ...r, ...patch } : r));
@@ -45,10 +65,17 @@ export function EbayVehicleFitmentSection({ form, onChange }: Props) {
               Add make, model and year range to help buyers find compatible parts.
             </p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add Vehicle
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            {canCopy && (
+              <Button type="button" variant="outline" size="sm" onClick={copyFromProduct}>
+                Copy from product
+              </Button>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Add Vehicle
+            </Button>
+          </div>
         </div>
       ) : (
         <>

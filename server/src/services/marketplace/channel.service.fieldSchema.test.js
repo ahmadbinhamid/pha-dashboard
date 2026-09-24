@@ -1,9 +1,10 @@
 // services/marketplace/channel.service.fieldSchema.test.js
-// GET /channels serves each fieldSchema additively, with static options. Needs Mongo.
+// GET /channels serves fieldSchemas with static options. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
@@ -16,7 +17,7 @@ test("listChannelsForTenant: each channel carries its fieldSchema with static op
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const channels = await listChannelsForTenant(new mongoose.Types.ObjectId());
+  const channels = await listChannelsForTenant(fixtureId());
   const byKey = Object.fromEntries(channels.map((c) => [c.key, c]));
 
   for (const key of ["ebay", "google"]) {

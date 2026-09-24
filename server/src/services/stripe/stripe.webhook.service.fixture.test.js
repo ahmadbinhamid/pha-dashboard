@@ -1,22 +1,10 @@
 // services/stripe/stripe.webhook.service.fixture.test.js
-//
-// refund-redesign-spec.md §8 edge-case matrix rows 14-19 — testable without
-// a real Stripe account by constructing the JSON event/object shapes Stripe
-// actually sends and driving handleEvent/handleChargeRefunded/
-// handleChargeRefundUpdated/reconcileStripeRefund directly, with
-// stripe.keys.service#getStripeClient mocked (node:test's built-in mock
-// support — same technique as refund.reconciliation.service.test.js).
-//
-// The mock must be installed BEFORE this file's own services are first
-// required, since stripe.webhook.service.js and refund.service.js both
-// call stripeKeysService.getStripeClient at their own module-load/call time.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/stripe/stripe.webhook.service.fixture.test.js
+// Spec §8 rows 14-19 via hand-built Stripe events, client mocked. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 const Order = require("../../models/Order");
@@ -28,16 +16,7 @@ const Inventory = require("../../models/Inventory");
 const stripeKeysService = require("./stripe.keys.service");
 const { REFUND_STATUS } = require("../../constants/refund.constants");
 
-// The real Stripe SDK's refunds.list() returns a hybrid "ApiListPromise" —
-// thenable (so `const { data } = await stripe.refunds.list(...)`, used by
-// handleChargeRefunded, resolves to an object with `.data`) AND directly
-// async-iterable (so `for await (const r of stripe.refunds.list(...))`,
-// used by refund.service.js#findExistingStripeRefund's auto-pagination,
-// iterates WITHOUT a top-level await) on the SAME returned value. Wrapping
-// this in an `async` function would break the second shape — the function
-// itself would always return a native Promise, and a bare Promise has no
-// Symbol.asyncIterator. `list` below is therefore a plain (non-async)
-// function returning this hybrid object directly.
+// Non-async: must be thenable AND async-iterable, like ApiListPromise.
 function makeListResponse(items) {
   const response = {
     data: items,
@@ -45,11 +24,7 @@ function makeListResponse(items) {
       for (const item of items) yield item;
     },
   };
-  // Resolve with a plain, non-thenable copy — NOT `response` itself. A
-  // Promise resolving to a thenable recursively unwraps it by calling
-  // `.then` again on that same value; since `response` is itself thenable,
-  // resolving to `response` creates an infinite resolution loop that hangs
-  // forever with no error (confirmed live — this is not hypothetical).
+  // Resolve a non-thenable copy; resolving to a thenable self loops forever.
   response.then = (resolve) => resolve({ data: items });
   return response;
 }
@@ -64,7 +39,7 @@ function buildFakeStripe({ createImpl, listImpl, retrieveImpl } = {}) {
   };
 }
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 async function createDisposableOrder({ quantity = 1, unitPrice = 1000, sku = null } = {}) {
   const suffix = crypto.randomUUID();
@@ -74,7 +49,7 @@ async function createDisposableOrder({ quantity = 1, unitPrice = 1000, sku = nul
     order_number: `TEST-WHFIX-${suffix}`,
     invoice_number: `TEST-WHFIX-INV-${suffix}`,
     items: [
-      { product: new mongoose.Types.ObjectId(), variant: null, name: "Webhook fixture item", sku, unit_price: unitPrice, quantity, discount_amount: 0 },
+      { product: fixtureId(), variant: null, name: "Webhook fixture item", sku, unit_price: unitPrice, quantity, discount_amount: 0 },
     ],
     customer: { name: "Webhook Fixture Test", email: null, phone: null },
     delivery_method: "pickup",
@@ -111,18 +86,11 @@ async function createStripePayment(order, { amount, suffix }) {
 test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  // Installed exactly ONCE, before refund.service.js or stripe.webhook.service.js
-  // are ever required — both call stripeKeysService.getStripeClient at their
-  // own module-load/call time, so a mock re-installed per-subtest (via
-  // t.mock.method inside each subtest's own `t`) would only ever reach
-  // whichever module hadn't already captured an earlier binding. Indirecting
-  // through a mutable `currentFakeStripe` that this ONE mock function reads
-  // at CALL time — not require time — means every subtest can swap
-  // behaviour just by reassigning the variable, regardless of load order.
+  // Installed once; reads currentFakeStripe at call time so subtests can swap it.
   let currentFakeStripe = buildFakeStripe();
   t.mock.method(stripeKeysService, "getStripeClient", async () => currentFakeStripe);
 
-  // ── Row 14: Stripe API errors mid-multi-allocation ──────────────────────
+  // -- Row 14: Stripe API errors mid-multi-allocation --
   await t.test("row 14: mid-multi-allocation Stripe failure marks the refund failed and records which allocation settled", async () => {
     let callCount = 0;
     currentFakeStripe = buildFakeStripe({
@@ -158,10 +126,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
       assert.equal(refund.status, REFUND_STATUS.FAILED);
       assert.ok(refund.failure_reason);
       assert.equal(refund.payment_allocations.length, 2, "must have split across both payments");
-      // Which specific payment landed first isn't guaranteed down to the
-      // millisecond in a fast test run — what matters is that EXACTLY ONE
-      // allocation recorded the Stripe id that succeeded before the other
-      // call failed, not which one.
+      // Which payment lands first varies; exactly one must record the Stripe id.
       const withId = refund.payment_allocations.filter((a) => a.stripe_refund_id);
       const withoutId = refund.payment_allocations.filter((a) => !a.stripe_refund_id);
       assert.equal(withId.length, 1, "exactly one allocation must have already succeeded at Stripe");
@@ -174,7 +139,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     }
   });
 
-  // ── Row 15: Stripe returns pending, then succeeded via webhook ──────────
+  // -- Row 15: Stripe returns pending, then succeeded via webhook --
   await t.test("row 15: effects apply once, on webhook confirmation, guarded by effects_applied_at", async () => {
     currentFakeStripe = buildFakeStripe();
     const refundService = require("../refund.service");
@@ -192,7 +157,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
       payment: payment._id,
       amount: 2000,
       reason: "customer_request",
-      status: REFUND_STATUS.PROCESSING, // §3.7 — createRefund already returned this to the caller; webhook confirms it
+      status: REFUND_STATUS.PROCESSING, // §3.7: createRefund returned this; webhook confirms
       initiated_via: "admin_api",
       initiated_by: null,
       payment_allocations: [{ payment: payment._id, amount: 2000, provider: "stripe", settled: false, stripe_refund_id: stripeRefundId }],
@@ -218,9 +183,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
       assert.equal(freshRefund.status, REFUND_STATUS.SUCCEEDED);
       const firstAppliedAt = freshRefund.effects_applied_at.getTime();
 
-      // A second, redundant confirmation for the same Stripe refund (e.g. a
-      // retried/duplicated webhook attempt reaching this function again) —
-      // must NOT double the ledger.
+      // A duplicate confirmation of the same refund must NOT double the ledger.
       await reconcileStripeRefund(sr, payment, order);
       freshOrder = await Order.findById(order._id);
       assert.equal(freshOrder.items[0].quantity_refunded, 2, "effects must be applied exactly once, not twice");
@@ -233,16 +196,16 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     }
   });
 
-  // ── Row 16: Stripe refund succeeds then flips to failed ─────────────────
+  // -- Row 16: Stripe refund succeeds then flips to failed --
   await t.test("row 16: charge.refund.updated auto-reverses, including re-deducting restocked stock", async () => {
     currentFakeStripe = buildFakeStripe();
     const refundService = require("../refund.service");
     const { handleChargeRefundUpdated } = require("./stripe.webhook.service");
 
-    const productId = new mongoose.Types.ObjectId();
+    const productId = fixtureId();
     const sku = `ph-${productId.toHexString()}`;
     const { order: baseOrder, suffix } = await createDisposableOrder({ quantity: 1, unitPrice: 1000, sku });
-    // Re-point the item's product to match the fallback-SKU id resolveSkuToIds expects.
+    // Re-point the item's product to the fallback-SKU id resolveSkuToIds expects.
     await Order.updateOne({ _id: baseOrder._id }, { $set: { "items.0.product": productId, "items.0.sku": sku } });
     const order = await Order.findById(baseOrder._id);
 
@@ -298,7 +261,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     }
   });
 
-  // ── Row 17: Duplicate charge.refunded delivery ───────────────────────────
+  // -- Row 17: Duplicate charge.refunded delivery --
   await t.test("row 17: claimEvent dedupes the event; a redelivered event never re-processes", async () => {
     const { order, suffix } = await createDisposableOrder({ quantity: 1, unitPrice: 1000 });
     const payment = await createStripePayment(order, { amount: 1000, suffix });
@@ -339,8 +302,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
       const afterFirst = await Order.findById(order._id);
       assert.equal(afterFirst.items[0].quantity_refunded, 1);
 
-      // The exact same event, redelivered — claimEvent's unique index on
-      // stripe_event_id must reject it before handleChargeRefunded ever runs again.
+      // Redelivered event: claimEvent's unique stripe_event_id index must reject it.
       await handleEvent(event, TEST_TENANT_ID);
       const afterSecond = await Order.findById(order._id);
       assert.equal(afterSecond.items[0].quantity_refunded, 1, "redelivery must be a complete no-op");
@@ -355,7 +317,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     }
   });
 
-  // ── Rows 18 & 19: dashboard-issued refund, and the concurrency guard on it ─
+  // -- Rows 18 & 19: dashboard-issued refund and its concurrency guard --
   await t.test("rows 18/19: an unknown (dashboard-issued) Stripe refund is recorded once, correctly shaped", async () => {
     currentFakeStripe = buildFakeStripe();
     const refundService = require("../refund.service");
@@ -367,12 +329,7 @@ test("webhook fixtures — §8 matrix rows 14-19", async (t) => {
     const sr = { id: stripeRefundId, status: "succeeded", amount: 1000, reason: "requested_by_customer" };
 
     try {
-      // Row 18 — two genuinely concurrent deliveries for the SAME
-      // stripe_refund_id (two overlapping charge.refunded webhooks for one
-      // charge) — both start their findOne before either write has landed.
-      // The unique index on payment_allocations.stripe_refund_id is the
-      // actual guard here, not a read-then-act check: one create() wins,
-      // the other catches E11000 and returns.
+      // Row 18: concurrent deliveries for one refund id; the unique index guards it.
       const results = await Promise.allSettled([
         reconcileStripeRefund(sr, payment, order),
         reconcileStripeRefund(sr, payment, order),

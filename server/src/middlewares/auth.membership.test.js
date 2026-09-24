@@ -1,11 +1,10 @@
 // middlewares/auth.membership.test.js
-// How a request picks its organisation: X-Tenant-Id only selects between organisations the
-// caller already belongs to, never grants access to one they don't.
-// Needs a live Mongo connection. Run: node --test src/middlewares/auth.membership.test.js
+// X-Tenant-Id picks among the caller's orgs, never grants one. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const User = require("../models/User");
@@ -52,9 +51,9 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
 
-  const orgA = await Tenant.create({ name: `Auth A ${suffix}`, slug: `auth-a-${suffix}`, code: `AA${suffix.slice(0, 6)}`, company_name: `Auth A ${suffix}` });
-  const orgB = await Tenant.create({ name: `Auth B ${suffix}`, slug: `auth-b-${suffix}`, code: `AB${suffix.slice(0, 6)}`, company_name: `Auth B ${suffix}` });
-  const outsider = await Tenant.create({ name: `Auth X ${suffix}`, slug: `auth-x-${suffix}`, code: `AX${suffix.slice(0, 6)}`, company_name: `Auth X ${suffix}` });
+  const orgA = trackFixtureTenant(await Tenant.create({ name: `Auth A ${suffix}`, slug: `auth-a-${suffix}`, code: `AA${suffix.slice(0, 6)}`, company_name: `Auth A ${suffix}` }));
+  const orgB = trackFixtureTenant(await Tenant.create({ name: `Auth B ${suffix}`, slug: `auth-b-${suffix}`, code: `AB${suffix.slice(0, 6)}`, company_name: `Auth B ${suffix}` }));
+  const outsider = trackFixtureTenant(await Tenant.create({ name: `Auth X ${suffix}`, slug: `auth-x-${suffix}`, code: `AX${suffix.slice(0, 6)}`, company_name: `Auth X ${suffix}` }));
 
   const user = await User.create({
     tenant_id: orgA._id,
@@ -117,7 +116,7 @@ test("requirePermission: gates on the role held in the ACTIVE organisation", asy
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
 
-  const org = await Tenant.create({ name: `Perm ${suffix}`, slug: `perm-${suffix}`, code: `PM${suffix.slice(0, 6)}`, company_name: `Perm ${suffix}` });
+  const org = trackFixtureTenant(await Tenant.create({ name: `Perm ${suffix}`, slug: `perm-${suffix}`, code: `PM${suffix.slice(0, 6)}`, company_name: `Perm ${suffix}` }));
   const user = await User.create({
     tenant_id: org._id,
     first_name: "Perm",

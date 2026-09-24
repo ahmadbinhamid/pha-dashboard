@@ -13,6 +13,6 @@ export default function ListingEditPage() {
 
   const listing = data?.data;
   const slug = listing && listing.product && typeof listing.product === "object" ? listing.product.slug : null;
-  if (isError || !listing || !slug) return <Navigate to="/listings" replace />;
+  if (isError || !listing || !slug) return <Navigate to="/channel-sync" replace />;
   return <Navigate to={productChannelsPath(slug, listing.platform)} replace />;
 }

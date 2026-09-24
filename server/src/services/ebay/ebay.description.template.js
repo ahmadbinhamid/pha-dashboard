@@ -1,5 +1,5 @@
 // services/ebay/ebay.description.template.js
-// Server mirror of ebayDescriptionGenerator.ts, rendered at push time. Keep in step.
+// Server mirror of ebayDescriptionGenerator.ts, rendered at push; keep in sync.
 
 const CONDITION_LABEL = {
   NEW: "Brand New · Sealed",
@@ -34,13 +34,13 @@ function descriptionInputFromResolved(resolved) {
   return {
     title: str(resolved.title),
     vehicle: product.vehicle || null,
-    mpn: str(specs.mpn),
+    mpn: str(specs.mpn || product.mpn),
     // NOTE: client ignored the variant SKU here; kept identical.
     stockNumber: str(listing.store_sku || product.sku),
     supersededPartNumbers: (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : []).map(str),
     authenticity: str(specs.authenticity),
     warranty: str(specs.warranty),
-    condition: str(listing.condition),
+    condition: str(listing.condition || product.condition),
     conditionNotes: str(listing.condition_notes),
     fitment: Array.isArray(listing.fitment) ? listing.fitment : [],
     imageUrl: str(photos[0]?.url),

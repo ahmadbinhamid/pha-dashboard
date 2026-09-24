@@ -1,10 +1,11 @@
 // services/marketplace/sync.service.end.test.js
-// endListing's resolved context keeps each adapter withdrawing the same thing. Needs Mongo.
+// endListing context makes every adapter withdraw the same. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -33,7 +34,7 @@ async function product(tenantId, suffix) {
 
 test("endListing (eBay): withdraws the variant's SKU with this tenant's settings", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const p = await product(tenantId, suffix);
   const variant = await ProductVariant.create({ tenant_id: tenantId, product: p._id, sku: `END-V-${suffix}` });
   const listing = await MarketplaceListing.create({
@@ -46,7 +47,7 @@ test("endListing (eBay): withdraws the variant's SKU with this tenant's settings
 
 test("endListing (eBay): a deleted product withdraws nothing and still resolves ok", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const p = await product(tenantId, suffix);
   const listing = await MarketplaceListing.create({ tenant_id: tenantId, product: p._id, platform: "ebay", external_offer_id: `O-${suffix}` });
   await Product.updateOne({ _id: p._id }, { deleted_at: new Date() });
@@ -58,7 +59,7 @@ test("endListing (eBay): a deleted product withdraws nothing and still resolves 
 
 test("endListing (Google): deletes the product-SKU resource via the tenant's connection", async () => {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const p = await product(tenantId, suffix);
   await ChannelConnection.collection.insertOne({
     tenant_id: tenantId, platform: "google", status: "connected", merchant_id: "m9", feed_label: "AU", content_language: "en",

@@ -1,15 +1,10 @@
 // services/refund.service.ledger-violation.test.js
-// findLedgerViolation lives inside applyRefundEffects, covering the Stripe webhook path too.
-// Proves the self-healing side: when an already-applied refund violates the invariant, auto-void
-// must reverse those effects (restock, eBay push), not just flip a status flag. The violation is
-// manufactured directly via Refund.create, bypassing createRefund's admission validation, since
-// this check exists as a backstop against exactly that kind of bypass.
-// eBay push is exercised for real via the Bull queue, using the `ph-<productId>` fallback SKU.
-// Needs a live Mongo connection and reachable Redis. Run: node --test src/services/refund.service.ledger-violation.test.js
+// Ledger violation auto-voids, reversing restock + eBay push. Mongo+Redis.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -23,8 +18,7 @@ const refundService = require("./refund.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../constants/marketplace.constants");
 
-// fanOutMarketplaceInventory silently skips any listing whose platform has no registered
-// adapter — register one here (same pattern sync.service.fencing.test.js uses) so pushes aren't skipped.
+// Fan-out skips adapterless platforms, so register a fake eBay adapter.
 const registry = require("./marketplace/registry");
 if (!registry.has(MARKETPLACE_PLATFORM.EBAY)) {
   registry.register({ key: MARKETPLACE_PLATFORM.EBAY, publish: async () => {}, update: async () => {}, end: async () => {} });
@@ -32,17 +26,15 @@ if (!registry.has(MARKETPLACE_PLATFORM.EBAY)) {
 
 const UNIT_PRICE = 1000; // $10.00/unit
 const LINE_QUANTITY = 2; // order has 2 units total on the one line
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
-// The "eBay was re-pushed" assertion checks MarketplaceListing.push_seq, not a raw Bull job
-// count — channel.queue.js debounces rapid-fire sync_listing calls for the same listing into
-// one job, but fanOutMarketplaceInventory claims a fresh fencing token on every real attempt.
+// Assert push_seq, not Bull job count: channel.queue.js debounces sync_listing.
 
 test("ledger violation: effects already applied, then auto-voided — restock re-deducted and eBay re-pushed", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  const productId = new mongoose.Types.ObjectId();
-  const sku = `ph-${productId.toHexString()}`; // fallback SKU format, resolves to {productId} with no real Product doc needed
+  const productId = fixtureId();
+  const sku = `ph-${productId.toHexString()}`; // fallback SKU, no Product doc needed
   const suffix = crypto.randomUUID();
 
   const location = await Location.create({ tenant_id: TEST_TENANT_ID, name: `Test Location ${suffix}` });
@@ -97,8 +89,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
     paid_at: new Date(),
   });
 
-  // fanOutMarketplaceInventory only enqueues a push for a product with an ACTIVE listing —
-  // without this, refund1/refund2's restock/reversal would silently push to nobody.
+  // Fan-out only pushes for an ACTIVE listing; without one restocks push nowhere.
   const listing = await MarketplaceListing.create({
     tenant_id: TEST_TENANT_ID,
     product: productId,
@@ -110,7 +101,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
   const listingId = listing._id.toString();
 
   try {
-    // ── Refund 1: legitimate, 1 of 2 units through createRefund — leaves 1 unit refundable. ──
+    // -- Refund 1: legit, 1 of 2 units via createRefund; 1 unit left --
     const refund1 = await refundService.createRefund(
       order._id.toString(),
       {
@@ -129,8 +120,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
 
     const seqBeforeViolatingRefund = (await MarketplaceListing.findById(listing._id).select("push_seq").lean()).push_seq;
 
-    // ── Refund 2: manufactured directly, bypassing admission validation, simulating whatever
-    // gets a bad refund into "succeeded" despite exceeding the line's quantity (1 + 2 = 3 > 2). ──
+    // -- Refund 2: bypasses admission, over-claims the line (1 + 2 = 3 > 2) --
     const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
     const refund2 = await Refund.create({
       tenant_id: TEST_TENANT_ID,
@@ -164,8 +154,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
       idempotency_key: `ledger-test-2-${suffix}`,
     });
 
-    // applyRefundEffects runs refund2's restock unconditionally, then detects the violation and
-    // auto-voids, reversing the restock it just applied.
+    // applyRefundEffects restocks refund2, detects the violation, then auto-voids.
     const settled = await refundService.applyRefundEffects(refund2._id);
 
     await t.test("the violating refund is auto-voided and flagged", () => {
@@ -195,9 +184,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
     });
 
     await t.test("eBay was re-pushed for both the apply and the void reversal", async () => {
-      // A raw Bull job count would assert against the debounce feature itself, since
-      // channel.queue.js collapses rapid-fire sync_listing calls for the same listing into one
-      // job. push_seq is immune to that: it increments on every real attempt, debounced or not.
+      // push_seq bumps on every real attempt; a job count would hit the debounce.
       const seqAfter = (await MarketplaceListing.findById(listing._id).select("push_seq").lean()).push_seq;
       assert.equal(
         seqAfter - seqBeforeViolatingRefund,
@@ -215,8 +202,7 @@ test("ledger violation: effects already applied, then auto-voided — restock re
     await Inventory.deleteOne({ _id: inventory._id });
     await MarketplaceListing.deleteOne({ _id: listing._id });
     await Location.deleteOne({ _id: location._id });
-    // This test exercises the real "ebay" Bull queue rather than mocking it, so it needs
-    // closing here, same as channel.worker.midflight.test.js's precedent.
+    // Uses the real "ebay" Bull queue, so close it or the process never exits.
     await ebayQueue.close();
     await mongoose.disconnect();
   }

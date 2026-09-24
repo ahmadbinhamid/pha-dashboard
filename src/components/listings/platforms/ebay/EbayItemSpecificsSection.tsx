@@ -15,7 +15,7 @@ import type { EbayListingFormState } from "@/types/marketplace";
 import type { CategoryAspect } from "@/types/ebay";
 import { Plus, X } from "lucide-react";
 
-// Aspects already captured by dedicated form fields — skip them in dynamic list
+// Aspects with dedicated form fields; skipped in the dynamic list.
 const STATIC_ASPECT_NAMES = new Set([
   "brand",
   "manufacturer part number",
@@ -26,6 +26,8 @@ const STATIC_ASPECT_NAMES = new Set([
 interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
+  // Product MPN an empty eBay MPN inherits (shown as placeholder).
+  productMpn?: string | null;
 }
 
 function patchSpecs(
@@ -36,7 +38,7 @@ function patchSpecs(
   onChange({ item_specifics: { ...form.item_specifics, ...patch } });
 }
 
-export function EbayItemSpecificsSection({ form, onChange }: Props) {
+export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) {
   const specs = form.item_specifics;
   const patch = (p: Partial<EbayListingFormState["item_specifics"]>) =>
     patchSpecs(form, onChange, p);
@@ -136,11 +138,14 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
           />
         </FormField>
 
-        <FormField label="Manufacturer Part Number (MPN)">
+        <FormField
+          label="Manufacturer Part Number (MPN)"
+          hint={productMpn && !specs.mpn ? "From product — type to override for eBay only." : undefined}
+        >
           <Input
             value={specs.mpn}
             onChange={(e) => patch({ mpn: e.target.value })}
-            placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+            placeholder={productMpn || 'e.g. 45022-TBC-A01 or "Does Not Apply"'}
           />
         </FormField>
       </div>

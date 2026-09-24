@@ -1,46 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { Switch } from "@/components/ui/Switch";
-import { NativeSelect } from "@/components/ui/Select";
-import { MultiSelect } from "@/components/ui/MultiSelect";
-import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
+import { Card } from "@/components/ui/Card";
+import { CopyField } from "@/components/ui/CopyField";
 import { FormField } from "@/components/ui/FormField";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/ActionsMenu";
-import { ProductImages } from "@/components/media/ProductImages";
-import { ProductStockCard } from "@/components/products/ProductStockCard";
-import { AddToCartButton } from "@/components/pos/AddToCartButton";
-import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { NativeSelect } from "@/components/ui/Select";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Switch } from "@/components/ui/Switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { ProductChannelChip } from "@/components/products/ProductChannelChip";
+import { ProductEditHeader } from "@/components/products/ProductEditHeader";
+import { ProductEssentialsCard, type EssentialItem } from "@/components/products/ProductEssentialsCard";
+import { ProductFitmentGroup } from "@/components/products/ProductFitmentGroup";
+import { ProductFormGroup } from "@/components/products/ProductFormGroup";
+import { ProductMarginStrip } from "@/components/products/ProductMarginStrip";
+import { ProductMediaPreviewCard, PRODUCT_MEDIA_ANCHOR } from "@/components/products/ProductMediaPreviewCard";
 import { ProductNotesSection } from "@/components/products/ProductNotesSection";
-import { FormSection } from "@/components/products/FormSection";
-import { ProductLivePreviewCard } from "@/components/products/ProductLivePreviewCard";
-import { ProductEssentialsProgress } from "@/components/products/ProductEssentialsProgress";
-import { SendProductEmailModal } from "@/components/products/SendProductEmailModal";
 import { ProductSalesChannelsSection } from "@/components/products/ProductSalesChannelsSection";
-import { SALES_CHANNELS_ANCHOR } from "@/config/salesChannels";
-import { useToast } from "@/context";
-import { updateProduct } from "@/lib/api/products";
-import type { Product } from "@/types/product";
-import { formatCurrency } from "@/utils/format";
-import {
-  ShoppingBag,
-  ChevronDown,
-  CheckCircle2,
-  Mail,
-} from "lucide-react";
+import { ProductStockField } from "@/components/products/ProductStockField";
+import { SendProductEmailModal } from "@/components/products/SendProductEmailModal";
+import { PRODUCT_EDIT_TABS, SALES_CHANNELS_ANCHOR, type ProductEditTab } from "@/config/salesChannels";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
+import { useToast } from "@/context";
+import { useProductChannelListings } from "@/hooks/useProductChannelListings";
+import { updateProduct } from "@/lib/api/products";
 import { productEditFormSchema, type ProductEditFormValues } from "@/lib/validation/product";
+import type { Product, ProductCondition } from "@/types/product";
+
+// Product fields a channel payload reads; editing any triggers a re-sync.
+const SYNCED_FIELDS: (keyof ProductEditFormValues)[] = ["title", "description", "price", "brand", "mpn", "condition", "images"];
+
+const CATEGORIES_FIELD_ID = "product-categories";
 
 function productToForm(p: Product): ProductEditFormValues {
   return {
@@ -128,12 +124,38 @@ export function ProductEditForm({
   const queryClient = useQueryClient();
   const [imagesUploading, setImagesUploading] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  // Last synced-field save; rows show "Syncing" until channels catch up.
+  const [syncingSince, setSyncingSince] = useState<number | null>(null);
 
-  // Redirected listing links land here with ?channel=<key>#sales-channels.
+  // ?tab=channels&channel=<key>; legacy #sales-channels anchor also opens it.
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") as ProductEditTab | null;
+  const tab: ProductEditTab =
+    tabParam && PRODUCT_EDIT_TABS.includes(tabParam)
+      ? tabParam
+      : location.hash === `#${SALES_CHANNELS_ANCHOR}`
+        ? "channels"
+        : "details";
   const focusChannel = searchParams.get("channel");
-  const focusChannels = location.hash === `#${SALES_CHANNELS_ANCHOR}`;
+
+  function setTab(next: string) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "details") params.delete("tab");
+        else params.set("tab", next);
+        params.delete("channel");
+        return params;
+      },
+      { replace: true },
+    );
+  }
+
+  const { channels, baseListings } = useProductChannelListings(product._id, syncingSince);
+  const listedNames = baseListings.map((l) => channels.find((c) => c.key === l.platform)?.name ?? l.platform);
+  // Tightest title limit any channel imposes (eBay: 80).
+  const titleLimit = Math.min(...channels.map((c) => c.productConstraints?.title?.maxLength ?? Infinity));
 
   const {
     register,
@@ -143,7 +165,7 @@ export function ProductEditForm({
     setValue,
     getValues,
     watch,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, dirtyFields },
   } = useForm<ProductEditFormValues>({
     resolver: zodResolver(productEditFormSchema),
     defaultValues: productToForm(product),
@@ -151,25 +173,33 @@ export function ProductEditForm({
 
   const form = watch();
 
+  // Browser-level guard only: BrowserRouter can't block in-app navigation.
+  useEffect(() => {
+    if (!isDirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isDirty]);
+
   const saveMutation = useMutation({
-    mutationFn: (fd: FormData) => updateProduct(product!._id, fd),
+    mutationFn: (fd: FormData) => updateProduct(product._id, fd),
     onError: (err: Error) => {
       toast({ title: "Save failed", description: err.message, tone: "danger" });
     },
   });
 
-  // Immediate, independent of the main Save flow, mirroring the Products list's publish/hide toggle. Rebases dirty-tracking (via reset) so a later Save doesn't silently revert the status.
+  // Immediate, apart from Save; rebases dirty state so Save won't revert it.
   const statusMutation = useMutation({
     mutationFn: (status: Product["status"]) => {
       const fd = new FormData();
       fd.append("status", status);
-      return updateProduct(product!._id, fd);
+      return updateProduct(product._id, fd);
     },
     onSuccess: (_res, status) => {
       reset({ ...getValues(), status }, { keepDirty: false });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["product", slug] });
-      toast({ title: "Product marked as active", tone: "success" });
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["product", slug] });
+      toast({ title: status === "active" ? "Marked Active" : "Moved to Draft", tone: "success" });
     },
     onError: (err: Error) => {
       toast({ title: "Couldn't update status", description: err.message, tone: "danger" });
@@ -177,321 +207,248 @@ export function ProductEditForm({
   });
 
   const onSave = (values: ProductEditFormValues) => {
-    if (!product) return;
+    const syncs = baseListings.length > 0 && SYNCED_FIELDS.some((f) => dirtyFields[f]);
     saveMutation.mutate(formToFD(values), {
       onSuccess: (res) => {
         reset(values);
-        queryClient.invalidateQueries({ queryKey: ["products"] });
-        queryClient.invalidateQueries({ queryKey: ["listings"] });
-        queryClient.invalidateQueries({ queryKey: ["variants", product?._id] });
-        toast({ title: "Saved", tone: "success" });
+        if (syncs) setSyncingSince(Date.now());
+        void queryClient.invalidateQueries({ queryKey: ["products"] });
+        void queryClient.invalidateQueries({ queryKey: ["listings"] });
+        void queryClient.invalidateQueries({ queryKey: ["variants", product._id] });
+        toast({ title: syncs ? `Saved · ${listedNames.join(", ")} re-sync in ~5–10s` : "Saved", tone: "success" });
         const newSlug = res.data?.slug;
         if (newSlug && newSlug !== slug) {
-          // Slug changed: just navigate, don't touch the old query — removing it while still subscribed would make RQ refetch the dead URL; leaving it is safe, it loses its subscriber and GCs after gcTime.
-          navigate(`/products/${newSlug}/edit`, { replace: true });
+          // Slug changed: just navigate; the old query GCs once it loses its subscriber.
+          navigate(`/products/${newSlug}/edit${location.search}`, { replace: true });
         } else {
-          queryClient.invalidateQueries({ queryKey: ["product", slug] });
+          void queryClient.invalidateQueries({ queryKey: ["product", slug] });
         }
       },
     });
   };
 
-  const showSetStockCard = !form.has_variants;
+  function focusCategories() {
+    setTab("details");
+    setTimeout(() => document.getElementById(CATEGORIES_FIELD_ID)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+  }
 
-  const essentials = [
-    form.title.trim().length > 0,
-    Number(form.price) > 0,
-    form.categories.length > 0,
-    form.images.length > 0,
+  const essentials: EssentialItem[] = [
+    { key: "title", label: "Title", done: form.title.trim().length > 0 },
+    { key: "price", label: "Retail price", done: Number(form.price) > 0 },
+    { key: "category", label: "Category", done: form.categories.length > 0, action: { label: "Add", onClick: focusCategories } },
+    {
+      key: "image",
+      label: "At least one image",
+      done: form.images.length > 0,
+      action: {
+        label: "Upload",
+        onClick: () => document.getElementById(PRODUCT_MEDIA_ANCHOR)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      },
+    },
   ];
-  const essentialsCompleted = essentials.filter(Boolean).length;
 
-  const priceNumber = Number(form.price) || 0;
-  const costNumber = Number(form.cost_price) || 0;
-  const hasMargin = priceNumber > 0 && form.cost_price !== "";
-  const profitPerUnit = priceNumber - costNumber;
-  const marginPct = hasMargin ? Math.round((profitPerUnit / priceNumber) * 100) : null;
+  const moneyInput = (name: "price" | "cost_price" | "shipping_cost") => (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-fg/45">A$</span>
+      <Input type="number" min="0" step="0.01" inputMode="decimal" className="pl-8" {...register(name)} placeholder="0.00" />
+    </div>
+  );
 
   return (
-    <div className="space-y-5 pb-24">
-
-      {/* Sticky page header */}
-      <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur-sm">
-        <BreadcrumbNav
-          items={[
-            { label: "Products", href: "/products" },
-            { label: product.title },
-          ]}
-        />
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <h1 className="truncate text-xl font-semibold tracking-tight">{product.title}</h1>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{product.title}</TooltipContent>
-            </Tooltip>
-            <p className="mt-0.5 truncate text-sm text-fg/45">/{product.slug}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <ProductEssentialsProgress completed={essentialsCompleted} total={essentials.length} />
-            {product.status === "active" ? (
-              <Badge variant="ok" className="hidden sm:inline-flex">Active</Badge>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger className="hidden h-auto w-auto items-center gap-1 rounded-full px-0 py-0 text-fg/40 hover:bg-transparent hover:text-fg/40 data-[state=open]:bg-transparent data-[state=open]:text-fg/40 sm:inline-flex">
-                  <Badge variant="muted" className="cursor-pointer">
-                    Draft
-                    <ChevronDown className="h-3 w-3" />
-                  </Badge>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onSelect={() => statusMutation.mutate("active")}
-                    disabled={statusMutation.isPending}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-fg/50" />
-                    Active
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <div className="flex items-center">
-              <AddToCartButton product={product} display="labeled" className="rounded-r-none" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className="h-9 w-6 rounded-l-none border-l border-border px-0"
-                    title="More actions"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setSendEmailOpen(true)}>
-                    <Mail className="h-3.5 w-3.5 text-fg/50" />
-                    Send Email
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            {/* Listing now lives in the Sales channels section below. */}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => document.getElementById(SALES_CHANNELS_ANCHOR)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            >
-              <ShoppingBag className="h-3.5 w-3.5" />
+    <Tabs value={tab} onValueChange={setTab}>
+      <div className="pb-24">
+        <ProductEditHeader
+          product={product}
+          onStatusChange={(status) => statusMutation.mutate(status)}
+          statusPending={statusMutation.isPending}
+          channelChip={
+            <ProductChannelChip channels={channels} listings={baseListings} syncingSince={syncingSince} onClick={() => setTab("channels")} />
+          }
+          isDirty={isDirty}
+          onDiscard={() => {
+            reset(productToForm(product));
+            toast({ title: "Changes discarded", tone: "success" });
+          }}
+          onSave={() => void handleSubmit(onSave)()}
+          saving={saveMutation.isPending}
+          uploading={imagesUploading}
+          onSendEmail={() => setSendEmailOpen(true)}
+        >
+          <TabsList className="gap-5 border-b-0">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="channels">
               Sales channels
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={!isDirty || saveMutation.isPending || imagesUploading}
-              onClick={() => handleSubmit(onSave)()}
-            >
-              {saveMutation.isPending ? "Saving…" : imagesUploading ? "Uploading images…" : "Save"}
-            </Button>
+              <Badge variant="muted" className="px-1.5 py-0 text-[11px]">{baseListings.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="notes">
+              Internal notes
+              <Badge variant="muted" className="px-1.5 py-0 text-[11px]">{product.internal_notes?.length ?? 0}</Badge>
+            </TabsTrigger>
+          </TabsList>
+        </ProductEditHeader>
+
+        <div className="mx-auto mt-6 grid max-w-[1240px] grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="min-w-0">
+            <TabsContent value="details" className="mt-0">
+              <Card className="divide-y divide-border">
+                <ProductFormGroup title="Product">
+                  <FormField
+                    label="Title"
+                    required
+                    error={errors.title?.message}
+                    aside={
+                      Number.isFinite(titleLimit) ? (
+                        <span className={form.title.length > titleLimit ? "text-danger" : undefined}>
+                          {form.title.length} / {titleLimit}
+                        </span>
+                      ) : undefined
+                    }
+                  >
+                    <Input {...register("title")} placeholder="Product title" />
+                  </FormField>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <FormField label="SKU" aside="auto">
+                      {form.sku ? <CopyField value={form.sku} /> : <Input value="" readOnly disabled placeholder="Not assigned" />}
+                    </FormField>
+                    <FormField label="Barcode" aside={`${form.barcode.length} / 13`}>
+                      <Input {...register("barcode")} placeholder="EAN / UPC" maxLength={13} />
+                    </FormField>
+                    <FormField label="Manufacturer part number">
+                      <Input {...register("mpn")} placeholder="e.g. 45022-TBC-A01" />
+                    </FormField>
+                  </div>
+                </ProductFormGroup>
+
+                <ProductFormGroup title="Pricing & stock" aside="All amounts in A$">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <FormField label="Retail price" required error={errors.price?.message}>
+                      {moneyInput("price")}
+                    </FormField>
+                    <FormField label="Cost price" error={errors.cost_price?.message}>
+                      {moneyInput("cost_price")}
+                    </FormField>
+                    <FormField label="Shipping cost" error={errors.shipping_cost?.message}>
+                      {moneyInput("shipping_cost")}
+                    </FormField>
+                    {form.has_variants ? (
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Stock</Label>
+                        <p className="flex h-10 items-center text-xs text-fg/55">Managed per variant</p>
+                      </div>
+                    ) : (
+                      <ProductStockField productId={product._id} />
+                    )}
+                  </div>
+                  <ProductMarginStrip price={form.price} cost={form.cost_price} />
+                </ProductFormGroup>
+
+                <ProductFormGroup title="Classification">
+                  <div id={CATEGORIES_FIELD_ID} className="scroll-mt-40">
+                    <FormField label="Categories" aside="Not synced to channels">
+                      <Controller
+                        control={control}
+                        name="categories"
+                        render={({ field }) => (
+                          <MultiSelect
+                            options={categoryOptions}
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Add category…"
+                            searchPlaceholder="Search categories…"
+                          />
+                        )}
+                      />
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField label="Condition">
+                      <Controller
+                        control={control}
+                        name="condition"
+                        render={({ field }) => (
+                          <SegmentedControl<ProductCondition>
+                            aria-label="Condition"
+                            options={CONDITIONS as { value: ProductCondition; label: string }[]}
+                            value={field.value as ProductCondition}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
+                    </FormField>
+                    <FormField label="Authenticity">
+                      <NativeSelect {...register("authenticity")}>
+                        <option value="">Select authenticity…</option>
+                        {AUTHENTICITY_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </NativeSelect>
+                    </FormField>
+                  </div>
+                </ProductFormGroup>
+
+                <ProductFitmentGroup
+                  values={{
+                    vehicle_make: form.vehicle_make,
+                    vehicle_model: form.vehicle_model,
+                    vehicle_model_code: form.vehicle_model_code,
+                    vehicle_year: form.vehicle_year,
+                    vehicle_year_to: form.vehicle_year_to,
+                  }}
+                  onChange={(patch) => {
+                    for (const [key, value] of Object.entries(patch)) {
+                      setValue(key as keyof ProductEditFormValues, value as never, { shouldValidate: true, shouldDirty: true });
+                    }
+                  }}
+                  yearRangeError={errors.vehicle_year_to?.message}
+                />
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="channels" className="mt-0">
+              <ProductSalesChannelsSection product={product} syncingSince={syncingSince} focusChannel={focusChannel} />
+            </TabsContent>
+
+            <TabsContent value="notes" className="mt-0">
+              <ProductNotesSection productId={product._id} slug={product.slug} notes={product.internal_notes} />
+            </TabsContent>
           </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-
-          {/* 1. Basics */}
-          <FormSection number={1} title="Basics">
-            <FormField label="Product title" required error={errors.title?.message}>
-              <Input {...register("title")} placeholder="Product title" />
-            </FormField>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <FormField label="SKU">
-                <Input
-                  value={form.sku}
-                  readOnly
-                  disabled
-                  placeholder="Not assigned"
-                  className="cursor-not-allowed font-mono opacity-60"
-                />
-              </FormField>
-
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-fg/65">Barcode</label>
-                  <span className="text-[10px] tabular-nums text-fg/35">{form.barcode.length}/13</span>
-                </div>
-                <Input {...register("barcode")} placeholder="EAN / UPC" maxLength={13} />
-              </div>
-
-              <FormField label="Manufacturer part number">
-                <Input {...register("mpn")} placeholder='e.g. 45022-TBC-A01' />
-              </FormField>
-            </div>
-
-            <Controller
-              control={control}
-              name="is_published_online"
-              render={({ field }) => (
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  label="Show on storefront"
-                  description="Visible to customers online as soon as it's created"
-                />
-              )}
-            />
-          </FormSection>
-
-          {/* 2. Classification & fitment */}
-          <FormSection number={2} title="Classification & fitment">
-            <FormField label="Categories">
-              <Controller
-                control={control}
-                name="categories"
-                render={({ field }) => (
-                  <MultiSelect
-                    options={categoryOptions}
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="Add category…"
-                    searchPlaceholder="Search categories…"
-                  />
-                )}
-              />
-            </FormField>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Condition">
-                <NativeSelect {...register("condition")}>
-                  {CONDITIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-
-              <FormField label="Authenticity">
-                <NativeSelect {...register("authenticity")}>
-                  <option value="">Select authenticity…</option>
-                  {AUTHENTICITY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-            </div>
-
-            <div className="border-t border-dashed border-border pt-4">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-sm font-semibold text-fg">Vehicle fitment</span>
-                <Badge variant="muted">Optional</Badge>
-              </div>
-              <ProductVehicleSection
-                values={{
-                  vehicle_make: form.vehicle_make,
-                  vehicle_model: form.vehicle_model,
-                  vehicle_model_code: form.vehicle_model_code,
-                  vehicle_year: form.vehicle_year,
-                  vehicle_year_to: form.vehicle_year_to,
-                }}
-                onChange={(patch) => {
-                  for (const [key, value] of Object.entries(patch)) {
-                    setValue(key as keyof ProductEditFormValues, value as never, { shouldValidate: true, shouldDirty: true });
-                  }
-                }}
-                yearRangeError={errors.vehicle_year_to?.message}
-              />
-            </div>
-          </FormSection>
-
-          {/* 3. Pricing */}
-          <FormSection number={3} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <FormField label="Retail price" required error={errors.price?.message}>
-                <Input type="number" min="0" step="0.01" {...register("price")} placeholder="0.00" />
-              </FormField>
-              <FormField label="Cost price" error={errors.cost_price?.message}>
-                <Input type="number" min="0" step="0.01" {...register("cost_price")} placeholder="0.00" />
-              </FormField>
-              <FormField label="Shipping cost" error={errors.shipping_cost?.message}>
-                <Input type="number" min="0" step="0.01" {...register("shipping_cost")} placeholder="0.00" />
-              </FormField>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 rounded-xs border border-border bg-bg-2/40 px-4 py-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Margin</p>
-                <p className="mt-0.5 text-sm font-semibold text-fg">{hasMargin ? `${marginPct}%` : "—"}</p>
-              </div>
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Profit per unit</p>
-                <p className="mt-0.5 text-sm font-semibold text-fg">
-                  {hasMargin ? formatCurrency(profitPerUnit) : "—"}
-                </p>
-              </div>
-              {!hasMargin && (
-                <p className="text-xs text-fg/45">Enter retail and cost to see live margin.</p>
-              )}
-            </div>
-          </FormSection>
-
-          {/* 4. Stock */}
-          <FormSection
-            number={4}
-            title="Stock"
-            description="Manage stock for your only location"
-          >
-            {showSetStockCard && <ProductStockCard productId={product._id} />}
-          </FormSection>
-
-          {/* 5. Media */}
-          <FormSection
-            number={5}
-            title="Media"
-            description="First image is used as the product cover"
-            tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
-          >
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-32">
             <Controller
               control={control}
               name="images"
               render={({ field }) => (
-                <ProductImages images={field.value} onChange={field.onChange} onUploadingChange={setImagesUploading} />
+                <ProductMediaPreviewCard
+                  images={field.value}
+                  onImagesChange={field.onChange}
+                  onUploadingChange={setImagesUploading}
+                  title={form.title}
+                  sku={form.sku}
+                  price={form.price}
+                  stockCount={product.stock_count}
+                />
               )}
             />
-          </FormSection>
-
-          {/* 6. Internal notes */}
-          <ProductNotesSection
-            number={6}
-            productId={product._id}
-            slug={product.slug}
-            notes={product.internal_notes}
-          />
-
-          {/* 7. Sales channels */}
-          <ProductSalesChannelsSection number={7} product={product} focusChannel={focusChannel} focus={focusChannels} />
-
+            <Card className="p-4">
+              <Controller
+                control={control}
+                name="is_published_online"
+                render={({ field }) => (
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    label="Show on storefront"
+                    description="Visible to customers online"
+                  />
+                )}
+              />
+            </Card>
+            <ProductEssentialsCard items={essentials} />
+          </aside>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-          <ProductLivePreviewCard
-            title={form.title}
-            images={form.images}
-            price={form.price}
-            sku={form.sku}
-            stockCount={product.stock_count}
-          />
-        </div>
+        <SendProductEmailModal product={product} open={sendEmailOpen} onOpenChange={setSendEmailOpen} />
       </div>
-
-      <SendProductEmailModal product={product} open={sendEmailOpen} onOpenChange={setSendEmailOpen} />
-    </div>
+    </Tabs>
   );
 }

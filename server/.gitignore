@@ -3,3 +3,5 @@ node_modules
 logs/
 
 uploads/
+# cleanFixtureResidue.js ledger of cleaned fixture tenants (local, per DB)
+.fixture-residue-ledger.json

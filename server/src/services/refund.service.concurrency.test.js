@@ -1,23 +1,10 @@
 // services/refund.service.concurrency.test.js
-//
-// refund-redesign-spec.md §9 required this explicitly: N parallel
-// single-unit refunds on a 5-unit line, exactly 5 succeed, ledger never
-// exceeds line quantity — run repeatedly, not once. This is the test that
-// exists specifically because the derived-state ledger makes effect
-// APPLICATION idempotent but does nothing for ADMISSION (read-then-act
-// validation) on its own — see refund.service.js#acquireRefundLock's own
-// comment for the exact race this test is designed to catch.
-//
-// Needs a live Mongo connection (this is validating real atomic-update
-// behaviour, not pure math) — run with:
-//   node --test src/services/refund.service.concurrency.test.js
-// against the same dev DB the rest of this work has been verified against.
-// Creates and tears down its own disposable Order/Payment/Refund documents
-// each run; safe to run repeatedly and does not depend on any other data.
+// Spec §9: parallel refunds on a 5-unit line, exactly 5 admitted. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -30,7 +17,7 @@ const LINE_QUANTITY = 5;
 const PARALLEL_REQUESTS = 10; // > LINE_QUANTITY on purpose — see the file header
 const REPEAT_RUNS = 5; // "run it repeatedly not once"
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 async function createDisposableOrder() {
   const suffix = crypto.randomUUID();
@@ -42,10 +29,10 @@ async function createDisposableOrder() {
     invoice_number: `TEST-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Concurrency test item",
-        sku: null, // no SKU — no restock/inventory side effects to worry about in this test
+        sku: null, // no SKU, so no restock side effects
         unit_price: 1000, // $10.00/unit, GST-inclusive
         quantity: LINE_QUANTITY,
         discount_amount: 0,
@@ -64,9 +51,7 @@ async function createDisposableOrder() {
     guest_access_token: crypto.randomBytes(16).toString("hex"),
   });
 
-  // item._id is genuinely persisted here (Order.create actually writes to
-  // disk, unlike the in-memory-only auto-generation on a mere hydrate — see
-  // Order.js's item_ids_migrated_at comment) — safe to mark migrated.
+  // item._id is really persisted by Order.create, so it's safe to mark migrated.
   order.item_ids_migrated_at = new Date();
   await order.save();
 
@@ -145,10 +130,7 @@ test("concurrency: N parallel single-unit refunds on a 5-unit line — exactly 5
         assert.equal(result.finalQuantityRefunded, LINE_QUANTITY, "ledger must never exceed line quantity");
         assert.equal(result.finalAmountRefunded, LINE_QUANTITY * 1000, "payment.amount_refunded must match exactly 5 units");
         assert.equal(result.finalLockState, null, "lock must be released even after rejected requests, not just successes");
-        // Every rejection should be the lock timing out, the line's quantity
-        // being exhausted, or — once the order itself has fully transitioned
-        // to "refunded" for a later racer that got its turn after the 5th
-        // unit already went through — the payment_status check. Never an unrelated crash.
+        // Allowed rejections: lock timeout, line exhausted, or order already refunded.
         for (const msg of result.rejectedMessages) {
           assert.ok(
             /Another refund is already in progress/.test(msg) ||

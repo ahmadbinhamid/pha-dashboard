@@ -1,9 +1,5 @@
 // services/marketplace/adapters/google.adapter.js
-// Marketplace adapter for Google Shopping (Merchant API); mirrors ebay.adapter.js's shape.
-// Google is feed-shaped: publish()/update() are both just productInputs.insert (upsert).
-// Pure translator: all I/O is resolved beforehand by sync.service/listing.resolver.
-// Migrated v1beta -> v1 after v1beta's 2026-02-28 discontinuation; some ProductAttributes
-// field names (price, condition, shippingLabel, etc.) are still unverified against a live call.
+// Google Shopping (Merchant API v1) adapter; feed-shaped, publish == update.
 
 const { logger } = require("../../../loaders/logging");
 const config = require("../../../config");
@@ -12,11 +8,10 @@ const googleOauthService = require("../../google/google.oauth.service");
 const googleMerchantApi = require("../../google/google.merchant.api.service");
 const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");
 const { assertFieldValues } = require("../fieldSchema");
+const { httpError } = require("../../../utils/http/httpError");
 const { fieldSchema, fieldValues } = require("./google.fieldSchema");
 
-// Google silently accepts a bad imageLink and only disapproves the product later (async);
-// this guards against that like ebay.api.service.js#resolveImageUrls does. status 400 keeps
-// circuitBreaker.js from tripping over a bad photo (a per-item data problem, not transport).
+// Google disapproves a bad imageLink later, async; 400 keeps the breaker shut.
 class GoogleImageValidationError extends Error {
   constructor(message) {
     super(message);
@@ -26,8 +21,7 @@ class GoogleImageValidationError extends Error {
   }
 }
 
-// Stricter than a plain startsWith("https://") — an absolute-URL parse also catches a value
-// that merely contains that prefix without actually being one.
+// URL parse, not startsWith, so a value merely containing https:// fails.
 function isAbsoluteHttpsUrl(url) {
   if (typeof url !== "string" || !url) return false;
   try {
@@ -52,8 +46,7 @@ const manifest = {
     "A product data source is created automatically on connect",
   ],
   requiredTenantData: ["merchant_id", "feed_label", "content_language", "target_country"],
-  // Merchant Center requires a claimed, verified website; a tenant with no verified default
-  // Domain would get every product disapproved. Read by channel.service.js and google.controller.js.
+  // Merchant Center disapproves products without a verified storefront domain.
   requiresStorefront: true,
   // Channel-only fields for the product form's Google panel.
   fieldSchema,
@@ -75,48 +68,43 @@ const categoryField = "google_product_category";
 // I/O the resolver hydrates onto `resolved` before calling us.
 const needs = { stock: true, productUrl: true };
 
-// Google expires a product not refreshed within 30 days; defaults under that cap for headroom.
-// Consumed by refresh.service.js / channel.worker.js.
+// Google expires products not refreshed in 30 days; default stays under that.
 const refreshIntervalDays = config.channels.refreshIntervalDays;
 
-// Follows the generic registry.js contract (unlike eBay's non-generic loadSettings) — no
-// ChannelConnection row returns null, and sync.service.js's "not connected" skip handles it.
+// Generic contract: no row returns null, which sync treats as not connected.
 async function loadSettings(tenantId) {
   return findConnection(tenantId, key, { withTokens: true });
 }
 
 function assertConfigured(settings) {
   if (!settings?.refresh_token_ct || !settings?.merchant_id || !settings?.data_source_id) {
-    throw new Error(
+    throw httpError(
       `[GoogleAdapter] Google Shopping is not fully configured for this tenant (missing refresh token, ` +
         `merchant_id, or data_source_id) — reconnect via Settings.`,
+      422,
     );
   }
 }
 
-// v1 drops the channel segment: contentLanguage~feedLabel~offerId (v1beta had a leading channel~).
-// Getting this wrong is silent — a wrong name 404s on delete, and end() treats 404 as success.
+// v1 drops the channel~ prefix; a wrong name 404s on delete, which end() eats.
 function buildProductResourceName(settings, sku) {
   return `${settings.content_language}~${settings.feed_label}~${sku}`;
 }
 
-// Full resource name needed by productInputs.delete, which addresses a product by its complete
-// path, unlike insert (which takes the short name as `offerId`).
+// delete needs the full path; insert takes the short name as offerId.
 function buildFullProductResourceName(settings, sku) {
   return `accounts/${settings.merchant_id}/products/${buildProductResourceName(settings, sku)}`;
 }
 
-// v1's Availability is an ALL_CAPS enum (IN_STOCK/OUT_OF_STOCK/...), not the old Content API's
-// lowercase strings — confirmed live after a real insert rejected "in stock" with 400.
+// v1 wants ALL_CAPS enums; lowercase "in stock" is rejected with a 400.
 function availabilityFor(quantity) {
   return quantity > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
 }
 
-// gtin when present; otherwise mpn+brand when both present; otherwise identifierExists: false.
-// Never invents an identifier. Logged at debug so the branch taken is traceable.
+// gtin, else mpn+brand, else identifierExists: false; never invents an id.
 function applyIdentifiers(attributes, identifiers, sku) {
   if (identifiers.gtin) {
-    // v1 renamed gtin -> gtins (now an array); this app only ever has one GTIN per listing.
+    // v1 renamed gtin to gtins (an array); a listing only ever has one GTIN.
     attributes.gtins = [identifiers.gtin];
     logger.debug(`[GoogleAdapter] ${sku}: identifier branch = gtin`);
     return;
@@ -131,11 +119,7 @@ function applyIdentifiers(attributes, identifiers, sku) {
   logger.debug(`[GoogleAdapter] ${sku}: identifier branch = identifierExists:false (no gtin, no complete mpn+brand pair)`);
 }
 
-// Builds the full ProductInput resource body. `productUrl`/`identifiers` are resolved by the
-// caller so this stays a pure, testable function with no DB access.
-// Throws GoogleImageValidationError for any unusable or missing primary image — Google otherwise
-// accepts a bad imageLink and disapproves the product later, asynchronously. A bad additional
-// image is just dropped with a warning; the product can still list on its primary photo alone.
+// Throws on a bad primary image; bad extra images are dropped with a warning.
 function buildProductInputFromResolved(resolved, settings, quantity, identifiers, productUrl) {
   const { sku, title, description, price, photos, listing, product } = resolved;
   // Listing category, else the tenant's mapping.
@@ -158,6 +142,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
     return false;
   });
 
+  // NOTE: some v1 names (price, condition, shippingLabel) are unverified live.
   const attributes = {
     title,
     description,
@@ -170,9 +155,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
       amountMicros: String(Math.round((price || 0) * 1_000_000)),
       currencyCode: settings.target_country ? currencyForCountry(settings.target_country) : "USD",
     },
-    // Per-product shipping override, using the same Price shape as `price` above. Omitted (not
-    // sent as 0) when unset, so it falls back to Google's account-level shipping rules rather than
-    // claiming free shipping. maxHandlingTime/maxTransitTime left out — this app tracks neither.
+    // Omitted when unset so account shipping rules apply, not free shipping.
     ...(product?.shipping_cost != null
       ? {
           shipping: [
@@ -197,7 +180,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
 
   applyIdentifiers(attributes, identifiers, sku);
 
-  // v1 removed `channel` from ProductInput entirely; feedLabel/contentLanguage/offerId unchanged.
+  // v1 removed `channel` from ProductInput; the other keys are unchanged.
   return {
     contentLanguage: settings.content_language,
     feedLabel: settings.feed_label,
@@ -206,7 +189,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
   };
 }
 
-// No shared currency-per-country map exists to reuse; minimal fallback for realistic tenant countries.
+// No shared currency map exists; minimal fallback for likely tenant countries.
 const COUNTRY_CURRENCY = { AU: "AUD", US: "USD", GB: "GBP", NZ: "NZD", CA: "CAD" };
 function currencyForCountry(countryCode) {
   return COUNTRY_CURRENCY[countryCode] || "USD";
@@ -218,8 +201,7 @@ function assertGoogleFields(resolved) {
   assertFieldValues(key, fieldSchema, fieldValues(resolved.listing, { categoryId }), { sku: resolved.sku });
 }
 
-// A product with stock_control off must never reach Google, not be published as in_stock —
-// signaled back as `{ skipped, reason }`, additive to the normal adapter return contract.
+// stock_control off: keep it off Google rather than publish it as in stock.
 function isUntrackedStock(resolved) {
   return resolved.product?.stock_control === false;
 }
@@ -231,7 +213,7 @@ function resolveQuantity(resolved) {
   return resolved.stock.quantity;
 }
 
-// Raises a captured URL error at the same point the old lookup did.
+// Rethrows a product URL error captured during hydration.
 function resolveProductUrl(resolved) {
   if (resolved.productUrlError) throw resolved.productUrlError;
   return resolved.productUrl;
@@ -251,7 +233,8 @@ async function publishOrUpdate(resolved, settings) {
   const productUrl = resolveProductUrl(resolved);
 
   const token = await googleOauthService.getValidAccessToken(settings);
-  if (!token) throw new Error(`[GoogleAdapter] ${resolved.sku}: could not obtain a valid Google access token`);
+  // NOTE: null only when the stored refresh token won't decrypt: auth, so 401.
+  if (!token) throw httpError(`[GoogleAdapter] ${resolved.sku}: could not obtain a valid Google access token`, 401);
 
   const productInput = buildProductInputFromResolved(resolved, settings, quantity, resolved.identifiers, productUrl);
   await googleMerchantApi.insertProductInput(token, settings, productInput);
@@ -287,24 +270,23 @@ async function end(listing, { product, settings } = {}) {
     return;
   }
 
-  // NOTE: ignores the variant SKU unlike publish — pre-existing, kept as-is.
+  // NOTE: ignores the variant SKU, unlike publish.
   const sku = listing.store_sku || product.sku || `ph-${product._id}`;
   const token = await googleOauthService.getValidAccessToken(settings);
-  if (!token) throw new Error(`[GoogleAdapter] end: could not obtain a valid Google access token for tenant ${product.tenant_id}`);
+  if (!token) throw httpError(`[GoogleAdapter] end: could not obtain a valid Google access token for tenant ${product.tenant_id}`, 401);
 
   await googleMerchantApi.deleteProductInput(token, settings, buildFullProductResourceName(settings, sku));
   logger.info(`[GoogleAdapter] listing ended: ${sku}`);
 }
 
-// Per-item calls under bounded concurrency (no documented Merchant API batch endpoint). Returns
-// one result per input, in the same order, so sync.service.js#syncBatch can map results back.
+// No Merchant API batch endpoint; results keep input order for syncBatch.
 const BATCH_CONCURRENCY = 10;
 
 async function publishBatch(resolvedList, settings) {
   assertConfigured(settings);
 
   const token = await googleOauthService.getValidAccessToken(settings);
-  if (!token) throw new Error("[GoogleAdapter] publishBatch: could not obtain a valid Google access token");
+  if (!token) throw httpError("[GoogleAdapter] publishBatch: could not obtain a valid Google access token", 401);
 
   const results = new Array(resolvedList.length);
 
@@ -336,7 +318,7 @@ async function publishBatch(resolvedList, settings) {
     }
   }
 
-  // Hand-rolled worker pool over an index cursor — chunks are already small, no need for p-limit.
+  // Small worker pool over an index cursor; chunks are small, so no p-limit.
   let nextIndex = 0;
   async function worker() {
     while (nextIndex < resolvedList.length) {

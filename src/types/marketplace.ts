@@ -39,14 +39,9 @@ export interface MarketplaceListingProduct {
   slug: string;
   sku: string | null;
   price: number;
-  // Present when the backend populates it (see ebay.listing.service.js's
-  // "product" populate field list) — the listing's Technical Specifications
-  // always reads this live, never a copy stored on the listing itself.
+  // Populated by the backend; Technical Specifications always reads it live.
   vehicle?: import("@/types/product").ProductVehicle | null;
-  // Present when the backend populates it — used only as a display fallback
-  // when the listing has no photo_overrides of its own (mirrors the
-  // product/variant fallback used server-side when actually pushing to eBay,
-  // see listing.resolver.js#resolvePhotos). Never written back on save.
+  // Display fallback when no photo_overrides (as resolvePhotos); never saved.
   attachments?: import("@/types/product").Attachment[];
 }
 
@@ -104,11 +99,7 @@ export interface EbayListing extends MarketplaceListing {
 
 export type GoogleCondition = "new" | "refurbished" | "used";
 
-// Deliberately small — see google.listing.service.js's own module header.
-// feed_label/content_language are feed-level settings from the tenant's
-// Google connection (chosen once at connect time), never per-listing, so
-// they don't appear here even though the backend schema technically has
-// unused fields for them.
+// feed_label/content_language are connection-level, not per-listing.
 export interface GoogleListing extends MarketplaceListing {
   platform: "google";
   google_product_category: string | null;
@@ -118,21 +109,10 @@ export interface GoogleListing extends MarketplaceListing {
   shipping_label: string | null;
 }
 
-// The Listings page's main table mixes every platform's rows together (see
-// listing.query.service.js) — this is what a row actually is once you don't
-// know which platform ahead of time. Narrow with `listing.platform` before
-// reading a platform-specific field.
+// Any-platform Listings row; narrow on `listing.platform` for platform fields.
 export type AnyMarketplaceListing = EbayListing | GoogleListing;
 
-// TASK 6 (regroup the listings page by product) — the ?group_by=product
-// shape of GET /listings (listing.query.service.js#listListingsGroupedByProduct):
-// one row per product, with all of that product's listings nested. Kept
-// deliberately smaller than AnyMarketplaceListing — just enough for the
-// grouped table's collapsed + expanded rows (platform/status/date/actions)
-// — a platform-specific field only the edit modal needs (Google's gtin/mpn/
-// condition/etc.) is fetched on demand via the existing getListing(id) call
-// when the tenant actually opens Edit, rather than growing this shape to
-// carry every platform's every field for every row on the list page.
+// GET /listings?group_by=product row; edit-only fields load via getListing(id).
 export interface GroupedListingSummary {
   _id: string;
   platform: MarketplacePlatform;
@@ -152,8 +132,7 @@ export interface ProductListingGroup {
   listings: GroupedListingSummary[];
 }
 
-// Editable fields for the Google "lightweight toggle" flow — see
-// components/listings/GoogleListingEditModal.tsx.
+// Editable Google listing fields (lib/marketplace/channelForms.ts).
 export interface GoogleListingFormState {
   google_product_category: string;
   gtin: string;
@@ -170,7 +149,7 @@ export const GOOGLE_LISTING_FORM_INITIAL: GoogleListingFormState = {
   shipping_label: "",
 };
 
-// Google panel state: channel fields plus overrides (no photos; Google's API lacks them).
+// Google panel state: fields plus overrides (Google's API has no photos).
 export interface GoogleChannelFormState extends GoogleListingFormState {
   title_override: string;
   description_override: string;
@@ -191,7 +170,7 @@ export interface ListingProductDefaults {
   photos: import("@/types/product").Attachment[];
 }
 
-// Form state — all numeric fields kept as strings to avoid controlled-input issues
+// Form state; numeric fields kept as strings to avoid controlled-input issues.
 export interface EbayListingFormState {
   product_id: string;
   variant_id: string;
@@ -199,10 +178,7 @@ export interface EbayListingFormState {
   description_override: string;
   price_override: string;
   photo_overrides: import("@/types/product").Attachment[];
-  // Vehicle info is NOT part of the listing's own form state — the
-  // Technical Specifications section always reads the product's live
-  // `vehicle` field directly (see ebayDescriptionGenerator.ts), so it can
-  // never go stale or diverge from the Product page's own data. eBay-specific
+  // No vehicle field: description reads product.vehicle live. eBay-specific:
   ebay_category_id: string;
   store_category_id: string;
   store_sku: string;

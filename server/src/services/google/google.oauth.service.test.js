@@ -1,12 +1,11 @@
 // services/google/google.oauth.service.test.js
-// Token refresh: proactive near-expiry refresh, persistence to ChannelConnection, and safety
-// under a concurrent-refresh race for the same tenant.
-// Needs a live Mongo connection. Run: node --test src/services/google/google.oauth.service.test.js
+// Token refresh: near-expiry, persistence, concurrent safety. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -20,7 +19,7 @@ function jsonResponse(status, body) {
 }
 
 async function makeConnection({ accessTokenExpired = false } = {}) {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const encAccess = encrypt("stale-access-token");
   const encRefresh = encrypt(`refresh-${crypto.randomUUID()}`);
   await ChannelConnection.collection.insertOne({

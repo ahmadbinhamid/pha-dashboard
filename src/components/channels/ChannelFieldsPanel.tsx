@@ -6,32 +6,29 @@ import type { ChannelFieldSources } from "@/hooks/useChannelFieldSources";
 import type { ChannelFieldDescriptor, ChannelSummary } from "@/types/channel";
 import type { MappedCategory } from "@/types/categoryMapping";
 import type { ListingProductDefaults } from "@/types/marketplace";
+import type { Product } from "@/types/product";
 import type { ChannelFormState } from "@/lib/marketplace/channelForms";
 
 const GROUP_LABELS: Record<string, string> = {
-  category: "Category",
+  category: "Listing",
   condition: "Condition",
   specifics: "Item specifics",
-  fitment: "Vehicle fitment",
-  policies: "Business policies",
-  shipping: "Shipping",
+  fitment: "Fitment",
+  policies: "Policies",
+  shipping: "Package",
   format: "Selling format",
-  identifiers: "Product identifiers",
+  identifiers: "Identifiers",
   advanced: "Listing settings",
 };
 
 // Types that span the full grid row.
 const FULL_WIDTH_TYPES: ChannelFieldDescriptor["type"][] = ["custom", "category", "textarea"];
 
-interface Props {
-  channel: ChannelSummary;
-  form: ChannelFormState;
-  onChange: (patch: Partial<ChannelFormState>) => void;
-  errors: Record<string, string>;
-  sources: ChannelFieldSources;
-  mappedCategory: MappedCategory | null | undefined;
-  productDefaults: ListingProductDefaults;
-  supportsPhotos: boolean;
+export const OVERRIDES_SECTION = { key: "overrides", label: "Advanced" };
+
+/** DOM id of a panel section, for the drawer's section nav. */
+export function channelSectionId(channelKey: string, sectionKey: string) {
+  return `channel-${channelKey}-${sectionKey}`;
 }
 
 // Groups descriptors, preserving schema order.
@@ -44,8 +41,35 @@ function groupSchema(schema: ChannelFieldDescriptor[]) {
   return [...groups.entries()];
 }
 
-// One channel's panel, rendered from its adapter's fieldSchema.
-export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, mappedCategory, productDefaults, supportsPhotos }: Props) {
+/** Section list, in order, for navigation. */
+export function channelFieldSections(schema: ChannelFieldDescriptor[]) {
+  return [...groupSchema(schema).map(([key]) => ({ key, label: GROUP_LABELS[key] ?? key })), OVERRIDES_SECTION];
+}
+
+interface Props {
+  channel: ChannelSummary;
+  product: Product;
+  form: ChannelFormState;
+  onChange: (patch: Partial<ChannelFormState>) => void;
+  errors: Record<string, string>;
+  sources: ChannelFieldSources;
+  mappedCategory: MappedCategory | null | undefined;
+  productDefaults: ListingProductDefaults;
+  supportsPhotos: boolean;
+}
+
+// One channel's settings, rendered from its adapter's fieldSchema.
+export function ChannelFieldsPanel({
+  channel,
+  product,
+  form,
+  onChange,
+  errors,
+  sources,
+  mappedCategory,
+  productDefaults,
+  supportsPhotos,
+}: Props) {
   const schema = channel.fieldSchema ?? [];
   const values = form as unknown as Record<string, unknown>;
   const categoryKey = schema.find((d) => d.type === "category")?.key;
@@ -62,6 +86,7 @@ export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, m
         error={errors[d.key]}
         fallback={fallback}
         effectiveCategoryId={effectiveCategoryId}
+        product={product}
       />
     ) : (
       <ChannelFieldInput
@@ -71,6 +96,7 @@ export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, m
         error={errors[d.key]}
         options={d.optionsSource ? sources.options[d.optionsSource] : undefined}
         fallback={fallback}
+        fallbackPrefix={sources.fallbackPrefixes[d.key]}
       />
     );
     if (d.type !== "category") return field;
@@ -83,11 +109,11 @@ export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, m
   }
 
   return (
-    <div className="space-y-5">
-      {schema.length === 0 && <p className="text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
+    <div className="divide-y divide-border">
+      {schema.length === 0 && <p className="p-5 text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
       {groupSchema(schema).map(([group, fields]) => (
-        <div key={group} className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-fg/45">{GROUP_LABELS[group] ?? group}</p>
+        <section key={group} id={channelSectionId(channel.key, group)} className="scroll-mt-4 space-y-4 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-fg/55">{GROUP_LABELS[group] ?? group}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {fields.map((d) => (
               <div key={d.key} className={FULL_WIDTH_TYPES.includes(d.type) ? "sm:col-span-2" : undefined}>
@@ -95,17 +121,19 @@ export function ChannelFieldsPanel({ channel, form, onChange, errors, sources, m
               </div>
             ))}
           </div>
-        </div>
+        </section>
       ))}
 
-      <ChannelOverridesSection
-        values={form as unknown as OverrideValues}
-        onChange={(patch) => onChange(patch as Partial<ChannelFormState>)}
-        productDefaults={productDefaults}
-        supportsPhotos={supportsPhotos}
-        titleMaxLength={channel.productConstraints?.title?.maxLength}
-        errors={errors}
-      />
+      <section id={channelSectionId(channel.key, OVERRIDES_SECTION.key)} className="scroll-mt-4 p-5">
+        <ChannelOverridesSection
+          values={form as unknown as OverrideValues}
+          onChange={(patch) => onChange(patch as Partial<ChannelFormState>)}
+          productDefaults={productDefaults}
+          supportsPhotos={supportsPhotos}
+          titleMaxLength={channel.productConstraints?.title?.maxLength}
+          errors={errors}
+        />
+      </section>
     </div>
   );
 }

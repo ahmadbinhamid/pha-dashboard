@@ -1,10 +1,11 @@
 // services/marketplace/productEdit.propagation.test.js
-// A product title edit reaches both real adapters (only platform HTTP stubbed). Needs Mongo.
+// A title edit reaches both real adapters (only HTTP stubbed). Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -55,7 +56,7 @@ after(async () => {
 
 async function makeFixture() {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const photo = await Attachment.create({ tenant_id: tenantId, uid: `att-${suffix}`, file_name: `${suffix}.jpg`, type: "image" });
   const product = await Product.create({
     tenant_id: tenantId,
@@ -115,7 +116,7 @@ test("editing a product title with no override reaches both the eBay and Google 
 
   const res = fakeRes();
   await productController.updateProduct(
-    { params: { id: product._id.toString() }, tenantId, user: { _id: new mongoose.Types.ObjectId() }, body: { title: newTitle } },
+    { params: { id: product._id.toString() }, tenantId, user: { _id: fixtureId() }, body: { title: newTitle } },
     res,
   );
   assert.equal(res.statusCode, 200);

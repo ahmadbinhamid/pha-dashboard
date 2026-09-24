@@ -1,31 +1,10 @@
 // services/stripe/stripe.webhook.service.payment-status.test.js
-//
-// Regression test for a real bug found live (not in this test suite):
-// handlePaymentSucceeded — the ONE webhook that marks a storefront order (or
-// a manual order's payment-link top-up) as paid — only ever wrote the
-// LEGACY `order.status` field. It never wrote `order.payment_status`, the
-// field refund.service.js#createRefund's admission check actually gates on
-// (REFUNDABLE_PAYMENT_STATUSES). payment_status stays stuck at its schema
-// default ("pending_payment") for every order paid through this path,
-// forever — meaning a fully, genuinely paid order was silently unrefundable
-// through the entire redesigned refund system. The same gap existed in
-// createManualOrder, recordOrderPayment, and the eBay order importer.
-//
-// This is exactly why none of the other refund test files caught it: every
-// one of them hand-constructs its Order fixture with payment_status: "paid"
-// set directly, bypassing the real order lifecycle entirely. This test
-// deliberately does NOT do that — it creates an order the way
-// createStorefrontOrder would (payment_status left at its default), then
-// drives the REAL handlePaymentSucceeded webhook handler, then proves a
-// refund can actually be admitted afterward — reproducing the live bug
-// end-to-end and proving the fix closes it.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/stripe/stripe.webhook.service.payment-status.test.js
+// Webhook-paid orders set payment_status so they're refundable. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 const Order = require("../../models/Order");
@@ -33,32 +12,13 @@ const Payment = require("../../models/Payment");
 const Refund = require("../../models/Refund");
 const stripeKeysService = require("../stripe/stripe.keys.service");
 const { ORDER_PAYMENT_STATUS } = require("../../constants/order.constants");
-// This test drives the REAL handlePaymentSucceeded webhook handler, which
-// really does send an order-confirmation email (services/email/email.service.js
-// -> queues/email.queue.js) — a genuine, real Bull queue gets constructed
-// (lazily, on that first real send — see email.queue.js's own comment on
-// why it's lazy at all now), not a mock. `.close()` it in `finally` below,
-// same as refund.service.ledger-violation.test.js does for its own genuine
-// use of the real "ebay" queue — found live: without this, the process
-// never exits on its own (confirmed via process._getActiveHandles()
-// showing 3 lingering Sockets, matching Bull's own client/subscriber/bclient
-// connections for one Queue instance), which was hanging the full suite at
-// exactly this file. Deliberately NOT destructured up here — that would
-// force eager construction at module load for a queue this file might not
-// even end up using, exactly what email.queue.js's own laziness exists to
-// avoid; accessed once, in `finally`, only after it's already certain the
-// queue was actually used.
+// Email queue is built lazily on send; close it in `finally` or it hangs.
 const emailQueueModule = require("../../queues/email.queue");
 
 test("handlePaymentSucceeded sets payment_status, not just the legacy status field", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  // list() must be a plain (non-async) function returning something that's
-  // BOTH thenable (for `await stripe.refunds.list(...)`) and directly
-  // async-iterable (for findExistingStripeRefund's `for await` auto-
-  // pagination) on the same value — see stripe.webhook.service.fixture.test.js's
-  // makeListResponse for the full reasoning (a hang and a "not async
-  // iterable" TypeError were both hit live building that mock the first time).
+  // Plain (non-async) list: thenable AND async-iterable (see fixture test).
   function makeListResponse(items) {
     const response = {
       data: items,
@@ -84,18 +44,15 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
   const suffix = crypto.randomUUID();
   const UNIT_PRICE = 2000;
 
-  // Deliberately mirrors createStorefrontOrder's real shape — payment_status
-  // is left at its schema default (pending_payment), exactly like real
-  // order creation does, NOT hand-set to "paid" like every other test
-  // fixture in this suite.
-  const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+  // Mirrors createStorefrontOrder: payment_status left at default, not "paid".
+  const TEST_TENANT_ID = fixtureId();
   const order = await Order.create({
     tenant_id: TEST_TENANT_ID,
     order_number: `TEST-PAYSTATUS-${suffix}`,
     invoice_number: `TEST-PAYSTATUS-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Payment status regression item",
         sku: null,
@@ -112,9 +69,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
     total: UNIT_PRICE,
     currency: "aud",
     channel: "storefront",
-    // status defaults to pending_payment, payment_status defaults to
-    // pending_payment — exactly what a real just-checked-out order looks
-    // like before Stripe confirms.
+    // Both statuses default to pending_payment, as before Stripe confirms.
     guest_access_token: crypto.randomBytes(16).toString("hex"),
   });
   order.item_ids_migrated_at = new Date();
@@ -140,8 +95,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
       assert.equal(fresh.payment_status, ORDER_PAYMENT_STATUS.PENDING_PAYMENT);
     });
 
-    // The real webhook handler, driven through the real dispatcher — not a
-    // hand-set fixture and not calling the handler function directly.
+    // Driven through the real dispatcher, not a hand-set fixture or direct call.
     await handleEvent(
       {
         id: `evt_paystatus_${suffix}`,
@@ -169,13 +123,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
     });
 
     await t.test("a refund can now actually be admitted — reproducing and closing the live bug", async () => {
-      // Before the fix, this threw 'Order payment_status "pending_payment"
-      // is not refundable' — the exact live symptom. It must not throw now.
-      // status ends at PROCESSING, not SUCCEEDED — this is a Stripe
-      // allocation, and settlement only confirms via a SEPARATE webhook
-      // (charge.refunded), by design (§3.7's "do NOT apply effects
-      // optimistically"). Reaching PROCESSING at all is the proof: admission
-      // was granted.
+      // Pre-fix this threw "not refundable"; PROCESSING proves admission was granted.
       const refund = await refundService.createRefund(
         order._id.toString(),
         {
@@ -195,9 +143,7 @@ test("handlePaymentSucceeded sets payment_status, not just the legacy status fie
     await Refund.deleteMany({ order: order._id });
     await Payment.deleteMany({ order: order._id });
     await Order.deleteOne({ _id: order._id });
-    // handlePaymentSucceeded (above) always sends an order-confirmation
-    // email for this fixture, so the real queue is already constructed by
-    // this point either way — .close() it before disconnecting.
+    // The confirmation email already built the queue; close it before disconnect.
     await emailQueueModule.emailQueue.close();
     await mongoose.disconnect();
   }

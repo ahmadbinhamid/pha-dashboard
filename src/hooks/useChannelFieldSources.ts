@@ -2,12 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { getBusinessPolicies, getEbaySettings } from "@/lib/api/ebay";
 import type { ChannelFieldOption } from "@/types/channel";
 import type { MappedCategory } from "@/types/categoryMapping";
+import type { Product } from "@/types/product";
 
 export interface ChannelFieldSources {
   // Dynamic options keyed by optionsSource.
   options: Record<string, ChannelFieldOption[]>;
   // Server-side fallback per field key.
   fallbacks: Record<string, string | null | undefined>;
+  // Label for where each fallback comes from.
+  fallbackPrefixes: Record<string, string>;
   loading: boolean;
 }
 
@@ -16,6 +19,7 @@ export function useChannelFieldSources(
   platform: string,
   categoryField: string | undefined,
   mappedCategory: MappedCategory | null | undefined,
+  product: Product,
 ): ChannelFieldSources {
   const isEbay = platform === "ebay";
   const policies = useQuery({
@@ -41,12 +45,22 @@ export function useChannelFieldSources(
       ...(categoryField ? { [categoryField]: mappedCategory?.id } : {}),
       ...(isEbay
         ? {
+            // Empty eBay condition inherits the product's (server: ebay.fieldSchema.js).
+            condition: product.condition,
             fulfillment_policy_id: settings?.fulfillment_policy_id,
             payment_policy_id: settings?.payment_policy_id,
             return_policy_id: settings?.return_policy_id,
           }
         : {}),
     },
+    fallbackPrefixes: isEbay
+      ? {
+          condition: "From product",
+          fulfillment_policy_id: "eBay default",
+          payment_policy_id: "eBay default",
+          return_policy_id: "eBay default",
+        }
+      : {},
     loading: isEbay && (policies.isLoading || ebaySettings.isLoading),
   };
 }

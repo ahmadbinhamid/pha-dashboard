@@ -1,6 +1,5 @@
 // services/marketplace/adapters/ebay.fieldSchema.js
-// eBay fields beyond the product — only what the eBay payload actually reads.
-// NOTE: omits fields never sent to eBay (store category, duration, quantity, zip).
+// eBay-only listing fields the payload reads. NOTE: unsent ones are omitted.
 
 const { FIELD_TYPE } = require("../../../constants/channelField.constants");
 const { EBAY_TITLE_MAX_LENGTH } = require("../../../constants/ebay.constants");
@@ -95,11 +94,20 @@ const fieldSchema = Object.freeze([
 // Limits on product-derived values (checked on the effective value).
 const productConstraints = Object.freeze({ title: { maxLength: EBAY_TITLE_MAX_LENGTH } });
 
+// Empty listing condition/MPN inherit the product's (set only to override).
+function effectiveCondition(listing, product) {
+  return listing.condition || product?.condition || null;
+}
+
+function effectiveMpn(listing, product) {
+  return listing.item_specifics?.mpn || product?.mpn || null;
+}
+
 // Effective value per key (category -> mapping, policies -> tenant default).
-function fieldValues(listing, { categoryId = listing.ebay_category_id, settings = null } = {}) {
+function fieldValues(listing, { categoryId = listing.ebay_category_id, settings = null, product = null } = {}) {
   return {
     ebay_category_id: categoryId,
-    condition: listing.condition,
+    condition: effectiveCondition(listing, product),
     condition_notes: listing.condition_notes,
     item_specifics: listing.item_specifics,
     fitment: listing.fitment,
@@ -118,4 +126,12 @@ function fieldValues(listing, { categoryId = listing.ebay_category_id, settings 
 const UPFRONT_KEYS = Object.freeze(["condition", "format", "accept_best_offer", "min_best_offer"]);
 const POLICY_KEYS = Object.freeze(["fulfillment_policy_id", "payment_policy_id", "return_policy_id"]);
 
-module.exports = { fieldSchema, productConstraints, fieldValues, UPFRONT_KEYS, POLICY_KEYS };
+module.exports = {
+  fieldSchema,
+  productConstraints,
+  fieldValues,
+  effectiveCondition,
+  effectiveMpn,
+  UPFRONT_KEYS,
+  POLICY_KEYS,
+};

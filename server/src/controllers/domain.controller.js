@@ -1,7 +1,18 @@
 // controllers/domain.controller.js
 
 const domainService = require("../services/domain.service");
+const { reconcileTenantPrerequisites } = require("../services/marketplace/channelPrerequisite.service");
+const { logger } = require("../loaders/logging");
 const { success, created, notFound, systemfailure } = require("../utils/http/response");
+
+// A domain change may meet a storefront prerequisite; never fails the request.
+async function reconcileChannels(tenantId) {
+  try {
+    await reconcileTenantPrerequisites(tenantId);
+  } catch (err) {
+    logger.warn(`[domain.controller] channel prerequisite reconcile failed for ${tenantId}: ${err.message}`);
+  }
+}
 
 exports.getDomains = async (req, res) => {
   try {
@@ -35,6 +46,7 @@ exports.setDefaultDomain = async (req, res) => {
   try {
     const domain = await domainService.setDefaultDomain(req.params.id, req.tenantId);
     if (!domain) return notFound(res, "Domain not found");
+    await reconcileChannels(req.tenantId);
     return success(res, domain, "Default domain updated");
   } catch (err) {
     return systemfailure(res, err);
@@ -45,6 +57,7 @@ exports.verifyDomain = async (req, res) => {
   try {
     const result = await domainService.verifyDomainDns(req.params.id, req.tenantId);
     if (!result) return notFound(res, "Domain not found");
+    if (result.verified) await reconcileChannels(req.tenantId);
     return success(
       res,
       result,

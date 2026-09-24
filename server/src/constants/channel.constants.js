@@ -4,14 +4,21 @@
 const CHANNEL_CONNECTION_STATUS = Object.freeze({
   CONNECTED: "connected",
   DISCONNECTED: "disconnected",
-  // OAuth consent succeeded and a token is saved, but the tenant hasn't picked a Merchant
-  // Center account yet; never treated as "connected" since assertConfigured requires merchant_id.
+  // OAuth done, no Merchant Center account picked; assertConfigured blocks sync.
   PENDING: "pending",
-  // Circuit breaker tripped from repeated transport/auth failures; pauses queue processing for
-  // the platform (not a hard failure) and self-clears via the resume path.
+  // Breaker tripped by transport/auth failures; cleared by the resume path.
   DEGRADED: "degraded",
+  // Needs attention; status_reason, when set, names the unmet prerequisite.
   ERROR: "error",
 });
+
+// Why a connection is ERROR; each maps to a manifest-declared prerequisite.
+const CHANNEL_STATUS_REASON = Object.freeze({
+  STOREFRONT_REQUIRED: "storefront_required",
+});
+
+// err.code for a sync failure caused by an unmet channel prerequisite.
+const CHANNEL_PREREQUISITE_ERROR_CODE = "CHANNEL_PREREQUISITE_UNMET";
 
 const CHANNEL_SYNC_LOG_STATUS = Object.freeze({
   SUCCESS: "success",
@@ -19,4 +26,9 @@ const CHANNEL_SYNC_LOG_STATUS = Object.freeze({
   SKIPPED: "skipped",
 });
 
-module.exports = { CHANNEL_CONNECTION_STATUS, CHANNEL_SYNC_LOG_STATUS };
+module.exports = {
+  CHANNEL_CONNECTION_STATUS,
+  CHANNEL_SYNC_LOG_STATUS,
+  CHANNEL_STATUS_REASON,
+  CHANNEL_PREREQUISITE_ERROR_CODE,
+};

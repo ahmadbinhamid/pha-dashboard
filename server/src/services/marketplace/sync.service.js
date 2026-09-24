@@ -1,14 +1,5 @@
 // services/marketplace/sync.service.js
-//
-// Platform-agnostic sync dispatcher. Loads a MarketplaceListing by ID,
-// resolves its content against the canonical Product (+ optional Variant),
-// fetches platform settings via the adapter's own loadSettings, and
-// delegates to the registered adapter. The adapter returns external IDs;
-// this service writes them back to the listing.
-//
-// Also owns: the fencing check (last_pushed_seq), the ChannelSyncLog audit
-// trail, and the per-tenant circuit breaker around every adapter call — see
-// server/docs/channel-architecture.md.
+// Adapter sync dispatcher: fencing, ChannelSyncLog audit and circuit breaker.
 
 const { logger } = require("../../loaders/logging");
 const MarketplaceListing = require("../../models/MarketplaceListing");
@@ -19,16 +10,12 @@ const config = require("../../config");
 const { getAdapter } = require("./registry");
 const { resolveListing, resolveSku, hydrateResolved } = require("./listing.resolver");
 const circuitBreaker = require("./circuitBreaker");
+const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channelPrerequisite.service");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
 
-// Writes one ChannelSyncLog row. Never throws into the caller — a logging
-// failure must never break the job it's describing (see
-// models/ChannelSyncLog.js). Failures are always logged in full; successes
-// (and skips, which aren't failures either) only when
-// config.channels.logSuccesses is set, so a full catalogue sync doesn't
-// write thousands of rows nobody reads.
-async function logSyncEvent({ tenantId, platform, jobType, entityId, status, attempt, errorCode, errorMessage, requestSummary, durationMs }) {
+// Never throws: a log failure mustn't break the job; non-failures are opt-in.
+async function logSyncEvent({ tenantId, platform, jobType, entityId, status, attempt, errorCode, errorMessage, errorStatus, requestSummary, durationMs }) {
   if (status !== CHANNEL_SYNC_LOG_STATUS.FAILURE && !config.channels.logSuccesses) return;
   try {
     await ChannelSyncLog.create({
@@ -41,6 +28,7 @@ async function logSyncEvent({ tenantId, platform, jobType, entityId, status, att
       attempt: attempt ?? 1,
       error_code: errorCode ?? null,
       error_message: errorMessage ?? null,
+      error_status: Number.isInteger(errorStatus) ? errorStatus : null,
       request_summary: requestSummary ?? null,
       duration_ms: durationMs ?? null,
     });
@@ -49,10 +37,7 @@ async function logSyncEvent({ tenantId, platform, jobType, entityId, status, att
   }
 }
 
-// Shared shape for every syncListing skip branch below: log the ChannelSyncLog row for
-// jobType "sync_listing" and return the same { skipped, reason } shape. Any listing-state
-// update specific to one branch (e.g. not_connected marking the listing ERROR) is done by the
-// caller before calling this, since only one branch needs it.
+// Logs a sync_listing skip; branch-specific listing updates are the caller's.
 async function skipSync(listing, reason) {
   await logSyncEvent({
     tenantId: listing.tenant_id,
@@ -65,7 +50,7 @@ async function skipSync(listing, reason) {
   return { skipped: true, reason };
 }
 
-// Stamps the sync baseline after a confirmed push; updateMany keeps duplicates consistent.
+// Stamps the sync baseline after a push; updateMany keeps duplicates in step.
 async function recordQuantityPushed(listing, adapter, quantity, seq) {
   await MarketplaceListing.updateMany(
     { tenant_id: listing.tenant_id, product: listing.product._id, variant: listing.variant || null, platform: listing.platform },
@@ -82,11 +67,7 @@ async function recordQuantityPushed(listing, adapter, quantity, seq) {
   );
 }
 
-// seq is the fencing token claimed at enqueue time (see
-// inventory.service.js#fanOutMarketplaceInventory) — null/undefined for
-// callers that don't participate in fencing (e.g. an explicit manual
-// "resync this listing" action with no stock change behind it), in which
-// case the sync always applies, same as before fencing existed.
+// seq: fencing token from enqueue; null (e.g. manual resync) always applies.
 async function syncListing(listingId, seq = null) {
   const listing = await MarketplaceListing.findById(listingId)
     .populate({ path: "product", populate: { path: "attachments" } })
@@ -97,18 +78,10 @@ async function syncListing(listingId, seq = null) {
     return { error: "Listing not found" };
   }
 
-  // last_pushed_seq defaults to 0 on the base schema, but a legacy document
-  // written before that migration can still read back `undefined` on a
-  // lean/partial read — coalesce at every comparison site rather than rely
-  // on Mongoose hydration defaults. See MarketplaceListing.js.
+  // Legacy docs can read back undefined, so coalesce rather than trust defaults.
   const lastPushedSeq = listing.last_pushed_seq ?? 0;
 
-  // A newer sync_listing job already landed for this listing (this one was
-  // delayed and got overtaken) — applying it now would push a stale
-  // quantity over a correct, more recent one. Drop it before doing any
-  // work; not a failure, just moot. This is the ONE fence check for every
-  // quantity push, now that there's only one writer path — see
-  // ebay.adapter.js's module header comment.
+  // Overtaken by a newer job; the sole fence check for every quantity push.
   if (seq != null && seq < lastPushedSeq) {
     logger.info(
       `[marketplace.sync] dropping stale sync_listing job for ${listingId} (seq ${seq} < last_pushed ${lastPushedSeq})`,
@@ -118,16 +91,7 @@ async function syncListing(listingId, seq = null) {
 
   const adapter = getAdapter(listing.platform);
 
-  // An adapter that's registered but whose tenant has no connection at all
-  // must be a clean "not connected" outcome, never an unhandled rejection —
-  // ONLY when the adapter actually implements loadSettings and it resolves
-  // to null. loadSettings itself is guarded as optional (not assumed
-  // present) because a minimal test double registered directly against the
-  // registry (see sync.service.fencing.test.js) legitimately doesn't
-  // implement the full adapter contract; an adapter with no loadSettings at
-  // all just gets `undefined` passed through as settings; unchanged
-  // behavior for that case rather than treating "no loadSettings method" the
-  // same as "loadSettings resolved to null".
+  // Only a null loadSettings means not connected; test doubles may lack it.
   let settings;
   if (typeof adapter.loadSettings === "function") {
     settings = await adapter.loadSettings(listing.product.tenant_id);
@@ -138,22 +102,24 @@ async function syncListing(listingId, seq = null) {
     }
   }
 
-  // Per-tenant circuit breaker — see circuitBreaker.js for why this is a
-  // per-(tenant, platform) gate rather than a literal Bull queue.pause()
-  // (which would stall every OTHER tenant sharing that platform's queue).
+  // Per-tenant gate, not queue.pause(), which would stall other tenants.
   if (await circuitBreaker.isOpen(listing.tenant_id, listing.platform)) {
     logger.warn(`[marketplace.sync] listing ${listingId}: circuit open for ${listing.platform}/${listing.tenant_id} — skipping until resumed`);
     return skipSync(listing, "circuit_open");
   }
 
+  // NOTE: skipped, not failed: a missing prerequisite isn't a broken integration.
+  const unmet = await ensurePrerequisites({
+    tenantId: listing.tenant_id, platform: listing.platform, manifest: adapter.manifest, connection: settings,
+  });
+  if (unmet) {
+    await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: unmet.message });
+    return skipSync(listing, unmet.reason);
+  }
+
   const isUpdate = !!listing.external_listing_id;
 
-  // Capability guard: an adapter that can't push inventory at all (a
-  // catalog-only platform, or one not yet built out) makes an inventory
-  // refresh (i.e. this listing is already published — isUpdate) a no-op
-  // rather than a crash. A first-time publish still goes through even if
-  // inventory=false, since publish also carries title/price/photos, not
-  // just quantity.
+  // No inventory capability: refresh is a no-op, but first publish still runs.
   const capabilities = adapter.capabilities || {};
   if (isUpdate && capabilities.inventory === false) {
     logger.warn(`[marketplace.sync] listing ${listingId}: adapter "${listing.platform}" has no inventory capability — sync_listing is a no-op`);
@@ -174,9 +140,7 @@ async function syncListing(listingId, seq = null) {
     // Inside the try so a lookup failure is recorded like any sync failure.
     await hydrateResolved([resolved], adapter, listing.tenant_id);
     const hooks = {
-      // Persist the offer ID as soon as it's known, not just at the end of
-      // the whole call chain — otherwise a failure downstream (e.g. publish)
-      // leaves this listing looking un-synced and a retry recreates the offer.
+      // Persist early so a later failure's retry doesn't recreate the offer.
       onOfferCreated: (offerId) => listing.updateOne({ external_offer_id: offerId }),
       onQuantityPushed: (quantity) => recordQuantityPushed(listing, adapter, quantity, seq),
     };
@@ -184,23 +148,12 @@ async function syncListing(listingId, seq = null) {
       ? await adapter.update(resolved, settings, hooks, seq)
       : await adapter.publish(resolved, settings, hooks, seq);
 
-    // Additive to the existing success shape every adapter has always
-    // returned ({ external_listing_id, external_offer_id, quantity }) —
-    // an adapter can now ALSO signal "this listing must not be pushed at
-    // all", e.g. google.adapter.js excluding an untracked-stock product
-    // from Google Shopping entirely rather than publishing it as in_stock.
-    // eBay's adapter never sets this, so this branch is a no-op for eBay —
-    // it always falls through to the unchanged success handling below.
+    // Adapter excluded this listing (e.g. Google skips untracked stock).
     if (ids?.skipped) {
       logger.info(`[marketplace.sync] listing ${listingId}: adapter skipped this sync (${ids.reason})`);
-      // Reusing NOT_LISTED rather than adding a new LISTING_SYNC_STATUS enum
-      // value for "explicitly excluded" — the closest existing meaning
-      // ("not published to this channel") without a schema change for one
-      // adapter-specific reason code.
+      // NOT_LISTED reused rather than a new status for one adapter's reason.
       await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.NOT_LISTED, sync_error: null });
-      // A skip is not a failure — the connection itself is fine, only this
-      // one listing's data made it ineligible — so this still counts as a
-      // healthy call for circuit-breaker purposes, same as any other success.
+      // Connection is healthy; only this listing's data was ineligible.
       await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
       await logSyncEvent({
         tenantId: listing.tenant_id,
@@ -216,20 +169,10 @@ async function syncListing(listingId, seq = null) {
 
     await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
 
-    // Determined AFTER the write succeeded, from what was actually pushed —
-    // the adapter no longer refuses to push a 0 quantity (that used to mean
-    // a manual "correct stock to 0" never reached eBay at all, and eBay
-    // kept selling stock we don't have). ids.quantity is null for an
-    // untracked-stock product (stock_control=false — see
-    // ebay.adapter.js#resolveQuantity), in which case there's no
-    // meaningful "out of stock" concept either.
+    // From what was pushed; quantity is null for untracked stock (never OOS).
     const outOfStock = ids.quantity === 0;
 
-    // priceLocked (see ebay.adapter.js#updateOfferTolerant): everything else
-    // about the sync succeeded, eBay just rejected the price/quantity
-    // revision because the offer is part of an active sale. Not an error —
-    // sync_error stays null (same convention as OUT_OF_STOCK) since the
-    // PRICE_LOCKED status itself already communicates what's going on.
+    // priceLocked: eBay refused a revision during a sale; status, not error.
     await listing.updateOne({
       external_listing_id: ids.external_listing_id || listing.external_listing_id,
       external_offer_id: ids.external_offer_id || listing.external_offer_id,
@@ -268,26 +211,24 @@ async function syncListing(listingId, seq = null) {
       sync_error: err.message,
     });
     await circuitBreaker.recordFailure(listing.tenant_id, listing.platform, err);
+    await flagIfPrerequisiteError(listing.tenant_id, listing.platform, adapter.manifest, err);
     await logSyncEvent({
       tenantId: listing.tenant_id,
       platform: listing.platform,
       jobType: isUpdate ? "update" : "publish",
       entityId: listing._id,
       status: CHANNEL_SYNC_LOG_STATUS.FAILURE,
-      // Generic pass-through — an adapter error that names itself (e.g.
-      // ebay.adapter.js's ConditionUnverifiedError, code
-      // "CONDITION_UNVERIFIED") surfaces that in the channel logs UI instead
-      // of only in stdout; an ordinary Error with no .code just logs null,
-      // same as before this existed.
+      // Surfaces named adapter errors (e.g. CONDITION_UNVERIFIED) in the UI
       errorCode: err.code ?? null,
       errorMessage: err.message,
+      errorStatus: err.status,
       durationMs: Date.now() - startedAt,
     });
     throw err;
   }
 }
 
-// Resolves adapter.end()'s context; settings load only when there's something to withdraw.
+// Builds adapter.end()'s context; settings load only if there's a SKU to end.
 async function loadEndContext(listing, adapter) {
   const productId = listing.product?._id || listing.product;
   const [product, variant] = await Promise.all([
@@ -337,27 +278,7 @@ async function endListing(listingId) {
   }
 }
 
-// ── Batch sync (Task 3 — Google Shopping, or any future capabilities.batch
-// adapter) ──────────────────────────────────────────────────────────────────
-//
-// A full catalogue sync is thousands of products — one sync_listing job
-// (one Bull message, one populate, one ChannelSyncLog row per success) per
-// product is not acceptable for a feed channel. syncBatch reads the
-// tenant's ACTIVE listings for a platform via a Mongo CURSOR (never loads
-// the whole catalogue into memory), dispatches adapter.publishBatch() in
-// chunks (config.channels.batchChunkSize, default 500), and tracks every
-// item's own success/failure/skip individually — a per-item failure never
-// fails the rest of the chunk or the batch.
-//
-// opts.listingIds: optional — restricts the cursor to this specific set of
-// listing ids instead of every ACTIVE listing for the tenant. Additive: no
-// existing caller passes this (the post-connect full sync and the existing
-// tests all call syncBatch(platform, tenantId) with no opts, unaffected).
-// Added for refresh.service.js#sweepStaleListings, which already knows
-// exactly which listings are stale and must re-push ONLY those — not the
-// tenant's entire catalogue — while still reusing this file's existing
-// chunking/fencing/publishBatch/ChannelSyncLog machinery rather than
-// duplicating it.
+// Cursor-chunked batch push for feed channels; opts.listingIds limits scope.
 async function syncBatch(platform, tenantId, opts = {}) {
   const adapter = getAdapter(platform);
   if (adapter.capabilities?.batch !== true || typeof adapter.publishBatch !== "function") {
@@ -373,6 +294,12 @@ async function syncBatch(platform, tenantId, opts = {}) {
   if (await circuitBreaker.isOpen(tenantId, platform)) {
     logger.warn(`[marketplace.sync] syncBatch: circuit open for ${platform}/${tenantId} — skipping until resumed`);
     return { skipped: true, reason: "circuit_open" };
+  }
+
+  const unmet = await ensurePrerequisites({ tenantId, platform, manifest: adapter.manifest, connection: settings });
+  if (unmet) {
+    logger.warn(`[marketplace.sync] syncBatch: ${platform}/${tenantId} prerequisite unmet (${unmet.reason}) — skipping`);
+    return { skipped: true, reason: unmet.reason };
   }
 
   const chunkSize = opts.chunkSize ?? config.channels.batchChunkSize;
@@ -407,22 +334,14 @@ async function syncBatch(platform, tenantId, opts = {}) {
     );
     return { ok: true, ...summary };
   } catch (err) {
-    // A THROW here means the batch call itself (transport/auth to the
-    // platform, or a bug) failed — distinct from a per-item failure inside
-    // a chunk, which processBatchChunk already contains and logs without
-    // ever throwing. This is what actually counts toward the breaker.
+    // Only a whole-batch throw counts toward the breaker, not per-item errors.
     logger.error(`[marketplace.sync] syncBatch ${platform}/${tenantId} failed: ${err.message}`);
     await circuitBreaker.recordFailure(tenantId, platform, err);
     throw err;
   }
 }
 
-// Resolves each listing in the chunk, drops any whose fencing token has
-// gone stale since it was read off the cursor (mirrors syncListing's own
-// `seq < last_pushed_seq` check), dispatches the survivors through
-// adapter.publishBatch in one call, then writes back each item's own result
-// individually. A per-item failure is recorded and skipped over — never
-// thrown — so it can never fail the rest of the chunk.
+// Fences, publishes and records one chunk; item failures never throw.
 async function processBatchChunk(adapter, settings, chunk, summary) {
   const candidates = [];
   for (const listing of chunk) {
@@ -434,14 +353,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   }
   if (!candidates.length) return;
 
-  // Fencing re-check, batched into ONE query rather than per-item — a
-  // listing whose last_pushed_seq has moved past the push_seq captured off
-  // the cursor was already synced more recently by something else
-  // (typically a single-listing sync_listing job) since it was read here;
-  // pushing our now-stale value would overwrite a newer, correct one. Same
-  // invariant as syncListing's `seq < listing.last_pushed_seq` check, just
-  // re-verified fresh right before dispatch instead of trusting a value
-  // read possibly-much-earlier in this cursor pass.
+  // Fresh fence re-check in one query; cursor reads may be long stale.
   const ids = candidates.map((c) => c.listing._id);
   const currentSeqs = await MarketplaceListing.find({ _id: { $in: ids } }).select("last_pushed_seq").lean();
   const lastPushedById = new Map(currentSeqs.map((d) => [String(d._id), d.last_pushed_seq ?? 0]));
@@ -470,7 +382,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   try {
     await hydrateResolved(resolvedChunk, adapter, toPush[0].listing.tenant_id);
   } catch (err) {
-    // Keep failures per item, as the old in-adapter lookups were.
+    // Attach to each item so failures stay per item.
     for (const resolved of resolvedChunk) resolved.hydrationError = err;
   }
   const results = await adapter.publishBatch(resolvedChunk, settings);
@@ -498,12 +410,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
       summary.failed++;
       const errorMessage = result?.error || "Unknown batch item failure";
       await listing.updateOne({ $set: { sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: errorMessage } });
-      // Deliberately NOT calling circuitBreaker.recordFailure here — a
-      // per-item failure inside a successfully-dispatched batch call is a
-      // product-data problem (google.adapter.js#publishBatch already
-      // catches per-item errors and never lets one propagate up to fail
-      // the whole call), not evidence the connection is unhealthy. Only the
-      // OUTER batch call throwing (see syncBatch's own catch) counts toward the breaker.
+      // No recordFailure: an item failure is bad data, not a bad connection.
       await logSyncEvent({
         tenantId: listing.tenant_id,
         platform: listing.platform,
@@ -517,9 +424,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
 
     summary.succeeded++;
     const outOfStock = result.quantity === 0;
-    // $set + $max in one call — $max so this can never regress
-    // last_pushed_seq backward if something newer already landed between
-    // the fencing re-check above and this write finally happening.
+    // $max so a newer push landing since the re-check is never regressed.
     await listing.updateOne({
       $set: {
         external_listing_id: result.external_listing_id || listing.external_listing_id,
@@ -541,13 +446,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   }
 }
 
-// Returns a listing's current push_seq (coalesced to 0 — see
-// MarketplaceListing.js's own comment on why every comparison site does
-// this), or null if the listing no longer exists. Used by
-// channel.worker.js's mid-flight recovery check (see
-// recoverMidFlightChange) — kept here rather than a direct model query in
-// the worker, so DB access for listing sync state stays in this service
-// layer, matching every other marketplace-listing read/write in this file.
+/** Current push_seq (0 if unset), or null if the listing is gone. */
 async function getListingPushSeq(listingId) {
   const listing = await MarketplaceListing.findById(listingId).select("push_seq").lean();
   return listing ? (listing.push_seq ?? 0) : null;

@@ -1,6 +1,5 @@
 // models/ChannelSyncLog.js
-// Append-only audit trail for channel adapter jobs. Failures always logged in full; successes
-// only when config.channels.logSuccesses is set. TTL index drops rows past syncLogTtlDays.
+// Append-only audit of adapter jobs; successes only if logSuccesses, TTL'd.
 
 const { Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
@@ -23,7 +22,9 @@ const channelSyncLogSchema = buildSchema(
     attempt: { type: Number, default: 1 },
     error_code: { type: String, default: null },
     error_message: { type: String, default: null },
-    // Small, non-sensitive snapshot for debugging, never the raw payload (can carry credentials/PII).
+    // The thrown error's .status, so a log row can be re-classified faithfully.
+    error_status: { type: Number, default: null },
+    // Small debug snapshot, never the raw payload (may hold credentials/PII).
     request_summary: { type: Schema.Types.Mixed, default: null },
     duration_ms: { type: Number, default: null },
   },
@@ -31,8 +32,7 @@ const channelSyncLogSchema = buildSchema(
 );
 
 channelSyncLogSchema.index({ tenant_id: 1, platform: 1, created_at: -1 });
-// expireAfterSeconds is fixed at index-creation time; a changed syncLogTtlDays only takes
-// effect for a new index (drop + recreate), not retroactively.
+// TTL is fixed at index creation; a new syncLogTtlDays needs drop + recreate.
 channelSyncLogSchema.index(
   { created_at: 1 },
   { expireAfterSeconds: config.channels.syncLogTtlDays * 24 * 60 * 60, background: true },

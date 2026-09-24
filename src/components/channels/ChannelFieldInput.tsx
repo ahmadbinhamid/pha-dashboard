@@ -14,10 +14,20 @@ interface ChannelFieldInputProps {
   options?: ChannelFieldOption[];
   // Server-side fallback for a blank value (makes the field optional).
   fallback?: string | null;
+  // Where the fallback comes from, e.g. "From product" / "eBay default".
+  fallbackPrefix?: string;
 }
 
 // Generic fieldSchema field; custom types use channelFieldRegistry.
-export function ChannelFieldInput({ descriptor, value, onChange, error, options, fallback }: ChannelFieldInputProps) {
+export function ChannelFieldInput({
+  descriptor,
+  value,
+  onChange,
+  error,
+  options,
+  fallback,
+  fallbackPrefix = "Default",
+}: ChannelFieldInputProps) {
   const { label, type, helpText } = descriptor;
   const required = descriptor.required && !fallback;
   const stringValue = value == null ? "" : String(value);
@@ -32,7 +42,7 @@ export function ChannelFieldInput({ descriptor, value, onChange, error, options,
     const fallbackLabel = fallback ? list.find((o) => o.value === fallback)?.label ?? fallback : null;
     control = (
       <NativeSelect value={stringValue} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{fallbackLabel ? `Default — ${fallbackLabel}` : "Select…"}</option>
+        <option value="">{fallbackLabel ? `${fallbackPrefix} — ${fallbackLabel}` : "Select…"}</option>
         {/* Keep a stored value outside the list selectable instead of blank. */}
         {stringValue && !list.some((o) => o.value === stringValue) && <option value={stringValue}>{stringValue}</option>}
         {list.map((o) => (

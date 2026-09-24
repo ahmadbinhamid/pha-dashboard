@@ -24,7 +24,7 @@ import { formatDateRangeLabel, getPresetRange } from "@/utils/dateRange";
 import type { DateRangeValue } from "@/utils/dateRange";
 import { Boxes, AlertTriangle, Clock, Radio } from "lucide-react";
 
-// Recent Activity polls rather than push, faster than page-wide PAGE_REFETCH_MS since a several-minute lag here reads as "nothing is happening".
+// Polls faster than PAGE_REFETCH_MS: lag here reads as "nothing is happening".
 const ACTIVITY_REFETCH_MS = 30_000;
 
 export default function DashboardPage() {
@@ -43,13 +43,13 @@ export default function DashboardPage() {
     refetchInterval: PAGE_REFETCH_MS,
   });
 
-  // Shared ["tenant-settings"] query key (also used by AppearanceTab.tsx/ProductEditPage.tsx), here for the "storefront" row's logo in ActiveChannelsCard.
+  // Shared ["tenant-settings"] query key; supplies the storefront row's logo.
   const { data: tenantSettingsRes } = useQuery({
     queryKey: ["tenant-settings"],
     queryFn: getTenantSettings,
   });
 
-  // Single query for the date-range-filtered section: Order Volume and Revenue Trends both render off this same series, so they always agree on the period shown.
+  // One series for Order Volume and Revenue Trends so their periods always agree.
   const { data: volumeRes, isLoading: volumeLoading } = useQuery({
     queryKey: ["dashboard", "order-volume", orderVolumeRange],
     queryFn: () => getOrderVolume(orderVolumeRange),
@@ -139,7 +139,7 @@ export default function DashboardPage() {
           icon={<Radio className="h-4 w-4" />}
           tone={syncHealthy ? "ok" : "danger"}
           loading={statsLoading}
-          onClick={() => navigate("/listings")}
+          onClick={() => navigate("/channel-sync")}
         />
       </div>
 

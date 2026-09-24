@@ -1,13 +1,11 @@
 // services/inventory.service.fanout.test.js
-// Regression guard: fanOutMarketplaceInventory must skip a listing with no registered adapter
-// (never throw), and one platform's enqueue failure must never block another's.
-// Mocks enqueueChannelJob directly, patched before inventory.service.js is first required.
-// Needs a live Mongo connection. Run: node --test src/services/inventory.service.fanout.test.js
+// Fan-out skips adapterless listings; isolates platform failures. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -27,14 +25,14 @@ const { fanOutMarketplaceInventory } = require("./inventory.service");
 test("fan-out: skips a listing whose platform has no adapter, and one platform's enqueue failure does not block others", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  // try/finally so a future assertion failure disconnects Mongo cleanly instead of hanging the suite.
+  // try/finally so a failed assertion still disconnects instead of hanging.
   try {
     const Product = require("../models/Product");
     const MarketplaceListing = require("../models/MarketplaceListing");
     const { LISTING_STATE } = require("../constants/marketplace.constants");
 
     const suffix = crypto.randomUUID();
-    const tenantId = new mongoose.Types.ObjectId();
+    const tenantId = fixtureId();
 
     const product = await Product.create({
       tenant_id: tenantId,
@@ -52,8 +50,7 @@ test("fan-out: skips a listing whose platform has no adapter, and one platform's
       state: LISTING_STATE.ACTIVE,
       condition: "NEW",
     });
-    // "amazon"/"shopify" have no Mongoose discriminator registered yet, so .create() would
-    // reject them — inserted directly via the raw collection instead.
+    // No discriminator for "amazon"/"shopify", so insert via the raw collection.
     await mongoose.connection.db.collection("marketplacelistings").insertMany([
       {
         tenant_id: tenantId,
@@ -88,7 +85,7 @@ test("fan-out: skips a listing whose platform has no adapter, and one platform's
     assert.equal(byPlatform.amazon.queued, false, "amazon's simulated queue outage must be reported, not thrown");
     assert.match(byPlatform.amazon.error, /simulated amazon queue outage/);
 
-    // Confirm the failure was isolated per platform: eBay's enqueue was actually attempted.
+    // Failure is isolated per platform: eBay's enqueue was still attempted.
     const ebayCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[0] === "ebay");
     assert.equal(ebayCalls.length, 1);
   } finally {

@@ -1,12 +1,11 @@
 // services/order.service.notifyBestEffort.test.js
-// notifyNewOrder is called best-effort; a broken notification pipeline must never fail order
-// creation. Proves it by forcing notifyNewOrder to throw and checking the order still comes back.
-// Needs a live Mongo connection. Run: node --test src/services/order.service.notifyBestEffort.test.js
+// A throwing notifyNewOrder must never fail order creation. Needs Mongo.
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -15,6 +14,7 @@ const Customer = require("../models/Customer");
 const Product = require("../models/Product");
 const Location = require("../models/Location");
 const Inventory = require("../models/Inventory");
+const InventoryHistory = require("../models/InventoryHistory");
 const Order = require("../models/Order");
 
 const notificationService = require("./notification.service");
@@ -26,11 +26,11 @@ after(() => mongoose.disconnect());
 test("createManualOrder: a notifyNewOrder failure does not prevent the order from being created", async (t) => {
   const suffix = crypto.randomUUID();
 
-  const tenant = await Tenant.create({
+  const tenant = trackFixtureTenant(await Tenant.create({
     name: `Notify best-effort test ${suffix}`,
     slug: `notify-best-effort-${suffix}`,
     code: `NBE${suffix.slice(0, 6).toUpperCase()}`,
-  });
+  }));
   const location = await Location.create({ tenant_id: tenant._id, name: `Loc ${suffix}` });
   const product = await Product.create({
     tenant_id: tenant._id,
@@ -47,6 +47,7 @@ test("createManualOrder: a notifyNewOrder failure does not prevent the order fro
   t.after(async () => {
     await Order.deleteMany({ tenant_id: tenant._id });
     await Inventory.deleteMany({ product: product._id });
+    await InventoryHistory.deleteMany({ product: product._id });
     await Product.deleteOne({ _id: product._id });
     await Location.deleteOne({ _id: location._id });
     await Customer.deleteOne({ _id: customer._id });

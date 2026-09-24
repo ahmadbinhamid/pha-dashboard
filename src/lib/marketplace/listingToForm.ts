@@ -24,7 +24,6 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   const rawFitment = (listing as unknown as Record<string, unknown>).fitment;
   const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
-  const pExt = p as unknown as Record<string, unknown>;
 
   return {
     product_id: productId,
@@ -37,11 +36,11 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",
-    condition: listing.condition || "NEW",
+    condition: listing.condition || "",
     condition_notes: listing.condition_notes || "",
     item_specifics: {
       brand: listing.item_specifics?.brand || "",
-      mpn: listing.item_specifics?.mpn || (typeof pExt?.mpn === "string" ? pExt.mpn : "") || "",
+      mpn: listing.item_specifics?.mpn || "",
       superseded_part_number: normaliseSpn(
         (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
       ),
@@ -76,7 +75,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   };
 }
 
-// Values an empty override inherits (variant, then product), from a populated listing.
+// Values an empty override inherits (variant, then product) from the listing.
 export function getListingProductDefaults(listing: EbayListing): ListingProductDefaults {
   const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
   const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
@@ -89,7 +88,7 @@ export function getListingProductDefaults(listing: EbayListing): ListingProductD
   };
 }
 
-// Description-image fallback when the listing has no photo_overrides, same variant->product precedence as the backend's listing.resolver.js#resolvePhotos. Requires product/variant populated with attachments (ebay.listing.service.js#getListingById).
+// Photos fall back to variant then product (as resolvePhotos); needs populate.
 export function getListingFallbackImageUrl(listing: EbayListing): string | undefined {
   const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
   const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;

@@ -1,24 +1,20 @@
 // services/marketplace/sync.service.fencing.test.js
-// Regression guard: sync_listing is the only writer path now and carries the same seq fence
-// push_quantity used to have alone; tests the fence at sync.service.js#syncListing directly.
-// Registers a fake "ebay" adapter to exercise fencing/dispatch without real eBay credentials.
-// Fake external ids are unique per run and cleaned up in t.after, to avoid colliding with the
-// unique partial index on external_listing_id/external_offer_id across reruns.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/sync.service.fencing.test.js
+// syncListing's seq fence drops stale pushes, via a fake adapter. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
-require("../../models/index"); // registers all schemas; syncListing populates Attachment via product.attachments
+require("../../models/index"); // registers schemas; syncListing populates Attachment
 const registry = require("./registry");
 const ebaySettingsService = require("../ebay/ebay.settings.service");
 mock.method(ebaySettingsService, "getSettings", async () => ({ tenant_id: null, sandbox: true, marketplace_id: "EBAY_AU" }));
 
-// Unique per process, since registry.register happens once at module load and can't be suffixed per-test.
+// Unique per process: registry.register runs once at load, can't vary per test.
 const FAKE_EXTERNAL_LISTING_ID = `L-fencing-${crypto.randomUUID()}`;
 const FAKE_EXTERNAL_OFFER_ID = `O-fencing-${crypto.randomUUID()}`;
 const updateSpy = mock.fn(async () => ({
@@ -38,7 +34,7 @@ test("sync_listing fencing: a stale seq is dropped before the adapter is ever ca
   const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   const product = await Product.create({
     tenant_id: tenantId,
@@ -60,8 +56,7 @@ test("sync_listing fencing: a stale seq is dropped before the adapter is ever ca
     last_pushed_seq: 5,
   });
 
-  // Hard delete (not soft-delete, which would leave the unique-indexed external ids behind).
-  // One combined t.after, since Node's test runner doesn't guarantee ordering across multiple hooks.
+  // Hard delete frees unique external ids; one t.after as hook order isn't fixed.
   t.after(async () => {
     await MarketplaceListing.deleteOne({ _id: listing._id });
     await Product.deleteOne({ _id: product._id });

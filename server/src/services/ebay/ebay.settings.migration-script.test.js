@@ -1,10 +1,10 @@
 // services/ebay/ebay.settings.migration-script.test.js
-// Regression guard: --dry-run writes nothing; a real run is idempotent (re-run skips already-migrated tenants).
-// Needs a live Mongo connection. Run: node --test src/services/ebay/ebay.settings.migration-script.test.js
+// Migration: --dry-run writes nothing; a real run is idempotent. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -20,7 +20,7 @@ test("migrateEbaySettingsToChannelConnection: --dry-run writes nothing, a real r
   await mongoose.connect(config.mongoUri);
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const { ciphertext, iv, tag } = encrypt(`script-token-${suffix}`);
 
   await EbaySettings.create({
@@ -30,8 +30,7 @@ test("migrateEbaySettingsToChannelConnection: --dry-run writes nothing, a real r
     refresh_token_tag: tag,
     connection_status: "connected",
     marketplace_id: "EBAY_AU",
-    // webhook_token is unique+sparse; sparse excludes only absent fields, not null, so two
-    // null-defaulted rows would collide. Set explicitly so this test doesn't depend on being the only such row.
+    // Unique+sparse index still indexes null, so null-default rows would collide.
     webhook_token: `wt-${suffix}`,
   });
 

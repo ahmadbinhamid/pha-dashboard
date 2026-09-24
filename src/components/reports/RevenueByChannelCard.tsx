@@ -65,7 +65,7 @@ export function RevenueByChannelCard({ rows, loading }: { rows: RevenueByChannel
         </div>
       </CardContent>
 
-      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/listings")}>
+      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/channel-sync?status=all")}>
         View Channel Performance
       </Button>
     </Card>

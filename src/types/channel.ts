@@ -1,12 +1,18 @@
-// Generic channel/marketplace shape from GET /channels, mirroring services/marketplace/channel.service.js#listChannelsForTenant. One entry per registered adapter, the shared type for any channel-status UI.
+// GET /channels shape (channel.service.js#listChannelsForTenant), per adapter.
 
-// "pending": OAuth consent succeeded and a token is saved, but the tenant hasn't picked a Merchant Center account yet (channel-architecture.md §9). Only the Google adapter produces this; eBay never does.
+// "pending" (Google only): OAuth done but no Merchant Center account picked.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
+
+// Unmet manifest prerequisite behind a status of "error".
+export type ChannelStatusReason = "storefront_required";
 
 export interface ChannelConnectionInfo {
   status: ChannelConnectionStatus;
   connected_at: string | null;
   last_error: string | null;
+  status_reason: ChannelStatusReason | null;
+  // Tenant-facing explanation with the remedy, set with status_reason.
+  status_message: string | null;
 }
 
 export interface ChannelHealthInfo {
@@ -24,7 +30,7 @@ export interface ChannelCapabilities {
   variants: boolean;
 }
 
-// A channel-only form field from manifest.fieldSchema (static options attached).
+// A channel-only form field from manifest.fieldSchema, with static options.
 export type ChannelFieldType = "text" | "textarea" | "number" | "boolean" | "select" | "category" | "policy" | "custom";
 
 export interface ChannelFieldOption {
@@ -59,7 +65,7 @@ export interface ChannelSummary {
   // Channel-only fields for the product form's panel.
   fieldSchema?: ChannelFieldDescriptor[];
   productConstraints?: ChannelProductConstraints;
-  // True unless this channel needs something the tenant doesn't have yet (Google Shopping: a verified storefront domain). `unavailable_reason` is a ready-to-show string whenever this is false.
+  // False if a prerequisite is missing (e.g. domain); see unavailable_reason.
   requiresStorefront?: boolean;
   available: boolean;
   unavailable_reason: string | null;
@@ -67,10 +73,27 @@ export interface ChannelSummary {
   connection: ChannelConnectionInfo;
   health: ChannelHealthInfo;
   listing_counts: Record<string, number>;
-  // Real per-platform "most recent listing sync" timestamp, distinct from health.last_success_at (connection-level "last successful API call").
+  // Latest listing sync; health.last_success_at is the last API success.
   last_synced_at: string | null;
-  // Sum of this channel's listings in sync_status error/price_locked, computed server-side (channel.service.js).
+  // Listings in error/price_locked, counted server-side.
   needs_attention_count: number;
-  // Folds needs_attention_count with connection-level trouble (tripped circuit breaker, failure streak) into one verdict for the summary card.
+  // needs_attention_count plus connection trouble, as one card verdict.
   health_status: "healthy" | "needs_attention";
+}
+
+export type ChannelSyncLogStatus = "success" | "failure" | "skipped";
+
+// One ChannelSyncLog row (GET /channels/:platform/logs).
+export interface ChannelSyncLog {
+  _id: string;
+  platform: string;
+  job_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  status: ChannelSyncLogStatus;
+  attempt: number;
+  error_code: string | null;
+  error_message: string | null;
+  duration_ms: number | null;
+  created_at: string;
 }

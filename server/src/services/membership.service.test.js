@@ -1,11 +1,10 @@
 // services/membership.service.test.js
-// A person can hold several organisations with a different role in each; permissions only come
-// from an ACTIVE membership; leaving one organisation never touches the account or the others.
-// Needs a live Mongo connection. Run: node --test src/services/membership.service.test.js
+// Per-org roles, ACTIVE-only permissions, leaving is per-org. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const User = require("../models/User");
@@ -22,7 +21,7 @@ async function makeTenant(suffix, label) {
     slug: `test-${label}-${suffix}`.toLowerCase(),
     code: `T${suffix.slice(0, 6).toUpperCase()}${label[0].toUpperCase()}`,
     company_name: `Test ${label} ${suffix}`,
-  });
+  }).then(trackFixtureTenant);
 }
 
 async function makeUser(suffix, tenantId) {

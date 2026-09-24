@@ -1,33 +1,52 @@
 // services/marketplace/circuitBreaker.js
-// Per-(tenant, platform) circuit breaker backed by ChannelConnection, checked by sync.service.js before
-// each adapter call. Deliberately not a Bull queue.pause(), which would stall every tenant on that platform.
+// Per-(tenant, platform) breaker; not queue.pause(), which stalls all tenants.
 
 const ChannelConnection = require("../../models/ChannelConnection");
 const { logger } = require("../../loaders/logging");
 const config = require("../../config");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
 
-// Only transport/auth failures (5xx, network error, 401/403) count; 400-level product data
-// errors never trip the breaker. Duck-typed on .status/.statusCode so any adapter can use this.
+// Node/undici codes; fetch puts them on err.cause or inside an AggregateError.
+const NETWORK_ERROR_CODES = new Set([
+  "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "EPIPE",
+  "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
+]);
+// fetch aborts are DOMExceptions identified by name, not code.
+const ABORT_ERROR_NAMES = new Set(["AbortError", "TimeoutError"]);
+const MAX_CAUSE_DEPTH = 4;
+
+function isNetworkFailure(err, depth = 0) {
+  if (!err || depth > MAX_CAUSE_DEPTH) return false;
+  // NOTE: our own DB failing isn't the channel's transport; never trip on it.
+  if (typeof err.name === "string" && err.name.startsWith("Mongo")) return false;
+  if (NETWORK_ERROR_CODES.has(err.code) || ABORT_ERROR_NAMES.has(err.name)) return true;
+  if (Array.isArray(err.errors) && err.errors.some((e) => isNetworkFailure(e, depth + 1))) return true;
+  return isNetworkFailure(err.cause, depth + 1);
+}
+
+// Positive match only: network error, 5xx, 401 or 403; nothing else trips.
 function isTransportOrAuthFailure(err) {
-  const status = err?.status ?? err?.statusCode;
-  if (status != null) return status >= 500 || status === 401 || status === 403;
-  // No HTTP status at all — a thrown network/timeout error, treated as transport-level.
-  return true;
+  const status = Number(err?.status ?? err?.statusCode);
+  if (Number.isInteger(status) && status > 0) return status >= 500 || status === 401 || status === 403;
+  return isNetworkFailure(err);
 }
 
 async function recordSuccess(tenantId, platform) {
   await ChannelConnection.updateOne(
     { tenant_id: tenantId, platform },
     {
-      $set: { consecutive_failures: 0, last_success_at: new Date(), status: CHANNEL_CONNECTION_STATUS.CONNECTED, last_error: null },
+      $set: {
+        consecutive_failures: 0,
+        last_success_at: new Date(),
+        status: CHANNEL_CONNECTION_STATUS.CONNECTED,
+        last_error: null,
+        status_reason: null,
+      },
     },
   );
 }
 
-// Returns { tripped } so callers can act on the transition itself. upsert: true relies on the
-// adapter's loadSettings already having migrated a full ChannelConnection row before this runs —
-// a new adapter must resolve settings before calling recordFailure, or this creates a bare row.
+// upsert assumes loadSettings already made the row, else inserts a bare one.
 async function recordFailure(tenantId, platform, err) {
   if (!isTransportOrAuthFailure(err)) return { tripped: false, counted: false };
 
@@ -56,11 +75,11 @@ async function isOpen(tenantId, platform) {
   return conn?.status === CHANNEL_CONNECTION_STATUS.DEGRADED;
 }
 
-// Explicit resume path used by the reconnect/manual-sync flow to clear a tripped breaker.
+// Clears a tripped breaker on reconnect or manual sync.
 async function resume(tenantId, platform) {
   await ChannelConnection.updateOne(
     { tenant_id: tenantId, platform },
-    { $set: { status: CHANNEL_CONNECTION_STATUS.CONNECTED, consecutive_failures: 0, last_error: null } },
+    { $set: { status: CHANNEL_CONNECTION_STATUS.CONNECTED, consecutive_failures: 0, last_error: null, status_reason: null } },
   );
   logger.info(`[circuitBreaker] ${platform}/${tenantId}: resumed`);
 }

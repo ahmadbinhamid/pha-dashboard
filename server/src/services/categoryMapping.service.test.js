@@ -1,10 +1,11 @@
 // services/categoryMapping.service.test.js
-// Category resolution order, tenant isolation and Google suggestions. Needs Mongo.
+// Category resolution order, tenant isolation, Google suggestions. Needs Mongo.
 
 const test = require("node:test");
 const { before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -25,7 +26,7 @@ after(() => mongoose.disconnect());
 
 async function fixture() {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const [discs, pads] = await Promise.all(
     ["Brake Discs", "Brake Pads"].map((name) => Category.create({ tenant_id: tenantId, name: `${name} ${suffix}`, slug: `${name}-${suffix}` })),
   );

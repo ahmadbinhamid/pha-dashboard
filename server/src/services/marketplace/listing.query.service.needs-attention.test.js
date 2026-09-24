@@ -1,11 +1,10 @@
 // services/marketplace/listing.query.service.needs-attention.test.js
-// Verifies needs_attention: true expands server-side to sync_status in [error, price_locked],
-// excludes everything else, and takes precedence over a plain sync_status passed alongside it.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/listing.query.service.needs-attention.test.js
+// needs_attention = [error, price_locked], beats sync_status. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -39,7 +38,7 @@ function makeListing(tenantId, productId, sync_status, platform = "ebay") {
   });
 }
 
-// A product can have at most one listing per (platform, variant), so each test listing needs its own product.
+// One listing per (platform, variant), so each listing needs its own product.
 async function makeListingWithNewProduct(tenantId, sync_status, platform = "ebay") {
   const product = await makeProduct(tenantId);
   return makeListing(tenantId, product._id, sync_status, platform);
@@ -49,7 +48,7 @@ test("listListings: needs_attention=true returns only error + price_locked listi
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Promise.all([
     makeListingWithNewProduct(tenantId, LISTING_SYNC_STATUS.SYNCED),
@@ -71,14 +70,14 @@ test("listListings: needs_attention=true takes precedence over a plain sync_stat
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Promise.all([
     makeListingWithNewProduct(tenantId, LISTING_SYNC_STATUS.SYNCED),
     makeListingWithNewProduct(tenantId, LISTING_SYNC_STATUS.ERROR),
   ]);
 
-  // sync_status: "synced" would normally match the first listing — needs_attention must win instead.
+  // sync_status "synced" matches the first listing; needs_attention must win.
   const { items, total } = await listListings(
     { skip: 0, limit: 20, sync_status: LISTING_SYNC_STATUS.SYNCED, needs_attention: true },
     tenantId,
@@ -92,7 +91,7 @@ test("listListings: needs_attention omitted/false falls back to a plain sync_sta
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Promise.all([
     makeListingWithNewProduct(tenantId, LISTING_SYNC_STATUS.SYNCED),
@@ -108,12 +107,12 @@ test("listListingsGroupedByProduct: needs_attention=true narrows which PRODUCTS 
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const productWithError = await makeProduct(tenantId);
   const productAllHealthy = await makeProduct(tenantId);
 
   await makeListing(tenantId, productWithError._id, LISTING_SYNC_STATUS.ERROR);
-  // Same product also has a healthy google listing, which must still show up once the product qualifies.
+  // Its healthy google listing must still show once the product qualifies.
   await MarketplaceListing.create({
     tenant_id: tenantId,
     product: productWithError._id,

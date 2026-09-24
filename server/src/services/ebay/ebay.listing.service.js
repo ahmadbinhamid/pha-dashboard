@@ -9,8 +9,7 @@ const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
 const { buildWordSearchOr } = require("../../utils/regex");
 
-// Production eBay item URLs are marketplace-specific; sandbox uses one shared
-// domain regardless of marketplace. Extend this map as new marketplaces are enabled.
+// Prod item URLs are per-marketplace; sandbox shares one domain.
 const EBAY_SITE_DOMAINS = {
   EBAY_US: "ebay.com",
   EBAY_AU: "ebay.com.au",
@@ -26,8 +25,7 @@ function buildEbayItemUrl(externalListingId, settings) {
   return `https://www.${domain}/itm/${externalListingId}`;
 }
 
-// Best-effort: adds fitment rows to this tenant's own vehicle catalog (never the shared/global one)
-// without letting a catalog write failure block the listing save.
+// Best-effort sync to the tenant's own vehicle catalog; never blocks the save.
 async function syncFitmentCatalog(fitment, tenantId) {
   if (!Array.isArray(fitment) || fitment.length === 0) return;
   try {
@@ -37,7 +35,7 @@ async function syncFitmentCatalog(fitment, tenantId) {
   }
 }
 
-// ── Create ────────────────────────────────────────────────────────────────────
+// ── Create ──
 
 async function createListing(payload, tenantId) {
   const {
@@ -71,8 +69,7 @@ async function createListing(payload, tenantId) {
   const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
   if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
 
-  // Idempotency: prevents a double-click from creating a second listing for the same product/variant
-  // (caused the Aug 2026 duplicate-listing incident). Check first for a clean return, not a raw duplicate-key error.
+  // Idempotency: a double-click must not create a second listing.
   const existing = await MarketplaceListing.findOne({
     tenant_id: tenantId,
     product,
@@ -122,8 +119,7 @@ async function createListing(payload, tenantId) {
 
     return listing;
   } catch (err) {
-    // check-then-create isn't atomic; the unique index catches true races — recover by
-    // returning whichever request won, instead of surfacing a raw E11000.
+    // check-then-create isn't atomic; on E11000 return the race winner.
     if (err.code === 11000 && err.keyPattern?.product) {
       const winner = await MarketplaceListing.findOne({
         tenant_id: tenantId,
@@ -137,13 +133,13 @@ async function createListing(payload, tenantId) {
   }
 }
 
-// ── Read ──────────────────────────────────────────────────────────────────────
+// ── Read ──
 
 async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate({
       path: "product",
-      select: "title slug sku price brand mpn attachments vehicle categories",
+      select: "title slug sku price brand mpn condition attachments vehicle categories",
       populate: { path: "attachments" },
     })
     .populate({
@@ -154,13 +150,11 @@ async function getListingById(id, tenantId) {
     .populate("photo_overrides");
 }
 
-// Aggregation, not .find(), because `search` must match the populated product's title/sku
-// (mirrors inventory.service.js's listInventory pattern).
+// Aggregation so `search` can match the populated product's title/sku.
 async function listListings({ skip, limit, product, product_in, state, sync_status, search } = {}, tenantId, settings) {
   const match = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
   if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
-  // Batch lookup for "which of these products have a listing" (e.g. Products list Channels column) —
-  // bypasses skip/limit since the caller already bounded input to one page's product ids.
+  // Batch "which products have a listing" lookup; input is page-bounded.
   if (product_in?.length) {
     match.product = { $in: product_in.map((id) => mongoose.Types.ObjectId.createFromHexString(id)) };
   }
@@ -204,7 +198,7 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
 
   const countPipeline = [...pipeline, { $count: "total" }];
   pipeline.push({ $sort: { created_at: -1 } });
-  // product_in already bounds the result set — pagination would reintroduce the truncation it avoids.
+  // product_in already bounds results; paginating would truncate them.
   if (!product_in?.length) pipeline.push({ $skip: skip }, { $limit: limit });
 
   const [items, countResult] = await Promise.all([
@@ -220,7 +214,7 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
   return { items: shapedItems, total: countResult[0]?.total || 0 };
 }
 
-// ── Update ────────────────────────────────────────────────────────────────────
+// ── Update ──
 
 async function updateListing(id, payload, tenantId) {
   const allowed = [
@@ -254,7 +248,7 @@ async function updateListing(id, payload, tenantId) {
     };
   }
 
-  // Expand item_specifics into dot-notation keys to skip Mongoose's whole-subdoc cast path.
+  // Dot-notation keys skip Mongoose's whole-subdoc cast path.
   if (update.item_specifics) {
     const specs = update.item_specifics;
     update["item_specifics.brand"] = specs.brand ?? null;
@@ -275,7 +269,7 @@ async function updateListing(id, payload, tenantId) {
     .populate("photo_overrides");
 }
 
-// ── Delete ────────────────────────────────────────────────────────────────────
+// ── Delete ──
 
 async function deleteListing(id, tenantId) {
   const filter = tenantId ? { _id: id, tenant_id: tenantId } : { _id: id };

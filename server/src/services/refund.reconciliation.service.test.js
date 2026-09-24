@@ -1,12 +1,10 @@
 // services/refund.reconciliation.service.test.js
-// reconcileStuckRefunds must distinguish "Stripe confirmed this refund doesn't exist"
-// (resource_missing, the only case that releases a reservation) from every other error, which
-// could just be Stripe being briefly unreachable. Mocks getStripeClient before first require.
-// Needs a live Mongo connection. Run: node --test src/services/refund.reconciliation.service.test.js
+// Only resource_missing releases a stuck reservation. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -28,10 +26,10 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
     },
   }));
 
-  // Required only now, after the mock is installed, so getStripeClient calls pick it up.
+  // Required after the mock is installed so getStripeClient calls pick it up.
   const { reconcileStuckRefunds } = require("./refund.reconciliation.service");
 
-  const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+  const TEST_TENANT_ID = fixtureId();
   const suffix = crypto.randomUUID();
   const order = await Order.create({
     tenant_id: TEST_TENANT_ID,
@@ -39,7 +37,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
     invoice_number: `TEST-RECON-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Reconciliation test item",
         sku: null,
@@ -113,7 +111,7 @@ test("reconciliation: a transient Stripe error leaves a PROCESSING refund untouc
       idempotency_key: `recon-test-${suffix}`,
     });
 
-    // Backdate past RESERVATION_STALE_AFTER_MS via the native driver, since created_at is immutable at the schema level.
+    // Backdate via the native driver; created_at is immutable in the schema.
     const staleCreatedAt = new Date(Date.now() - refundService.RESERVATION_STALE_AFTER_MS - 10 * 60 * 1000);
     await Refund.collection.updateOne({ _id: refund._id }, { $set: { created_at: staleCreatedAt } });
 

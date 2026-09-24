@@ -5,6 +5,7 @@ const test = require("node:test");
 const { before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
@@ -18,7 +19,7 @@ after(() => mongoose.disconnect());
 const quiet = () => {};
 
 test("checkEbaySettingsMigrated: an unmigrated tenant is reported; a migrated or soft-deleted one is not double-counted", async () => {
-  const [pending, migrated, softDeleted] = [0, 1, 2].map(() => new mongoose.Types.ObjectId());
+  const [pending, migrated, softDeleted] = [0, 1, 2].map(() => fixtureId());
   await EbaySettings.collection.insertMany([pending, migrated, softDeleted].map((tenant_id) => ({ tenant_id, connection_status: "connected" })));
   await ChannelConnection.collection.insertMany([
     { tenant_id: migrated, platform: "ebay", status: "connected", deleted_at: null },

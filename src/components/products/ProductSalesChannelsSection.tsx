@@ -1,47 +1,27 @@
-import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FormSection } from "@/components/products/FormSection";
-import { SalesChannelRow } from "@/components/channels/SalesChannelRow";
+import { Card } from "@/components/ui/Card";
 import { SkeletonText } from "@/components/ui/Skeleton";
-import { getChannels } from "@/lib/api/channels";
-import { getListings } from "@/lib/api/listings";
+import { SalesChannelRow } from "@/components/channels/SalesChannelRow";
 import { getProductMappedCategories } from "@/lib/api/categoryMappings";
-import type { AnyMarketplaceListing, ListingProductDefaults } from "@/types/marketplace";
+import { useProductChannelListings } from "@/hooks/useProductChannelListings";
+import type { ListingProductDefaults } from "@/types/marketplace";
 import type { Product } from "@/types/product";
-import { SALES_CHANNELS_ANCHOR } from "@/config/salesChannels";
 
 interface Props {
-  number: number;
   product: Product;
-  // Channel panel to open on arrival (from a redirected listing link).
+  // Last save time, so rows show "Syncing…" until channels catch up.
+  syncingSince: number | null;
+  // Channel whose settings drawer opens on arrival (from a redirected link).
   focusChannel?: string | null;
-  focus?: boolean;
 }
 
 // Lists the product on each channel; channels only add what they can't derive.
-export function ProductSalesChannelsSection({ number, product, focusChannel, focus = false }: Props) {
-  const anchorRef = useRef<HTMLDivElement>(null);
-
-  // Shares the Listings/Settings cache.
-  const { data: channelsRes, isLoading: channelsLoading } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
-  const { data: listingsRes, isLoading: listingsLoading } = useQuery({
-    queryKey: ["listings", "product", product._id],
-    queryFn: () => getListings({ product: product._id, limit: 100 }),
-  });
+export function ProductSalesChannelsSection({ product, syncingSince, focusChannel }: Props) {
+  const { channels, baseListing, variantListingCount, isLoading } = useProductChannelListings(product._id, syncingSince);
   const { data: mappedRes } = useQuery({
     queryKey: ["product-mapped-categories", product._id],
     queryFn: () => getProductMappedCategories(product._id),
   });
-
-  useEffect(() => {
-    if (focus || focusChannel) anchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [focus, focusChannel]);
-
-  const channels = channelsRes?.data ?? [];
-  const listings: AnyMarketplaceListing[] = listingsRes?.data?.items ?? [];
-  // Base listings only; variant listings stay on the Listings page.
-  const baseListing = (platform: string) => listings.find((l) => l.platform === platform && !l.variant) ?? null;
-  const variantListingCount = listings.filter((l) => l.variant).length;
 
   const productDefaults: ListingProductDefaults = {
     title: product.title,
@@ -50,17 +30,16 @@ export function ProductSalesChannelsSection({ number, product, focusChannel, foc
   };
 
   return (
-    <div id={SALES_CHANNELS_ANCHOR} ref={anchorRef} className="scroll-mt-28">
-      <FormSection
-        number={number}
-        title="Sales channels"
-        description="Tick a channel to list this product there. Product edits reach every ticked channel automatically."
-        contentClassName="divide-y divide-border/60 py-1"
-      >
-        {channelsLoading || listingsLoading ? (
-          <SkeletonText lines={3} className="py-3" />
+    <Card>
+      <div className="flex items-baseline gap-2 border-b border-border p-5">
+        <h3 className="text-sm font-semibold text-fg">Sales channels</h3>
+        <span className="ml-auto text-xs text-fg/45">Saving the product re-syncs every ticked channel in ~5–10s</span>
+      </div>
+      <div className="divide-y divide-border">
+        {isLoading ? (
+          <SkeletonText lines={3} className="p-5" />
         ) : channels.length === 0 ? (
-          <p className="py-3 text-sm text-fg/55">No sales channels are available.</p>
+          <p className="p-5 text-sm text-fg/55">No sales channels are available.</p>
         ) : (
           channels.map((channel, index) => (
             <SalesChannelRow
@@ -71,16 +50,17 @@ export function ProductSalesChannelsSection({ number, product, focusChannel, foc
               productDefaults={productDefaults}
               listingSummary={baseListing(channel.key)}
               mappedCategory={mappedRes?.data?.[channel.key] ?? null}
+              syncingSince={syncingSince}
               defaultOpen={focusChannel === channel.key}
             />
           ))
         )}
         {variantListingCount > 0 && (
-          <p className="py-3 text-xs text-fg/55">
+          <p className="p-5 text-xs text-fg/55">
             {variantListingCount} variant listing{variantListingCount === 1 ? "" : "s"} for this product are managed on the Listings page.
           </p>
         )}
-      </FormSection>
-    </div>
+      </div>
+    </Card>
   );
 }

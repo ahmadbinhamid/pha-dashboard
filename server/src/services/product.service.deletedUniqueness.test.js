@@ -1,12 +1,10 @@
 // services/product.service.deletedUniqueness.test.js
-// Regression guard for a live prod incident: unique indexes cover soft-deleted products, but the
-// soft-delete plugin hides those rows from find/findOne, so generateNextSku/ensureUniqueSlug
-// picked values a soft-deleted row still held and every insert died on a duplicate key.
-// Needs a live Mongo connection. Run: node --test src/services/product.service.deletedUniqueness.test.js
+// SKU/slug generation must skip values held by soft-deleted rows. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -16,14 +14,14 @@ const Product = require("../models/Product");
 
 // Unique per run so concurrent/repeat runs never collide on the real indexes.
 const tenantCode = `ZZ${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-const tenant = { _id: new mongoose.Types.ObjectId(), code: tenantCode };
+const tenant = { _id: fixtureId(), code: tenantCode };
 
 test.before(async () => {
   await mongoose.connect(config.mongoUri);
 });
 
 test.after(async () => {
-  // deleteMany bypasses the soft-delete plugin, so this really purges the fixtures.
+  // deleteMany bypasses soft-delete, so this really purges the fixtures.
   await Product.deleteMany({ tenant_id: tenant._id });
   await mongoose.disconnect();
 });
@@ -89,8 +87,8 @@ test("ensureUniqueSlug treats a soft-deleted product's slug as taken", async () 
 });
 
 test("slug uniqueness stays scoped per tenant", async () => {
-  // A slug taken in another tenant must not bump this tenant's — the compound index allows cross-tenant reuse.
-  const otherTenant = new mongoose.Types.ObjectId();
+  // Another tenant's slug must not bump this one's; the index is per-tenant.
+  const otherTenant = fixtureId();
   const base = `shared-${tenantCode.toLowerCase()}`;
 
   await Product.create({

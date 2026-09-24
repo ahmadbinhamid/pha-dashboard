@@ -1,35 +1,5 @@
 // services/marketplace/adapters/ebay.adapter.js
-//
-// Implements the marketplace adapter interface for eBay.
-// Wraps the existing eBay API service so the underlying HTTP sequence
-// (upsert inventory item → create/recover offer → publish) is unchanged.
-//
-// Multi-tenant: `settings` (an EbaySettings doc, see ebay.settings.service.js)
-// carries this tenant's refresh_token/marketplace/policies and is threaded
-// into every eBay API call instead of a single global credential.
-//
-// Interface:
-//   key                                            -> "ebay"
-//   manifest                                        -> catalogue entry (see registry.js#list)
-//   capabilities                                    -> { publish, inventory, batch, orders, webhooks, inboundInventory, variants }
-//   loadSettings(tenantId)                          -> resolved eBay settings, or null if never connected
-//   publish(resolved, settings, hooks?, seq?)      -> { external_listing_id, external_offer_id, quantity }
-//   update(resolved, settings, hooks?, seq?)       -> { external_listing_id, external_offer_id, quantity }
-//   end(listing, { product, variant, settings, sku }) -> void
-// Pure translator: all I/O is resolved beforehand by sync.service/listing.resolver.
-//
-// There is no separate lightweight "just push a quantity" entry point
-// anymore (the old pushInventory/push_quantity job) — every quantity push,
-// whatever triggered it, goes through publish/update via the sync_listing
-// job, so there's exactly one writer path and one fencing check (`seq` vs
-// MarketplaceListing.last_pushed_seq) instead of two independently-fenced
-// (or worse, one unfenced) ones. See inventory.service.js#fanOutMarketplaceInventory
-// and marketplace/sync.service.js#syncListing.
-//
-// hooks.onOfferCreated(offerId) is invoked as soon as an offer ID is known,
-// before the (separate, failure-prone) publish call — lets the caller persist
-// it immediately so a later failure doesn't cause a retry to recreate the offer.
-// hooks.onQuantityPushed(quantity) fires after a confirmed write to stamp the baseline.
+// eBay adapter (pure translator); every quantity push goes via publish/update.
 
 const { logger } = require("../../../loaders/logging");
 const {
@@ -50,15 +20,20 @@ const { getConditionPolicies } = require("../../ebay/ebay.catalog.service");
 const { getSettings: getEbaySettings } = require("../../ebay/ebay.settings.service");
 const { renderEbayDescription, descriptionInputFromResolved } = require("../../ebay/ebay.description.template");
 const { assertFieldValues, assertProductConstraints } = require("../fieldSchema");
-const { fieldSchema, productConstraints, fieldValues, UPFRONT_KEYS, POLICY_KEYS } = require("./ebay.fieldSchema");
+const {
+  fieldSchema,
+  productConstraints,
+  fieldValues,
+  effectiveCondition,
+  UPFRONT_KEYS,
+  POLICY_KEYS,
+} = require("./ebay.fieldSchema");
 const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
+const { httpError } = require("../../../utils/http/httpError");
 
 const key = "ebay";
 
-// GET /api/v1/channels merges this with the tenant's ChannelConnection
-// status/health (see channel.controller.js) — logo is left null, not a path
-// into assets/branding (no eBay asset exists there), since the frontend
-// isn't touched in this run and can decide how to render an icon for it.
+// Merged with ChannelConnection status in GET /channels; no eBay logo asset.
 const manifest = {
   key,
   name: "eBay",
@@ -93,53 +68,23 @@ const capabilities = {
   variants: true,
 };
 
-// Resolves this tenant's eBay settings for the generic sync dispatcher (see
-// sync.service.js). Deliberately mirrors getEbaySettings' own contract
-// exactly (an object — possibly with every field null/default for a never-
-// connected tenant — never `null` itself), NOT the newer generic
-// loadSettings contract's "null means not connected" convention.
-// NOTE: an eBay tenant with active listings but no credentials configured
-// still reaches publish()/update() below exactly as it always has, and gets
-// the same "credentials not configured" thrown error (retried by Bull same
-// as today) — the generic "not connected" skip in sync.service.js is for
-// adapters whose loadSettings legitimately returns null (a platform with no
-// resolvable settings at all), which never happens for eBay. Changing that
-// would be an observable behavior change for eBay this migration must avoid.
+// NOTE: never null, so an unconnected eBay tenant throws instead of skipping.
 async function loadSettings(tenantId) {
   return getEbaySettings(tenantId);
 }
 
-// eBay-only baseline fields, so the inventory poller can tell our pushes from eBay edits.
-// TODO(dual-write): drop once ebay_synced_quantity is backfilled.
+// Poller baseline (ours vs eBay edits). TODO(dual-write): drop after backfill.
 function syncBaselineFields(quantity) {
   return { ebay_synced_quantity: quantity, ebay_synced_at: new Date(), ebay_pending_reconcile_qty: null };
 }
 
-// Preferred fallback order when the stored condition isn't accepted for the
-// listing's category — e.g. "USED_GOOD" is invalid for a primary category
-// that only allows "USED_ACCEPTABLE" (eBay error 25021). We stay within the
-// same condition family (new-like vs. used-like) rather than jumping across.
-// used family ordered 3000 (USED_EXCELLENT) first, not 5000 (USED_GOOD):
-// 4000/5000/6000 are eBay's MEDIA grades (books, DVDs, games) — most eBay
-// Motors parts categories don't accept them at all, only 3000/6000/7000, so
-// leading with a media-only grade picked the wrong one whenever a category
-// happened to accept more than one used-family id. See normalizeCondition's
-// own comment in ebay.api.service.js for the matching default-mapping fix.
+// Same-family fallbacks (25021); used leads with 3000, 4000-6000 are media.
 const CONDITION_FALLBACK_ORDER = {
   new: ["NEW", "NEW_OTHER", "LIKE_NEW", "CERTIFIED_REFURBISHED", "EXCELLENT_REFURBISHED", "VERY_GOOD_REFURBISHED", "GOOD_REFURBISHED", "SELLER_REFURBISHED"],
   used: ["USED_EXCELLENT", "USED_VERY_GOOD", "USED_GOOD", "USED_ACCEPTABLE", "FOR_PARTS_OR_NOT_WORKING"],
 };
 
-// Thrown by resolveCategoryCondition when a listing's condition could not be
-// verified against eBay's per-category policy — the lookup either threw or
-// came back with no accepted conditions at all. `.status = 400` is what
-// circuitBreaker.js's isTransportOrAuthFailure keys off to classify this as
-// a per-item data problem, not a transport/auth failure (same convention as
-// every other 400-level rejection) — a bad/unverifiable condition on ONE
-// listing says nothing about whether this tenant's eBay connection itself
-// is healthy, and must never pause syncing for every other listing.
-// `.code` is a stable, machine-readable identifier that flows through into
-// the listing's ChannelSyncLog row (see sync.service.js's catch block).
+// status 400 = per-item data error, so the circuit breaker won't trip.
 class ConditionUnverifiedError extends Error {
   constructor(message) {
     super(message);
@@ -149,29 +94,11 @@ class ConditionUnverifiedError extends Error {
   }
 }
 
-// Resolves the stored listing condition to one eBay actually accepts for the
-// listing's primary category, cross-checking against the Sell Metadata API's
-// per-category condition policy instead of assuming a static mapping is
-// always valid (it isn't — accepted conditions vary by category).
-//
-// "We could not verify this" and "we verified this and it's fine" used to
-// both silently resolve to the same fallback condition — an empty policy
-// list, or the lookup itself throwing, both just returned the raw,
-// unverified condition and let it through to eBay, which only ever caught
-// the mismatch much later, at publishOffer, with a far less useful error
-// (25021 — see this function's own git history for the incident that
-// exposed it: a sandbox/production Metadata-API URL mismatch made every
-// lookup fail, silently, for a sandbox-connected tenant). Both are now a
-// hard failure — a wrong/unverifiable condition is a listing-data problem
-// the merchant must fix, not something worth silently guessing at and
-// deferring to a much more confusing eBay-side rejection.
+// Condition the category accepts; unverifiable fails hard (not a late 25021).
 async function resolveCategoryCondition(rawCondition, categoryId, settings, sku = null) {
   const fallback = normalizeCondition(rawCondition, sku);
   if (!categoryId) {
-    // publish() throws on a missing ebay_category_id immediately after this
-    // call anyway (update() logs+skips the offer step) — nothing to verify
-    // against without one, so this stays a silent early return, just made
-    // traceable for anyone debugging why verification never ran.
+    // No category: publish() throws right after; update() skips the offer.
     logger.debug(`[EbayAdapter] resolveCategoryCondition: no ebay_category_id yet — using "${fallback}" unverified`);
     return fallback;
   }
@@ -220,9 +147,7 @@ function isPriceLockedBySaleError(err) {
   return err instanceof EbayApiError && err.hasErrorId(EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE);
 }
 
-// A stored external_offer_id eBay no longer recognizes — deleted/expired on
-// eBay's side, or a stale/bad ID. See EBAY_ERROR_CODE's comment for why two
-// codes both mean this.
+// Stale/deleted offer id; see EBAY_ERROR_CODE for why two codes mean this.
 function isOfferMissingError(err) {
   return (
     err instanceof EbayApiError &&
@@ -230,11 +155,7 @@ function isOfferMissingError(err) {
   );
 }
 
-// updateOffer, tolerant of eBay rejecting the price/quantity revision because
-// the offer is part of an active sale (error 25019) — that's not something
-// retrying or erroring out helps with, it resolves itself once the sale ends
-// or is reconfigured on eBay, so this is treated as a soft skip (logged, not
-// thrown) rather than the same hard failure as every other updateOffer error.
+// Soft-skips 25019 (offer in an active sale); resolves once the sale ends.
 async function updateOfferTolerant(token, settings, offerId, offerBody, sku) {
   try {
     await updateOffer(token, settings, offerId, offerBody);
@@ -246,11 +167,7 @@ async function updateOfferTolerant(token, settings, offerId, offerBody, sku) {
   }
 }
 
-// Creates a fresh offer, recovering from eBay reporting one already exists
-// for this SKU (25002 — extracts the offerId eBay reports back and switches
-// to updateOffer instead). Shared by publish()'s "no offerId yet" branch and
-// both publish()/update()'s "stored offerId is dead" recovery below, so
-// there's exactly one place that knows how to stand up an offer from scratch.
+// Creates an offer, or on 25002 updates the existing one eBay reports.
 async function createOrRecoverOffer(token, settings, offerBody, sku) {
   try {
     const offerId = await createOffer(token, settings, offerBody);
@@ -265,25 +182,14 @@ async function createOrRecoverOffer(token, settings, offerBody, sku) {
   }
 }
 
-// null means "don't send eBay a quantity at all" — a merchant with
-// stock_control=false has explicitly said they don't track this product's
-// stock, so any number this app sends is a fabrication. The previous
-// behavior (Math.max(total, 1), i.e. "always claim at least 1 available")
-// wrote a number to eBay with no real basis. Leaving eBay's own quantity
-// alone — set by the seller directly, or left at whatever it already was —
-// is the honest option. Callers must skip the quantity portion of the sync
-// entirely when this returns null (see buildInventoryItemFromResolved /
-// buildOfferFromResolved in ebay.api.service.js) and must not call
-// updateSyncBaseline, since there is no expected-eBay-quantity to track for
-// an untracked-stock product.
+// null = untracked stock: skip qty and baseline rather than invent a number.
 function resolveQuantity(resolved) {
   if (!resolved.product.stock_control) return null;
   if (!resolved.stock) throw new Error(`[EbayAdapter] ${resolved.sku}: resolved.stock missing — hydrate via listing.resolver#hydrateResolved`);
   return resolved.stock.quantity;
 }
 
-// No override => render the template from live data (was a stored client-side copy).
-// NOTE: legacy null-override listings now get the template instead of plain text.
+// NOTE: no override => template rendered from live data (legacy ones too).
 function withRenderedDescription(resolved) {
   if (resolved.listing?.description_override) return resolved;
   const branding = resolved.branding || {};
@@ -301,7 +207,7 @@ function effectiveCategoryId(resolved) {
 
 // Enforces fieldSchema rules; `keys` picks which apply at this step.
 function assertEbayFields(resolved, settings, keys) {
-  const values = fieldValues(resolved.listing, { categoryId: effectiveCategoryId(resolved), settings });
+  const values = fieldValues(resolved.listing, { categoryId: effectiveCategoryId(resolved), settings, product: resolved.product });
   assertFieldValues(key, fieldSchema, values, { keys, sku: resolved.sku });
 }
 
@@ -314,31 +220,25 @@ function assertUpfrontFields(resolved, settings) {
 async function publish(resolved, settings, hooks = {}, _seq = null) {
   resolved = withRenderedDescription(resolved);
   if (!credentialsConfigured(settings)) {
-    throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
+    throw httpError("[EbayAdapter] eBay credentials not configured for this tenant", 422);
   }
 
   const token = await getAccessToken(settings);
-  if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
+  if (!token) throw httpError("[EbayAdapter] Could not obtain eBay access token", 401);
 
   const { listing } = resolved;
   assertUpfrontFields(resolved, settings);
   const quantity = resolveQuantity(resolved);
 
-  // Push 0 normally — an item genuinely out of stock still gets its true
-  // quantity written to eBay. Refusing to write here (the old behavior)
-  // meant eBay kept selling stock we don't have; the listing stays alive at
-  // 0 via eBay's own out-of-stock handling, not by us hiding the number.
-  // marketplace/sync.service.js sets sync_status OUT_OF_STOCK for
-  // visibility, but only after this write succeeds — see its own comment.
+  // Push 0 too so eBay stops selling; sync.service flags OUT_OF_STOCK after.
 
   // Step 1 — inventory item
   const categoryId = effectiveCategoryId(resolved);
-  const condition = await resolveCategoryCondition(listing.condition, categoryId, settings, resolved.sku);
+  const condition = await resolveCategoryCondition(effectiveCondition(listing, resolved.product), categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
-  // null quantity (stock_control=false) has nothing to track a baseline
-  // for — see resolveQuantity's comment.
+  // Untracked stock (null) has no baseline to stamp.
   if (quantity != null) await hooks.onQuantityPushed?.(quantity);
 
   // Same point as the old category check (after the item write).
@@ -346,12 +246,10 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
   // publishOffer needs all three policies (listing or tenant default).
   assertEbayFields(resolved, settings, POLICY_KEYS);
 
-  // Step 2 — ensure merchant location exists (creates it from this tenant's
-  // warehouse address if missing)
+  // Step 2 - ensure merchant location exists (built from warehouse address)
   await ensureLocation(token, settings);
 
-  // Step 4 — create/update offer (recover from 25002 if it already exists,
-  // or from the stored offerId being dead on eBay's side — see isOfferMissingError)
+  // Step 4 - create/update offer (recovers from 25002 or a dead offerId)
   logger.info(`[EbayAdapter] using categoryId: "${categoryId}" (${resolved.category?.source || "listing"})`);
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
@@ -372,10 +270,7 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
     logger.info(`[EbayAdapter] offer created: ${offerId}`);
   }
 
-  // Persist the offer ID immediately, before the publish call — otherwise a
-  // publishOffer() failure/timeout leaves the local doc unaware the offer
-  // already exists, and a retry would call createOffer() again for the same
-  // SKU, producing a second offer on eBay.
+  // Persist before publish so a retry after failure can't duplicate the offer.
   await hooks.onOfferCreated?.(offerId);
 
   // Step 5 — publish
@@ -393,14 +288,14 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
 async function update(resolved, settings, hooks = {}, _seq = null) {
   resolved = withRenderedDescription(resolved);
   if (!credentialsConfigured(settings)) {
-    throw new Error("[EbayAdapter] eBay credentials not configured for this tenant");
+    throw httpError("[EbayAdapter] eBay credentials not configured for this tenant", 422);
   }
 
   const token = await getAccessToken(settings);
-  if (!token) throw new Error("[EbayAdapter] Could not obtain eBay access token");
+  if (!token) throw httpError("[EbayAdapter] Could not obtain eBay access token", 401);
 
   const { listing } = resolved;
-  // NOTE: policies not enforced on update; a live offer may rely on eBay-side state.
+  // NOTE: policies not enforced on update; a live offer may use eBay state.
   assertUpfrontFields(resolved, settings);
   const quantity = resolveQuantity(resolved);
 
@@ -408,7 +303,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
 
   // Step 1 — sync inventory item
   const categoryId = effectiveCategoryId(resolved);
-  const condition = await resolveCategoryCondition(listing.condition, categoryId, settings, resolved.sku);
+  const condition = await resolveCategoryCondition(effectiveCondition(listing, resolved.product), categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
@@ -423,9 +318,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
     };
   }
 
-  // Step 2 — update offer (recover from the stored offerId being dead on
-  // eBay's side — see isOfferMissingError — the same as the "lost the
-  // offerId entirely" path just below)
+  // Step 2 - update offer (recreated below if the stored offerId is dead)
   const offerBody = buildOfferFromResolved(resolved, settings, quantity);
   let offerId = listing.external_offer_id || null;
 
@@ -446,12 +339,10 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
     }
   }
 
-  // Listing is "active" but we lost the offerId (or the stored one was dead
-  // on eBay's side, above) — re-create and re-publish
+  // Active but offerId lost or dead - re-create and re-publish
   const { offerId: newOfferId, priceLocked } = await createOrRecoverOffer(token, settings, offerBody, resolved.sku);
   offerId = newOfferId;
-  // Persist immediately — see the comment in publish() for why this can't
-  // wait until after publishOffer() succeeds.
+  // Persist immediately; see publish() for why.
   await hooks.onOfferCreated?.(offerId);
   const listingId = await publishOffer(token, settings, offerId);
   return {
@@ -476,7 +367,8 @@ async function end(listing, { product, settings, sku } = {}) {
   }
 
   const result = await deleteProduct(settings, sku, offerId);
-  if (result.error) throw new Error(result.error);
+  // Keep status/cause so the breaker classifies HTTP and network failures.
+  if (result.error) throw httpError(result.error, result.status, { cause: result.cause });
   logger.info(`[EbayAdapter] listing ended: ${sku}`);
 }
 
@@ -491,8 +383,7 @@ module.exports = {
   update,
   end,
   syncBaselineFields,
-  // Exported for tests (ebay.adapter.condition.test.js) — not part of the
-  // generic adapter contract.
+  // Exported for tests only, not the adapter contract.
   resolveCategoryCondition,
   ConditionUnverifiedError,
 };

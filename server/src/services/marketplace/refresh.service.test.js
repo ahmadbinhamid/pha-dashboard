@@ -1,30 +1,10 @@
 // services/marketplace/refresh.service.test.js
-//
-// Coverage for the stale-listing refresh sweep (see refresh.service.js's
-// own module header for why this exists: Google Merchant Center expires a
-// listing that isn't refreshed within 30 days, and this app's own sync only
-// fires on a stock change or at connect time).
-//
-// Each test registers its OWN fake adapter under a unique platform key
-// (crypto.randomUUID()-suffixed) directly against the registry — same
-// pattern as sync.service.fencing.test.js — so nothing here touches the
-// real "ebay"/"google" adapters or their real credentials.
-//
-// The "no query / no jobs" tests (declared-opt-out, kill switch) use
-// t.mock.method (test-scoped — auto-restored when that test ends, so a
-// tripwire mock can never leak into a later test in this file) to prove NO
-// database call and NO enqueue happens at all — no Mongo connection is even
-// opened for those two. Every other test needs a live Mongo connection
-// (real ChannelConnection/MarketplaceListing documents — chunking and
-// staleness-filtering correctness is exactly what's under test, so faking
-// Mongoose's query/cursor internals would test less than the real thing)
-// but mocks channelQueue.enqueueChannelJob throughout to avoid needing Redis.
-//
-// Run with: node --test src/services/marketplace/refresh.service.test.js
+// Stale-listing refresh sweep; fake adapters, mocked enqueue. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -41,13 +21,7 @@ function registerFakeAdapter(platformKey, refreshIntervalDays) {
   registry.register({
     key: platformKey,
     refreshIntervalDays,
-    // Mirrors the generic contract every real adapter already follows
-    // (see registry.js): null for "not connected". Also treats an
-    // explicitly DISCONNECTED status as "not connected" — a reasonable
-    // real adapter's own check, and exactly what lets this file test the
-    // "disconnected tenant is skipped" rule via ChannelConnection.status
-    // rather than via "no row at all" (the only case the real Google
-    // adapter itself currently distinguishes).
+    // null when not connected; DISCONNECTED also counts, to test that skip rule.
     async loadSettings(tenantId) {
       const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: platformKey }).lean();
       if (!conn || conn.status === CHANNEL_CONNECTION_STATUS.DISCONNECTED) return null;
@@ -57,7 +31,7 @@ function registerFakeAdapter(platformKey, refreshIntervalDays) {
 }
 
 async function makeTenantConnection(platformKey, status = CHANNEL_CONNECTION_STATUS.CONNECTED) {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await ChannelConnection.collection.insertOne({
     tenant_id: tenantId,
     platform: platformKey,
@@ -73,18 +47,14 @@ function daysAgo(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-// insertMany (not .create()) — a test-fixture platform key is never a
-// registered discriminator, and Model.create() looks up a discriminator by
-// the discriminatorKey value and throws "Discriminator ... not found" for
-// anything unregistered; insertMany bypasses that discriminator resolution
-// and just writes the base-schema fields directly, which is all these tests need.
+// insertMany: create() throws for unregistered discriminator keys like these.
 async function makeListing(tenantId, platformKey, { state = LISTING_STATE.ACTIVE, syncedAt } = {}) {
-  const _id = new mongoose.Types.ObjectId();
+  const _id = fixtureId();
   await MarketplaceListing.insertMany([
     {
       _id,
       tenant_id: tenantId,
-      product: new mongoose.Types.ObjectId(),
+      product: fixtureId(),
       variant: null,
       platform: platformKey,
       state,
@@ -228,9 +198,7 @@ test("refresh.service: a tenant with a breaker-gated (circuit open) connection i
 
   const platformKey = `test-refresh-breaker-gated-${crypto.randomUUID()}`;
   registerFakeAdapter(platformKey, 10);
-  // DEGRADED is exactly what circuitBreaker.js#isOpen checks for — reusing
-  // the real circuitBreaker.isOpen (not re-implemented), so this connection
-  // is otherwise perfectly "connected" from loadSettings' own point of view.
+  // DEGRADED trips the real circuitBreaker.isOpen; loadSettings still passes.
   const tenantId = await makeTenantConnection(platformKey, CHANNEL_CONNECTION_STATUS.DEGRADED);
   await makeListing(tenantId, platformKey, { syncedAt: daysAgo(90) });
 
@@ -261,7 +229,7 @@ test("refresh.service: chunking — 1,200 stale listings at chunk size 500 produ
 
   const docs = Array.from({ length: 1200 }, () => ({
     tenant_id: tenantId,
-    product: new mongoose.Types.ObjectId(),
+    product: fixtureId(),
     variant: null,
     platform: platformKey,
     state: LISTING_STATE.ACTIVE,
@@ -293,13 +261,7 @@ test("refresh.service: refresh_stale (and the sync_batch jobs it enqueues) never
   const queue = channelQueue.getQueue(platform);
   t.after(() => queue.close());
 
-  // channel.queue.js's debounce condition is keyed to the literal string
-  // "sync_listing" (verified by reading that file — see
-  // refresh.service.js's own comment) — a "refresh_stale" (or "sync_batch")
-  // job name never matches it, so two enqueues never collapse into one
-  // debounced jobId the way two sync_listing calls for the same listing
-  // would. Proven directly here rather than assumed: two back-to-back
-  // enqueues under each job name must get two DISTINCT Bull job ids.
+  // Only "sync_listing" is debounced, so other job names must get distinct ids.
   const refreshJobA = await channelQueue.enqueueChannelJobDirect(platform, "refresh_stale", {}, { delay: 0 });
   const refreshJobB = await channelQueue.enqueueChannelJobDirect(platform, "refresh_stale", {}, { delay: 0 });
   assert.notEqual(refreshJobA.id, refreshJobB.id, "two refresh_stale enqueues must never collapse into the same jobId");

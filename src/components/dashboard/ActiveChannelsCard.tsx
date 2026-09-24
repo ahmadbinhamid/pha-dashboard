@@ -35,7 +35,7 @@ const STATUS_BORDER: Record<ChannelHealth["status"], string> = {
   not_connected: "border-border",
 };
 
-// Initials chip is purely decorative identity (not status), cycled by index — stable across renders since `channels` order doesn't change.
+// Decorative (not status), cycled by index; channel order is fixed.
 function initials(name: string) {
   const words = name.trim().split(/\s+/);
   return words.length === 1 ? words[0].slice(0, 2).toUpperCase() : (words[0][0] + words[1][0]).toUpperCase();
@@ -48,12 +48,7 @@ function channelDetail(channel: ChannelHealth) {
   return relative ? `Synced ${relative}` : "Not yet synced";
 }
 
-// eBay/Google get their real logo; "storefront" gets the tenant's own
-// uploaded logo (Branding settings) if they've set one; anything else falls
-// back to the categorical-color initials chip below. Kept as this card's
-// own chip (rounded-xl, not ChannelAvatar's rounded-full) per this file's
-// own header comment — both just call into the same getChannelLogo() so
-// eBay/Google are never drawn twice.
+// Real logo for eBay/Google, tenant logo for storefront, else an initials chip.
 function ChannelIdentityChip({ channel, index, tenantLogoUrl }: { channel: ChannelHealth; index: number; tenantLogoUrl?: string | null }) {
   const BrandLogo = getChannelLogo(channel.key);
   const isStorefront = channel.key === "storefront";
@@ -92,7 +87,7 @@ export function ActiveChannelsCard({
 }: {
   channels: ChannelHealth[];
   loading?: boolean;
-  /** Tenant's own uploaded logo (Branding settings) — shown for the "storef... */
+  /** Tenant's uploaded logo (Branding settings), shown for "storefront". */
   tenantLogoUrl?: string | null;
 }) {
   const navigate = useNavigate();
@@ -116,7 +111,7 @@ export function ActiveChannelsCard({
           channels.map((channel, i) => (
             <div
               key={channel.key}
-              onClick={() => navigate("/listings")}
+              onClick={() => navigate(`/channel-sync?platform=${channel.key}&status=all`)}
               className={cn(
                 "group flex cursor-pointer items-center justify-between gap-2 rounded-xl border bg-muted/40 px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:bg-muted/70",
                 STATUS_BORDER[channel.status],
@@ -141,7 +136,7 @@ export function ActiveChannelsCard({
         )}
       </CardContent>
 
-      <Button variant="primary" size="sm" className="mt-2 w-full gap-1.5" onClick={() => navigate("/listings")}>
+      <Button variant="primary" size="sm" className="mt-2 w-full gap-1.5" onClick={() => navigate("/settings/integrations")}>
         Manage All Integrations
         <ChevronRight className="h-3.5 w-3.5" />
       </Button>

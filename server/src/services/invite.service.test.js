@@ -1,11 +1,10 @@
 // services/invite.service.test.js
-// The invite lifecycle: a link redeems at most once, is bound to the address it was sent to,
-// and re-inviting reuses the row rather than piling up a history.
-// Needs a live Mongo connection. Run: node --test src/services/invite.service.test.js
+// Invites redeem once, bind to the invited email, reuse the row. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const User = require("../models/User");
@@ -24,7 +23,7 @@ async function makeTenant(suffix, label = "inv") {
     slug: `invite-${label}-${suffix}`.toLowerCase(),
     code: `IV${label[0].toUpperCase()}${suffix.slice(0, 5).toUpperCase()}`,
     company_name: `Invite ${label} ${suffix}`,
-  });
+  }).then(trackFixtureTenant);
 }
 
 async function makeUser(email, tenantId) {

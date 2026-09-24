@@ -1,12 +1,10 @@
 // services/marketplace/listing.resolver.test.js
-// Covers resolveProductUrl's host resolution order (default Domain, then linkDomain fallback),
-// the /product/<slug> path, fail-loudly behavior, and that the linkDomain fallback is refused
-// for any platform whose manifest declares requiresStorefront. `platform` is a required 4th argument.
-// Needs a live Mongo connection. Run: node --test src/services/marketplace/listing.resolver.test.js
+// resolveProductUrl host order, fail-loud, storefront refusal. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -17,10 +15,9 @@ const { DOMAIN_STATUS } = require("../../constants/domain.constants");
 const { resolveProductUrl } = require("./listing.resolver");
 
 const registry = require("./registry");
-// Real google.adapter.js, since its manifest.requiresStorefront is the actual contract to test against.
+// Real google.adapter.js: its manifest.requiresStorefront is the contract.
 registry.register(require("./adapters/google.adapter"));
-// Minimal eBay stand-in (no requiresStorefront) to test the non-storefront fallback path
-// without pulling in the real adapter's heavier dependency chain.
+// Minimal eBay stand-in (no requiresStorefront) avoids the real adapter's deps.
 registry.register({ key: "ebay", manifest: { key: "ebay", name: "eBay" }, capabilities: {}, publish: async () => {}, update: async () => {}, end: async () => {} });
 
 async function makeTenant(suffix) {
@@ -28,7 +25,7 @@ async function makeTenant(suffix) {
     name: `Resolver Test ${suffix}`,
     slug: `resolver-test-${suffix}`,
     code: `RT${suffix.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
-  });
+  }).then(trackFixtureTenant);
 }
 
 test("resolveProductUrl: a verified default Domain wins over the linkDomain fallback", async (t) => {
@@ -51,7 +48,7 @@ test("resolveProductUrl: a verified default Domain wins over the linkDomain fall
     verification_token: crypto.randomUUID(),
   });
 
-  // Platform is "google" (requiresStorefront: true) deliberately — the domain branch wins regardless.
+  // google (requiresStorefront) on purpose: the domain branch wins regardless.
   const url = await resolveProductUrl(tenant._id, `widget-${suffix}`, `SKU-${suffix}`, "google");
   assert.equal(url, `https://store-${suffix}.example.com/product/widget-${suffix}`);
 });

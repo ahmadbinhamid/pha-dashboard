@@ -11,7 +11,7 @@ import { createListing, pushListing, updateListing } from "@/lib/api/listings";
 import { createGoogleListing, updateGoogleListing } from "@/lib/api/googleListings";
 import { listingToForm } from "@/lib/marketplace/listingToForm";
 
-// Per-channel create/save glue for the product form (there's no generic create route).
+// Per-channel create/save glue for the product form (no generic create route).
 
 export type ChannelFormState = EbayListingFormState | GoogleChannelFormState;
 
@@ -49,15 +49,14 @@ async function pushOrThrow(listingId: string) {
 }
 
 const ebayAdapter: ChannelFormAdapter = {
-  // NOTE: seeds eBay fields like the old create page; category left empty for the mapping.
+  // NOTE: condition/MPN/category left empty to inherit live; SKU is identity.
   initialForm: (product) => ({
     ...EBAY_LISTING_FORM_INITIAL,
     product_id: product._id,
     store_sku: product.sku ?? "",
-    condition: product.condition || EBAY_LISTING_FORM_INITIAL.condition,
+    condition: "",
     item_specifics: {
       ...EBAY_LISTING_FORM_INITIAL.item_specifics,
-      mpn: product.mpn ?? "",
       authenticity: product.authenticity ?? "",
     },
   }),
@@ -94,7 +93,7 @@ const googleAdapter: ChannelFormAdapter = {
           price_override: listing.price_override != null ? String(listing.price_override) : "",
         }
       : { ...GOOGLE_CHANNEL_FORM_INITIAL },
-  // Create also queues a sync; overrides aren't accepted on create, so save them after.
+  // Create queues a sync too; overrides aren't accepted on create, so save after.
   create: async (product, form) => {
     const googleForm = form as GoogleChannelFormState;
     const { data } = await createGoogleListing(product._id, null, googleForm);

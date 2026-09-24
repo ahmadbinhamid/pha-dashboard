@@ -1,11 +1,11 @@
 // services/marketplace/adapters/google.adapter.publish.test.js
-//
-// Hydration + publish() end to end on real Mongo fixtures, fetch stubbed. Needs Mongo.
+// Hydration + publish() end to end, fetch stubbed. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../../config");
 
@@ -26,7 +26,7 @@ const registry = require("../registry");
 const googleAdapter = require("./google.adapter");
 registry.register(googleAdapter);
 
-// Records every call made to the stubbed fetch so assertions can inspect what was sent.
+// Records every stubbed fetch call so assertions can inspect what was sent.
 let fetchCalls = [];
 function installFetchStub(handler) {
   fetchCalls = [];
@@ -53,7 +53,7 @@ const VALID_MERCHANT_API_HANDLER = (url) => {
 
 async function makeFixture({ stockControl = true, stockCount = 5, withDomain = true, gtin = null, mpn = null, brand = null } = {}) {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   if (withDomain) {
     await Domain.create({
@@ -115,7 +115,7 @@ async function makeFixture({ stockControl = true, stockCount = 5, withDomain = t
   return { tenantId, product, listing };
 }
 
-// Every fixture carries a real HTTPS image now — a photo-less product is a rejection, not a null-imageLink success (see image-validation.test.js).
+// Fixtures carry real HTTPS images; a photo-less product is a rejection.
 const VALID_HTTPS_IMAGE_URL = "https://cdn.example.com/photo.jpg";
 
 async function resolveFor(listing, product, { photos = [{ type: "image", url: VALID_HTTPS_IMAGE_URL }] } = {}) {
@@ -234,7 +234,7 @@ test("google adapter: a listing with no resolvable public product URL (no defaul
   assert.equal(fetchCalls.length, 0, "no Merchant API call must happen when the product URL can't be resolved");
 });
 
-// A zero-photo product is rejected like a bad-URL one (Google accepts a null imageLink and only disapproves later); end-to-end counterpart to image-validation.test.js's builder-level case.
+// Google accepts a null imageLink but disapproves later, so reject zero photos.
 test("google adapter: a product with ZERO photos fails loudly (GoogleImageValidationError), never pushes", async (t) => {
   await mongoose.connect(config.mongoUri);
   installFetchStub(VALID_MERCHANT_API_HANDLER);
@@ -261,11 +261,11 @@ test("google adapter: loadSettings returns null for a tenant with no ChannelConn
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const settings = await googleAdapter.loadSettings(tenantId);
   assert.equal(settings, null);
 
-  // Proves sync.service.js#syncListing's "not connected" skip path handles Google's null loadSettings without an unhandled rejection.
+  // syncListing's "not connected" skip must handle Google's null loadSettings.
   const marketplaceSync = require("../sync.service");
   const product = await Product.create({
     tenant_id: tenantId,
@@ -294,7 +294,7 @@ test("google adapter, via sync.service.js: untracked-stock skip writes a Channel
   installFetchStub(VALID_MERCHANT_API_HANDLER);
   t.after(() => mongoose.disconnect());
 
-  // logSuccesses must be true so the (non-failure) skip row gets written — see sync.service.js#logSyncEvent.
+  // logSuccesses needed so the non-failure skip row is written (logSyncEvent).
   const originalLogSuccesses = config.channels.logSuccesses;
   config.channels.logSuccesses = true;
   t.after(() => {

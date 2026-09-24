@@ -1,11 +1,10 @@
 // services/role.service.test.js
-//
-// System roles can't be edited or deleted; custom roles may use any catalogue permission.
-// Needs a live Mongo connection — run with: node --test src/services/role.service.test.js
+// System roles are locked; custom roles may use any permission. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const User = require("../models/User");
@@ -25,7 +24,7 @@ async function makeTenant(suffix) {
     slug: `role-test-${suffix}`.toLowerCase(),
     code: `RT${suffix.slice(0, 6).toUpperCase()}`,
     company_name: `Role Test ${suffix}`,
-  });
+  }).then(trackFixtureTenant);
 }
 
 test("roles: seeding is idempotent, and the seeded set is what it claims", async () => {
@@ -145,7 +144,7 @@ test("roles: can't be deleted while a pending invitation still promises it", asy
       "a role a pending invite points at can't be deleted out from under it",
     );
 
-    // Revoking the invite frees the role up again — no orphaned reference left behind.
+    // Revoking the invite frees the role again, with no orphaned reference.
     const invite = await Invitation.findOne({ tenant_id: tenant._id, role_id: role._id });
     await inviteService.revokeInvite({ invitationId: invite._id, tenantId: tenant._id });
     assert.ok(await roleService.deleteRole(role._id, tenant._id));

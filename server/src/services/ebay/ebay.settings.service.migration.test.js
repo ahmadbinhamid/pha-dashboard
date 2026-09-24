@@ -1,19 +1,10 @@
 // services/ebay/ebay.settings.service.migration.test.js
-//
-// Regression guard for Task 2's lazy read-through: getSettings() migrates a
-// legacy EbaySettings row into ChannelConnection on first read, returns the
-// exact same shape either way, and concurrent calls for the same
-// never-yet-migrated tenant never create duplicate ChannelConnection docs
-// (race-safe via the unique {tenant_id, platform} index + findOneAndUpdate
-// upsert + re-read on a duplicate-key error — see
-// ebay.settings.service.js#migrateFromLegacy).
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/ebay/ebay.settings.service.migration.test.js
+// getSettings lazily migrates EbaySettings, race-safe, same shape. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -27,7 +18,7 @@ test("lazy EbaySettings -> ChannelConnection read-through: identical shape, idem
   await mongoose.connect(config.mongoUri);
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const { ciphertext, iv, tag } = encrypt(`token-${suffix}`);
 
   await EbaySettings.create({
@@ -41,19 +32,13 @@ test("lazy EbaySettings -> ChannelConnection read-through: identical shape, idem
     sandbox: true,
     fulfillment_policy_id: `FUL-${suffix}`,
     warehouse_city: "London",
-    // EbaySettings.webhook_token is unique+sparse — sparse only excludes a
-    // field that's entirely ABSENT, not one present with value null, so two
-    // rows both defaulting to null (any tenant that's never called
-    // ensureWebhookToken) collide. Explicit here so this test never depends
-    // on being the only such row in a shared dev database (confirmed live
-    // while writing this test).
+    // Unique+sparse index still indexes null, so null-default rows would collide.
     webhook_token: `wt-${suffix}`,
   });
 
   assert.equal(await ChannelConnection.findOne({ tenant_id: tenantId }).lean(), null, "no ChannelConnection yet");
 
-  // 10 concurrent reads for a tenant with no ChannelConnection row yet —
-  // must never create duplicates, and every one must resolve to the identical shape.
+  // 10 concurrent reads, no ChannelConnection yet: no dupes, identical shapes.
   const results = await Promise.all(Array.from({ length: 10 }, () => svc.getSettings(tenantId)));
 
   for (const settings of results) {
@@ -75,12 +60,11 @@ test("lazy EbaySettings -> ChannelConnection read-through: identical shape, idem
 test("a legacy row with a null/empty refresh token migrates as disconnected, never connected", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await EbaySettings.create({
     tenant_id: tenantId,
     connection_status: "not_connected",
-    // See the other test's comment above on why this can't be left at its
-    // null default.
+    // Can't stay null: see the unique+sparse note above.
     webhook_token: `wt-${crypto.randomUUID()}`,
   });
 

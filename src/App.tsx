@@ -17,7 +17,7 @@ import DashboardPage from "@/pages/erp/DashboardPage";
 import ProductsPage from "@/pages/erp/ProductsPage";
 import ProductCreatePage from "@/pages/erp/ProductCreatePage";
 import ProductEditPage from "@/pages/erp/ProductEditPage";
-import ListingsPage from "@/pages/erp/ListingsPage";
+import ChannelSyncPage from "@/pages/erp/ChannelSyncPage";
 import CategoriesPage from "@/pages/erp/CategoriesPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
 import CustomersPage from "@/pages/erp/CustomersPage";
@@ -54,10 +54,10 @@ export default function App() {
     >
       <AppProviders>
         <Routes>
-          {/* Public — no login, no tenant context beyond the order id + guest token. Shared across every tenant's payment links. */}
+          {/* Public: order id + guest token only; shared by every tenant's pay links. */}
           <Route path="/pay/:orderId" element={<PayOrderPage />} />
 
-          {/* Invite landing page, deliberately not behind GuestRoute: valid both for someone signed in (accepts) and with no account (signs up and joins in one step) — see InvitePage. */}
+          {/* Not behind GuestRoute: signed-in users accept, new users sign up. */}
           <Route path="/invite" element={<InvitePage />} />
 
           <Route
@@ -69,10 +69,7 @@ export default function App() {
             }
           />
 
-          {/* Public self-signup is disabled — every account now comes in
-              through an invite (see InvitePage) or is provisioned directly.
-              Route and import kept, not deleted, so re-enabling this is a
-              one-line uncomment rather than rebuilding the page.
+          {/* Self-signup disabled (invite-only); kept for a one-line re-enable.
           <Route
             path="/register"
             element={
@@ -103,11 +100,12 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            {/* /catalogue was this page's old name before Products/Listings merged; kept as a redirect so existing bookmarks still land correctly. */}
+            {/* Old /catalogue URL, redirected for existing bookmarks. */}
             <Route path="/catalogue" element={<Navigate to="/products" replace />} />
             <Route path="/products/new" element={<ProductCreatePage />} />
             <Route path="/products/:slug/edit" element={<ProductEditPage />} />
-            <Route path="/listings" element={<ListingsPage />} />
+            <Route path="/channel-sync" element={<ChannelSyncPage />} />
+            <Route path="/listings" element={<Navigate to="/channel-sync" replace />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/customers" element={<CustomersPage />} />
@@ -122,7 +120,7 @@ export default function App() {
             <Route path="/activity-log" element={<ActivityLogPage />} />
             <Route path="/profile" element={<ProfilePage />} />
 
-            {/* Settings is one page with URL-driven tabs (/settings/:tab, or /settings/:tab/:section); pre-redesign URLs below still resolve to whichever tab replaced them. */}
+            {/* URL-driven settings tabs; pre-redesign URLs redirect to their new tab. */}
             <Route path="/settings" element={<Navigate to="/settings/store" replace />} />
             <Route path="/settings/business-info" element={<Navigate to="/settings/store/general" replace />} />
             <Route path="/settings/payment-account" element={<Navigate to="/settings/integrations/stripe" replace />} />

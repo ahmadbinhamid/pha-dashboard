@@ -1,19 +1,11 @@
 // services/google/google.merchant.api.circuitbreaker.test.js
-//
-// Task 6: "a 503 from the Merchant API increments the circuit breaker; a
-// 400 item validation error does not." Exercised through the REAL
-// end-to-end path (sync.service.js#syncListing -> google.adapter.js ->
-// google.merchant.api.service.js), not just the classifier function in
-// isolation, so this proves the actual ChannelConnection.consecutive_failures
-// counter behaves correctly, not just that the error carries the right `.status`.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/google/google.merchant.api.circuitbreaker.test.js
+// Merchant API 503 trips the breaker, 400 doesn't (sync path). Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -36,14 +28,7 @@ function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) };
 }
 
-// TASK 1 (a later run): this fixture's product needs a real photo now that
-// a zero-photo product is itself a (400, non-breaker) rejection — without
-// one, both tests below would fail before ever reaching the simulated
-// 503/400 Merchant API response they exist to test. Attachment.url is a
-// virtual built from config.uploads.url; overridden to a fake https host
-// for the life of this file (restored after) since this env's real
-// UPLOADS_URL is plain http://. Same fix as
-// google.adapter.batch.test.js's own makeTenantWithListings.
+// Zero-photo products are 400-rejected, so use an https photo (env is http).
 let originalUploadsUrl;
 before(() => {
   originalUploadsUrl = config.uploads.url;
@@ -55,7 +40,7 @@ after(() => {
 
 async function makeFixture() {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Domain.create({
     tenant_id: tenantId,
