@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { useCart } from "@/context/cart";
 import { getVariants } from "@/lib/api/products";
 import { formatCurrency } from "@/utils/format";
@@ -13,7 +13,7 @@ import type { Product } from "@/types/product";
 
 interface AddToCartButtonProps {
   product: Product;
-  // "icon" for dense contexts; "labeled" for a full button; "icon-solid" for a prominent circular primary action (Add Products step).
+  // "icon": dense; "labeled": full button; "icon-solid": prominent primary.
   display?: "icon" | "labeled" | "icon-solid";
   className?: string;
 }
@@ -22,7 +22,7 @@ function cartKey(productId: string, variantId: string | null) {
   return `${productId}:${variantId ?? "base"}`;
 }
 
-// Handles both add paths: a plain product adds straight to cart; a has_variants product opens a popover to pick variant + quantity first.
+// Plain products add directly; has_variants opens a variant/qty picker.
 export function AddToCartButton({ product, display = "icon", className }: AddToCartButtonProps) {
   const { addItem } = useCart();
   const [open, setOpen] = useState(false);
@@ -72,7 +72,7 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
       // No per-variant shipping rate — always the parent product's.
       shipping_cost: product.shipping_cost ?? 0,
       quantity,
-      // Variant-level stock isn't exposed by list-variants; backend re-validates real availability at order-creation time.
+      // list-variants lacks variant stock; backend re-validates on order create.
       max_quantity: null,
     });
     setOpen(false);
@@ -148,14 +148,15 @@ export function AddToCartButton({ product, display = "icon", className }: AddToC
             <p className="py-3 text-center text-xs text-fg/50">No active variants found.</p>
           ) : (
             <div className="space-y-2">
-              <NativeSelect value={selectedVariantId} onChange={(e) => setSelectedVariantId(e.target.value)}>
-                <option value="">Choose a variant…</option>
-                {variants.map((v) => (
-                  <option key={v._id} value={v._id}>
-                    {v.display_name} — {formatCurrency(v.price)}
-                  </option>
-                ))}
-              </NativeSelect>
+              <SingleSelect
+                options={variants.map((v) => ({
+                  value: v._id,
+                  label: `${v.display_name} — ${formatCurrency(v.price)}`,
+                }))}
+                value={selectedVariantId}
+                onChange={setSelectedVariantId}
+                placeholder="Choose a variant…"
+              />
               <Input
                 type="number"
                 min={1}

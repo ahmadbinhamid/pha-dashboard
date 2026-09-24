@@ -30,17 +30,17 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
         ) : rows.length === 0 ? (
           <div className="py-10 text-center text-sm text-fg/45">No orders in this range yet</div>
         ) : (
-          // Zero horizontal cell padding (same compact pattern as CriticalStockCard.tsx) — six columns in this card's ~1/3-page width don't fit Table.tsx's default px-4 without clipping the last column.
+          // No horizontal padding: six columns don't fit Table's default px-4 here.
           <div className="overflow-x-auto">
-            <Table className="text-[11px]">
+            <Table className="text-2xs">
               <TableHeader className="bg-transparent">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-auto px-1 pb-2 first:pl-0 text-[10px]">Channel</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Revenue</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Orders</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">Items</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 text-right text-[10px]">AOV</TableHead>
-                  <TableHead className="h-auto px-1 pb-2 last:pr-0 text-right text-[10px]">Profit</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 first:pl-0 text-3xs">Channel</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-3xs">Revenue</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-3xs">Orders</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-3xs">Items</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 text-right text-3xs">AOV</TableHead>
+                  <TableHead className="h-auto px-1 pb-2 last:pr-0 text-right text-3xs">Profit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -54,7 +54,7 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
                     <TableCell className="px-1 py-2.5 last:pr-0 text-right">
                       <span className="font-semibold text-ok tabular-nums">{formatCurrencyFromCents(row.grossProfitCents)}</span>
                       {row.trendPct !== null && (
-                        <span className={`block text-[9px] font-normal ${row.trendPct >= 0 ? "text-ok" : "text-danger"}`}>
+                        <span className={`block text-4xs font-normal ${row.trendPct >= 0 ? "text-ok" : "text-danger"}`}>
                           {row.trendPct >= 0 ? "↗" : "↘"} {Math.abs(row.trendPct).toFixed(1)}%
                         </span>
                       )}

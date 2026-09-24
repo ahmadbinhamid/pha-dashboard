@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { updateEbaySettings, getBusinessPolicies } from "@/lib/api/ebay";
 import type { EbaySettings } from "@/types/ebaySettings";
 import { ebaySettingsFormSchema, type EbaySettingsFormValues } from "@/lib/validation/ebaySettingsForm";
@@ -89,20 +89,14 @@ export function EbaySettingsForm({
         control={control}
         name={field}
         render={({ field: rhfField }) => (
-          <Select value={rhfField.value} onValueChange={rhfField.onChange} disabled={policiesLoading}>
-            <SelectTrigger>
-              <SelectValue
-                placeholder={policiesLoading ? "Loading…" : !options?.length ? "No policies found" : "Select policy"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {(options ?? []).map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SingleSelect
+            options={(options ?? []).map((p) => ({ value: p.id, label: p.name }))}
+            value={rhfField.value}
+            onChange={rhfField.onChange}
+            onBlur={rhfField.onBlur}
+            disabled={policiesLoading}
+            placeholder={policiesLoading ? "Loading…" : !options?.length ? "No policies found" : "Select policy"}
+          />
         )}
       />
     </FormField>
@@ -122,18 +116,12 @@ export function EbaySettingsForm({
                 control={control}
                 name="marketplace_id"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MARKETPLACES.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SingleSelect
+                    options={MARKETPLACES}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
                 )}
               />
             </FormField>

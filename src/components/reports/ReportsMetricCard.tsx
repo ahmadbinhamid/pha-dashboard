@@ -4,11 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/utils/cn";
 
-// Same "identity, not status" categorical-token pattern
-// ActiveChannelsCard.tsx / RevenueTrendChart.tsx use for per-item coloring
-// (globals.css --cat-1..6) — these 5 cards are distinct KPIs on equal
-// footing, not a status signal, so a fixed accent/danger/warn/ok tone
-// per MetricCard.tsx wouldn't fit; the caller picks one of these instead.
+// Categorical --cat-* tones: these KPIs are identities, not status signals.
 export type ReportsMetricColorVar =
   | "var(--color-accent)"
   | "var(--color-cat-1)"
@@ -65,7 +61,7 @@ export function ReportsMetricCard({
         <div>
           <div className="text-xl font-bold tracking-tight text-fg tabular-nums">{value}</div>
           {changePct !== null ? (
-            <div className={cn("mt-1 flex items-center gap-1 text-[11px] font-semibold", isUp ? "text-ok" : "text-danger")}>
+            <div className={cn("mt-1 flex items-center gap-1 text-2xs font-semibold", isUp ? "text-ok" : "text-danger")}>
               {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               <span>
                 {isUp ? "+" : ""}
@@ -73,7 +69,7 @@ export function ReportsMetricCard({
               </span>
             </div>
           ) : (
-            <div className="mt-1 text-[11px] font-medium text-fg/40">No prior period yet</div>
+            <div className="mt-1 text-2xs font-medium text-fg/40">No prior period yet</div>
           )}
         </div>
       )}

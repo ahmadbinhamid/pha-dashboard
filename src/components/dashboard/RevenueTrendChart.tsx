@@ -80,7 +80,7 @@ export function RevenueTrendChart({
 }: {
   points: OrderVolumePoint[];
   previousPeriodRevenueCents?: number;
-  // Dashboard's shared date-range filter, pre-formatted (formatDateRangeLabel) so this and Order Volume always show the same applied window.
+  // Shared date-range label so this and Order Volume show the same window.
   rangeLabel: string;
   loading?: boolean;
 }) {
@@ -95,7 +95,7 @@ export function RevenueTrendChart({
         totals.set(key, (totals.get(key) || 0) + cents);
       }
     }
-    // Every ORDER_CHANNEL is pre-seeded at 0 so lines don't break on a zero-order day, but a never-used channel shouldn't clutter the legend with a flat zero line.
+    // Hide never-used channels (pre-seeded at 0) from the legend.
     return Array.from(totals.entries())
       .filter(([, cents]) => cents > 0)
       .sort((a, b) => b[1] - a[1])
@@ -110,7 +110,7 @@ export function RevenueTrendChart({
       null,
     );
 
-    // Channel with the most revenue on the peak day specifically, for the "Top performing channel" caption.
+    // Top revenue channel on the peak day, for the "Top performing" caption.
     let peakChannel: string | null = null;
     if (peak) {
       for (const [key, cents] of Object.entries(peak.byChannel)) {
@@ -118,13 +118,13 @@ export function RevenueTrendChart({
       }
     }
 
-    // Period-over-period comparison vs the same-length prior window, computed server-side.
+    // Period-over-period vs same-length prior window, computed server-side.
     const hasPriorPeriod = typeof previousPeriodRevenueCents === "number" && previousPeriodRevenueCents > 0;
     const periodChangePct = hasPriorPeriod
       ? ((totalRevenueCents - previousPeriodRevenueCents!) / previousPeriodRevenueCents!) * 100
       : null;
 
-    // "Pacing" caption: is the latest day running hot/cold vs the period average.
+    // "Pacing" caption: latest day vs period average.
     const latest = points[points.length - 1] ?? null;
     let pacing: "up" | "down" | "steady" = "steady";
     if (latest && dailyAverageCents > 0) {
@@ -151,7 +151,7 @@ export function RevenueTrendChart({
               type="button"
               onClick={() => setViewMode(tab.key)}
               className={cn(
-                "rounded-sm px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                "rounded-sm px-2.5 py-1 text-2xs font-semibold uppercase tracking-wide transition-colors",
                 viewMode === tab.key ? "bg-card text-fg shadow-sm" : "text-fg/50 hover:text-fg",
               )}
             >

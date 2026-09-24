@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { useToast } from "@/context";
 import { deleteCategoryMapping, saveCategoryMapping } from "@/lib/api/categoryMappings";
@@ -70,21 +70,18 @@ export function CategoryMappingRow({ category, platforms, mappings, googleCatego
       const suggestion = category.suggestions.google;
       return (
         <FormField label={label}>
-          <NativeSelect
+          <SingleSelect
+            options={[
+              { value: "", label: "Not mapped" },
+              // Keep a saved id outside the list selectable instead of blank.
+              ...(value && !googleCategories.some((c) => c.id === value)
+                ? [{ value, label: draft[key]?.name || `Category ${value}` }]
+                : []),
+              ...googleCategories.map((c) => ({ value: c.id, label: `${c.name.split(" > ").slice(-1)[0]} (${c.id})` })),
+            ]}
             value={value}
-            onChange={(e) => setPlatform(key, e.target.value, googleCategories.find((c) => c.id === e.target.value)?.name ?? null)}
-          >
-            <option value="">Not mapped</option>
-            {/* Keep a saved id outside the list selectable instead of blank. */}
-            {value && !googleCategories.some((c) => c.id === value) && (
-              <option value={value}>{draft[key]?.name || `Category ${value}`}</option>
-            )}
-            {googleCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name.split(" > ").slice(-1)[0]} ({c.id})
-              </option>
-            ))}
-          </NativeSelect>
+            onChange={(id) => setPlatform(key, id, googleCategories.find((c) => c.id === id)?.name ?? null)}
+          />
           {suggestion && value !== suggestion.id && (
             <Button
               type="button"

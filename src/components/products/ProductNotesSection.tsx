@@ -33,7 +33,7 @@ export function ProductNotesSection({ productId, slug, notes }: ProductNotesSect
 
   return (
     <Card>
-      <ProductFormGroup title="Internal notes" aside="Staff only — never shown to customers">
+      <ProductFormGroup title="Internal notes" aside="Staff only, never shown to customers">
         <div className="space-y-2">
           <Textarea
             value={text}
@@ -63,7 +63,7 @@ export function ProductNotesSection({ productId, slug, notes }: ProductNotesSect
               .map((note) => (
                 <div key={note._id} className="rounded-xs border border-border bg-bg-2/40 p-3">
                   <p className="text-sm text-fg/80">{note.text}</p>
-                  <p className="mt-1.5 text-[10px] text-fg/40">{new Date(note.created_at).toLocaleString()}</p>
+                  <p className="mt-1.5 text-3xs text-fg/40">{new Date(note.created_at).toLocaleString()}</p>
                 </div>
               ))}
           </div>

@@ -10,13 +10,13 @@ import type { CartItem } from "@/types/cart";
 
 interface CartItemRowProps {
   item: CartItem;
-  // Review Order step shows a per-line discount input; Add Products step's basket doesn't (discounts are decided at review time).
+  // Only Review Order shows per-line discounts; the basket doesn't.
   discountValue?: string;
   onDiscountChange?: (value: string) => void;
-  lineTotal?: number; // dollars, post-discount — falls back to unit_price*qty when omitted
+  lineTotal?: number; // dollars, post-discount; defaults to unit_price*qty
 }
 
-// Two-row layout instead of cramming image/name/discount/qty/price/remove into one line, which only fit in a wide context (Review Order), not the narrow Basket sidebar.
+// Two rows: a single line only fit Review Order, not the narrow Basket.
 export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }: CartItemRowProps) {
   const { removeItem, setQuantity, setItemNote } = useCart();
   const [noteOpen, setNoteOpen] = useState(!!item.note);
@@ -75,7 +75,7 @@ export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }
             <QuantityStepper value={item.quantity} max={item.max_quantity} onChange={(q) => setQuantity(item.key, q)} />
             {showDiscount && (
               <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-fg/40">Disc.</label>
+                <label className="text-3xs font-semibold uppercase tracking-wider text-fg/40">Disc.</label>
                 <Input
                   type="number"
                   min={0}

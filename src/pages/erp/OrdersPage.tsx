@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ManageColumns } from "@/components/ui/ManageColumns";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
@@ -21,7 +21,7 @@ import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart, Banknote, Clock, CreditCard } from "lucide-react";
 
-// Order lifecycle, independent of payment status (see PAYMENT_STATUS_FILTERS below and OrderStatusSelect's same split on the detail page).
+// Order lifecycle, independent of payment status
 const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = [
   { label: "All Status", value: "" },
   { label: "Pending", value: "pending" },
@@ -31,7 +31,7 @@ const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = 
   { label: "Cancelled", value: "cancelled" },
 ];
 
-// Always derived from actual payments/refunds — never admin-editable.
+// Always derived from actual payments/refunds, never admin-editable.
 const PAYMENT_STATUS_FILTERS: { label: string; value: OrderPaymentStatus | "" }[] = [
   { label: "All Payment", value: "" },
   { label: "Unpaid", value: "pending_payment" },
@@ -53,7 +53,7 @@ const MODE_FILTERS: { label: string; value: OrderDeliveryMethod | "" }[] = [
   { label: "Pickup", value: "pickup" },
 ];
 
-// Order ID (sticky) and Actions are structural, not part of this list; every other column can be hidden via "Manage Columns", persisted per browser.
+// Order ID and Actions are structural; the rest are hideable, per browser
 const ORDER_COLUMNS: ColumnDef[] = [
   { key: "customer", label: "Customer", alwaysVisible: true },
   { key: "channel", label: "Channel" },
@@ -238,7 +238,7 @@ export default function OrdersPage() {
       </div>
 
       <Card className="overflow-hidden">
-        {/* Filter bar — search, selects, and Manage Columns all in one row above the table */}
+        {/* Filter bar */}
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <div className="relative min-w-48 flex-1 sm:max-w-xs">
@@ -251,10 +251,10 @@ export default function OrdersPage() {
                 size="sm"
               />
             </div>
-            <FilterSelect options={CHANNEL_FILTERS} value={channel} onChange={setChannel} className="h-9" />
-            <FilterSelect options={STATUS_FILTERS} value={fulfillmentStatus} onChange={setFulfillmentStatus} className="h-9" />
-            <FilterSelect options={PAYMENT_STATUS_FILTERS} value={paymentStatus} onChange={setPaymentStatus} className="h-9" />
-            <FilterSelect options={MODE_FILTERS} value={deliveryMethod} onChange={setDeliveryMethod} className="h-9" />
+            <SingleSelect size="sm" options={CHANNEL_FILTERS} value={channel} onChange={setChannel} />
+            <SingleSelect size="sm" options={STATUS_FILTERS} value={fulfillmentStatus} onChange={setFulfillmentStatus} />
+            <SingleSelect size="sm" options={PAYMENT_STATUS_FILTERS} value={paymentStatus} onChange={setPaymentStatus} />
+            <SingleSelect size="sm" options={MODE_FILTERS} value={deliveryMethod} onChange={setDeliveryMethod} />
             {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
           </div>
 

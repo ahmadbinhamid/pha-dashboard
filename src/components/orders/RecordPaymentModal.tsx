@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import {
   Modal,
   ModalContent,
@@ -28,9 +28,14 @@ interface RecordPaymentModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const PAYMENT_METHOD_OPTIONS = (["cash", "online_transfer", "efpos"] as const).map((value) => ({
+  value,
+  label: PAYMENT_METHOD_LABEL[value],
+}));
+
 const EMPTY_FORM: RecordPaymentFormValues = { payment_method: "cash", amount: "" };
 
-// Staff-entered follow-up payment (cash/bank transfer) against an order's outstanding balance, e.g. collecting the rest of a deposit.
+// Staff-entered follow-up payment against an order's outstanding balance.
 export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChange }: RecordPaymentModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -39,6 +44,7 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -89,11 +95,19 @@ export function RecordPaymentModal({ orderId, balanceDueCents, open, onOpenChang
 
           <div className="space-y-4">
             <FormField label="Payment Method">
-              <NativeSelect {...register("payment_method")}>
-                <option value="cash">{PAYMENT_METHOD_LABEL.cash}</option>
-                <option value="online_transfer">{PAYMENT_METHOD_LABEL.online_transfer}</option>
-                <option value="efpos">{PAYMENT_METHOD_LABEL.efpos}</option>
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="payment_method"
+                render={({ field }) => (
+                  <SingleSelect
+                    options={PAYMENT_METHOD_OPTIONS}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                )}
+              />
             </FormField>
             <FormField label="Amount" required error={errors.amount?.message}>
               <Input

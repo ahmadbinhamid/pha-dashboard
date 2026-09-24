@@ -13,7 +13,7 @@ import { getNotifications, markNotificationRead, markAllNotificationsRead } from
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { AppNotification } from "@/types/notification";
 
-// Socket push (context/socket.tsx) is the primary delivery mechanism; this refetchInterval is only a defensive fallback if that connection drops.
+// Socket push is primary; this refetch is only a fallback if the socket drops.
 const FALLBACK_REFETCH_MS = 60_000;
 
 function timeAgo(iso: string) {
@@ -42,7 +42,7 @@ export function NotificationBell() {
 
   async function handleSelect(notification: AppNotification) {
     if (!notification.read_at) {
-      // Optimistic: the panel closes immediately on click, so a stale "unread" state never visibly lingers.
+      // Optimistic so a stale "unread" state never lingers after the panel closes.
       queryClient.setQueryData(["notifications", { page: 1, limit: 10 }], (prev: typeof data) =>
         prev
           ? {
@@ -97,7 +97,7 @@ export function NotificationBell() {
         >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-3xs font-semibold leading-none text-accent-fg">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -136,7 +136,7 @@ export function NotificationBell() {
                     <div className="text-xs text-fg/60">
                       {n.message} · {formatCurrencyFromCents(n.data.total)}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-fg/40">{timeAgo(n.created_at)}</div>
+                    <div className="mt-0.5 text-2xs text-fg/40">{timeAgo(n.created_at)}</div>
                   </div>
                 </div>
               </DropdownMenuItem>

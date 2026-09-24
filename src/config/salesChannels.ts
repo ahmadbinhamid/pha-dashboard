@@ -9,3 +9,9 @@ export const SALES_CHANNELS_ANCHOR = "sales-channels";
 export function productChannelsPath(slug: string, channel?: string | null) {
   return `/products/${slug}/edit?tab=channels${channel ? `&channel=${encodeURIComponent(channel)}` : ""}`;
 }
+
+// Where a listing's channel category comes from (row badge and drawer).
+export const CATEGORY_SOURCE_LABEL = {
+  override: (channelName: string) => `Overridden for ${channelName}`,
+  mapping: "From category mapping",
+} as const;

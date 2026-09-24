@@ -18,7 +18,7 @@ const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger" | "mu
   voided: "muted",
 };
 
-// refund-redesign-spec.md §1.3/§2.3: order-scoped history with a void action for succeeded refunds (§3.8), replacing the old payment-scoped, amount-only version.
+// Order-scoped refund history; succeeded refunds can be voided.
 export function RefundHistoryList({ orderId, refunds }: { orderId: string; refunds: Refund[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,7 +82,7 @@ export function RefundHistoryList({ orderId, refunds }: { orderId: string; refun
           {refund.failure_reason && <div className="mt-1 text-xs text-danger">{refund.failure_reason}</div>}
           {refund.void_reason && <div className="mt-1 text-xs text-fg/50">Voided: {refund.void_reason}</div>}
           <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-[10px] text-fg/40">{new Date(refund.created_at).toLocaleString()}</span>
+            <span className="text-3xs text-fg/40">{new Date(refund.created_at).toLocaleString()}</span>
             {refund.status === "succeeded" && (
               <Button
                 type="button"

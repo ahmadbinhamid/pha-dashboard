@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/ActionsMenu";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
+import { StickyPageHeader } from "@/components/shared/StickyPageHeader";
 import type { Product } from "@/types/product";
 
 const STATUS_OPTIONS: { value: Product["status"]; label: string; hint: string }[] = [
@@ -30,6 +31,8 @@ interface ProductEditHeaderProps {
   onSendEmail: () => void;
   // Tab bar, kept sticky together with the header.
   children: React.ReactNode;
+  // Lets the page measure the header to place sticky content below it.
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 // Sticky product header: breadcrumb, status, channel health, save and tab bar.
@@ -45,11 +48,12 @@ export function ProductEditHeader({
   uploading,
   onSendEmail,
   children,
+  ref,
 }: ProductEditHeaderProps) {
   const active = product.status === "active";
 
   return (
-    <div className="sticky top-0 z-30 -mx-6 border-b border-border bg-card px-6">
+    <StickyPageHeader ref={ref} className="border-b border-border">
       <div className="flex min-h-14 flex-wrap items-center gap-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <BreadcrumbNav className="min-w-0" items={[{ label: "Products", href: "/products" }, { label: product.title }]} />
@@ -116,6 +120,6 @@ export function ProductEditHeader({
         </div>
       </div>
       {children}
-    </div>
+    </StickyPageHeader>
   );
 }

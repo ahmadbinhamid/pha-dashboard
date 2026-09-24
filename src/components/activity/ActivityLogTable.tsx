@@ -4,8 +4,7 @@ import { eventVisual, formatTime } from "@/components/activity/ActivityEventRow"
 import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
 
-// Audit trail as a table; reads icon/tone through eventVisual so it can't drift from the dashboard's compact feed.
-// No User/IP Address columns: ActivityEvent carries no actor/request metadata (dashboard.service.js derives events from orders/stock history) — shows tags instead of all-"—" columns.
+// Uses eventVisual to match dashboard feed; no User/IP cols (no actor info).
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
@@ -31,7 +30,7 @@ export function ActivityLogTable({ events }: { events: ActivityEvent[] }) {
               <TableRow key={event.id}>
                 <TableCell className="whitespace-nowrap text-fg/55">
                   <span className="block">{formatDate(event.timestamp)}</span>
-                  <span className="block text-[11px] text-fg/40">{formatTime(event.timestamp)}</span>
+                  <span className="block text-2xs text-fg/40">{formatTime(event.timestamp)}</span>
                 </TableCell>
 
                 <TableCell>
@@ -45,7 +44,7 @@ export function ActivityLogTable({ events }: { events: ActivityEvent[] }) {
 
                 <TableCell className="text-fg/70">
                   <span>{event.description}</span>
-                  {event.sku ? <span className="mt-0.5 block font-mono text-[11px] text-fg/40">SKU {event.sku}</span> : null}
+                  {event.sku ? <span className="mt-0.5 block font-mono text-2xs text-fg/40">SKU {event.sku}</span> : null}
                 </TableCell>
 
                 <TableCell className="text-right">

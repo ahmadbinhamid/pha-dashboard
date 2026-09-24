@@ -122,7 +122,7 @@ export function CommandPalette({
     onOpenChange(false);
   }
 
-  // Flattened in section render order so Up/Down/Enter moves across Pages→Products→Orders→Customers with one shared index.
+  // Flat list in render order so Up/Down/Enter share one index across sections.
   const flatEntries = useMemo(() => {
     const entries: { id: string; onSelect: () => void }[] = [];
     for (const item of pageResults) {
@@ -160,7 +160,7 @@ export function CommandPalette({
 
   const anyLoading = productsLoading || ordersLoading || customersLoading;
   const anyErrored = productsErrored || ordersErrored || customersErrored;
-  // A failed search isn't the same as a genuine zero-result — surfacing that distinction is what caught product search silently returning empty when its backing service was unreachable.
+  // Distinguish a failed search from zero results so outages aren't silent.
   const noResults = hasQuery && !anyLoading && !anyErrored && flatEntries.length === 0;
 
   return (
@@ -184,7 +184,7 @@ export function CommandPalette({
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <div className="shrink-0 border-b border-border p-3">
-            {/* Plain `outline-none` loses to globals.css's unlayered :focus-visible rule — same `!` fix as Input.tsx, with the border+glow applied via focus-within to this container, not the borderless input. */}
+            {/* `!` beats globals.css :focus-visible, as in Input.tsx; glow on the box */}
             <div
               className={cn(
                 "flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2.5",
@@ -328,7 +328,7 @@ export function CommandPalette({
 
           <div className="flex shrink-0 items-center justify-end border-t border-border px-4 py-2.5 text-xs text-fg/40">
             Press
-            <kbd className="mx-1.5 rounded-xs border border-border bg-bg-2 px-1.5 py-0.5 text-[10px] font-medium text-fg/50">
+            <kbd className="mx-1.5 rounded-xs border border-border bg-bg-2 px-1.5 py-0.5 text-3xs font-medium text-fg/50">
               ESC
             </kbd>
             to close

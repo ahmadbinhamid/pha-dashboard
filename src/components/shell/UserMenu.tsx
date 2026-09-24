@@ -18,8 +18,7 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-// One account panel, two triggers: "compact" (Topbar) is just the avatar; "full" (sidebar footer) adds name + role + chevron. Both open the same menu: identity, theme toggle, Profile/Settings, Logout.
-// The panel aligns to whichever edge of the trigger has room: sidebar opens rightward, Topbar avatar opens leftward against the window edge.
+// Compact (Topbar) or full (sidebar) trigger; panel opens toward the free side.
 export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full" }) {
   const { user, logout } = useAuth();
   const { preference, setTheme } = useThemePreference();
@@ -29,7 +28,7 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
 
   const fullName = `${user.first_name} ${user.last_name}`.trim();
   const avatar = (
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-fg text-[10px] font-semibold text-bg">
+    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-fg text-3xs font-semibold text-bg">
       {personInitials(user.first_name, user.last_name)}
     </span>
   );
@@ -56,8 +55,8 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
       >
         {avatar}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold leading-tight text-fg">{fullName || "Account"}</div>
-          <div className="truncate text-[11px] text-fg/50">{ACCOUNT_ROLE_LABEL[user.role] ?? user.role}</div>
+          <div className="truncate text-compact font-semibold leading-tight text-fg">{fullName || "Account"}</div>
+          <div className="truncate text-2xs text-fg/50">{ACCOUNT_ROLE_LABEL[user.role] ?? user.role}</div>
         </div>
         <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg/35" />
       </button>
@@ -67,10 +66,10 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 
-      {/* Width fixed so the panel reads the same from either trigger, matching the sidebar footer's inset and staying clear of the window edge from the Topbar. */}
+      {/* Fixed width so the panel looks the same from either trigger. */}
       <DropdownMenuContent align={variant === "compact" ? "end" : "start"} className="w-61 p-0">
         <div className="px-3 py-2.5">
-          <div className="truncate text-[13px] font-semibold text-fg">{fullName || "Account"}</div>
+          <div className="truncate text-compact font-semibold text-fg">{fullName || "Account"}</div>
           <div className="truncate text-xs text-fg/50">{user.email}</div>
         </div>
 
@@ -105,7 +104,7 @@ export function UserMenu({ variant = "compact" }: { variant?: "compact" | "full"
         <DropdownMenuSeparator className="mx-0" />
 
         <div className="p-1">
-          {/* Kept because the Topbar avatar used to link directly to /profile — this preserves the one-click route. */}
+          {/* Keeps the old one-click Topbar-avatar route to /profile. */}
           <DropdownMenuItem className="px-2 py-1.5 text-xs" onSelect={() => navigate("/profile")}>
             <User className="h-3.5 w-3.5" />
             Profile

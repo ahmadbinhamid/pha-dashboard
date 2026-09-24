@@ -5,7 +5,7 @@ import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/
 import { EbayPackageFields } from "@/components/listings/platforms/ebay/EbayPackageFields";
 import { ChannelFieldInput } from "@/components/channels/ChannelFieldInput";
 import { InheritedChannelField } from "@/components/channels/InheritedChannelField";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 import { hasOverride, productValueLabel } from "@/lib/marketplace/inheritedFields";
 import type { ChannelFieldDescriptor } from "@/types/channel";
@@ -49,14 +49,11 @@ export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCusto
           overridden={hasOverride(specs.authenticity)}
           onReset={() => setAuthenticity("")}
         >
-          <NativeSelect value={specs.authenticity} onChange={(e) => setAuthenticity(e.target.value)}>
-            <option value="">Same as product</option>
-            {AUTHENTICITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <SingleSelect
+            options={[{ value: "", label: "Same as product" }, ...AUTHENTICITY_OPTIONS]}
+            value={specs.authenticity}
+            onChange={setAuthenticity}
+          />
         </InheritedChannelField>
         <EbayItemSpecificsSection
         form={{ ...ebayForm, ebay_category_id: effectiveCategoryId ?? ebayForm.ebay_category_id }}

@@ -3,13 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { getCategoryAspects } from "@/lib/api/ebay";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { CategoryAspect } from "@/types/ebay";
@@ -97,16 +91,11 @@ export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) 
     const value = specs.aspects?.[aspect.name] ?? "";
     if (aspect.mode === "SELECTION_ONLY" && aspect.values.length > 0) {
       return (
-        <Select value={value} onValueChange={(v) => setAspectValue(aspect.name, v)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select…" />
-          </SelectTrigger>
-          <SelectContent>
-            {aspect.values.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SingleSelect
+          options={aspect.values.map((v) => ({ value: v, label: v }))}
+          value={value}
+          onChange={(v) => setAspectValue(aspect.name, v)}
+        />
       );
     }
     return (
@@ -196,7 +185,7 @@ export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) 
           Add Part Number
         </Button>
 
-        <p className="text-[11px] text-fg/40">
+        <p className="text-2xs text-fg/40">
           List all older part numbers this part supersedes — helps buyers find this listing.
         </p>
       </div>

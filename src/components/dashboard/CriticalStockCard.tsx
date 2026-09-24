@@ -43,13 +43,13 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
             Nothing below your low-stock threshold right now.
           </div>
         ) : (
-          // No sticky first column: unlike the app's larger tables, this is always just 3 narrow columns, so the sticky-column chrome would only add weight.
+          // No sticky first column: only 3 narrow columns, so it would just add weight.
           <div className="max-h-80 overflow-x-auto">
-            {/* text-xs overrides Table.tsx's default text-sm to keep rows this compact. */}
+            {/* text-xs overrides Table.tsx default text-sm for compact rows. */}
             <Table className="text-xs">
               <TableHeader className="bg-transparent">
                 <TableRow className="hover:bg-transparent">
-                  {/* px-0 on every edge (not just first/last) since Table.tsx's base px-4 gutter isn't wanted here; first:/last: still needed so plain px-0 dedupes against base's first:pl-5/last:pr-5 in tailwind-merge. */}
+                  {/* first:/last: px-0 needed to override base first:pl-5/last:pr-5. */}
                   <TableHead className="h-auto px-0 pb-1.5 first:pl-0">
                     Part &amp; SKU
                   </TableHead>
@@ -66,7 +66,7 @@ export function CriticalStockCard({ items, loading }: { items: CriticalStockItem
                   <TableRow key={item.inventoryId} className="group cursor-pointer">
                     <TableCell className="px-0 py-2 first:pl-0">
                       <div className="truncate font-semibold text-fg group-hover:text-accent">{item.name}</div>
-                      <div className="truncate font-mono text-[11px] text-fg/40">{item.sku}</div>
+                      <div className="truncate font-mono text-2xs text-fg/40">{item.sku}</div>
                     </TableCell>
                     <TableCell className="px-0 py-2 text-center">
                       <Badge variant={item.stockCount === 0 ? "danger" : "warn"}>{item.stockCount} units</Badge>

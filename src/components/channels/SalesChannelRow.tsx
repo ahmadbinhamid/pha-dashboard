@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ExternalLink, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ExternalLink, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import Link from "@/components/ui/Link";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
-import { ViewOnChannelLink } from "@/components/channels/ViewOnChannelLink";
+import { SalesChannelRowActionsMenu } from "@/components/channels/SalesChannelRowActionsMenu";
 import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
+import { CATEGORY_SOURCE_LABEL } from "@/config/salesChannels";
 import { ChannelSettingsDrawer } from "@/components/channels/ChannelSettingsDrawer";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { useToast } from "@/context";
@@ -180,7 +181,14 @@ export function SalesChannelRow({
 
   const listingCategory = categoryKey ? ((listingSummary as unknown as Record<string, unknown> | null)?.[categoryKey] as string | null) : null;
   const categoryId = listingCategory || mappedCategory?.id || null;
-  const categorySource = listingCategory ? "Set on this product" : mappedCategory ? "From default" : null;
+  const categoryOverridden = !!listingCategory;
+
+  // Clears the listing's own category and re-syncs, so the mapping applies.
+  function resetCategory() {
+    if (!form || !categoryKey) return;
+    const next = { ...form, [categoryKey]: "" } as ChannelFormState;
+    if (validate(next)) saveMutation.mutate(next);
+  }
 
   return (
     <div>
@@ -203,7 +211,17 @@ export function SalesChannelRow({
                   <span>
                     Category <span className="font-mono text-fg/70">{categoryId}</span>
                   </span>
-                  {categorySource && <Badge variant="muted" className="px-1.5 py-0.5 text-[11px] font-medium">{categorySource}</Badge>}
+                  {(categoryOverridden || mappedCategory) && (
+                    <Badge variant={categoryOverridden ? "warn" : "muted"} className="px-1.5 py-0.5 text-2xs font-medium">
+                      {categoryOverridden ? CATEGORY_SOURCE_LABEL.override(channel.name) : CATEGORY_SOURCE_LABEL.mapping}
+                    </Badge>
+                  )}
+                  {categoryOverridden && mappedCategory && (
+                    <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-2xs" disabled={busy || !form} onClick={resetCategory}>
+                      <RotateCcw className="h-3 w-3" />
+                      Reset
+                    </Button>
+                  )}
                 </>
               ) : (
                 <span className="text-warn">Category not set</span>
@@ -218,36 +236,30 @@ export function SalesChannelRow({
             <ExternalLink className="h-3 w-3" />
           </Link>
         ) : (
-          <>
+          <div className="flex items-center gap-3">
             {listed && listingSummary && (
-              <div className="flex items-center gap-3 text-xs text-fg/50">
+              // Status with its sync time as a caption, so the two read as one.
+              <div className="flex flex-col items-end gap-1">
                 <SyncBadge status={awaiting ? "pending" : listingSummary.sync_status} />
-                <span className="whitespace-nowrap">
+                <span className="whitespace-nowrap text-2xs text-fg/45">
                   {awaiting
                     ? "Syncing…"
                     : listingSummary.synced_at
                       ? `Synced ${formatRelativeTime(listingSummary.synced_at)}`
                       : "Not synced yet"}
                 </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1 px-2 text-xs"
-                  disabled={busy || !form}
-                  onClick={() => form && validate(form) && saveMutation.mutate(form)}
-                >
-                  <RefreshCw className={cn("h-3.5 w-3.5", saveMutation.isPending && "animate-spin")} />
-                  Re-sync
-                </Button>
-                <ViewOnChannelLink url={listingSummary.external_url} channelName={channel.name} />
               </div>
             )}
-            <Button type="button" variant="secondary" size="sm" className="gap-1.5" disabled={!form} onClick={() => setDrawerOpen(true)}>
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Edit listing
-            </Button>
-          </>
+            <SalesChannelRowActionsMenu
+              channelName={channel.name}
+              onEdit={() => setDrawerOpen(true)}
+              editDisabled={!form}
+              onResync={listed && listingSummary ? () => form && validate(form) && saveMutation.mutate(form) : undefined}
+              resyncDisabled={busy || !form}
+              resyncing={saveMutation.isPending}
+              externalUrl={listingSummary?.external_url}
+            />
+          </div>
         )}
       </div>
 

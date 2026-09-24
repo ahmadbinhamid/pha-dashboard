@@ -15,7 +15,7 @@ interface CustomerSearchComboboxProps {
   className?: string;
 }
 
-// Unlike the generic Combobox (filters a fixed local list), this re-queries the customers API on every keystroke, so paginated-out customers are still found by search. With no search text, shows the same first page as the Customers list.
+// Queries the API per keystroke (unlike Combobox) so paged-out rows match.
 export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className }: CustomerSearchComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -94,7 +94,7 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
 
           <div className="max-h-60 overflow-y-auto p-1">
             {!debouncedQuery && results.length > 0 && (
-              <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg/40">
+              <div className="px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-fg/40">
                 Recent customers
               </div>
             )}

@@ -4,7 +4,7 @@ import { formatCurrencyFromCents } from "@/utils/format";
 import { getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 import type { OrderPaymentSummary } from "@/types/orders";
 
-// Every Payment doc recorded against an order — a manual sale can have more than one (deposit, then top-up), so this always renders a history.
+// A manual sale can have several payments (deposit, top-up), so list all.
 export function PaymentHistoryList({
   payments,
   onSelect,
@@ -44,7 +44,7 @@ export function PaymentHistoryList({
           {payment.amount_refunded > 0 && (
             <div className="mt-1 text-xs text-fg/55">{formatCurrencyFromCents(payment.amount_refunded)} refunded</div>
           )}
-          <div className="mt-1.5 text-[10px] text-fg/40">
+          <div className="mt-1.5 text-3xs text-fg/40">
             {payment.paid_at ? new Date(payment.paid_at).toLocaleString() : "Not yet paid"}
           </div>
         </div>

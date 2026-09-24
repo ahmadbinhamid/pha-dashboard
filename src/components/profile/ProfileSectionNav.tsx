@@ -13,7 +13,7 @@ export function findProfileSection(id?: string | null): ProfileSectionId {
   return SECTIONS.some((s) => s.id === id) ? (id as ProfileSectionId) : "profile";
 }
 
-// Side nav for the Profile page. Rows, not pills, since a pill shrink-wraps and leaves mismatched widths; marks the active row the way the app sidebar does. Below `lg` it collapses to a horizontal strip with everything sized down, since a column is wasted height on a phone.
+// Rows not pills for equal widths; below lg collapses to a compact strip.
 export function ProfileSectionNav({
   activeId,
   onSelect,
@@ -23,7 +23,7 @@ export function ProfileSectionNav({
 }) {
   return (
     <Card className="p-1.5 lg:p-2">
-      <p className="hidden px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg/35 lg:block">
+      <p className="hidden px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-fg/35 lg:block">
         Personal
       </p>
 
@@ -58,7 +58,7 @@ export function ProfileSectionNav({
 
               <span
                 className={cn(
-                  "min-w-0 truncate text-xs font-semibold transition-colors lg:text-[13px]",
+                  "min-w-0 truncate text-xs font-semibold transition-colors lg:text-compact",
                   active ? "text-primary" : "text-fg/75 group-hover:text-fg",
                 )}
               >

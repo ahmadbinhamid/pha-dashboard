@@ -2,21 +2,7 @@ import { Store } from "lucide-react";
 import { getChannelLogo } from "@/components/channels/channelLogos";
 import { CATEGORICAL_COLOR_VARS as AVATAR_COLOR_VARS } from "@/config/categoricalColors";
 
-// Identity-only chip for a sales channel. A recognized channel (eBay,
-// Google, or "storefront" — the tenant's own site) shows its real logo; an
-// initials-on-a-categorical-color chip is the fallback for anything else
-// (a future adapter this hasn't been taught about yet). Same principle as
-// ActiveChannelsCard.tsx's own inline avatar (dashboard): identity gets a
-// categorical color, health gets a separate semantic-token dot/badge, and
-// the two never share one element. Kept as its own component rather than
-// reusing that one directly — its rounded-full treatment is Products-page
-// styling, not something to force onto the dashboard's own rounded-xl chip
-// (or vice-versa); both call into getChannelLogo() for the actual logo
-// though, so eBay/Google never get drawn twice.
-//
-// Deliberately carries no status meaning. Mixing "which channel" and "is it healthy" into one
-// colored dot was exactly what made the Products page's channel status confusing — this chip
-// only ever answers "which channel"; color here never implies health.
+// Identity-only channel chip (logo or initials); color never implies health.
 export function channelAvatarColor(index: number) {
   return AVATAR_COLOR_VARS[index % AVATAR_COLOR_VARS.length];
 }
@@ -31,16 +17,14 @@ export function ChannelAvatar({
   index,
   size = "sm",
   channelKey,
-  // Tenant's own uploaded logo (Branding settings) — only meaningful when
-  // channelKey === "storefront", since that's the one "channel" that's the
-  // tenant's own brand rather than a third party's.
+  // Tenant logo; only used when channelKey === "storefront" (tenant's own brand).
   logoUrl,
 }: {
   name: string;
-  /** Position among the channels being shown together — picks the fallback color. */
+  /** Position among shown channels; picks the fallback color. */
   index: number;
   size?: "sm" | "md";
-  /** e.g. "ebay" | "google" | "storefront" — resolves to a real logo instea... */
+  /** e.g. "ebay" | "google" | "storefront"; resolves to a real logo. */
   channelKey?: string;
   logoUrl?: string | null;
 }) {
@@ -69,7 +53,7 @@ export function ChannelAvatar({
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${dimension} ${size === "sm" ? "text-[9px]" : "text-xs"}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${dimension} ${size === "sm" ? "text-4xs" : "text-xs"}`}
       style={{ backgroundColor: channelAvatarColor(index) }}
       aria-hidden="true"
     >

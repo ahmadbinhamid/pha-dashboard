@@ -6,3 +6,4 @@ export * from "./useThemePreference";
 export * from "./useChannelFieldSources";
 export * from "./useProductStockRecord";
 export * from "./useProductChannelListings";
+export * from "./useElementHeight";

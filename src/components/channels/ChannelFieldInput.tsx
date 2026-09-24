@@ -1,6 +1,6 @@
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
 import type { ChannelFieldDescriptor, ChannelFieldOption } from "@/types/channel";
@@ -43,18 +43,15 @@ export function ChannelFieldInput({
   if (type === "select" || type === "policy" || type === "category") {
     const list = options ?? descriptor.options ?? [];
     const fallbackLabel = fallback ? list.find((o) => o.value === fallback)?.label ?? fallback : null;
-    control = (
-      <NativeSelect value={stringValue} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{fallbackLabel ? `${fallbackPrefix} — ${fallbackLabel}` : "Select…"}</option>
-        {/* Keep a stored value outside the list selectable instead of blank. */}
-        {stringValue && !list.some((o) => o.value === stringValue) && <option value={stringValue}>{stringValue}</option>}
-        {list.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </NativeSelect>
-    );
+    const selectOptions = [
+      ...(fallbackLabel ? [{ value: "", label: `${fallbackPrefix} — ${fallbackLabel}` }] : []),
+      // Optional with no fallback: an explicit "None" keeps the value clearable.
+      ...(!fallbackLabel && !required ? [{ value: "", label: "None" }] : []),
+      // Keep a stored value outside the list selectable instead of blank.
+      ...(stringValue && !list.some((o) => o.value === stringValue) ? [{ value: stringValue, label: stringValue }] : []),
+      ...list,
+    ];
+    control = <SingleSelect options={selectOptions} value={stringValue} onChange={onChange} />;
   } else if (type === "textarea") {
     control = <Textarea value={stringValue} onChange={(e) => onChange(e.target.value)} rows={3} />;
   } else {

@@ -5,31 +5,17 @@ import { cn } from "@/utils/cn";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
-// react-day-picker ships unstyled (no default CSS) — every part is targeted
-// via `classNames` using the library's own UI/DayFlag/SelectionState key
-// names, mapped onto this app's own tokens rather than react-day-picker's
-// (nonexistent) default look or a copy-pasted arbitrary palette.
+// react-day-picker ships unstyled; every part is mapped onto app tokens here.
 export function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{
-        // `nav` (the prev/next chevrons) is rendered by react-day-picker as a
-        // sibling of `month`, not nested inside it, and is positioned
-        // `absolute inset-x-0 top-0` — without `relative` here it escapes all
-        // the way up to the nearest positioned ancestor (Popover.Content),
-        // landing at the very top of the whole popover and overlapping
-        // whatever sits above the calendar (e.g. the preset-day chips row).
+        // `nav` is an absolute sibling of `month`; `relative` keeps it in the calendar.
         months: "relative flex flex-col gap-4",
         month: "space-y-3",
-        // No `relative` here (unlike a typical shadcn Calendar) — this box is
-        // full-width (flex + justify-center) even though its visible text is
-        // centered, and giving it `position` would make it a *positioned*
-        // descendant painted in the same stacking layer as `nav` below. Since
-        // `nav` renders first in the DOM, month_caption's invisible full-width
-        // box would then paint on top of it and silently eat clicks on the
-        // prev/next chevrons — found by seeing the chevrons render but never fire onClick.
+        // No `relative`: a positioned caption paints over `nav` and eats its clicks.
         month_caption: "flex items-center justify-center pt-1",
         caption_label: "text-sm font-semibold text-fg",
         nav: "absolute inset-x-0 top-0 z-10 flex items-center justify-between",
@@ -41,31 +27,10 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         ),
         month_grid: "w-full border-collapse",
         weekdays: "flex",
-        weekday: "w-9 text-[11px] font-medium text-fg/40 uppercase tracking-wide",
+        weekday: "w-9 text-2xs font-medium text-fg/40 uppercase tracking-wide",
         weeks: "",
         week: "flex w-full mt-1",
-        // The "connected band" look (one continuous orange shape across the
-        // whole range, not separate per-day dots) comes from styling the
-        // DAY CELL (this `day` key and the range_*/selected modifier keys
-        // below) — react-day-picker applies every modifier class to the
-        // <td>, never to the button inside it (confirmed straight from its
-        // source: DayButton only ever gets the static `day_button` class,
-        // nothing modifier-aware).
-        //
-        // Important subtlety, found by inspecting the actual rendered
-        // classes rather than assuming: react-day-picker marks EVERY day in
-        // an active range as `selected` too — a range's middle days get
-        // both `range_middle` AND `selected` at once, not just start/end.
-        // Since selected's rounded-full/bg-accent and range_middle's
-        // flat/bg-accent-15 are plain (non-!important) classes fighting
-        // over the same properties, which one visually won was left up to
-        // Tailwind's internal stylesheet order — not the order these
-        // classes appear in the class list — and in testing it picked the
-        // wrong one for the corners specifically (every range day rendered
-        // fully rounded, not just the two ends). The `!` important suffix
-        // on range_start/range_middle/range_end's conflicting declarations
-        // makes them win unconditionally, which is what actually makes this
-        // deterministic instead of "worked by luck in one browser."
+        // Modifiers go on <td>; `!` makes range_* beat `selected` (on every range day).
         day: "h-9 w-9 p-0 text-center text-sm relative",
         day_button: cn(
           "relative z-10 h-9 w-9 rounded-full p-0 font-normal text-fg transition-colors",

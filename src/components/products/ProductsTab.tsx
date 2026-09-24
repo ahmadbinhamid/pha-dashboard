@@ -16,7 +16,7 @@ import {
   ModalDescription,
 } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
 import type { ViewMode } from "@/components/ui/ViewToggle";
@@ -47,7 +47,7 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
-// ProductsPage's main content: product CRUD merged with the per-channel status view from ListingsPage.tsx's old grouped-by-product table. Channel set comes from `channels` (GET /channels), never hardcoded, so new adapters appear with no changes here.
+// Channel set comes from GET /channels, never hardcoded, so new adapters show
 export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -173,7 +173,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
 
   const pageProductIds = (data?.data?.items ?? []).map((p) => p._id);
 
-  // Full listing objects (not just platform names) so the expandable channel row can show real sync_status/synced_at, not just "is it on this channel".
+  // Full listings, not names: the channel row shows real sync_status/synced_at
   const { data: listingsData } = useQuery({
     queryKey: ["listings-for-products", pageProductIds],
     queryFn: () => getListings({ product_in: pageProductIds.join(",") }),
@@ -218,7 +218,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, tone: "danger" }),
   });
 
-  // Products tab's per-channel "List" action — Google is a one-click toggle (mirrors ListingsPage.tsx); eBay needs its full create form, so that navigates instead.
+  // Google is a one-click toggle; eBay needs its full create form, so navigate
   const listOnGoogleMutation = useMutation({
     mutationFn: (productId: string) => createGoogleListing(productId, null, GOOGLE_LISTING_FORM_INITIAL),
     onSuccess: () => {
@@ -264,8 +264,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
             {isFetching && !isLoading && (
               <span className="text-xs text-fg/40">Updating…</span>
             )}
-            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
-            <FilterSelect options={STOCK_FILTERS} value={stock} onChange={setStock} />
+            <SingleSelect size="sm" options={STATUS_FILTERS} value={status} onChange={setStatus} />
+            <SingleSelect size="sm" options={STOCK_FILTERS} value={stock} onChange={setStock} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}
@@ -304,7 +304,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                     Product
                   </StickyTableHead>
                   <TableHead>Status</TableHead>
-                  {/* "Storefront", not "Online": being published here (your own shop) is a different question from being listed anywhere (the Channels column). */}
+                  {/* "Storefront": published on own shop differs from listed on channels */}
                   <TableHead>Storefront</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>

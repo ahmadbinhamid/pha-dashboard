@@ -97,7 +97,7 @@ export function EbayVehicleFitmentSection({ form, onChange, productVehicle }: Pr
         </>
       )}
 
-      <p className="text-[11px] text-fg/40">
+      <p className="text-2xs text-fg/40">
         Add all compatible vehicles. eBay uses this to display your listing in fitment search results.
       </p>
     </div>

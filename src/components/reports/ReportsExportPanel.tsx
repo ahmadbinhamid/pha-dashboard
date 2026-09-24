@@ -5,12 +5,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { downloadPdf } from "@/utils/pdf";
 
-// Real-data replacement for the mockup's "Recent Reports" panel (pre-generated PDFs with fixed timestamps) — this app has no report storage, so each row downloads a real PDF from data already on the page.
+// No report storage, so each row builds a real PDF from on-page data.
 export interface ExportDataset {
   id: string;
   title: string;
   rows: Record<string, unknown>[];
-  // What the rows cover. Defaults to the page's date range, which is wrong for stock-level (not order-window) datasets — those pass their own wording.
+  // Coverage label; defaults to date range, stock datasets pass their own.
   scopeLabel?: string;
 }
 
@@ -45,7 +45,7 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-fg">{dataset.title}</p>
-                    <p className="truncate text-[10px] text-fg/40">
+                    <p className="truncate text-3xs text-fg/40">
                       {dataset.rows.length} {dataset.rows.length === 1 ? "row" : "rows"}{" "}
                       {dataset.scopeLabel ?? "for the selected range"}
                     </p>
@@ -56,7 +56,7 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
                   type="button"
                   disabled={dataset.rows.length === 0}
                   onClick={() => downloadPdf(dataset.title.toLowerCase().replace(/\s+/g, "_"), dataset.rows, { title: dataset.title })}
-                  className="flex shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-fg transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-2xs font-semibold text-fg transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span>PDF</span>
                   <Download className="h-3 w-3 text-fg/50" />

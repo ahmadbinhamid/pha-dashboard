@@ -16,6 +16,7 @@ import { useCart } from "@/context/cart";
 import { ORDER_DRAFT_STORAGE_KEY, clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { Order, OrderAddress } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
+import { StickyPageHeader } from "@/components/shared/StickyPageHeader";
 
 const STEPS = [
   { label: "Add Products" },
@@ -24,8 +25,7 @@ const STEPS = [
   { label: "Order Confirmation" },
 ];
 
-// What the header says beneath the title, so the operator is told what this
-// screen wants from them rather than what the page is called.
+// Subtitle per step: what the screen needs from the operator.
 const STEP_DESCRIPTION: Record<number, string> = {
   1: "Search the catalogue and build the order's lines.",
   2: "Choose who this order is for and how it reaches them.",
@@ -33,8 +33,7 @@ const STEP_DESCRIPTION: Record<number, string> = {
   4: "Order created — print, email or start another.",
 };
 
-// Steps 1 and 2 run beside the live order summary; 3 and 4 own the full width
-// (Review has its own totals column, Confirmation is a receipt).
+// Steps 1-2 sit beside the live summary; 3-4 (review, receipt) are full width.
 const SUMMARY_STEPS = new Set([1, 2]);
 
 const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
@@ -47,10 +46,7 @@ const EMPTY_CUSTOMER_DELIVERY: CustomerDeliveryState = {
   billingAddress: EMPTY_ADDRESS,
 };
 
-// Everything the wizard needs to resume mid-flow after a full page reload —
-// e.g. Vite's dev-server HMR client force-reloads the page if its WebSocket
-// dropped while the tab was backgrounded, which would otherwise wipe every
-// in-memory useState the instant the window loses and regains focus.
+// Resume state for a full reload (e.g. HMR reconnect), which wipes useState.
 interface WizardStorage {
   step: number;
   customerDelivery: CustomerDeliveryState;
@@ -77,9 +73,7 @@ function readStoredWizard(): WizardStorage {
     if (!raw) return EMPTY_WIZARD;
     const parsed = JSON.parse(raw) as Partial<WizardStorage>;
     const merged = { ...EMPTY_WIZARD, ...parsed };
-    // Step 4 (confirmation) is never persisted with its `createdOrder` — that
-    // lives only in in-memory state — so resuming into it renders a blank
-    // confirmation screen. Treat a stored step 4 as stale and start over.
+    // Step 4's createdOrder is memory-only, so a stored step 4 is stale.
     if (merged.step >= 4) return EMPTY_WIZARD;
     return merged;
   } catch {
@@ -114,20 +108,14 @@ export default function CreateOrderPage() {
   const customerDeliveryRef = useRef<StepHandle>(null);
   const reviewOrderRef = useRef<StepHandle>(null);
 
-  // A restored step 2/3 with an empty cart means the cart was cleared
-  // elsewhere (or the order behind it was already completed) — there's
-  // nothing left to build, so bounce back to step 1 rather than showing a
-  // wizard with no products in it.
+  // Restored step 2/3 with an empty cart (cleared elsewhere): back to step 1.
   useEffect(() => {
     if (step > 1 && items.length === 0) setStep(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    // Step 4 has nothing worth resuming (the order's already created) and
-    // isn't a valid resume target anyway — see readStoredWizard. Persisting
-    // it here would just re-write over the clearOrderDraft() call that
-    // handleOrderCreated makes right before this effect re-runs.
+    // Never persist step 4: it would undo handleOrderCreated's clearOrderDraft.
     if (step === 4) return;
     persistWizard({ step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput });
   }, [step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput]);
@@ -144,7 +132,7 @@ export default function CreateOrderPage() {
   function handleOrderCreated(order: Order) {
     setCreatedOrder(order);
     setStep(4);
-    // The order is done and the cart's already cleared — nothing left worth resuming.
+    // Order done and cart cleared: nothing left worth resuming.
     clearOrderDraft();
   }
 
@@ -188,12 +176,8 @@ export default function CreateOrderPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title, actions and the step rail travel together as one sticky block.
-          The negative margins cancel AppShell's page gutter so the opaque
-          background reaches the edges instead of letting cards show through
-          beside it — same pattern as SettingsPage, and matching the shell's
-          own px-4 / sm:px-6 / lg:px-10 rather than a single hardcoded -mx-6. */}
-      <div className="sticky top-0 z-30 -mx-4 space-y-4 border-b border-border bg-bg/95 px-4 pb-4 pt-section backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+      {/* Title, actions and the step rail stay pinned as one block. */}
+      <StickyPageHeader className="space-y-4 border-b border-border bg-bg/95 pb-4 backdrop-blur-sm">
         <PageHeader title="Create Order" description={STEP_DESCRIPTION[step]}>
           {step < 4 && (
             <Button variant="ghost" size="sm" onClick={handleCancel}>
@@ -215,7 +199,7 @@ export default function CreateOrderPage() {
         <Card className="px-5 py-3.5">
           <OrderStepper steps={STEPS} current={step} />
         </Card>
-      </div>
+      </StickyPageHeader>
 
       {showSummary ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -231,9 +215,8 @@ export default function CreateOrderPage() {
             )}
           </div>
 
-          {/* Sticky under the header block, so the total stays visible while
-              the product list scrolls. */}
-          <div className="lg:sticky lg:top-44 lg:self-start">
+          {/* Pinned under the header; it now sticks 16px higher (flush top). */}
+          <div className="lg:sticky lg:top-40 lg:self-start">
             <OrderSummaryPanel />
           </div>
         </div>

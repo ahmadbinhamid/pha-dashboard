@@ -7,7 +7,7 @@ import { useToast } from "@/context";
 import { addOrderNote } from "@/lib/api/orders";
 import type { OrderInternalNote } from "@/types/orders";
 
-// Internal staff comment thread, distinct from the customer-facing order note captured at creation; never shown to the customer.
+// Internal staff thread, separate from the customer-facing order note.
 export function OrderNotesSection({ orderId, notes }: { orderId: string; notes: OrderInternalNote[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,7 +57,7 @@ export function OrderNotesSection({ orderId, notes }: { orderId: string; notes: 
               .map((note) => (
                 <div key={note._id} className="rounded-xs border border-border bg-bg-2/40 p-3">
                   <p className="text-sm text-fg/80">{note.text}</p>
-                  <p className="mt-1.5 text-[10px] text-fg/40">{new Date(note.created_at).toLocaleString()}</p>
+                  <p className="mt-1.5 text-3xs text-fg/40">{new Date(note.created_at).toLocaleString()}</p>
                 </div>
               ))}
           </div>

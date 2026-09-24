@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Radio, RadioGroup } from "@/components/ui/Radio";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { FormField } from "@/components/ui/FormField";
 import { Textarea } from "@/components/ui/Textarea";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -40,7 +40,7 @@ const SCOPE_OPTIONS: { value: RefundScope; label: string; description: string }[
   { value: "amount", label: "Amount only", description: "A goodwill credit or adjustment with no line data" },
 ];
 
-// refund-redesign-spec.md §7: one dialog, three scopes, settlement path auto-chosen per payment. The client computes no money — every number comes straight from GET /refundable or a plain multiplication of its figures; the real charged total only comes from the POST response.
+// No client money math beyond multiplying server figures from /refundable.
 export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,7 +57,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
   const [error, setError] = useState<string | undefined>();
   const [amountError, setAmountError] = useState<string | undefined>();
 
-  // Generated once per dialog OPEN, not per submit click, so a double-click or retry reuses the same key and the server returns the same refund instead of creating a second one.
+  // One key per dialog open so double-clicks/retries dedupe server-side.
   const [idempotencyKey, setIdempotencyKey] = useState("");
   useEffect(() => {
     if (open) {
@@ -84,7 +84,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
 
   const restockDefault = RESTOCK_DEFAULT_REASONS.has(reason);
 
-  // §5: an eBay payment allocation only shows once something's still refundable on it, so the acknowledgement gate only appears when it could actually be used.
+  // Ack gate only shows when an eBay allocation still has refundable balance.
   const hasEbayPayment = refundable?.payments.some((p) => p.provider === "ebay" && p.refundable > 0) ?? false;
 
   const mutation = useMutation({
@@ -120,7 +120,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
       return { items, shipping, adjustment: 0, gst: Math.round((items + shipping) / 11), total: items + shipping };
     }
 
-    // line_items: sum of effective_unit_price × selected quantity per line — a plain multiplication of a server-computed figure, not a re-derivation of discount apportionment.
+    // Server unit price x qty; no client-side discount apportionment.
     let items = 0;
     for (const [orderItemId, sel] of lineSelections) {
       const line = refundable.lines.find((l) => l.order_item_id === orderItemId);
@@ -256,13 +256,7 @@ export function RefundDialog({ orderId, open, onOpenChange, onSuccess }: RefundD
             {hasEbayPayment && <RefundEbayConfirmation confirmed={ebayConfirmed} onChange={setEbayConfirmed} />}
 
             <FormField label="Reason" required>
-              <NativeSelect value={reason} onChange={(e) => setReason(e.target.value as RefundReason)}>
-                {REFUND_REASONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <SingleSelect options={REFUND_REASONS} value={reason} onChange={(v) => setReason(v as RefundReason)} />
             </FormField>
 
             <FormField label="Internal Note">

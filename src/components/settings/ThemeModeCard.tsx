@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { ThemeMode } from "@/hooks";
 
-// One selectable theme option: a miniature preview above its name. Drawn from literal light/dark values, not theme tokens, since the dark tile must stay dark even while the app is in light mode.
+// Theme tile; literal colours so the dark preview stays dark in light mode.
 export function ThemeModeCard({
   mode,
   label,
@@ -37,7 +37,7 @@ export function ThemeModeCard({
           <span className="shrink-0">{icon}</span>
           <div className="min-w-0">
             <h3 className="text-xs font-bold text-fg">{label}</h3>
-            <p className="truncate text-[10px] text-fg/50">{description}</p>
+            <p className="truncate text-3xs text-fg/50">{description}</p>
           </div>
         </div>
         {selected ? (
@@ -50,7 +50,7 @@ export function ThemeModeCard({
   );
 }
 
-// The miniatures themselves, literal zinc/white values for the reason above.
+// Preview miniatures; literal zinc/white values for the reason above.
 export function LightPreview() {
   return (
     <div className="flex h-full flex-col justify-between bg-zinc-100 p-2.5">

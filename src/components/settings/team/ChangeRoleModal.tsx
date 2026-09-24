@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { updateMember } from "@/lib/api/access";
 import { SYSTEM_ROLE_SUPER_ADMIN } from "@/config/access";
 import type { Member, Role } from "@/types/access";
 
-/** Changes the role held in THIS organisation only — see membership.service.js. */
+/** Changes the role in this organisation only (membership.service.js). */
 export function ChangeRoleModal({
   member,
   roles,
@@ -52,16 +52,15 @@ export function ChangeRoleModal({
 
         <div className="space-y-4">
           <FormField label="Role" required>
-            <NativeSelect value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-              {roles
-                // Super Admin can't be handed out from here — can't be edited or removed afterwards.
+            <SingleSelect
+              options={roles
+                // Super Admin can't be granted here: it can't be edited or removed later.
                 .filter((role) => role.name !== SYSTEM_ROLE_SUPER_ADMIN)
-                .map((role) => (
-                  <option key={role._id} value={role._id}>
-                    {role.name}
-                  </option>
-                ))}
-            </NativeSelect>
+                .map((role) => ({ value: role._id, label: role.name }))}
+              value={roleId}
+              onChange={setRoleId}
+              placeholder="Select a role…"
+            />
           </FormField>
         </div>
 

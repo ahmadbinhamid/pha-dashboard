@@ -1,5 +1,5 @@
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ORDER_STATUS_LABEL } from "@/components/orders/OrderStatusBadge";
 import { useToast } from "@/context";
 import { updateOrderStatus } from "@/lib/api/orders";
@@ -16,7 +16,18 @@ const DOT_COLOR: Record<OrderFulfillmentStatus, string> = {
   cancelled: "bg-tag-danger-fg",
 };
 
-// Pure order lifecycle; payment status is a separate, read-only concept (OrderPaymentStatusBadge) never touched by this control.
+// Dot + label per status; the trigger mirrors the selected item.
+const STATUS_OPTIONS = STATUSES.map((status) => ({
+  value: status,
+  label: (
+    <span className="flex items-center gap-2">
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[status])} />
+      {ORDER_STATUS_LABEL[status]}
+    </span>
+  ),
+}));
+
+// Lifecycle only; payment status (OrderPaymentStatusBadge) is separate.
 export function OrderStatusSelect({ order }: { order: { _id: string; fulfillment_status: OrderFulfillmentStatus } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -36,26 +47,13 @@ export function OrderStatusSelect({ order }: { order: { _id: string; fulfillment
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-fg/50">Status</span>
-      <Select
+      <SingleSelect
+        size="sm"
+        options={STATUS_OPTIONS}
         value={order.fulfillment_status}
-        onValueChange={(value) => mutation.mutate(value as OrderFulfillmentStatus)}
+        onChange={(value) => mutation.mutate(value as OrderFulfillmentStatus)}
         disabled={mutation.isPending}
-      >
-        <SelectTrigger className="h-9 w-auto min-w-36 gap-2 text-sm">
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[order.fulfillment_status])} />
-          <SelectValue>{ORDER_STATUS_LABEL[order.fulfillment_status]}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {STATUSES.map((status) => (
-            <SelectItem key={status} value={status}>
-              <span className="flex items-center gap-2">
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLOR[status])} />
-                {ORDER_STATUS_LABEL[status]}
-              </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
     </div>
   );
 }

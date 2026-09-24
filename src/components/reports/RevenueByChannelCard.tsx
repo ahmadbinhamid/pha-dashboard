@@ -39,7 +39,7 @@ export function RevenueByChannelCard({ rows, loading }: { rows: RevenueByChannel
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-[10px] font-medium uppercase text-fg/40">Total Revenue</span>
+              <span className="text-3xs font-medium uppercase text-fg/40">Total Revenue</span>
               <span className="text-sm font-bold text-fg">{formatCurrencyFromCents(totalCents)}</span>
             </div>
           </div>
@@ -58,7 +58,7 @@ export function RevenueByChannelCard({ rows, loading }: { rows: RevenueByChannel
               </div>
               <div className="text-right">
                 <span className="font-bold text-fg">{row.pct.toFixed(1)}%</span>
-                <span className="block text-[11px] text-fg/40">{formatCurrencyFromCents(row.revenueCents)}</span>
+                <span className="block text-2xs text-fg/40">{formatCurrencyFromCents(row.revenueCents)}</span>
               </div>
             </div>
           ))}

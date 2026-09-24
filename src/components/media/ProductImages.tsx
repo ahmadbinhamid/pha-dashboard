@@ -15,7 +15,7 @@ interface ProductImagesProps {
 const tileBase =
   "group relative cursor-move overflow-hidden rounded-md border border-border bg-bg-2 transition-colors hover:border-accent/50";
 
-// Large cover tile plus a mini-grid of the rest, restyled with our own tokens, wired to a real upload-from-device flow rather than a shared media-library modal.
+// Cover tile + mini-grid, with direct device upload (no media-library modal).
 export function ProductImages({ images, onChange, onUploadingChange }: ProductImagesProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +90,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
       ) : (
         <>
           <Plus className="h-4 w-4" />
-          <span className="text-[10px] leading-none">Add</span>
+          <span className="text-3xs leading-none">Add</span>
         </>
       )}
     </button>
@@ -155,7 +155,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
                 {uploadMutation.isPending ? "Uploading…" : "Click to add images"}
               </span>
               <span className="mt-0.5 block text-xs text-fg/45">
-                Drop files here or browse — PNG, JPG up to 5MB
+                Drop files here or browse PNG, JPG up to 5MB
               </span>
             </span>
           </button>
@@ -175,7 +175,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
             className={cn("flex-1", tileBase)}
           >
             <img src={images[0].url} alt={imgAlt(images[0])} className="h-full w-full object-contain p-1" draggable={false} />
-            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
+            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-3xs font-medium leading-none text-white">
               Cover
             </span>
             <CoverPin />
@@ -193,7 +193,7 @@ export function ProductImages({ images, onChange, onUploadingChange }: ProductIm
             className={cn("h-full w-1/2", tileBase)}
           >
             <img src={images[0].url} alt={imgAlt(images[0])} className="h-full w-full object-contain p-1" draggable={false} />
-            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
+            <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-3xs font-medium leading-none text-white">
               Cover
             </span>
             <CoverPin />

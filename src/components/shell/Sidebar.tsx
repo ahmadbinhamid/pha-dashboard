@@ -52,10 +52,10 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               </>
             ) : (
               <>
-                <div className="truncate text-[13px] font-semibold leading-tight tracking-tight text-fg">
+                <div className="truncate text-compact font-semibold leading-tight tracking-tight text-fg">
                   {settings.storeName || APP_NAME}
                 </div>
-                <div className="truncate text-[10.5px] text-fg/45">{APP_NAME}</div>
+                <div className="truncate text-2xs text-fg/45">{APP_NAME}</div>
               </>
             )}
           </div>

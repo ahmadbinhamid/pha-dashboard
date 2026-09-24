@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
 import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TooltipContentProps } from "recharts";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderVolumePoint } from "@/types/dashboard";
 
-// Revenue (bars) and orders (line) in one plot. Two separate scales (dollars vs counts), so the gap between line and bar is not a quantity — only their shape (both measured from the same zero, scaled to their own peak) is meaningful.
-// Neither y-axis is drawn, so the hover tooltip is the only place the numbers exist. Don't add gridlines/a shared axis — they'd invite reading the vertical gap as a difference. If reopened, two stacked plots (small multiples) is the honest form.
+// Separate scales, no y-axis: only shape is meaningful; tooltip shows values
 
 type Granularity = "daily" | "weekly" | "monthly";
 
@@ -17,15 +16,14 @@ const GRANULARITY_OPTIONS = [
   { label: "Monthly", value: "monthly" },
 ];
 
-// Beyond this many points, a marker per point becomes a rope, so dots drop out and the hover marker does the work.
+// Past this many points, per-point dots become a rope, so they drop out
 const MAX_POINTS_WITH_DOTS = 31;
 
-// How much plot height each series' max fills. Both measured from the same floor, so the line rides the tops of the bars rather than floating separately; a no-orders day pulls it to baseline with its missing bar.
-// The 55%/95% headroom keeps the line clear of the bars proportionally, not absolutely — it only dips into a bar on a day carried by one unusually large order, a real fact left visible rather than designed away.
+// Share of plot height each series' max fills; line rides tops of the bars
 const PEAK_BAR_HEIGHT = 0.55;
 const PEAK_LINE_HEIGHT = 0.95;
 
-/** Which granularity a range opens on — a long range (90 daily bars in ~500px) starts already rolled up; the dropdown can still override it. */
+/** Long ranges open already rolled up; the dropdown can still override. */
 function defaultGranularity(pointCount: number): Granularity {
   if (pointCount > 180) return "monthly";
   if (pointCount > 45) return "weekly";
@@ -38,7 +36,7 @@ type Bucket = {
   key: string;
   /** Short form for the x-axis. */
   label: string;
-  /** The days this bucket covers, for the tooltip — a rolled-up bucket is often partial (e.g. a 6-day final week), and the axis label alone doesn't say which days. */
+  /** Days covered, for the tooltip: a rolled-up bucket may be partial. */
   rangeLabel: string;
   revenueCents: number;
   orders: number;
@@ -58,7 +56,7 @@ function asDate(isoDay: string) {
   return new Date(`${isoDay}T00:00:00`);
 }
 
-/** Bucket boundaries are computed in UTC, but toLocaleDateString formats in local time (west of UTC, 1 Sept 00:00Z becomes 31 Aug) — re-anchor to local midnight on the same calendar day first. */
+/** Re-anchor UTC date to local midnight so toLocaleDateString won't shift */
 function localMidnight(utcDay: Date) {
   return new Date(utcDay.getUTCFullYear(), utcDay.getUTCMonth(), utcDay.getUTCDate());
 }
@@ -74,7 +72,7 @@ function bucketPoints(points: OrderVolumePoint[], granularity: Granularity): Buc
     }));
   }
 
-  // Accumulate first, label after: a bucket's covered range isn't known until its last day is seen.
+  // Accumulate first: a bucket's range is unknown until its last day
   const spans = new Map<string, { start: Date; firstDay: string; lastDay: string; revenueCents: number; orders: number }>();
 
   for (const point of points) {
@@ -86,7 +84,7 @@ function bucketPoints(points: OrderVolumePoint[], granularity: Granularity): Buc
     if (existing) {
       existing.revenueCents += point.revenueCents;
       existing.orders += point.orders;
-      // Compared, not assigned: the endpoint returns days in order today, but a bucket's span shouldn't silently break if that changes.
+      // Compared, not assigned, so out-of-order days don't break the span
       if (point.date < existing.firstDay) existing.firstDay = point.date;
       if (point.date > existing.lastDay) existing.lastDay = point.date;
       continue;
@@ -118,12 +116,12 @@ function bucketPoints(points: OrderVolumePoint[], granularity: Granularity): Buc
     }));
 }
 
-/** Domains that let each series use its own full range from a shared zero: max/PEAK puts the tallest value at PEAK of plot height, everything else scales below it. */
+/** Per-series domain from zero: max/PEAK puts the tallest at PEAK height. */
 function seriesDomains(data: Bucket[]): { revenue: [number, number]; orders: [number, number] } {
   const maxRevenue = Math.max(0, ...data.map((d) => d.revenueCents));
   const maxOrders = Math.max(0, ...data.map((d) => d.orders));
 
-  // An all-zero (or fully refunded) range would otherwise give a zero-height/inverted domain, rendering as a blank plot.
+  // All-zero range would give a zero-height/inverted domain (blank plot)
   return {
     revenue: [0, maxRevenue > 0 ? maxRevenue / PEAK_BAR_HEIGHT : 1],
     orders: [0, maxOrders > 0 ? maxOrders / PEAK_LINE_HEIGHT : 1],
@@ -161,16 +159,16 @@ export function RevenueOverviewChart({
 }: {
   points: OrderVolumePoint[];
   loading?: boolean;
-  /** Recharts' grow-in animation runs on requestAnimationFrame, which headless screenshots can't advance (lands on an empty frame zero) — off only for that. */
+  /** Grow-in animation uses rAF, which headless screenshots can't advance. */
   animate?: boolean;
 }) {
-  // null = "follow the range"; once the dropdown is touched, that choice wins so changing the date range doesn't silently undo it.
+  // null = follow the range; a dropdown choice survives date range changes
   const [chosen, setChosen] = useState<Granularity | null>(null);
   const granularity = chosen ?? defaultGranularity(points.length);
   const data = useMemo(() => bucketPoints(points, granularity), [points, granularity]);
   const domains = useMemo(() => seriesDomains(data), [data]);
   const showDots = data.length <= MAX_POINTS_WITH_DOTS;
-  // Also true of a range with days but nothing sold — plotting that draws a flat line reading as steady trade, not no trade. Same copy as this page's other empty states.
+  // Days with nothing sold would draw a flat line reading as steady trade
   const isEmpty = data.every((d) => d.revenueCents === 0 && d.orders === 0);
 
   return (
@@ -188,7 +186,8 @@ export function RevenueOverviewChart({
           </span>
         </div>
 
-        <FilterSelect
+        <SingleSelect
+          size="sm"
           options={GRANULARITY_OPTIONS}
           value={granularity}
           onChange={(v) => setChosen(v as Granularity)}
@@ -209,11 +208,11 @@ export function RevenueOverviewChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ ...AXIS_TICK, fill: "var(--color-fg)" }}
-                // Under ~8 buckets every one is labelled outright, since a 7-slot band at this card's width would otherwise drop every second label; past 8, the gap rule takes over since forced labels would collide.
+                // Under ~8 buckets label all; past that the gap rule avoids collisions
                 interval={data.length <= 8 ? 0 : "preserveStartEnd"}
                 minTickGap={24}
               />
-              {/* Both axes hidden — they exist only to carry the banded domains. Values come from the tooltip. */}
+              {/* Axes hidden: they only carry the banded domains. */}
               <YAxis yAxisId="revenue" hide domain={domains.revenue} />
               <YAxis yAxisId="orders" hide domain={domains.orders} />
               <Tooltip content={ChartTooltip} cursor={{ fill: "var(--color-border)", opacity: 0.25 }} />

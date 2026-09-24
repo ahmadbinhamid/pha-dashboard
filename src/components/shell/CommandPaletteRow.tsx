@@ -1,6 +1,6 @@
 import { cn } from "@/utils/cn";
 
-// One row shape shared by every CommandPalette result section so they don't each hand-roll the same icon/title/subtitle/trailing layout.
+// Shared row layout for every CommandPalette result section.
 export function PaletteRow({
   active,
   onClick,
@@ -40,7 +40,7 @@ export function PaletteRow({
       {trailing !== undefined && (
         <span className="shrink-0 text-right">
           <span className="block text-sm font-bold tabular-nums text-fg">{trailing}</span>
-          {trailingSub ? <span className="mt-0.5 block text-[11px] font-semibold">{trailingSub}</span> : null}
+          {trailingSub ? <span className="mt-0.5 block text-2xs font-semibold">{trailingSub}</span> : null}
         </span>
       )}
     </button>

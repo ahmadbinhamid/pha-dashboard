@@ -1,11 +1,10 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ProductEditForm } from "@/components/products/ProductEditForm";
+import { ProductForm } from "@/components/products/ProductForm";
 import { getProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
 function ProductEditSkeleton() {
   return (
     <div className="space-y-5 pb-24">
@@ -50,8 +49,7 @@ function ProductEditSkeleton() {
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-// Thin data-loading shell — ProductEditForm only mounts once `product` is guaranteed non-null, so useForm's defaultValues build from real data on the first render, sidestepping the reset()-after-load race.
+// Loads the product first, so form defaults are real data on first render.
 export default function ProductEditPage() {
   const { slug } = useParams<{ slug: string }>();
 
@@ -76,5 +74,5 @@ export default function ProductEditPage() {
     return <ProductEditSkeleton />;
   }
 
-  return <ProductEditForm key={product._id} product={product} slug={slug} categoryOptions={categoryOptions} />;
+  return <ProductForm key={product._id} mode="edit" product={product} slug={slug} categoryOptions={categoryOptions} />;
 }

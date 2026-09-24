@@ -32,8 +32,7 @@ import type { DateRangeValue } from "@/utils/dateRange";
 
 const DEFAULT_RANGE_DAYS = 7;
 export default function ReportsPage() {
-  // Opens on the last 7 days: the range people check most often, and the one
-  // the charts on this page read best at (daily buckets, every day labelled).
+  // Defaults to last 7 days: most-checked range, and daily buckets label cleanly.
   const [range, setRange] = useState<DateRangeValue>(() => getPresetRange(DEFAULT_RANGE_DAYS));
   const rangeParams = { from: range.from, to: range.to };
 
@@ -73,11 +72,7 @@ export default function ReportsPage() {
     refetchInterval: PAGE_REFETCH_MS,
   });
 
-  // Filtered on the same {from, to} as the cards above, not on a bare day
-  // COUNT derived from the summary — that only ever meant "the last N days
-  // ending today", so picking a past range silently showed this card a
-  // different window, and any range outside the endpoint's old 7-90 day
-  // bounds failed the request outright.
+  // Same {from, to} as the cards above, so past ranges show the same window.
   const { data: turnoverRes, isLoading: turnoverLoading, isError: turnoverFailed } = useQuery({
     queryKey: ["reports", "inventory-turnover", range],
     queryFn: () => getInventoryTurnover(rangeParams),
@@ -97,9 +92,7 @@ export default function ReportsPage() {
 
   const revenueChartData = useMemo(() => volumeRes?.data?.points ?? [], [volumeRes]);
 
-  // Real derived series (revenue ÷ orders per day) — no dedicated backend
-  // field for it, unlike the other 4 cards' sparklines, since it's a simple
-  // ratio of two already-fetched arrays.
+  // Derived revenue/orders ratio; no backend field needed for this sparkline.
   const dailyAvgOrderValueCents = useMemo(() => {
     if (!summary) return [];
     return summary.dailyRevenueCents.map((cents, i) => (summary.dailyOrders[i] > 0 ? Math.round(cents / summary.dailyOrders[i]) : 0));
@@ -139,8 +132,7 @@ export default function ReportsPage() {
           <Download className="h-4 w-4" />
           Export PDF
         </Button>
-        {/* Two roots: the /reports endpoints, plus the dashboard stats query
-            behind Inventory Insights and the inventory-valuation export. */}
+        {/* /reports queries plus dashboard stats (insights, valuation export). */}
         <RefreshControl queryKeys={[["reports"], ["dashboard", "stats"]]} />
       </PageHeader>
 
@@ -194,11 +186,7 @@ export default function ReportsPage() {
 
       <InventoryTurnoverCard turnover={turnover} loading={turnoverLoading} error={turnoverFailed} />
 
-      {/* Sized by CONTAINER width, for the same reason as the row further
-          down: AppShell's sidebar is 260px expanded and 72px collapsed, so a
-          viewport breakpoint mis-measures this row by ~190px. Three across
-          only once the row itself is wide enough to hold a chart, a pie and a
-          category list side by side. */}
+      {/* Container query: sidebar width skews viewport breakpoints by ~190px. */}
       <div className="@container">
         <div className="grid grid-cols-1 gap-6 @3xl:grid-cols-12">
           <Card className="flex flex-col justify-between gap-4 p-5 shadow-card transition-shadow duration-300 hover:shadow-md @3xl:col-span-7 @6xl:col-span-5">
@@ -219,18 +207,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Two cards here, export panel on its own row below — NOT three
-          across. Three needs ~1285px to render without something breaking
-          (sales table ~470, insight tiles ~390 for a two-word label on one
-          line, export rows ~380, plus gaps) and this row only has ~1170px on
-          a 1512px screen. Every three-across split just moves the damage:
-          5/3/4 wrapped every insight label onto two lines, 5/4/3 truncated
-          every export title mid-word.
-
-          Sized by CONTAINER width, not viewport width, because AppShell's
-          sidebar is 260px expanded and 72px collapsed — the same viewport
-          hands this row ~190px more or less space without any viewport
-          breakpoint firing. */}
+      {/* Two cards + export row below: three across doesn't fit; container-sized. */}
       <div className="@container">
         <div className="grid grid-cols-1 gap-6 @3xl:grid-cols-12">
           <div className="@3xl:col-span-7">
@@ -244,9 +221,7 @@ export default function ReportsPage() {
           <div className="@3xl:col-span-12">
             <ReportsExportPanel
               loading={performanceLoading || categoriesLoading || channelLoading}
-              // Titles double as the PDF filename (see ReportsExportPanel)
-              // and as the row label, which truncates in this card's share of
-              // the row — so they drop the "Report" suffix the card heading already implies.
+              // Titles are the PDF filename and a truncating row label: no "Report" suffix.
               datasets={[
                 {
                   id: "sales-summary",
@@ -261,9 +236,7 @@ export default function ReportsPage() {
                 {
                   id: "inventory-valuation",
                   title: "Inventory Valuation",
-                  // Stock levels as they stand right now — this one comes from
-                  // the dashboard stats endpoint, which takes no date range, so
-                  // it can't claim to cover the selected one.
+                  // Dashboard stats take no date range, so this reflects current stock only.
                   scopeLabel: "at current stock levels",
                   rows: stats ? [{ totalInventoryValue: stats.totalInventoryValue.toFixed(2), lowStockCount: stats.lowStockCount, outOfStockCount: stats.outOfStockCount }] : [],
                 },
@@ -288,7 +261,7 @@ export default function ReportsPage() {
           <Lightbulb className="h-4 w-4 shrink-0 text-accent" />
           <span>Sales reports cover your selected date range; inventory figures are current stock.</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-accent">
+        <div className="flex items-center gap-2 text-2xs font-semibold text-accent">
           <RefreshCw className="h-3.5 w-3.5" />
           <span>Data reflects the latest orders and inventory on record</span>
         </div>

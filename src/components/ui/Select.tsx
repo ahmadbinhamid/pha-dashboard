@@ -143,25 +143,6 @@ const SelectSeparator = React.forwardRef<
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
-// NativeSelect — styled wrapper around a plain <select>, for simple dropdowns where Radix Select is overkill.
-const NativeSelect = React.forwardRef<
-  HTMLSelectElement,
-  React.SelectHTMLAttributes<HTMLSelectElement>
->(({ className, value, ...props }, ref) => (
-  <select
-    ref={ref}
-    value={value}
-    className={cn(
-      "flex h-10 w-full appearance-none rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-(--shadow-input) transition-shadow duration-150",
-      "outline-none! focus:border-accent focus:shadow-(--shadow-input-focus)",
-      "disabled:cursor-not-allowed disabled:opacity-50",
-      value === "" || value === undefined ? "text-fg/45" : "text-fg",
-      className,
-    )}
-    {...props}
-  />
-));
-NativeSelect.displayName = "NativeSelect";
 
 export {
   Select,
@@ -174,5 +155,4 @@ export {
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,
-  NativeSelect,
 };

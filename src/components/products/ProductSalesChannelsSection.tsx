@@ -33,7 +33,7 @@ export function ProductSalesChannelsSection({ product, syncingSince, focusChanne
     <Card>
       <div className="flex items-baseline gap-2 border-b border-border p-5">
         <h3 className="text-sm font-semibold text-fg">Sales channels</h3>
-        <span className="ml-auto text-xs text-fg/45">Saving the product re-syncs every ticked channel in ~5–10s</span>
+        <span className="ml-auto text-xs text-fg/45">Saving the product resyncs every ticked channel in ~5–10s</span>
       </div>
       <div className="divide-y divide-border">
         {isLoading ? (

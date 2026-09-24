@@ -57,7 +57,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
           >
             <Search className="h-3.5 w-3.5 shrink-0 text-fg/40 group-hover:text-fg/60" />
             <span className="flex-1 truncate text-left text-sm text-fg/45">Search…</span>
-            <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-fg/45 sm:inline-flex">
+            <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 text-3xs font-medium text-fg/45 sm:inline-flex">
               ⌘K
             </kbd>
           </button>
@@ -85,7 +85,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
             >
               <ShoppingCart className="h-4 w-4" />
               {totalItems > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-3xs font-semibold leading-none text-accent-fg">
                   {totalItems > 99 ? "99+" : totalItems}
                 </span>
               )}

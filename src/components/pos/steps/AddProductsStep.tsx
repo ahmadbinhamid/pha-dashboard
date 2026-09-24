@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Package, Search } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
@@ -11,7 +11,7 @@ import { getProducts } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { formatCurrency } from "@/utils/format";
 
-// Product picker for step 1. The running basket lives in OrderSummaryPanel instead, which stays put across steps 1 and 2. Continuing needs no validation beyond "cart isn't empty", checked directly by the page header's Next button.
+// Step 1 picker; the basket lives in OrderSummaryPanel across steps 1-2.
 export function AddProductsStep() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -51,18 +51,16 @@ export function AddProductsStep() {
               className="pl-9"
             />
           </div>
-          <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)} className="sm:w-52">
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <SingleSelect
+            options={[{ value: "", label: "All categories" }, ...categories.map((c) => ({ value: c._id, label: c.name }))]}
+            value={category}
+            onChange={setCategory}
+            className="sm:w-52"
+          />
         </div>
       </div>
 
-      {/* Scrolls inside the card rather than growing the page, so the search row and summary panel beside it both stay in view. */}
+      {/* Scroll inside the card so search row and summary panel stay in view. */}
       <div className="min-h-[22rem] divide-y divide-border/60 overflow-y-auto lg:max-h-[calc(100vh-22rem)]">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (

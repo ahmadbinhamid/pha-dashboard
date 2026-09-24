@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings } from "@/types/tenantSettings";
 import { paymentDomainFormSchema, type PaymentDomainFormValues } from "@/lib/validation/tenantSettings";
@@ -27,7 +27,7 @@ export function PaymentDomainForm({
   const queryClient = useQueryClient();
 
   const {
-    register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -78,10 +78,21 @@ export function PaymentDomainForm({
           </div>
 
           <FormField label="Payment domain">
-            <NativeSelect {...register("payment_domain_mode")}>
-              <option value="default">Use default payment domain</option>
-              <option value="vendor_slug">{`Use my store domain (${settings.slug})`}</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="payment_domain_mode"
+              render={({ field }) => (
+                <SingleSelect
+                  options={[
+                    { value: "default", label: "Use default payment domain" },
+                    { value: "vendor_slug", label: `Use my store domain (${settings.slug})` },
+                  ]}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              )}
+            />
           </FormField>
         </CardContent>
       </Card>

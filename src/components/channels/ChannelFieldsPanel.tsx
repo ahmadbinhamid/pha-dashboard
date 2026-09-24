@@ -121,7 +121,13 @@ export function ChannelFieldsPanel({
     return (
       <div className="space-y-1.5">
         {field}
-        <ChannelCategorySource listingValue={values[d.key] as string} mapped={mappedCategory} required={d.required} />
+        <ChannelCategorySource
+          channelName={channel.name}
+          listingValue={values[d.key] as string}
+          mapped={mappedCategory}
+          required={d.required}
+          onReset={() => onChange({ [d.key]: "" } as Partial<ChannelFormState>)}
+        />
       </div>
     );
   }
@@ -131,7 +137,7 @@ export function ChannelFieldsPanel({
       {schema.length === 0 && <p className="p-5 text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
       {groupSchema(schema).map(([group, fields]) => (
         <section key={group} id={channelSectionId(channel.key, group)} className="scroll-mt-4 space-y-4 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-fg/55">{GROUP_LABELS[group] ?? group}</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-fg/55">{GROUP_LABELS[group] ?? group}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {fields.map((d) => (
               <div key={d.key} className={FULL_WIDTH_TYPES.includes(d.type) ? "sm:col-span-2" : undefined}>

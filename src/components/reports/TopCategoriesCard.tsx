@@ -36,7 +36,7 @@ export function TopCategoriesCard({ rows, loading }: { rows: TopCategoryRow[]; l
                 "100.0%" needs ~94px, which 4/12 already covers at 320px of
                 content, and this card is only ~350px wide in its own row — a
                 higher threshold hid the bars on every real screen. */}
-            <div className="grid grid-cols-12 pb-1.5 text-[10px] font-semibold uppercase text-fg/35">
+            <div className="grid grid-cols-12 pb-1.5 text-3xs font-semibold uppercase text-fg/35">
               <span className="col-span-4">Category</span>
               <span className="col-span-5 text-right @xs:col-span-4">Revenue</span>
               <span className="col-span-3 text-right @xs:col-span-4">% of Total</span>
@@ -55,7 +55,7 @@ export function TopCategoriesCard({ rows, loading }: { rows: TopCategoryRow[]; l
                   <div className="hidden h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-muted @xs:block @sm:w-12">
                     <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(row.pct, 100)}%` }} />
                   </div>
-                  <span className="shrink-0 text-[11px] font-semibold text-fg/60 tabular-nums">{row.pct.toFixed(1)}%</span>
+                  <span className="shrink-0 text-2xs font-semibold text-fg/60 tabular-nums">{row.pct.toFixed(1)}%</span>
                 </div>
               </div>
             ))}

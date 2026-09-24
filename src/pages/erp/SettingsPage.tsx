@@ -8,7 +8,7 @@ import { ComingSoonPanel } from "@/components/settings/ComingSoonPanel";
 import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
-// UsersTab/RolesTab are fully built but not wired up — see config/settingsTabs.tsx's comment on "users"/"roles". Both fall through to the generic `available: false` branch below.
+// UsersTab/RolesTab exist but aren't wired up (available: false, see below).
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
   DEFAULT_SETTINGS_TAB,
@@ -20,13 +20,14 @@ import {
 } from "@/config/settingsTabs";
 import type { IntegrationId } from "@/config/integrations";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
+import { StickyPageHeader } from "@/components/shared/StickyPageHeader";
 
-// Settings as a full page (used to be a bottom-sheet overlay): header, tab bar, active tab's body. Both nav levels live in the URL (/settings/:tab and /settings/:tab/:section) so every screen is linkable.
+// Both nav levels live in the URL (/settings/:tab/:section): all linkable.
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { tab, section } = useParams<{ tab?: string; section?: string }>();
 
-  // Forms inside the tabs (eBay, Stripe, SMTP) render their Save button into the page header through this portal target, keeping the action visible without each panel growing its own row.
+  // Tab forms portal their Save button here so it stays visible in the header.
   const [headerActionsEl, setHeaderActionsEl] = useState<HTMLDivElement | null>(null);
 
   const activeTab = findSettingsTab(tab) ?? findSettingsTab(DEFAULT_SETTINGS_TAB)!;
@@ -38,10 +39,9 @@ export default function SettingsPage() {
   const goToTab = (id: SettingsTabId) => navigate(`/settings/${id}`);
 
   return (
-    <div className="-mt-section space-y-6">
-      {/* Title, header actions and tab bar pin to the top of AppShell's scroll container as one block, so a Save button on a long form (portaled in via SettingsHeaderActions) never scrolls off.
-          Negative margins cancel the page gutter so the opaque background reaches the edges; -top-section offsets the shell's own py-section so sticky pins flush instead of leaving a scroll-through band above the header. */}
-      <div className="sticky -top-section z-20 -mx-4 space-y-4 bg-bg px-4 pt-section sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+    <div className="space-y-6">
+      {/* Title, portaled Save and tab bar stay pinned so Save never scrolls off. */}
+      <StickyPageHeader className="z-20 space-y-4">
         <PageHeader
           title="Settings"
           description="Manage your store preferences, appearance & theme, integrations and system settings."
@@ -50,7 +50,7 @@ export default function SettingsPage() {
         </PageHeader>
 
         <SettingsTabBar activeId={activeTab.id} onSelect={goToTab} />
-      </div>
+      </StickyPageHeader>
 
       <SettingsHeaderActionsProvider value={headerActionsEl}>
         {activeTab.id === "appearance" ? (
@@ -78,7 +78,7 @@ export default function SettingsPage() {
           <Lock className="h-4 w-4 shrink-0 text-accent" />
           <span>Settings are saved against your store and apply to everyone on the account.</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-accent">
+        <div className="flex items-center gap-2 text-2xs font-semibold text-accent">
           <RefreshCw className="h-3.5 w-3.5" />
           <span>Changes take effect immediately</span>
         </div>

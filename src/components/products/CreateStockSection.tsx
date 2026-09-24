@@ -10,7 +10,7 @@ interface CreateStockSectionProps {
   onChange: (entries: StockEntry[]) => void;
 }
 
-// One stock location only (Main Warehouse), so just an opening-quantity control; `entries` stays a 0-or-1-item array to keep the FormData payload shape unchanged.
+// Opening quantity at the single Main Warehouse; entries holds 0 or 1 item.
 export function CreateStockSection({ entries, onChange }: CreateStockSectionProps) {
   const { data: locData } = useQuery({ queryKey: ["locations"], queryFn: getLocations });
   const mainWarehouse = (locData?.data ?? []).find((l) => l.is_active && l.name === "Main Warehouse");
@@ -42,7 +42,7 @@ export function CreateStockSection({ entries, onChange }: CreateStockSectionProp
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-fg/40">Opening quantity</span>
+        <span className="text-3xs font-semibold uppercase tracking-wide text-fg/40">Opening quantity</span>
         <div className="flex items-center rounded-md border border-border bg-card">
           <button
             type="button"

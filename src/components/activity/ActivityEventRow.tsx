@@ -3,11 +3,11 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/utils/cn";
 import type { ActivityEvent } from "@/types/dashboard";
 
-// A "stock" event's first tag is the real ADJUSTMENT_TYPE (backend's mapStockEvent) — more stable to branch on than the free-form title text.
+// Stock events branch on first tag (real ADJUSTMENT_TYPE), not free-form title.
 const RESTOCK_ADJUSTMENT_TAGS = new Set(["restock", "transfer_in"]);
 const LOSS_ADJUSTMENT_TAGS = new Set(["damaged", "lost", "stolen"]);
 
-// Shared by this row and the dashboard's compact RecentActivityRow for one consistent icon/color mapping; restock gets its own RefreshCw icon, other stock events share Package.
+// Shared with RecentActivityRow so icon/color mapping stays consistent.
 export function eventVisual(event: ActivityEvent): { icon: typeof ShoppingCart; style: string } {
   if (event.type === "order") return { icon: ShoppingCart, style: "bg-ok/10 text-ok" };
   const adjustmentTag = event.tags[0];
@@ -25,7 +25,7 @@ function formatDateTime(iso: string) {
   return `${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}, ${formatTime(iso)}`;
 }
 
-// Icon + title/description/tags block shared by the dashboard feed and the full Activity Log page.
+// Icon + text/tags block shared by the dashboard feed and Activity Log page.
 export function ActivityEventRow({ event, showDate }: { event: ActivityEvent; showDate?: boolean }) {
   const { icon: Icon, style } = eventVisual(event);
   return (
@@ -36,7 +36,7 @@ export function ActivityEventRow({ event, showDate }: { event: ActivityEvent; sh
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <span className="truncate text-xs font-semibold text-fg">{event.title}</span>
-          <span className="shrink-0 rounded-md border border-border bg-card px-2 py-0.5 text-[10px] font-medium tabular-nums text-fg/45">
+          <span className="shrink-0 rounded-md border border-border bg-card px-2 py-0.5 text-3xs font-medium tabular-nums text-fg/45">
             {showDate ? formatDateTime(event.timestamp) : formatTime(event.timestamp)}
           </span>
         </div>
@@ -45,7 +45,7 @@ export function ActivityEventRow({ event, showDate }: { event: ActivityEvent; sh
         {event.tags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {event.tags.map((tag) => (
-              <Badge key={tag} variant="muted" className="px-1.5 py-0.5 text-[10px] capitalize">
+              <Badge key={tag} variant="muted" className="px-1.5 py-0.5 text-3xs capitalize">
                 {tag.replace(/_/g, " ")}
               </Badge>
             ))}

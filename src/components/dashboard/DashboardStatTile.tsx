@@ -10,7 +10,7 @@ const CAPTION_TONE: Record<StatTileTone, string> = {
   accent: "text-accent",
 };
 
-// Small "label / value / caption" tile used across dashboard chart cards (RevenueTrendChart's summary row, OrderVolumeChart's footer, a borderless "plain" variant) so consumers stop hand-rolling the same markup.
+// Shared "label / value / caption" tile for dashboard chart cards.
 export function DashboardStatTile({
   label,
   value,
@@ -38,7 +38,7 @@ export function DashboardStatTile({
   const valueSize = variant === "soft" ? "text-xl" : "text-lg";
   const valueSpacing = variant === "soft" ? "mt-0.5" : "mt-1";
 
-  // min-w-0: grid items default to min-width: auto, so without it a long value/caption widens the grid track instead of letting `truncate` ellipsize.
+  // min-w-0: grid items default to min-width:auto, which would block truncate.
   if (loading) {
     return (
       <div className={cn("min-w-0 transition-colors duration-200", box, className)}>
@@ -51,10 +51,10 @@ export function DashboardStatTile({
 
   return (
     <div className={cn("min-w-0 transition-colors duration-200", box, className)}>
-      <p className="truncate text-[11px] font-medium text-fg/50">{label}</p>
+      <p className="truncate text-2xs font-medium text-fg/50">{label}</p>
       <p className={cn("truncate font-bold tracking-tight text-fg tabular-nums", valueSize, valueSpacing)}>{value}</p>
       {caption ? (
-        <p className={cn("mt-0.5 truncate text-[10px] font-medium", CAPTION_TONE[captionTone])}>{caption}</p>
+        <p className={cn("mt-0.5 truncate text-3xs font-medium", CAPTION_TONE[captionTone])}>{caption}</p>
       ) : null}
     </div>
   );

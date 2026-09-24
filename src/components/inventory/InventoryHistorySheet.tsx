@@ -64,7 +64,7 @@ function HistoryRow({ entry }: { entry: InventoryHistoryRecord }) {
 
         {entry.reason && <p className="mt-0.5 truncate text-xs text-fg/45">{entry.reason}</p>}
 
-        <div className="mt-1 flex items-center justify-between text-[10px] text-fg/35">
+        <div className="mt-1 flex items-center justify-between text-3xs text-fg/35">
           <span>{entry.user ? `${entry.user.first_name} ${entry.user.last_name}` : "System"}</span>
           <span>{formatDateTime(entry.created_at)}</span>
         </div>
@@ -78,7 +78,7 @@ export function InventoryHistorySheet({ item, onOpenChange }: InventoryHistorySh
     queryKey: ["inventory-history", item?._id],
     queryFn: () => getInventoryHistory(item!._id),
     enabled: !!item,
-    // An audit log must reflect the latest state on open — overrides AppProviders.tsx's app-wide 5-minute staleTime.
+    // Audit log must be fresh on open; overrides app-wide 5-minute staleTime.
     staleTime: 0,
     refetchOnMount: "always",
   });

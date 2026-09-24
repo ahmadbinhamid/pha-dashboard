@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-fg/40 first:pt-1">
+    <div className="px-2.5 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-fg/40 first:pt-1">
       {children}
     </div>
   );
@@ -28,7 +28,7 @@ function ResultSkeletonRows() {
   );
 }
 
-// One "PRODUCTS (5) / results-or-skeleton-or-error" group, shared by every result section in CommandPalette instead of near-identical inline blocks.
+// Heading + results/skeleton/error group shared by CommandPalette sections.
 export function CommandPaletteSection<T>({
   heading,
   total,
@@ -38,7 +38,7 @@ export function CommandPaletteSection<T>({
   renderItem,
 }: {
   heading: string;
-  // Shown as "heading (total)" once known; omitted while in flight so a section never claims zero results before it's checked.
+  // "heading (total)" once known; omitted in flight so it never claims zero.
   total?: number;
   isLoading: boolean;
   isError: boolean;

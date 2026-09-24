@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, ShoppingCart, Boxes, History } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Input } from "@/components/ui/Input";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -29,7 +29,7 @@ export default function ActivityLogPage() {
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
-  // Free-text search stays out of the URL and is debounced locally; synced filters are worth deep-linking, a half-typed search mid-keystroke isn't.
+  // Search stays out of the URL: a half-typed query isn't worth deep-linking
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function ActivityLogPage() {
     [setSearchParams],
   );
 
-  // Sets from/to together in one history entry — two sequential updateFilter calls could race.
+  // Sets from/to in one history entry; two updateFilter calls could race
   const updateDateRange = useCallback(
     (range: DateRangeValue) => {
       setSearchParams((prev) => {
@@ -89,7 +89,7 @@ export default function ActivityLogPage() {
     [setSearchParams],
   );
 
-  // Compares against the previous value, not a one-shot mounted flag, to stay idempotent under StrictMode's double-invoke — a flag wrongly fired setPage twice, needing two Back clicks to leave.
+  // Compare to previous value, not a mounted flag, to survive StrictMode
   const prevSearchRef = useRef(debouncedSearch);
   useEffect(() => {
     if (prevSearchRef.current === debouncedSearch) return;
@@ -162,10 +162,10 @@ export default function ActivityLogPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 w-64 sm:w-80 lg:w-96"
             />
-            <FilterSelect options={TYPE_FILTERS} value={type} onChange={(v) => updateFilter("type", v)} />
+            <SingleSelect size="sm" options={TYPE_FILTERS} value={type} onChange={(v) => updateFilter("type", v)} />
           </div>
 
-          {/* Date range sits opposite the text filters: "what" on the left, "over what period" on the right. Fetch hint rides with it rather than shifting the picker. */}
+          {/* Date range opposite text filters; fetch hint rides with it */}
           <div className="flex items-center gap-3">
             {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
             <DateRangePicker

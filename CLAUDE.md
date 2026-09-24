@@ -17,12 +17,23 @@ not suggestions: a change that breaks one of them is not finished.
   `categories/`, `dashboard/`, `providers/`, ...) for an existing component
   that already does the job. Don't reinvent a button/card/badge/dialog that
   already exists.
+- **One component per control type; never hand-roll or compose primitives in
+  feature code.** Single-value dropdown: `ui/SingleSelect`. Multi-value:
+  `ui/MultiSelect`. Searchable picker: `ui/Combobox`. No raw `<select>` and no
+  direct Radix `Select`/`SelectTrigger` composition outside `src/components/ui/`.
+  If an existing component can't express a need, extend that component rather
+  than creating a second variant. When you find two components doing the same
+  job, consolidate them, don't patch one.
 - **Use the app's own typography, colors and tokens exactly as the rest of
   the app does; never arbitrary Tailwind values.** Colors
   are CSS vars defined in `src/app/globals.css` (`bg`, `fg`, `card`,
   `accent`, `border`, `danger`, `warn`, `ok`, etc.); typography is the scale
   defined in that file's `@layer base` block. Don't hardcode a hex color or
-  an arbitrary Tailwind color class when a token already covers it.
+  an arbitrary Tailwind color class when a token already covers it. Below
+  `text-xs`, use the theme's small sizes (`text-compact` 13px, `text-2xs`
+  11px, `text-3xs` 10px, `text-4xs` 9px), never `text-[Npx]`; a new size
+  goes in `globals.css` `@theme` and in `utils/cn.ts`'s font-size group, or
+  `cn()` will treat it as a colour and drop it.
   - Exception (established precedent, fine to keep following): full-bleed
     dark overlays — modal scrims, image lightboxes, "Cover" badges on
     thumbnails — use literal `bg-black/*` + `text-white` throughout the
@@ -119,7 +130,8 @@ repeatedly; treat this section as a hard requirement.
 
 ## Before finishing any change
 
-- **FE**: reusable component used (not raw HTML)? theme tokens used (not
+- **FE**: reusable component used (not raw HTML, not a second variant of an
+  existing control)? theme tokens used (not
   arbitrary colors)? new component is its own file in the right feature
   folder? types/constants placed per the rule above?
 - **BE**: DB access is in a service (not the controller/route/worker)?

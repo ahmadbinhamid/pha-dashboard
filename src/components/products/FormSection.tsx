@@ -9,7 +9,7 @@ interface FormSectionProps {
   children: React.ReactNode;
 }
 
-// Numbered section wrapper for product create/edit forms; the number chip distinguishes it from the plain icon-badge SectionLabel used elsewhere.
+// Numbered section card for the product form (create and edit).
 export function FormSection({
   number,
   title,

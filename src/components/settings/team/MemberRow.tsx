@@ -12,10 +12,10 @@ import { cn } from "@/utils/cn";
 import { SYSTEM_ROLE_SUPER_ADMIN } from "@/config/access";
 import type { Member } from "@/types/access";
 
-// Initials avatar — same fallback shape TenantLogo uses when a tenant has no logo, rather than a second avatar treatment.
+// Initials avatar, same fallback shape as TenantLogo's no-logo state.
 function Initials({ first, last }: { first: string; last: string }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-[11px] font-bold text-accent">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-2xs font-bold text-accent">
       {`${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?"}
     </span>
   );
@@ -49,7 +49,7 @@ export function MemberRow({
 }) {
   const user = member.user_id;
   const suspended = member.status === "suspended";
-  // Super Admin is protected server-side too (membership.service.js) — the menu just doesn't offer what would be refused.
+  // Super Admin is also protected server-side; the menu omits refused actions.
   const isSuperAdmin = member.role_id?.name === SYSTEM_ROLE_SUPER_ADMIN;
   const locked = isSelf || isSuperAdmin;
 
@@ -63,7 +63,7 @@ export function MemberRow({
               <span className="truncate text-sm font-semibold text-fg">
                 {`${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || user?.email}
               </span>
-              {isSelf ? <span className="text-[10px] font-semibold uppercase text-fg/40">You</span> : null}
+              {isSelf ? <span className="text-3xs font-semibold uppercase text-fg/40">You</span> : null}
             </div>
             <div className="truncate text-xs text-fg/50">{user?.email}</div>
           </div>

@@ -1,4 +1,4 @@
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { VEHICLE_YEAR_OPTIONS } from "@/config/vehicleYears";
 
 interface YearSelectProps {
@@ -10,22 +10,19 @@ interface YearSelectProps {
   "aria-invalid"?: boolean;
 }
 
-// Replaces a free-text number input for a vehicle model year — a bounded dropdown makes an invalid year structurally impossible instead of relying on validation after the fact.
+const YEAR_OPTIONS = VEHICLE_YEAR_OPTIONS.map((year) => ({ value: String(year), label: String(year) }));
+
+// NOTE: "" is a real option here (Year To "Present" clears it), not a prompt.
 export function YearSelect({ value, onChange, placeholder = "Select year…", disabled, id, ...rest }: YearSelectProps) {
   return (
-    <NativeSelect
+    <SingleSelect
       id={id}
+      options={[{ value: "", label: placeholder }, ...YEAR_OPTIONS]}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       disabled={disabled}
+      className={value === "" ? "text-fg/45" : undefined}
       {...rest}
-    >
-      <option value="">{placeholder}</option>
-      {VEHICLE_YEAR_OPTIONS.map((year) => (
-        <option key={year} value={year}>
-          {year}
-        </option>
-      ))}
-    </NativeSelect>
+    />
   );
 }

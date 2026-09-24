@@ -61,10 +61,10 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
     [points],
   );
 
-  // Revenue is the soft background bar; the selected metric is the foreground line — unless Revenue itself is selected, then the bar alone carries the chart.
+  // Revenue is the background bar; selected metric is the line (bar-only if so).
   const showTrendLine = metric !== "revenueCents";
 
-  // Bar/line ride separate y-axes for their unrelated units; bar's domain is squashed to 4x max (bottom quarter) so it sits visibly under the line's 1.2x domain — but only when a line is drawn, else the bar gets a normal height.
+  // Squash bar domain (4x max) under the line only when a line is drawn.
   const revenueDomainMultiplier = showTrendLine ? 4 : 1.15;
 
   return (
@@ -82,7 +82,7 @@ export function OrderVolumeChart({ points, loading }: { points: OrderVolumePoint
               type="button"
               onClick={() => setMetric(tab.key)}
               className={cn(
-                "rounded-sm px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                "rounded-sm px-2.5 py-1 text-2xs font-semibold uppercase tracking-wide transition-colors",
                 metric === tab.key ? "bg-card text-fg shadow-sm" : "text-fg/50 hover:text-fg",
               )}
             >

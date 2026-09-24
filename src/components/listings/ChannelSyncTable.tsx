@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMenu";
 import { ListingSyncLogSheet } from "@/components/listings/ListingSyncLogSheet";
@@ -155,8 +155,9 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
               <RefreshCw className={retryMutation.isPending ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
               {retryMutation.isPending ? "Retrying…" : `Retry selected${selectedListings.length ? ` (${selectedListings.length})` : ""}`}
             </Button>
-            <FilterSelect options={platformFilters} value={platform} onChange={(v) => updateParams({ platform: v || null })} />
-            <FilterSelect
+            <SingleSelect size="sm" options={platformFilters} value={platform} onChange={(v) => updateParams({ platform: v || null })} />
+            <SingleSelect
+              size="sm"
               options={STATUS_FILTERS}
               value={syncStatus}
               onChange={(v) => updateParams({ status: v === DEFAULT_STATUS ? null : v || ALL_STATUSES })}

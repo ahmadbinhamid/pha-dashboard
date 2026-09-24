@@ -72,7 +72,7 @@ export function FitmentRow({
     <div className="rounded-xs border border-border bg-bg-2/30 p-3 space-y-3">
       {/* Row index label */}
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">
           Vehicle {index + 1}
         </span>
         <button
@@ -88,7 +88,7 @@ export function FitmentRow({
       {/* Make + Model */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Make</span>
+          <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Make</span>
           <Combobox
             options={makes}
             value={row.make}
@@ -99,7 +99,7 @@ export function FitmentRow({
           />
         </div>
         <div className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Model</span>
+          <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Model</span>
           <Combobox
             options={models}
             value={row.model}
@@ -115,7 +115,7 @@ export function FitmentRow({
       {/* Model Code + Years */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Model Code</span>
+          <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Model Code</span>
           <Combobox
             options={modelCodes}
             value={row.model_code}
@@ -127,11 +127,11 @@ export function FitmentRow({
           />
         </div>
         <div className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year From</span>
+          <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Year From</span>
           <YearSelect value={row.year_from} onChange={(year_from) => onUpdate({ year_from })} />
         </div>
         <div className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg/40">Year To</span>
+          <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Year To</span>
           <YearSelect
             value={row.year_to}
             onChange={(year_to) => onUpdate({ year_to })}

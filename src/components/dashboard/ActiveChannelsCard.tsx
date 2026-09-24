@@ -125,7 +125,7 @@ export function ActiveChannelsCard({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <span className={cn("flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold", STATUS_TEXT[channel.status])}>
+                <span className={cn("flex items-center gap-1 whitespace-nowrap text-2xs font-semibold", STATUS_TEXT[channel.status])}>
                   <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[channel.status])} aria-hidden="true" />
                   {STATUS_LABEL[channel.status]}
                 </span>

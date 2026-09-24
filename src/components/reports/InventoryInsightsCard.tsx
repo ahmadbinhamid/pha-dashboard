@@ -10,7 +10,7 @@ import type { DashboardStats } from "@/types/dashboard";
 
 const TONE_STYLES = {
   accent: { box: "bg-accent/5 border-accent/20", icon: "text-accent" },
-  // For a figure that isn't a status: stock turnover has no "healthy" threshold defined, so it can't honestly borrow the success/warning treatment.
+  // Non-status figure: turnover has no healthy threshold, so no status tone.
   neutral: { box: "bg-muted/40 border-border", icon: "text-fg/45" },
   warn: { box: "bg-warn/5 border-warn/20", icon: "text-warn" },
   danger: { box: "bg-danger/5 border-danger/20", icon: "text-danger" },
@@ -32,16 +32,16 @@ function InsightBox({
 }) {
   const styles = TONE_STYLES[tone];
   return (
-    // min-w-0: grid items default to min-width: auto, so without it a long currency value overflowed into the neighboring box instead of letting `truncate` ellipsize.
+    // min-w-0: grid items default to min-width:auto, which blocks truncate.
     <div className={cn("min-w-0 space-y-1 rounded-xl border p-2.5", styles.box)}>
       <div className={cn("flex items-start gap-1.5", styles.icon)}>
         <span className="mt-0.5 shrink-0">{icon}</span>
-        {/* Label wraps to 2 lines instead of truncating — single-lining left almost nothing readable in this narrow box. Value below still truncates as a safety net. */}
-        <span className="text-[10px] font-semibold uppercase leading-tight">{label}</span>
+        {/* Label wraps to 2 lines; truncating left it unreadable here. */}
+        <span className="text-3xs font-semibold uppercase leading-tight">{label}</span>
       </div>
-      <p className="truncate text-[13px] font-bold text-fg tabular-nums">{value}</p>
-      {/* Wraps instead of truncating — at ~70px width it was being cut mid-word, which reads as broken rather than abbreviated. */}
-      {caption ? <p className={cn("text-[10px] font-semibold leading-tight", styles.icon)}>{caption}</p> : null}
+      <p className="truncate text-compact font-bold text-fg tabular-nums">{value}</p>
+      {/* Wraps: truncating at ~70px cut mid-word, which reads as broken. */}
+      {caption ? <p className={cn("text-3xs font-semibold leading-tight", styles.icon)}>{caption}</p> : null}
     </div>
   );
 }
@@ -73,9 +73,9 @@ export function InventoryInsightsCard({
             <InsightBox
               tone="accent"
               icon={<Box className="h-3.5 w-3.5" />}
-              // Labels trimmed to what the card title doesn't already say — full names spilled onto a 3rd line at this box's ~125px width.
+              // Short labels: full names spilled onto a 3rd line at ~125px width.
               label="Inventory Value"
-              // Compact notation ("A$414K"): too narrow to fit "A$414,499.00" without truncating mid-number, and compact stays honest without implying misleading rounding.
+              // Compact notation (A$414K): the full amount won't fit untruncated.
               value={`A$${formatCompactNumber(stats.totalInventoryValue)}`}
               caption={
                 stats.inventoryValueChangePct !== null

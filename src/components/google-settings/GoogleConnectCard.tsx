@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { getChannels } from "@/lib/api/channels";
 import { getGoogleConnectUrl, getGoogleAccounts, completeGoogleConnect } from "@/lib/api/google";
@@ -204,18 +204,17 @@ export function GoogleConnectCard() {
                           control={control}
                           name="merchantId"
                           render={({ field }) => (
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger id="google-merchant-account">
-                                <SelectValue placeholder="Choose an account" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accounts.map((a) => (
-                                  <SelectItem key={a.accountId} value={a.accountId}>
-                                    {a.accountName ? `${a.accountName} (${a.accountId})` : a.accountId}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <SingleSelect
+                              id="google-merchant-account"
+                              options={accounts.map((a) => ({
+                                value: a.accountId,
+                                label: a.accountName ? `${a.accountName} (${a.accountId})` : a.accountId,
+                              }))}
+                              value={field.value}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              placeholder="Choose an account"
+                            />
                           )}
                         />
                       </FormField>
@@ -240,18 +239,12 @@ export function GoogleConnectCard() {
                         control={control}
                         name="targetCountry"
                         render={({ field }) => (
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {GOOGLE_TARGET_COUNTRIES.map((c) => (
-                                <SelectItem key={c.value} value={c.value}>
-                                  {c.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SingleSelect
+                            options={[...GOOGLE_TARGET_COUNTRIES]}
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                          />
                         )}
                       />
                     </FormField>

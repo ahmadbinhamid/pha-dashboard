@@ -13,12 +13,13 @@ export function isAwaitingSync(listing: AnyMarketplaceListing, since: number | n
   return !listing.synced_at || new Date(listing.synced_at).getTime() < since;
 }
 
-// Channels plus this product's base listings (header, tab and section).
-export function useProductChannelListings(productId: string, syncingSince: number | null = null) {
+// Channels plus this product's base listings; none until the product exists.
+export function useProductChannelListings(productId: string | null, syncingSince: number | null = null) {
   const channelsQuery = useQuery({ queryKey: ["channels"], queryFn: getChannels });
   const listingsQuery = useQuery({
     queryKey: ["listings", "product", productId],
-    queryFn: () => getListings({ product: productId, limit: 100 }),
+    queryFn: () => getListings({ product: productId!, limit: 100 }),
+    enabled: !!productId,
     refetchInterval: (query) => {
       const items = query.state.data?.data?.items ?? [];
       return items.some((l) => isAwaitingSync(l, syncingSince)) ? SYNC_POLL_INTERVAL_MS : false;
