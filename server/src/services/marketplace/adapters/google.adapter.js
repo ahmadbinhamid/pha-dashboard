@@ -9,7 +9,7 @@ const googleMerchantApi = require("../../google/google.merchant.api.service");
 const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");
 const { assertFieldValues } = require("../fieldSchema");
 const { httpError } = require("../../../utils/http/httpError");
-const { fieldSchema, fieldValues } = require("./google.fieldSchema");
+const { fieldSchema, fieldValues, toGoogleCondition } = require("./google.fieldSchema");
 
 // Google disapproves a bad imageLink later, async; 400 keeps the breaker shut.
 class GoogleImageValidationError extends Error {
@@ -150,7 +150,7 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
     imageLink: primaryImageUrl,
     ...(additionalImageUrls.length > 0 ? { additionalImageLinks: additionalImageUrls } : {}),
     availability: availabilityFor(quantity),
-    condition: listing.condition || "new",
+    condition: toGoogleCondition(resolved.condition),
     price: {
       amountMicros: String(Math.round((price || 0) * 1_000_000)),
       currencyCode: settings.target_country ? currencyForCountry(settings.target_country) : "USD",

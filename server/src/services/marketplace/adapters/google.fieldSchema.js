@@ -1,8 +1,7 @@
 // services/marketplace/adapters/google.fieldSchema.js
-// Google fields beyond the product — only what google.adapter.js reads.
-// NOTE: feed_label/content_language come from the connection; custom labels aren't settable.
+// NOTE: feed_label/content_language from connection; custom labels unsettable.
 
-const { FIELD_TYPE } = require("../../../constants/channelField.constants");
+const { FIELD_TYPE, STATIC_FIELD_OPTIONS } = require("../../../constants/channelField.constants");
 
 const fieldSchema = Object.freeze([
   {
@@ -19,9 +18,10 @@ const fieldSchema = Object.freeze([
     label: "Condition",
     type: FIELD_TYPE.SELECT,
     required: false,
-    helpText: "Defaults to new.",
+    helpText: "Defaults to the product's condition.",
     optionsSource: "google.conditions",
     group: "condition",
+    inheritsFrom: "condition",
   },
   {
     key: "gtin",
@@ -49,6 +49,15 @@ const fieldSchema = Object.freeze([
   },
 ]);
 
+const GOOGLE_CONDITIONS = new Set(STATIC_FIELD_OPTIONS["google.conditions"].map((o) => o.value));
+
+// Product NEW/USED to Google's lowercase enum; Google overrides pass through.
+function toGoogleCondition(value) {
+  const lower = String(value ?? "").toLowerCase();
+  return GOOGLE_CONDITIONS.has(lower) ? lower : "new";
+}
+
+// NOTE: condition validates only the stored Google override; fallback's mapped.
 function fieldValues(listing, { categoryId = listing.google_product_category } = {}) {
   return {
     google_product_category: categoryId,
@@ -59,4 +68,4 @@ function fieldValues(listing, { categoryId = listing.google_product_category } =
   };
 }
 
-module.exports = { fieldSchema, fieldValues };
+module.exports = { fieldSchema, fieldValues, toGoogleCondition };

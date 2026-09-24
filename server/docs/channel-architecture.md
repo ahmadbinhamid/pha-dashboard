@@ -1053,6 +1053,54 @@ override removed). Every write re-checks the stored value, so the script is
 idempotent and race-safe. Generated eBay descriptions are cleared only with the
 opt-in flag.
 
+### Fields on both Product and a listing: null means "use the product"
+
+**Rule.** A field that exists on both `Product` and a listing discriminator MUST
+default to `null` (or empty) and fall back to the product value. A listing field
+holds a value only when it is genuinely channel-specific (eBay category id,
+business policies, store SKU) or a deliberate override. This bug class has now
+appeared three times (title/description/price/photos, then condition and
+authenticity, then fitment): a listing default such as `condition: "NEW"` silently
+shadowed the product, so product edits queued a sync that pushed the old value.
+
+Resolution (`services/marketplace/productFallbacks.js`, exposed on `resolved`):
+
+| Resolved field | Listing value (override) | Else product |
+|---|---|---|
+| `condition` | eBay `condition` / Google `condition` | `product.condition` |
+| `authenticity` | eBay `item_specifics.authenticity` | `product.authenticity` |
+| `fitment` | eBay `fitment[]` rows naming a make or model | `[product.vehicle]` (one row) |
+| `brand`, `mpn` | `item_specifics.brand` / `.mpn`, Google `mpn` | `product.brand` / `.mpn` |
+
+`""` counts as unset. Platform vocabularies are mapped in the adapter, not stored:
+eBay `resolveCategoryCondition` maps the **resolved** condition to what the
+category accepts (`USED` → `USED_EXCELLENT`); Google's `toGoogleCondition` maps
+`NEW`/`USED` to `new`/`used`. `product.vehicle` → `fitment[]` is a shape change and
+lives in the resolver so any channel can use it.
+
+**Enforced in CI** by `models/productListingOverlap.test.js`: it compares Product
+leaf field names with each discriminator's own (recursing into subdocuments and
+arrays) and fails on any overlap missing from its commented `ALLOWED_OVERLAPS`,
+on any allowlisted field whose default isn't null/empty, and on stale entries.
+
+The product fan-out list (`controllers/product.controller.js`,
+`MARKETPLACE_RELEVANT_PRODUCT_FIELDS`) must include every product field a channel
+reads, compared by value: title, description, price, brand, mpn, condition,
+authenticity, vehicle, slug (Google link), stock_control, shipping_cost (Google),
+attachments, categories (mapped channel category). `sku` is excluded on purpose:
+it is the channel identity, and re-pushing a changed SKU creates a new item.
+
+The channel panel shows each inherited value read-only with "from product", plus
+an explicit "Override for <channel>" control; an override is flagged and resettable
+(`fieldSchema` descriptors carry `inheritsFrom: "<product field>"`).
+
+Migration: `scripts/backfillClearCopiedChannelFields.js [--dry-run] [--tenant=<id>]`
+nulls a listing value only when it pushes the same thing as the product would;
+different values are real overrides and are kept. eBay `condition: "NEW"` on a
+product that is not new is **ambiguous** (it was the old default, and nothing
+records whether a user chose it): the script leaves it and reports the count
+and sample ids for a person to decide.
+
 ### Category mappings
 
 `CategoryMapping { tenant_id, product_category_id, platform, external_category_id,
@@ -1075,7 +1123,7 @@ category ids are shipped; they must come from eBay's live category search.
 ### fieldSchema contract
 
 `manifest.fieldSchema`: an ordered list of
-`{ key, label, type, required, helpText, optionsSource?, group? }` covering **only**
+`{ key, label, type, required, helpText, optionsSource?, group?, inheritsFrom? }` covering **only**
 what the channel needs beyond the product. `type` is one of `text | textarea |
 number | boolean | select | category | policy | custom`. `GET /api/v1/channels`
 serves it with static option lists attached as `options`; dynamic sources (eBay
@@ -1088,7 +1136,7 @@ Enforced server-side in the mapper (`services/marketplace/fieldSchema.js`,
 | Rule | Where |
 |---|---|
 | eBay effective title ≤ 80 | `ebay.adapter.js#assertUpfrontFields`, before any write; also `validateListingForPush` |
-| eBay condition required; format enum; best-offer number | `assertUpfrontFields` (publish + update) |
+| eBay effective condition required (listing, else product); format enum; best-offer number | `assertUpfrontFields` (publish + update) |
 | eBay category required | `publish()`, same point as before (after the inventory-item write); `update()` keeps its "skip the offer" path; also `validateListingForPush` |
 | eBay business policies required (listing value or tenant default) | `publish()` before the offer is created; `validateListingForPush` |
 | Google condition enum | `google.adapter.js#assertGoogleFields` (publish, update, per batch item) |
@@ -1106,6 +1154,9 @@ I/O-backed is resolved beforehand by `sync.service.js` / `listing.resolver.js`:
 - `resolved.productUrl` / `productUrlError`: the storefront host is resolved once
   per chunk, and the error is raised by the adapter at its original point.
 - `resolved.branding`, `resolved.category`, `resolved.identifiers`.
+- `resolved.condition`, `resolved.authenticity`, `resolved.fitment`: listing
+  override, else product (see "Fields on both Product and a listing" above).
+  Adapters never read `listing.condition` or `listing.item_specifics.authenticity`.
 - The sync baseline is written by `sync.service.js#recordQuantityPushed` via
   `hooks.onQuantityPushed`, at the exact point the adapter used to write it.
 - `end(listing, context)` receives product/variant/settings/SKU from

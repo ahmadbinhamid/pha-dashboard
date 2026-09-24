@@ -24,7 +24,6 @@ const {
   fieldSchema,
   productConstraints,
   fieldValues,
-  effectiveCondition,
   UPFRONT_KEYS,
   POLICY_KEYS,
 } = require("./ebay.fieldSchema");
@@ -234,7 +233,7 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
 
   // Step 1 — inventory item
   const categoryId = effectiveCategoryId(resolved);
-  const condition = await resolveCategoryCondition(effectiveCondition(listing, resolved.product), categoryId, settings, resolved.sku);
+  const condition = await resolveCategoryCondition(resolved.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
@@ -303,7 +302,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
 
   // Step 1 — sync inventory item
   const categoryId = effectiveCategoryId(resolved);
-  const condition = await resolveCategoryCondition(effectiveCondition(listing, resolved.product), categoryId, settings, resolved.sku);
+  const condition = await resolveCategoryCondition(resolved.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
   await upsertInventoryItem(token, settings, inventoryItem);
   logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku} (qty: ${quantity ?? "untracked"})`);

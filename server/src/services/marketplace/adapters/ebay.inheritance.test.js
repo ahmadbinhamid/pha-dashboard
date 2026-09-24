@@ -6,11 +6,13 @@ const assert = require("node:assert/strict");
 const { buildInventoryItemFromResolved } = require("../../ebay/ebay.api.service");
 const { fieldValues, effectiveMpn } = require("./ebay.fieldSchema");
 const { descriptionInputFromResolved } = require("../../ebay/ebay.description.template");
+const { resolveListing } = require("../listing.resolver");
 
 const product = { _id: "p1", sku: "S1", mpn: "LR010632", condition: "USED", brand: "Land Rover" };
 
+// Through the real resolver, so the adapter sees what production passes it.
 function resolved(listing) {
-  return { sku: "S1", title: "Flare", description: "d", brand: product.brand, photos: [], listing, product };
+  return resolveListing({ platform: "ebay", ...listing }, { ...product, title: "Flare", description: "d" });
 }
 
 test("empty listing MPN/condition fall back to the product", () => {

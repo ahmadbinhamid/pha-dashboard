@@ -38,11 +38,11 @@ function descriptionInputFromResolved(resolved) {
     // NOTE: client ignored the variant SKU here; kept identical.
     stockNumber: str(listing.store_sku || product.sku),
     supersededPartNumbers: (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : []).map(str),
-    authenticity: str(specs.authenticity),
+    authenticity: str(resolved.authenticity),
     warranty: str(specs.warranty),
-    condition: str(listing.condition || product.condition),
+    condition: str(resolved.condition),
     conditionNotes: str(listing.condition_notes),
-    fitment: Array.isArray(listing.fitment) ? listing.fitment : [],
+    fitment: Array.isArray(resolved.fitment) ? resolved.fitment : [],
     imageUrl: str(photos[0]?.url),
   };
 }

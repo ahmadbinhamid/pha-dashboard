@@ -121,8 +121,8 @@ test("updateProduct: an irrelevant-field edit fans out to nothing", async (t) =>
     params: { id: product._id.toString() },
     tenantId,
     user: { _id: fixtureId() },
-    // is_taxable/stock_control/tags aren't read by any adapter; must not queue.
-    body: { is_taxable: true, stock_control: false, tags: ["a", "b"] },
+    // None of these is read by a channel payload (stock_control is: see below).
+    body: { is_taxable: true, tags: ["a", "b"], compare_price: 150, barcode: "9300000000001", cost_price: 40 },
   };
   const res = fakeRes();
 
@@ -131,6 +131,21 @@ test("updateProduct: an irrelevant-field edit fans out to nothing", async (t) =>
   assert.equal(res.statusCode, 200);
   const syncCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[1] === "sync_listing");
   assert.equal(syncCalls.length, 0, "an edit to fields no adapter reads must not fan out");
+});
+
+test("updateProduct: a stock_control change fans out (untracked stock changes both payloads)", async () => {
+  const { tenantId, product } = await setup();
+  enqueueSpy.mock.resetCalls();
+
+  const res = fakeRes();
+  await productController.updateProduct(
+    { params: { id: product._id.toString() }, tenantId, user: { _id: fixtureId() }, body: { stock_control: false } },
+    res,
+  );
+
+  assert.equal(res.statusCode, 200);
+  const syncCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[1] === "sync_listing");
+  assert.ok(syncCalls.length > 0, "a stock_control edit must queue a sync");
 });
 
 test("updateProduct: a queue failure does not fail the request", async (t) => {

@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import Link from "@/components/ui/Link";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
+import { ViewOnChannelLink } from "@/components/channels/ViewOnChannelLink";
 import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
 import { ChannelSettingsDrawer } from "@/components/channels/ChannelSettingsDrawer";
 import { SyncBadge } from "@/components/listings/SyncBadge";
@@ -239,6 +240,7 @@ export function SalesChannelRow({
                   <RefreshCw className={cn("h-3.5 w-3.5", saveMutation.isPending && "animate-spin")} />
                   Re-sync
                 </Button>
+                <ViewOnChannelLink url={listingSummary.external_url} channelName={channel.name} />
               </div>
             )}
             <Button type="button" variant="secondary" size="sm" className="gap-1.5" disabled={!form} onClick={() => setDrawerOpen(true)}>

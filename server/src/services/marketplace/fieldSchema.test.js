@@ -1,5 +1,5 @@
 // services/marketplace/fieldSchema.test.js
-// fieldSchema contract: real fields only, and rules enforced in the mappers. No Mongo.
+// fieldSchema contract: real fields only, rules enforced in mappers. No Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -18,7 +18,10 @@ const { validateFieldValues, withStaticOptions, ChannelFieldValidationError } = 
 const ebayAdapter = require("./adapters/ebay.adapter");
 const googleAdapter = require("./adapters/google.adapter");
 
-const DESCRIPTOR_KEYS = ["key", "label", "type", "required", "helpText", "optionsSource", "group"];
+const Product = require("../../models/Product");
+const { resolveCondition, resolveAuthenticity, resolveFitment } = require("./productFallbacks");
+
+const DESCRIPTOR_KEYS = ["key", "label", "type", "required", "helpText", "optionsSource", "group", "inheritsFrom"];
 
 for (const adapter of [ebayAdapter, googleAdapter]) {
   test(`${adapter.key} fieldSchema: well-formed descriptors naming only real listing fields`, () => {
@@ -30,6 +33,7 @@ for (const adapter of [ebayAdapter, googleAdapter]) {
       assert.equal(typeof d.label, "string");
       assert.equal(typeof d.required, "boolean");
       assert.ok(discriminator.path(d.key) || discriminator.pathType(d.key) === "nested", `${d.key} must be a real ${adapter.key} listing field`);
+      if (d.inheritsFrom) assert.ok(Product.schema.path(d.inheritsFrom), `${d.key}: inheritsFrom must name a real Product field`);
     }
   });
 }
@@ -56,11 +60,15 @@ test("withStaticOptions attaches static option lists for the frontend", () => {
   assert.equal(served.find((d) => d.key === "gtin").options, undefined);
 });
 
-function ebayResolved(listing, title = "Front Brake Disc") {
+// Resolved fields use the real fallback rules, as resolveListing does.
+function ebayResolved(overrides, title = "Front Brake Disc") {
+  const listing = { tenant_id: "t1", condition: "NEW", ebay_category_id: "33564", item_specifics: {}, ...overrides };
+  const product = { _id: "p1", stock_control: false };
   return {
-    sku: "SKU-1", title, description: "d", price: 10, brand: null, photos: [], category: null,
-    listing: { tenant_id: "t1", condition: "NEW", ebay_category_id: "33564", item_specifics: {}, ...listing },
-    product: { _id: "p1", stock_control: false }, variant: null,
+    sku: "SKU-1", title, description: "d", price: 10, brand: null, photos: [], category: null, listing, product, variant: null,
+    condition: resolveCondition(listing, product),
+    authenticity: resolveAuthenticity(listing, product),
+    fitment: resolveFitment(listing, product),
   };
 }
 

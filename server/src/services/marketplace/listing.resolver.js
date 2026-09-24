@@ -2,6 +2,7 @@
 // Merges Product/Variant content with listing overrides; adapters read this.
 
 const { httpError } = require("../../utils/http/httpError");
+const { resolveCondition, resolveAuthenticity, resolveFitment, fitmentFromVehicle } = require("./productFallbacks");
 const { CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
 
 function resolveSku(listing, product, variant) {
@@ -47,6 +48,9 @@ function resolveListing(listing, product, variant = null) {
     description: listing.description_override || product.description || product.title,
     price: resolvePrice(listing, product, variant),
     brand,
+    condition: resolveCondition(listing, product),
+    authenticity: resolveAuthenticity(listing, product),
+    fitment: resolveFitment(listing, product),
     photos: resolvePhotos(listing, product, variant),
     identifiers: resolveIdentifiers(listing, product),
     // { id, name, source: "listing" | "mapping" } | null
@@ -202,4 +206,14 @@ async function applyMappedCategories(resolvedList, platform, tenantId) {
   for (const resolved of missing) resolved.category = byProduct.get(String(resolved.product._id)) || null;
 }
 
-module.exports = { resolveListing, resolveSku, resolveProductUrl, resolveIdentifiers, hydrateResolved };
+module.exports = {
+  resolveListing,
+  resolveSku,
+  resolveCondition,
+  resolveAuthenticity,
+  resolveFitment,
+  fitmentFromVehicle,
+  resolveProductUrl,
+  resolveIdentifiers,
+  hydrateResolved,
+};

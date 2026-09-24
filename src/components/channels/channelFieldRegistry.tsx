@@ -4,6 +4,10 @@ import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/E
 import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
 import { EbayPackageFields } from "@/components/listings/platforms/ebay/EbayPackageFields";
 import { ChannelFieldInput } from "@/components/channels/ChannelFieldInput";
+import { InheritedChannelField } from "@/components/channels/InheritedChannelField";
+import { NativeSelect } from "@/components/ui/Select";
+import { AUTHENTICITY_OPTIONS } from "@/config/productOptions";
+import { hasOverride, productValueLabel } from "@/lib/marketplace/inheritedFields";
 import type { ChannelFieldDescriptor } from "@/types/channel";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { Product } from "@/types/product";
@@ -34,13 +38,33 @@ export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCusto
   ),
   "ebay.item_specifics": ({ form, onChange, effectiveCategoryId, product }) => {
     const ebayForm = form as EbayListingFormState;
+    const specs = ebayForm.item_specifics;
+    const setAuthenticity = (authenticity: string) => onChange({ item_specifics: { ...specs, authenticity } } as Partial<ChannelFormState>);
     return (
-      <EbayItemSpecificsSection
+      <div className="space-y-4">
+        <InheritedChannelField
+          label="Authenticity"
+          channelName="eBay"
+          productValue={productValueLabel("authenticity", product)}
+          overridden={hasOverride(specs.authenticity)}
+          onReset={() => setAuthenticity("")}
+        >
+          <NativeSelect value={specs.authenticity} onChange={(e) => setAuthenticity(e.target.value)}>
+            <option value="">Same as product</option>
+            {AUTHENTICITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </InheritedChannelField>
+        <EbayItemSpecificsSection
         form={{ ...ebayForm, ebay_category_id: effectiveCategoryId ?? ebayForm.ebay_category_id }}
         // Don't write the mapped category back onto the listing.
         onChange={({ ebay_category_id: _ignored, ...patch }) => onChange(patch)}
         productMpn={product.mpn}
       />
+      </div>
     );
   },
   "ebay.fitment": ({ form, onChange, product }) => (

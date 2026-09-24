@@ -16,6 +16,8 @@ interface ChannelFieldInputProps {
   fallback?: string | null;
   // Where the fallback comes from, e.g. "From product" / "eBay default".
   fallbackPrefix?: string;
+  // Control only; a wrapper (InheritedChannelField) owns label and error.
+  bare?: boolean;
 }
 
 // Generic fieldSchema field; custom types use channelFieldRegistry.
@@ -27,6 +29,7 @@ export function ChannelFieldInput({
   options,
   fallback,
   fallbackPrefix = "Default",
+  bare = false,
 }: ChannelFieldInputProps) {
   const { label, type, helpText } = descriptor;
   const required = descriptor.required && !fallback;
@@ -66,6 +69,7 @@ export function ChannelFieldInput({
     );
   }
 
+  if (bare) return <>{control}</>;
   return (
     <FormField label={label} required={required} error={error} hint={helpText}>
       {control}

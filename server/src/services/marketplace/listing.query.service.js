@@ -77,13 +77,17 @@ async function listListings(
   // eBay item URLs for eBay rows only; settings fetched only if one is present.
   const hasEbayRows = items.some((item) => item.platform === MARKETPLACE_PLATFORM.EBAY);
   const ebaySettings = hasEbayRows ? await ebaySettingsService.getSettings(tenantId) : null;
-  const shapedItems = items.map((item) =>
-    item.platform === MARKETPLACE_PLATFORM.EBAY
-      ? { ...item, ebay_item_url: buildEbayItemUrl(item.external_listing_id, ebaySettings) }
-      : item,
-  );
+  const shapedItems = items.map((item) => withExternalUrl(item, ebaySettings));
 
   return { items: shapedItems, total: countResult[0]?.total || 0 };
+}
+
+// Live listing URL, platform-neutral; null for Google (no public URL).
+function withExternalUrl(item, ebaySettings) {
+  if (item.platform !== MARKETPLACE_PLATFORM.EBAY) return { ...item, external_url: null };
+  const url = buildEbayItemUrl(item.external_listing_id, ebaySettings);
+  // ebay_item_url kept for existing readers.
+  return { ...item, ebay_item_url: url, external_url: url };
 }
 
 // Shared by both passes below so their $group stages stay identical.
@@ -193,11 +197,7 @@ async function listListingsGroupedByProduct(
 
   const items = orderedGroups.map((g) => ({
     product: g.product,
-    listings: g.listings.map((l) =>
-      l.platform === MARKETPLACE_PLATFORM.EBAY
-        ? { ...l, ebay_item_url: buildEbayItemUrl(l.external_listing_id, ebaySettings) }
-        : l,
-    ),
+    listings: g.listings.map((l) => withExternalUrl(l, ebaySettings)),
   }));
 
   return { items, total };

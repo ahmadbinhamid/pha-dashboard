@@ -3,6 +3,7 @@
 
 const { FIELD_TYPE } = require("../../../constants/channelField.constants");
 const { EBAY_TITLE_MAX_LENGTH } = require("../../../constants/ebay.constants");
+const { resolveCondition } = require("../productFallbacks");
 
 const POLICY_HELP = "Leave empty to use your eBay default (Settings › eBay).";
 
@@ -16,7 +17,16 @@ const fieldSchema = Object.freeze([
     optionsSource: "ebay.categorySearch",
     group: "category",
   },
-  { key: "condition", label: "Condition", type: FIELD_TYPE.SELECT, required: true, optionsSource: "ebay.conditions", group: "condition" },
+  {
+    key: "condition",
+    label: "Condition",
+    type: FIELD_TYPE.SELECT,
+    required: true,
+    optionsSource: "ebay.conditions",
+    group: "condition",
+    // Null on the listing means "use the product's"; set only to override.
+    inheritsFrom: "condition",
+  },
   {
     key: "condition_notes",
     label: "Condition notes",
@@ -34,7 +44,7 @@ const fieldSchema = Object.freeze([
     optionsSource: "ebay.categoryAspects",
     group: "specifics",
   },
-  // Used by the description's fitment table; aspects use product.vehicle.
+  // Description fitment table; empty inherits product.vehicle (aspects always).
   {
     key: "fitment",
     label: "Vehicle fitment",
@@ -42,6 +52,7 @@ const fieldSchema = Object.freeze([
     required: false,
     helpText: "Listed in the eBay description's compatibility table.",
     group: "fitment",
+    inheritsFrom: "vehicle",
   },
   {
     key: "fulfillment_policy_id",
@@ -94,11 +105,7 @@ const fieldSchema = Object.freeze([
 // Limits on product-derived values (checked on the effective value).
 const productConstraints = Object.freeze({ title: { maxLength: EBAY_TITLE_MAX_LENGTH } });
 
-// Empty listing condition/MPN inherit the product's (set only to override).
-function effectiveCondition(listing, product) {
-  return listing.condition || product?.condition || null;
-}
-
+// Empty listing MPN inherits the product's (set only to override).
 function effectiveMpn(listing, product) {
   return listing.item_specifics?.mpn || product?.mpn || null;
 }
@@ -107,7 +114,7 @@ function effectiveMpn(listing, product) {
 function fieldValues(listing, { categoryId = listing.ebay_category_id, settings = null, product = null } = {}) {
   return {
     ebay_category_id: categoryId,
-    condition: effectiveCondition(listing, product),
+    condition: resolveCondition(listing, product),
     condition_notes: listing.condition_notes,
     item_specifics: listing.item_specifics,
     fitment: listing.fitment,
@@ -130,7 +137,6 @@ module.exports = {
   fieldSchema,
   productConstraints,
   fieldValues,
-  effectiveCondition,
   effectiveMpn,
   UPFRONT_KEYS,
   POLICY_KEYS,

@@ -82,7 +82,7 @@ jobs:
       # Throwaway key per run; nothing needs it stable across jobs.
       - run: echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
-      # Warnings don't fail (0 errors / 335 warnings); any error does.
+      # Warnings don't fail (0 errors / 345 warnings); any error does.
       - run: npm run lint
 
       # No retries; `tee` keeps output for the next step, pipefail still fails here.

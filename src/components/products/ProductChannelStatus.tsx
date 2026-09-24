@@ -1,14 +1,13 @@
 import { cn } from "@/utils/cn";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
+import { ViewOnChannelLink } from "@/components/channels/ViewOnChannelLink";
 import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GroupedListingSummary } from "@/types/marketplace";
 
-// Extracted from ListingsPage.tsx's per-product expand pattern so the Products page and the Listings page's grouped fallback don't reimplement it. `channels` from GET /channels, never hardcoded, so new adapters show up automatically.
-//
-// A colored dot means one thing everywhere: sync status/health — the same mapping used by the collapsed row, expanded panel, and top channel-summary cards. Channel identity is its own separate element (ChannelAvatar) with no status color, so "which channel" and "is it OK" never compete for the same pixel.
+// NOTE: channels come from GET /channels; a dot's colour is only ever status.
 
-type ListingLike = Pick<AnyMarketplaceListing | GroupedListingSummary, "platform" | "sync_status" | "synced_at">;
+type ListingLike = Pick<AnyMarketplaceListing | GroupedListingSummary, "platform" | "sync_status" | "synced_at" | "external_url">;
 
 const DOT_COLOR: Record<string, string> = {
   synced: "bg-ok",
@@ -19,7 +18,7 @@ const DOT_COLOR: Record<string, string> = {
   not_listed: "bg-fg/20",
 };
 
-// Status → plain text color, no pill background, so a real listing's status doesn't visually outweigh its bare-text "Not listed" neighbors.
+// Plain text colour, no pill, so a status doesn't outweigh "Not listed" rows.
 const STATUS_TEXT_COLOR: Record<string, string> = {
   synced: "text-ok",
   pending: "text-warn",
@@ -28,9 +27,7 @@ const STATUS_TEXT_COLOR: Record<string, string> = {
   error: "text-danger",
 };
 
-// Collapsed row's "Channels" cell — a dot per registered channel (colored by
-// that channel's listing status, dim if not listed) plus a short summary
-// string, e.g. "2/6 live · 1 syncing".
+// Collapsed "Channels" cell: a status dot per channel plus "2/6 live".
 export function ProductChannelDots({
   channels,
   listings,
@@ -38,7 +35,7 @@ export function ProductChannelDots({
   channels: ChannelSummary[];
   listings: ListingLike[];
 }) {
-  // Keyed by plain string, not MarketplacePlatform, since channel.key comes from the backend's dynamic adapter registry — a wider set than the frontend's closed union.
+  // Keyed by string: channel keys come from the server registry.
   const byPlatform = new Map<string, ListingLike>(listings.map((l) => [l.platform, l]));
   const liveCount = channels.filter((c) => byPlatform.get(c.key)?.sync_status === "synced").length;
   const pendingCount = channels.filter((c) => byPlatform.get(c.key)?.sync_status === "pending").length;
@@ -65,7 +62,7 @@ export function ProductChannelDots({
   );
 }
 
-// Expanded detail panel: one row per channel with this product's real status (or "Ready to publish"), and a single "Open"/"List" action. Push/retry/delete stay Listings-tab-only — this view is for browsing, not day-to-day operations.
+// Expanded panel: per-channel status, a live link, and one Open/List action.
 export function ProductChannelDetail({
   channels,
   listings,
@@ -77,7 +74,7 @@ export function ProductChannelDetail({
   onOpen: (platform: string) => void;
   onList: (platform: string) => void;
 }) {
-  // Keyed by plain string, not MarketplacePlatform, since channel.key comes from the backend's dynamic adapter registry — a wider set than the frontend's closed union.
+  // Keyed by string: channel keys come from the server registry.
   const byPlatform = new Map<string, ListingLike>(listings.map((l) => [l.platform, l]));
 
   return (
@@ -91,11 +88,11 @@ export function ProductChannelDetail({
 
         return (
           <div key={channel.key} className="flex items-center gap-3 py-2.5">
-            {/* Icon only — the brand mark already identifies the channel, so a text label was redundant; sized up to "md" since it doesn't share the row with text. */}
+            {/* Icon only: the brand mark already names the channel. */}
             <span className="flex w-10 shrink-0 items-center" title={channel.name}>
               <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="md" />
             </span>
-            {/* Same dot/color the collapsed row uses for this status — see this file's header comment. */}
+            {/* Same status dot as the collapsed row. */}
             <span
               className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_COLOR[status ?? "not_listed"])}
               aria-hidden="true"
@@ -108,6 +105,7 @@ export function ProductChannelDetail({
                   ? "Queued for next sync"
                   : "Ready to publish"}
             </span>
+            <ViewOnChannelLink url={listing?.external_url} channelName={channel.name} compact />
             <button
               type="button"
               onClick={() => (isListed ? onOpen(channel.key) : onList(channel.key))}

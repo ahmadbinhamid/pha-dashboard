@@ -16,12 +16,12 @@ export interface ListingListParams {
   platform?: MarketplacePlatform;
   state?: string;
   sync_status?: string;
-  // Listings tab's "Needs attention" tab; expands server-side to sync_status in [error, price_locked], taking precedence over a plain sync_status (listing.query.service.js#NEEDS_ATTENTION_STATUSES).
+  // Server expands to sync_status in [error, price_locked]; beats sync_status.
   needs_attention?: boolean;
   search?: string;
 }
 
-// Empty override => null (use the product value); eBay's description renders server-side.
+// Empty override => null (use product value); eBay description renders on BE.
 function formStateToPayload(form: EbayListingFormState) {
   return {
     product: form.product_id,
@@ -32,7 +32,8 @@ function formStateToPayload(form: EbayListingFormState) {
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
     store_sku: form.store_sku || null,
-    condition: form.condition,
+    // Empty = use the product's condition.
+    condition: form.condition || null,
     condition_notes: form.condition_notes,
     item_specifics: {
       brand: form.item_specifics.brand || null,
@@ -70,7 +71,7 @@ function formStateToPayload(form: EbayListingFormState) {
   };
 }
 
-// eBay's own rich-form CREATE/UPDATE, staying on /ebay/listings since its fields (category, fitment, business policies) are eBay-specific. See lib/api/googleListings.ts for Google's smaller version.
+// eBay-specific fields (category, fitment, policies) keep /ebay/listings.
 export const createListing = async (form: EbayListingFormState) => {
   const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", formStateToPayload(form));
   return data;
@@ -81,13 +82,13 @@ export const updateListing = async (id: string, form: EbayListingFormState) => {
   return data;
 };
 
-// Browse/read/delete/push are platform-agnostic — /listings mixes every platform's rows together (server/src/services/marketplace/listing.query.service.js).
+// Browse/read/delete/push are platform-agnostic; /listings mixes platforms.
 export const getListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<AnyMarketplaceListing>>>("/listings", { params });
   return data;
 };
 
-// Same endpoint, `?group_by=product` — one row per product instead of per listing (listing.query.service.js#listListingsGroupedByProduct); same query params otherwise.
+// Same endpoint grouped by product: one row per product, same query params.
 export const getGroupedListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<ProductListingGroup>>>("/listings", {
     params: { ...params, group_by: "product" },

@@ -47,6 +47,8 @@ export interface ChannelFieldDescriptor {
   optionsSource?: string;
   group?: string;
   options?: ChannelFieldOption[];
+  // Product field an empty listing value falls back to (shown "from product").
+  inheritsFrom?: string;
 }
 
 export interface ChannelProductConstraints {

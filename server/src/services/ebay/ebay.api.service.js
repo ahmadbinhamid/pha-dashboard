@@ -334,9 +334,9 @@ function buildVehicleAspects(product) {
 }
 
 function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null, settings = null) {
-  const { sku, title, description, brand, photos, listing, product } = resolved;
+  const { sku, title, description, brand, photos, listing, product, authenticity } = resolved;
   const imageUrls = resolveImageUrls(photos, settings);
-  const condition = conditionOverride || normalizeCondition(listing.condition || product?.condition, sku);
+  const condition = conditionOverride || normalizeCondition(resolved.condition, sku);
 
   // eBay requires brand/mpn as a pair (error 25002), so default the missing side.
   const specs = listing.item_specifics || {};
@@ -360,7 +360,7 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
   // SPN is single-value on eBay (25002), so only the first entry is sent.
   if (spnArr.length > 0) aspects["Superseded Part Number"] = [spnArr[0]];
   // Authenticity/warranty fields override dynamic aspects of the same name
-  if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
+  if (authenticity) aspects["Authenticity"] = [String(authenticity)];
   if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
 
   // Vehicle aspects from product.vehicle; see buildVehicleAspects re fitment.

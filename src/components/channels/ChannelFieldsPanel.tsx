@@ -8,6 +8,8 @@ import type { MappedCategory } from "@/types/categoryMapping";
 import type { ListingProductDefaults } from "@/types/marketplace";
 import type { Product } from "@/types/product";
 import type { ChannelFormState } from "@/lib/marketplace/channelForms";
+import { InheritedChannelField } from "@/components/channels/InheritedChannelField";
+import { clearedValue, hasOverride, productValueLabel } from "@/lib/marketplace/inheritedFields";
 
 const GROUP_LABELS: Record<string, string> = {
   category: "Listing",
@@ -78,6 +80,7 @@ export function ChannelFieldsPanel({
   function renderField(d: ChannelFieldDescriptor) {
     const Custom = CHANNEL_FIELD_COMPONENTS[`${channel.key}.${d.key}`];
     const fallback = sources.fallbacks[d.key] ?? null;
+    const inherited = !!d.inheritsFrom;
     const field = Custom ? (
       <Custom
         descriptor={d}
@@ -97,8 +100,23 @@ export function ChannelFieldsPanel({
         options={d.optionsSource ? sources.options[d.optionsSource] : undefined}
         fallback={fallback}
         fallbackPrefix={sources.fallbackPrefixes[d.key]}
+        bare={inherited}
       />
     );
+    if (d.inheritsFrom) {
+      return (
+        <InheritedChannelField
+          label={d.label}
+          channelName={channel.name}
+          productValue={productValueLabel(d.inheritsFrom, product)}
+          overridden={hasOverride(values[d.key])}
+          onReset={() => onChange({ [d.key]: clearedValue(values[d.key]) } as Partial<ChannelFormState>)}
+          error={errors[d.key]}
+        >
+          {field}
+        </InheritedChannelField>
+      );
+    }
     if (d.type !== "category") return field;
     return (
       <div className="space-y-1.5">

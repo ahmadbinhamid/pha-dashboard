@@ -34,6 +34,10 @@ function resolvedFor({ stockControl, quantity }) {
     },
     product: { _id: "p1", stock_control: stockControl },
     variant: null,
+    // What resolveListing sets from the listing above (condition "NEW").
+    condition: "NEW",
+    authenticity: null,
+    fitment: [],
   };
 }
 

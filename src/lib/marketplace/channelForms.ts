@@ -49,16 +49,11 @@ async function pushOrThrow(listingId: string) {
 }
 
 const ebayAdapter: ChannelFormAdapter = {
-  // NOTE: condition/MPN/category left empty to inherit live; SKU is identity.
+  // NOTE: product-backed fields stay empty to inherit live; SKU is identity.
   initialForm: (product) => ({
     ...EBAY_LISTING_FORM_INITIAL,
     product_id: product._id,
     store_sku: product.sku ?? "",
-    condition: "",
-    item_specifics: {
-      ...EBAY_LISTING_FORM_INITIAL.item_specifics,
-      authenticity: product.authenticity ?? "",
-    },
   }),
   fromListing: (listing) => listingToForm(listing as EbayListing),
   // Old flow: create a DRAFT, then push (validates + queues).

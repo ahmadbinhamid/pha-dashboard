@@ -71,6 +71,8 @@ export interface MarketplaceListing {
   external_listing_id: string | null;
   external_offer_id: string | null;
   ebay_item_url: string | null;
+  // Live listing on the channel, when it has a public URL (eBay today).
+  external_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,6 +127,7 @@ export interface GroupedListingSummary {
   store_sku: string | null;
   updated_at: string;
   ebay_item_url?: string | null;
+  external_url?: string | null;
 }
 
 export interface ProductListingGroup {
@@ -221,7 +224,8 @@ export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {
   ebay_category_id: "",
   store_category_id: "",
   store_sku: "",
-  condition: "NEW",
+  // Empty = use the product's condition (sent as null).
+  condition: "",
   condition_notes: "",
   item_specifics: {
     brand: "",

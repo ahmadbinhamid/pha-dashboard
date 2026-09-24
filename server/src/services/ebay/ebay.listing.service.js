@@ -49,7 +49,7 @@ async function createListing(payload, tenantId) {
     ebay_category_id = null,
     store_category_id = null,
     store_sku = null,
-    condition = "NEW",
+    condition = null,
     condition_notes = "",
     item_specifics = {},
     fitment = [],
@@ -93,9 +93,10 @@ async function createListing(payload, tenantId) {
       ebay_category_id,
       store_category_id,
       store_sku,
-      condition,
+      // NOTE: "" and null both mean "inherit from product"; stored as null.
+      condition: condition || null,
       condition_notes,
-      item_specifics,
+      item_specifics: { ...item_specifics, authenticity: item_specifics.authenticity || null },
       fitment,
       format,
       quantity_available: quantity_available != null ? Number(quantity_available) : null,
@@ -233,6 +234,8 @@ async function updateListing(id, payload, tenantId) {
   for (const key of allowed) {
     if (payload[key] !== undefined) update[key] = payload[key];
   }
+
+  if (update.condition !== undefined) update.condition = update.condition || null;
 
   // Coerce numeric strings
   if (update.price_override != null) update.price_override = Number(update.price_override);
