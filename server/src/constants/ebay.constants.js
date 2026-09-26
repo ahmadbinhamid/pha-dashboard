@@ -1,5 +1,5 @@
 // constants/ebay.constants.js
-// eBay OAuth scope identifiers, fixed by eBay's OAuth spec, never change between environments.
+// eBay OAuth scopes and API codes; fixed by eBay, same in every environment.
 
 const EBAY_SCOPES = Object.freeze({
   SELL_INVENTORY: "https://api.ebay.com/oauth/api_scope/sell.inventory",
@@ -9,20 +9,23 @@ const EBAY_SCOPES = Object.freeze({
   BASE: "https://api.ebay.com/oauth/api_scope",
 });
 
-// Named eBay Inventory/Offer API error codes branched on elsewhere, kept as a single source of truth.
+// Inventory/Offer API error codes the adapter branches on.
 const EBAY_ERROR_CODE = Object.freeze({
-  // "createOffer" fails because an offer already exists; recovered via updateOffer with the returned offerId.
+  // createOffer: offer exists; recovered via updateOffer on the returned id.
   OFFER_ALREADY_EXISTS: 25002,
-  // "updateOffer" rejected because the offer is part of an active eBay sale/promotion — not a
-  // hard failure, it self-resolves once the sale ends or allows price updates.
+  // Qty 0 on a live listing without seller "Out-of-stock control".
+  INVALID_LISTING_QUANTITY: 25004,
+  // updateOffer during an eBay sale; self-resolves when the sale ends.
   PRICE_LOCKED_BY_ACTIVE_SALE: 25019,
-  // "updateOffer" rejects a stored external_offer_id eBay no longer recognizes — either an
-  // input-validation error or a 404; both mean this offerId is dead, recreate it.
+  // Stored offer id eBay no longer knows (validation error or 404): recreate.
   OFFER_NOT_FOUND_INPUT: 25604,
   OFFER_NOT_FOUND_RESOURCE: 25710,
 });
 
-// A tenant's eBay connection health, surfaced in Settings instead of a silently failing sync.
+// Offer listingStatus values a restock should relist; EBAY_ENDED is policy.
+const EBAY_RELISTABLE_STATUSES = Object.freeze(["ENDED", "INACTIVE", "NOT_LISTED"]);
+
+// Connection health shown in Settings instead of a silently failing sync.
 const EBAY_CONNECTION_STATUS = Object.freeze({
   NOT_CONNECTED: "not_connected",
   CONNECTED: "connected",
@@ -31,9 +34,7 @@ const EBAY_CONNECTION_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-// Every eBay marketplace the UI lets a tenant pick, mapped to its transaction currency.
-// Previously hardcoded "AUD" regardless, mislabeling non-AU marketplace orders. Found live.
-// Order import prefers eBay's own reported currency and only falls back to this map.
+// Marketplace currency; order import only falls back to this over eBay's own.
 const EBAY_MARKETPLACE_CURRENCY = Object.freeze({
   EBAY_AU: "AUD",
   EBAY_US: "USD",
@@ -55,6 +56,7 @@ const EBAY_TITLE_MAX_LENGTH = 80;
 module.exports = {
   EBAY_SCOPES,
   EBAY_ERROR_CODE,
+  EBAY_RELISTABLE_STATUSES,
   EBAY_CONNECTION_STATUS,
   EBAY_MARKETPLACE_CURRENCY,
   EBAY_TITLE_MAX_LENGTH,

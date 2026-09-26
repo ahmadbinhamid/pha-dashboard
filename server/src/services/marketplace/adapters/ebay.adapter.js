@@ -13,6 +13,8 @@ const {
   createOffer,
   updateOffer,
   publishOffer,
+  getOffer,
+  withdrawOffer,
   deleteProduct,
   ensureLocation,
 } = require("../../ebay/ebay.api.service");
@@ -27,7 +29,7 @@ const {
   UPFRONT_KEYS,
   POLICY_KEYS,
 } = require("./ebay.fieldSchema");
-const { EBAY_ERROR_CODE } = require("../../../constants/ebay.constants");
+const { EBAY_ERROR_CODE, EBAY_RELISTABLE_STATUSES } = require("../../../constants/ebay.constants");
 const { httpError } = require("../../../utils/http/httpError");
 
 const key = "ebay";
@@ -181,6 +183,58 @@ async function createOrRecoverOffer(token, settings, offerBody, sku) {
   }
 }
 
+// 25004: eBay refuses qty 0 on a live listing without out-of-stock control.
+function isInvalidListingQuantityError(err) {
+  return err instanceof EbayApiError && err.hasErrorId(EBAY_ERROR_CODE.INVALID_LISTING_QUANTITY);
+}
+
+// Upserts the item; on a refused 0, ends the listing instead (restock relists).
+async function pushInventoryItem(token, settings, inventoryItem, quantity, offerId, hooks) {
+  const { sku } = inventoryItem;
+  try {
+    await upsertInventoryItem(token, settings, inventoryItem);
+  } catch (err) {
+    if (quantity !== 0 || !offerId || !isInvalidListingQuantityError(err)) throw err;
+    logger.warn(`[EbayAdapter] ${sku}: eBay refused qty 0 (no out-of-stock control) — withdrawing offer ${offerId}`);
+    await withdrawOfferTolerant(token, settings, offerId, sku);
+    try {
+      await upsertInventoryItem(token, settings, inventoryItem);
+    } catch (retryErr) {
+      if (!isInvalidListingQuantityError(retryErr)) throw retryErr;
+      // NOTE: no baseline stamp: eBay still holds the old qty, poller must agree.
+      logger.warn(`[EbayAdapter] ${sku}: listing ended; eBay kept its last qty`);
+      return;
+    }
+  }
+  logger.info(`[EbayAdapter] inventory_item upserted: ${sku} (qty: ${quantity ?? "untracked"})`);
+  // Untracked stock (null) has no baseline to stamp.
+  if (quantity != null) await hooks.onQuantityPushed?.(quantity);
+}
+
+// A sold-out listing eBay already ended can't be withdrawn again; that's fine.
+async function withdrawOfferTolerant(token, settings, offerId, sku) {
+  try {
+    await withdrawOffer(token, settings, offerId);
+    logger.info(`[EbayAdapter] ${sku}: offer ${offerId} withdrawn (listing ended)`);
+  } catch (err) {
+    logger.warn(`[EbayAdapter] ${sku}: withdraw offer ${offerId} failed, continuing: ${err.message}`);
+  }
+}
+
+// Relists an offer whose listing ended (e.g. sold out); returns the new id.
+async function relistIfEnded(token, settings, offerId, sku) {
+  const offer = await getOffer(token, settings, offerId);
+  const listingStatus = offer.listing?.listingStatus;
+  if (offer.status === "PUBLISHED" && !EBAY_RELISTABLE_STATUSES.includes(listingStatus)) return null;
+  if (listingStatus === "EBAY_ENDED") {
+    logger.warn(`[EbayAdapter] ${sku}: listing was ended by eBay (policy) — not relisting`);
+    return null;
+  }
+  const listingId = await publishOffer(token, settings, offerId);
+  logger.info(`[EbayAdapter] ${sku}: ended listing relisted on restock, listingId: ${listingId}`);
+  return listingId;
+}
+
 // null = untracked stock: skip qty and baseline rather than invent a number.
 function resolveQuantity(resolved) {
   if (!resolved.product.stock_control) return null;
@@ -235,10 +289,7 @@ async function publish(resolved, settings, hooks = {}, _seq = null) {
   const categoryId = effectiveCategoryId(resolved);
   const condition = await resolveCategoryCondition(resolved.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
-  await upsertInventoryItem(token, settings, inventoryItem);
-  logger.info(`[EbayAdapter] inventory_item upserted: ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
-  // Untracked stock (null) has no baseline to stamp.
-  if (quantity != null) await hooks.onQuantityPushed?.(quantity);
+  await pushInventoryItem(token, settings, inventoryItem, quantity, listing.external_offer_id, hooks);
 
   // Same point as the old category check (after the item write).
   assertEbayFields(resolved, settings, ["ebay_category_id"]);
@@ -298,15 +349,11 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
   assertUpfrontFields(resolved, settings);
   const quantity = resolveQuantity(resolved);
 
-  // Push 0 normally — see the matching comment in publish() above.
-
   // Step 1 — sync inventory item
   const categoryId = effectiveCategoryId(resolved);
   const condition = await resolveCategoryCondition(resolved.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
-  await upsertInventoryItem(token, settings, inventoryItem);
-  logger.info(`[EbayAdapter] inventory_item upserted (update): ${resolved.sku} (qty: ${quantity ?? "untracked"})`);
-  if (quantity != null) await hooks.onQuantityPushed?.(quantity);
+  await pushInventoryItem(token, settings, inventoryItem, quantity, listing.external_offer_id, hooks);
 
   if (!categoryId) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);
@@ -325,8 +372,10 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
     try {
       const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku);
       if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
+      // Back in stock: a listing eBay ended at 0 needs republishing to sell.
+      const relistedId = quantity > 0 ? await relistIfEnded(token, settings, offerId, resolved.sku) : null;
       return {
-        external_listing_id: listing.external_listing_id || null,
+        external_listing_id: relistedId || listing.external_listing_id || null,
         external_offer_id: offerId,
         quantity,
         ...(priceLocked ? { priceLocked: true } : {}),

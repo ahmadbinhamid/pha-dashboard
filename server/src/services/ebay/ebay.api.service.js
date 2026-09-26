@@ -507,6 +507,27 @@ async function publishOffer(token, settings, offerId) {
   return data.listingId;
 }
 
+async function getOffer(token, settings, offerId) {
+  const res = await fetch(
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
+    { method: "GET", headers: ebayHeaders(token, settings.marketplace_id) },
+  );
+
+  if (!res.ok) await throwEbayApiError("getOffer", res);
+  return res.json();
+}
+
+// Ends the live listing but keeps the offer, so publishOffer can relist it.
+async function withdrawOffer(token, settings, offerId) {
+  const res = await fetch(
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}/withdraw`,
+    { method: "POST", headers: ebayHeaders(token, settings.marketplace_id), body: JSON.stringify({}) },
+  );
+
+  if (!res.ok) await throwEbayApiError("withdrawOffer", res);
+  return { ok: true };
+}
+
 // ── Delete ──
 
 async function deleteProduct(settings, sku, offerId = null) {
@@ -785,6 +806,8 @@ module.exports = {
   createOffer,
   updateOffer,
   publishOffer,
+  getOffer,
+  withdrawOffer,
   deleteProduct,
   getInventoryLocations,
   ensureLocation,
