@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import Link from "@/components/ui/Link";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
+import { SalesChannelResyncButton } from "@/components/channels/SalesChannelResyncButton";
 import { SalesChannelRowActionsMenu } from "@/components/channels/SalesChannelRowActionsMenu";
 import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
 import { CATEGORY_SOURCE_LABEL } from "@/config/salesChannels";
@@ -238,25 +239,26 @@ export function SalesChannelRow({
         ) : (
           <div className="flex items-center gap-3">
             {listed && listingSummary && (
-              // Status with its sync time as a caption, so the two read as one.
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
                 <SyncBadge status={awaiting ? "pending" : listingSummary.sync_status} />
-                <span className="whitespace-nowrap text-2xs text-fg/45">
-                  {awaiting
-                    ? "Syncing…"
-                    : listingSummary.synced_at
-                      ? `Synced ${formatRelativeTime(listingSummary.synced_at)}`
-                      : "Not synced yet"}
-                </span>
+                <SalesChannelResyncButton
+                  onResync={() => form && validate(form) && saveMutation.mutate(form)}
+                  disabled={busy || !form}
+                  resyncing={saveMutation.isPending || awaiting}
+                  syncLabel={
+                    awaiting
+                      ? "Syncing…"
+                      : listingSummary.synced_at
+                        ? `Synced ${formatRelativeTime(listingSummary.synced_at)}`
+                        : "Not synced yet"
+                  }
+                />
               </div>
             )}
             <SalesChannelRowActionsMenu
               channelName={channel.name}
               onEdit={() => setDrawerOpen(true)}
               editDisabled={!form}
-              onResync={listed && listingSummary ? () => form && validate(form) && saveMutation.mutate(form) : undefined}
-              resyncDisabled={busy || !form}
-              resyncing={saveMutation.isPending}
               externalUrl={listingSummary?.external_url}
             />
           </div>
