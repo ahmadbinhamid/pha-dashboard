@@ -9,7 +9,7 @@ interface RequirePermissionProps {
   children: ReactNode;
 }
 
-// Page guard; renders nothing until access loads so the page never flashes.
+// Page guard; ProtectedRoute has already loaded access, so this rarely waits.
 export function RequirePermission({ permission, children }: RequirePermissionProps) {
   const { can, isLoading } = useMyAccess();
   if (isLoading) return null;
