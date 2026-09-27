@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { SecretInput } from "@/components/ui/SecretInput";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { SkeletonText } from "@/components/ui/Skeleton";
-import { SHIPPING_ADDRESS_TYPE_OPTIONS } from "@/config/shipping";
+import { AU_STATE_OPTIONS, SHIPPING_ADDRESS_TYPE_OPTIONS } from "@/config/shipping";
 import { useToast } from "@/context";
 import { SHIPPING_SETTINGS_QUERY_KEY, getShippingSettings, testShippingConnection, updateShippingSettings } from "@/lib/api/shipping";
 import { shippingSettingsFormSchema, type ShippingSettingsFormValues } from "@/lib/validation/shippingSettings";
@@ -84,8 +84,14 @@ export function TransdirectSettingsCard({ onMutationStateChange }: { onMutationS
               <FormField label="Suburb" className="sm:col-span-2">
                 <Input {...register("sender_suburb")} placeholder="SYDNEY" />
               </FormField>
-              <FormField label="State">
-                <Input {...register("sender_state")} placeholder="NSW" maxLength={10} />
+              <FormField label="State" error={errors.sender_state?.message}>
+                <Controller
+                  control={control}
+                  name="sender_state"
+                  render={({ field }) => (
+                    <SingleSelect options={AU_STATE_OPTIONS} value={field.value} onChange={field.onChange} placeholder="State" />
+                  )}
+                />
               </FormField>
             </div>
             <div className="flex flex-wrap items-end justify-between gap-4">

@@ -1,5 +1,6 @@
 export type ShippingMethod = "standard" | "calculated";
 export type ShippingAddressType = "business" | "residential";
+export type AuStateCode = "ACT" | "NSW" | "NT" | "QLD" | "SA" | "TAS" | "VIC" | "WA";
 
 // Never includes the API key, only whether one is saved.
 export interface ShippingSettings {

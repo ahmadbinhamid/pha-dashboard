@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ScanLine, Search } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
-import { BarcodeScannerModal } from "@/components/shared/BarcodeScannerModal";
 import { TagProductResultRow } from "@/components/tags/TagProductResultRow";
 import { useToast } from "@/context";
-import { productIdFromTagLink } from "@/config/productTag";
-import { getProduct, getProducts } from "@/lib/api/products";
+import { getProducts } from "@/lib/api/products";
 import { TAG_QUERY_KEYS, addToTagQueue } from "@/lib/api/tags";
 import type { TagQueueItem, TagQueueMode } from "@/types/tags";
 
@@ -21,7 +18,6 @@ export function TagProductSearch({ queue }: { queue: TagQueueItem[] }) {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(input.trim()), 300);
@@ -54,28 +50,9 @@ export function TagProductSearch({ queue }: { queue: TagQueueItem[] }) {
     onError: (err: Error) => toast({ title: "Couldn't add to the queue", description: err.message, tone: "danger" }),
   });
 
-  // Skips the debounce so a scan shows its result straight away.
-  function showSearch(value: string) {
-    setInput(value);
-    setSearch(value);
-    setOpen(true);
-  }
-
-  // A tag QR carries the product id; search by its SKU to reuse the rows.
-  async function handleScan(value: string) {
-    const productId = productIdFromTagLink(value);
-    if (!productId) return showSearch(value.trim());
-    try {
-      const res = await queryClient.fetchQuery({ queryKey: ["product", productId], queryFn: () => getProduct(productId) });
-      showSearch(res.data?.sku || res.data?.title || "");
-    } catch {
-      toast({ title: "No product found for this tag", tone: "danger" });
-    }
-  }
-
   return (
-    <div ref={containerRef} className="relative flex items-center gap-2">
-      <div className="relative min-w-0 flex-1">
+    <div ref={containerRef} className="relative">
+      <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40" />
         <Input
           size="sm"
@@ -86,30 +63,12 @@ export function TagProductSearch({ queue }: { queue: TagQueueItem[] }) {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-          placeholder="Search or scan"
+          placeholder="Search by title or stock number"
           aria-label="Search products to tag"
           className="h-9 pl-9 text-sm"
         />
         {isFetching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-fg/40" />}
       </div>
-      <Button
-        type="button"
-        variant="secondary"
-        size="icon"
-        className="h-9 w-9 shrink-0"
-        onClick={() => setScanOpen(true)}
-        title="Scan a tag or barcode"
-        aria-label="Scan a product tag or barcode with the camera"
-      >
-        <ScanLine className="h-4 w-4" />
-      </Button>
-      <BarcodeScannerModal
-        open={scanOpen}
-        onOpenChange={setScanOpen}
-        onDetect={(value) => void handleScan(value)}
-        title="Scan a product"
-        description="Point the camera at a product tag's QR code or a barcode."
-      />
 
       {open && search && (
         <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border border-border bg-card shadow-lg">

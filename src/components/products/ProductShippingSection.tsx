@@ -2,6 +2,7 @@ import { Controller, type UseFormReturn } from "react-hook-form";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { SingleSelect } from "@/components/ui/SingleSelect";
+import { Switch } from "@/components/ui/Switch";
 import { SHIPPING_METHOD_OPTIONS } from "@/config/shipping";
 import { CalculatedShippingNotice } from "@/components/products/CalculatedShippingNotice";
 import { missingPackageFields } from "@/lib/products/packageDimensions";
@@ -36,7 +37,37 @@ export function ProductShippingSection({ methods }: { methods: UseFormReturn<Pro
         )}
       </div>
 
-      {method === "calculated" && <CalculatedShippingNotice missingPackage={missingPackage} />}
+      {method === "calculated" && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Controller
+              control={control}
+              name="tailgate_pickup"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  label="Tailgate pickup"
+                  description="No forklift where it's collected. Needed over 25 kg."
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="tailgate_delivery"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  label="Tailgate delivery"
+                  description="Courier brings a lift for the customer. Needed over 25 kg."
+                />
+              )}
+            />
+          </div>
+          <CalculatedShippingNotice missingPackage={missingPackage} />
+        </>
+      )}
     </div>
   );
 }

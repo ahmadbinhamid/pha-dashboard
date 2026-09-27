@@ -2,9 +2,15 @@
 
 const Joi = require("joi");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
+const { isAuState } = require("../utils/auState");
 
 const objectId = Joi.string().hex().length(24);
 const postcode = Joi.string().trim().pattern(/^\d{4}$/).messages({ "string.pattern.base": "Postcode must be 4 digits" });
+const auState = Joi.string()
+  .trim()
+  .max(40)
+  .custom((value, helpers) => (!value || isAuState(value) ? value : helpers.error("any.invalid")))
+  .messages({ "any.invalid": "State must be an Australian state, e.g. VIC" });
 
 const quote = {
   body: Joi.object({
@@ -16,7 +22,8 @@ const quote = {
     receiver: Joi.object({
       postcode: postcode.required(),
       suburb: Joi.string().trim().min(1).max(80).required(),
-      state: Joi.string().trim().max(10).allow("", null),
+      state: auState.allow("", null),
+      address_type: Joi.string().valid(...Object.values(ADDRESS_TYPE)),
     }).required(),
   }),
 };
@@ -27,7 +34,7 @@ const updateSettings = {
     api_key: Joi.string().trim().max(200).allow(""),
     sender_postcode: postcode.allow("", null),
     sender_suburb: Joi.string().trim().max(80).allow("", null),
-    sender_state: Joi.string().trim().max(10).allow("", null),
+    sender_state: auState.allow("", null),
     sender_type: Joi.string().valid(...Object.values(ADDRESS_TYPE)),
   }).min(1),
 };

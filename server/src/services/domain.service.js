@@ -11,7 +11,7 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-// Verification TXT record lives on a subdomain prefix so it never collides with the tenant's own SPF/etc TXT records.
+// TXT record on a prefix subdomain so it can't clash with the tenant's SPF.
 function getVerificationRecordName(hostname) {
   return `${VERIFICATION_SUBDOMAIN}.${hostname}`;
 }
@@ -46,7 +46,7 @@ async function deleteDomain(id, tenantId) {
   return domain;
 }
 
-// Unset then set default (not atomic — no multi-doc transactions, see tenant.service.js); domain must be verified first.
+// Unset then set, not atomic (no transactions); must be verified first.
 async function setDefaultDomain(id, tenantId) {
   const domain = await Domain.findOne({ _id: id, tenant_id: tenantId });
   if (!domain) return null;
@@ -60,7 +60,7 @@ async function setDefaultDomain(id, tenantId) {
   return domain;
 }
 
-// Compares the TXT record against this domain's own verification_token, not just any TXT record present.
+// Must match this domain's own verification_token, not any TXT record.
 async function verifyDomainDns(id, tenantId) {
   const domain = await Domain.findOne({ _id: id, tenant_id: tenantId });
   if (!domain) return null;
@@ -70,13 +70,13 @@ async function verifyDomainDns(id, tenantId) {
   try {
     records = await dns.resolveTxt(recordName);
   } catch (err) {
-    // ENOTFOUND/ENODATA = no record yet, not an error; anything else is logged as possible infra trouble.
+    // ENOTFOUND/ENODATA mean no record yet; anything else is logged.
     if (err.code !== "ENOTFOUND" && err.code !== "ENODATA") {
       logger.warn(`[domain.service] DNS lookup error for ${recordName}: ${err.message}`);
     }
   }
 
-  // resolveTxt returns string[][]; join each record's chunks before comparing (DNS splits values >255 chars).
+  // DNS splits values over 255 chars; join each record's chunks first.
   const found = records.some((chunks) => chunks.join("") === domain.verification_token);
 
   if (found) {
@@ -88,8 +88,7 @@ async function verifyDomainDns(id, tenantId) {
   return { domain, verified: found, recordName, expectedValue: domain.verification_token };
 }
 
-// All active hostnames across tenants, for CORS (app.js) to accept verified custom domains as Origins.
-// Cached in-process for CACHE_TTL_MS to avoid a DB round trip per request; brief staleness is an acceptable trade-off.
+// Active hostnames for CORS; cached per process, briefly stale by design.
 const CACHE_TTL_MS = 60_000;
 let hostnameCache = { hostnames: [], expiresAt: 0 };
 
@@ -101,15 +100,22 @@ async function getActiveHostnames() {
   return hostnameCache.hostnames;
 }
 
-// Does this tenant have a real, DNS-verified storefront domain (needed for e.g. Google Merchant Center)?
-// Same query as listing.resolver.js#resolveProductUrl's primary branch, but excludes its PAYMENT_LINK_DOMAIN
-// fallback — that's a platform subdomain the tenant can't verify with Google, fine for payment links only.
+// Verified own domain only; the payment-link subdomain doesn't count.
 async function hasVerifiedDefaultDomain(tenantId) {
   const domain = await Domain.exists({ tenant_id: tenantId, is_default: true, status: DOMAIN_STATUS.ACTIVE });
   return !!domain;
 }
 
+/** Hostname of the tenant's verified default storefront domain, or null. */
+async function getDefaultStorefrontHost(tenantId) {
+  const domain = await Domain.findOne({ tenant_id: tenantId, is_default: true, status: DOMAIN_STATUS.ACTIVE })
+    .select("hostname")
+    .lean();
+  return domain?.hostname ?? null;
+}
+
 module.exports = {
+  getDefaultStorefrontHost,
   listDomains,
   createDomain,
   deleteDomain,

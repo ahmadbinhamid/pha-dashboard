@@ -12,6 +12,9 @@ const {
 } = require("../constants/product.constants");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
+// Multipart forms send booleans as "true"/"false" strings.
+const formBool = Joi.boolean().truthy("true").falsy("false");
+
 const createProduct = {
   body: Joi.object({
     title: Joi.string().trim().min(1).required().messages({
@@ -48,6 +51,8 @@ const createProduct = {
     package: Joi.string().allow("", null).default(null),
     bay: Joi.string().trim().max(40).allow("", null).default(null),
     shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)).default(SHIPPING_METHOD.STANDARD),
+    tailgate_pickup: formBool.default(false),
+    tailgate_delivery: formBool.default(false),
     // Queue one tag per unit on create (mobile's "Add to Tag Queue").
     add_to_tag_queue: Joi.boolean().truthy("true").falsy("false").default(false),
     attachments: Joi.array().items(Joi.string()).default([]),
@@ -91,6 +96,8 @@ const updateProduct = {
     package: Joi.string().allow("", null),
     bay: Joi.string().trim().max(40).allow("", null),
     shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)),
+    tailgate_pickup: formBool,
+    tailgate_delivery: formBool,
     attachments: Joi.array().items(Joi.string()),
     categories: Joi.array().items(Joi.string()),
     tags: Joi.array().items(Joi.string()),

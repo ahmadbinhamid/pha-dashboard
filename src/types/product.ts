@@ -127,6 +127,9 @@ export interface Product {
   shipping_cost: number | null;
   // Absent on documents saved before shipping methods existed = standard.
   shipping_method?: ShippingMethod;
+  // Transdirect only; absent on older documents = no tailgate.
+  tailgate_pickup?: boolean;
+  tailgate_delivery?: boolean;
   is_taxable: boolean;
   sku: string | null;
   barcode: string | null;

@@ -13,7 +13,8 @@ const Product = require("../../models/Product");
 const settingsService = require("./shippingSettings.service");
 const transdirect = require("./transdirect.api.service");
 const SENDER = { postcode: "2000", suburb: "SYDNEY", state: "NSW", type: "business" };
-const getConfig = mock.method(settingsService, "getTransdirectConfig", async () => ({ apiKey: "k", sender: SENDER }));
+const SITE = "https://shop.example.test/";
+const getConfig = mock.method(settingsService, "getTransdirectConfig", async () => ({ apiKey: "k", sender: SENDER, requestingSite: SITE }));
 const quoteShipment = mock.method(transdirect, "quoteShipment", async () => [
   { courier: "tnt", total: 20.5, service: "road", transit_time: "2 days" },
   { courier: "allied", total: 31, service: "road", transit_time: "1 day" },
@@ -30,7 +31,7 @@ before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
 beforeEach(() => {
   quoteShipment.mock.resetCalls();
-  getConfig.mock.mockImplementation(async () => ({ apiKey: "k", sender: SENDER }));
+  getConfig.mock.mockImplementation(async () => ({ apiKey: "k", sender: SENDER, requestingSite: SITE }));
 });
 
 const product = (tenantId, extra) => {
@@ -62,9 +63,27 @@ test("mixed cart: flat + cheapest courier, and the quote is reused", async () =>
   const sent = quoteShipment.mock.calls[0].arguments[1];
   assert.deepEqual(sent.items, [{ ...PKG, quantity: 2 }], "only the calculated line, with its package");
   assert.equal(sent.receiver.type, "residential");
+  assert.equal(sent.requestingSite, SITE, "the store's own website");
 
   await quoteCart(tenantId, { items, receiver: { ...RECEIVER, suburb: "MELBOURNE" } });
   assert.equal(quoteShipment.mock.callCount(), 1, "same cart and address: cached");
+});
+
+test("tailgate flags and the customer's address type reach Transdirect", async () => {
+  const tenantId = fixtureId();
+  const heavy = await product(tenantId, { shipping_method: "calculated", package: PKG, tailgate_delivery: true });
+  const light = await product(tenantId, { shipping_method: "calculated", package: PKG });
+  const items = [{ product: heavy._id, quantity: 1 }, { product: light._id, quantity: 1 }];
+
+  await quoteCart(tenantId, { items, receiver: { ...RECEIVER, address_type: "business" } });
+  const sent = quoteShipment.mock.calls[0].arguments[1];
+  assert.equal(sent.tailgateDelivery, true, "one heavy item needs it for the shipment");
+  assert.equal(sent.tailgatePickup, false);
+  assert.equal(sent.receiver.type, "business");
+
+  await quoteCart(tenantId, { items, receiver: RECEIVER });
+  assert.equal(quoteShipment.mock.callCount(), 2, "a different address type is a new quote");
+  assert.equal(quoteShipment.mock.calls[1].arguments[1].receiver.type, "residential");
 });
 
 test("calculated product without full package dimensions is refused", async () => {

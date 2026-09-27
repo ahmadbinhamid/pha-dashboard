@@ -10,13 +10,6 @@ export function productTagDeepLink(productId: string) {
   return `${PRODUCT_TAG_DEEP_LINK_BASE}${productId}`;
 }
 
-/** Product id from a scanned tag QR, or null for any other code. */
-export function productIdFromTagLink(value: string): string | null {
-  if (!value.startsWith(PRODUCT_TAG_DEEP_LINK_BASE)) return null;
-  const id = value.slice(PRODUCT_TAG_DEEP_LINK_BASE.length).trim();
-  return /^[a-f0-9]{24}$/i.test(id) ? id : null;
-}
-
 // Mirrors server constants/tag.constants.js; the server has the final say.
 export const MAX_TAG_COPIES = 500;
 export const TAG_FONT_PT = { min: 5, max: 14, step: 0.5 } as const;

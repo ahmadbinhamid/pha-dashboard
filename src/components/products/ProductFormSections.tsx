@@ -67,19 +67,20 @@ export function ProductFormSections({
           <Input {...register("title")} placeholder="e.g. Front brake pad set, ceramic" autoFocus={autoFocusTitle} />
         </FormField>
 
-        <div className={cn("grid grid-cols-1 items-end gap-3", skuField ? "lg:grid-cols-3" : "sm:grid-cols-2")}>
+        <div className={cn("grid grid-cols-1 gap-3", skuField && "sm:grid-cols-2")}>
           {skuField && <FormField label="SKU">{skuField}</FormField>}
           <FormField label="Manufacturer part number">
             <Input {...register("mpn")} placeholder="e.g. 45022-TBC-A01" />
           </FormField>
-          <Controller
-            control={control}
-            name="is_published_online"
-            render={({ field }) => (
-              <Switch checked={field.value} onCheckedChange={field.onChange} label="Show on storefront" description={storefrontDescription} />
-            )}
-          />
         </div>
+
+        <Controller
+          control={control}
+          name="is_published_online"
+          render={({ field }) => (
+            <Switch checked={field.value} onCheckedChange={field.onChange} label="Show on storefront" description={storefrontDescription} />
+          )}
+        />
       </FormSection>
 
       <FormSection number={2} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>

@@ -133,6 +133,20 @@ test("updateProduct: an irrelevant-field edit fans out to nothing", async (t) =>
   assert.equal(syncCalls.length, 0, "an edit to fields no adapter reads must not fan out");
 });
 
+test("updateProduct: tailgate flags save but never reach eBay or Google", async () => {
+  const { tenantId, product } = await setup();
+  enqueueSpy.mock.resetCalls();
+  const res = fakeRes();
+  const body = { tailgate_pickup: "true", tailgate_delivery: "true" };
+  await productController.updateProduct({ params: { id: product._id.toString() }, tenantId, user: { _id: fixtureId() }, body }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.data.tailgate_pickup, true);
+  assert.equal(res.body.data.tailgate_delivery, true);
+  const syncCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[1] === "sync_listing");
+  assert.equal(syncCalls.length, 0, "Transdirect-only fields must not resync channels");
+});
+
 test("updateProduct: a stock_control change fans out (untracked stock changes both payloads)", async () => {
   const { tenantId, product } = await setup();
   enqueueSpy.mock.resetCalls();

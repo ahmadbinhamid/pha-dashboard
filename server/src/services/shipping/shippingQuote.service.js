@@ -6,9 +6,10 @@ const { httpError } = require("../../utils/http/httpError");
 const { toPackage, isCompletePackage } = require("../../utils/packageDimensions");
 const { getTransdirectConfig } = require("./shippingSettings.service");
 const { quoteShipment } = require("./transdirect.api.service");
+const { toAuStateCode } = require("../../utils/auState");
 const { SHIPPING_METHOD, ADDRESS_TYPE, QUOTE_CACHE_TTL_MS } = require("../../constants/shipping.constants");
 
-const PRODUCT_FIELDS = "title price shipping_cost shipping_method package is_published_online";
+const PRODUCT_FIELDS = "title price shipping_cost shipping_method package tailgate_pickup tailgate_delivery is_published_online";
 const MAX_CACHE_ENTRIES = 1000;
 const toCents = (dollars) => Math.round((dollars ?? 0) * 100);
 
@@ -17,7 +18,8 @@ const quoteCache = new Map();
 
 function cacheKey(tenantId, lines, receiver) {
   const cart = lines.map((l) => `${l.product._id}x${l.quantity}`).sort().join(",");
-  return `${tenantId}|${cart}|${receiver.postcode}|${String(receiver.suburb).toUpperCase()}`;
+  const place = `${receiver.postcode}|${String(receiver.suburb).toUpperCase()}|${receiverType(receiver)}`;
+  return `${tenantId}|${cart}|${place}`;
 }
 
 function cached(key) {
@@ -44,6 +46,9 @@ async function resolveLines(tenantId, items) {
   });
 }
 
+// Customer's pick at checkout; residential when not given.
+const receiverType = (receiver) => receiver.address_type || ADDRESS_TYPE.RESIDENTIAL;
+
 async function quoteCalculated(tenantId, lines, receiver) {
   const config = await getTransdirectConfig(tenantId);
   if (!config) throw httpError("Calculated shipping isn't set up for this store yet", 422);
@@ -52,9 +57,18 @@ async function quoteCalculated(tenantId, lines, receiver) {
 
   const quotes = await quoteShipment(config.apiKey, {
     declaredValue: lines.reduce((sum, l) => sum + (l.product.price ?? 0) * l.quantity, 0),
+    requestingSite: config.requestingSite,
+    // One heavy item needing a tailgate means the whole shipment does.
+    tailgatePickup: lines.some((l) => l.product.tailgate_pickup),
+    tailgateDelivery: lines.some((l) => l.product.tailgate_delivery),
     items: lines.map((l) => ({ ...toPackage(l.product.package), quantity: l.quantity })),
     sender: config.sender,
-    receiver: { postcode: receiver.postcode, suburb: receiver.suburb, state: receiver.state ?? "", type: ADDRESS_TYPE.RESIDENTIAL },
+    receiver: {
+      postcode: receiver.postcode,
+      suburb: receiver.suburb,
+      state: toAuStateCode(receiver.state),
+      type: receiverType(receiver),
+    },
   });
   if (!quotes.length) throw httpError(`No courier delivers to ${receiver.suburb} ${receiver.postcode}`, 422);
   const [best] = quotes;

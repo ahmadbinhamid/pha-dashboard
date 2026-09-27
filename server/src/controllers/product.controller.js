@@ -96,7 +96,7 @@ const vehicleValue = (v) => ({
 
 const packageValue = (v) => toPackage(v);
 
-// NOTE: sku excluded; it's the channel identity, a new one would duplicate.
+// NOTE: no sku (channel identity) or tailgate flags (Transdirect only).
 const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
   title: scalar,
   description: scalar,
@@ -314,6 +314,8 @@ exports.createProduct = async (req, res) => {
       package: pkg,
       bay,
       shipping_method,
+      tailgate_pickup,
+      tailgate_delivery,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -337,6 +339,8 @@ exports.createProduct = async (req, res) => {
       package: toPackage(pkg),
       bay: bay || null,
       shipping_method: shipping_method || SHIPPING_METHOD.STANDARD,
+      tailgate_pickup: toBool(tailgate_pickup),
+      tailgate_delivery: toBool(tailgate_delivery),
       is_taxable: toBool(is_taxable),
       sku: autoSku,
       barcode: barcode || null,
@@ -422,6 +426,8 @@ exports.updateProduct = async (req, res) => {
       package: pkg,
       bay,
       shipping_method,
+      tailgate_pickup,
+      tailgate_delivery,
     } = body;
 
     let pendingSlugBase = null;
@@ -462,6 +468,8 @@ exports.updateProduct = async (req, res) => {
     if (pkg !== undefined) product.package = toPackage(pkg);
     if (bay !== undefined) product.bay = bay || null;
     if (shipping_method) product.shipping_method = shipping_method;
+    if (tailgate_pickup !== undefined) product.tailgate_pickup = toBool(tailgate_pickup);
+    if (tailgate_delivery !== undefined) product.tailgate_delivery = toBool(tailgate_delivery);
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);

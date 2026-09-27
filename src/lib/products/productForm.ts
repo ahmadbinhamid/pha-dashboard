@@ -27,6 +27,8 @@ export const EMPTY_PRODUCT_FORM: ProductFormValues = {
   package: EMPTY_PACKAGE_FORM,
   bay: "",
   shipping_method: "standard",
+  tailgate_pickup: false,
+  tailgate_delivery: false,
   type: "physical",
   status: "active",
   is_published_online: true,
@@ -63,6 +65,8 @@ export function productToForm(p: Product): ProductFormValues {
     package: packageToForm(p.package),
     bay: p.bay ?? "",
     shipping_method: p.shipping_method ?? "standard",
+    tailgate_pickup: p.tailgate_pickup ?? false,
+    tailgate_delivery: p.tailgate_delivery ?? false,
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
@@ -107,6 +111,8 @@ export function productFormToFormData(form: ProductFormValues, mode: ProductForm
   fd.append("package", JSON.stringify(packageFromForm(form.package)));
   optional("bay", form.bay.trim());
   fd.append("shipping_method", form.shipping_method);
+  fd.append("tailgate_pickup", String(form.tailgate_pickup));
+  fd.append("tailgate_delivery", String(form.tailgate_delivery));
   fd.append("type", form.type);
   fd.append("status", status);
   fd.append("is_published_online", String(form.is_published_online));

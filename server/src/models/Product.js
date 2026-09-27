@@ -62,6 +62,9 @@ const productSchema = buildSchema({
   shipping_cost: { type: Number, default: null },
   // standard: shipping_cost per unit; calculated: Transdirect by postcode.
   shipping_method: { type: String, enum: Object.values(SHIPPING_METHOD), default: SHIPPING_METHOD.STANDARD },
+  // Transdirect only: courier brings a tailgate lift (no forklift on site).
+  tailgate_pickup: { type: Boolean, default: false },
+  tailgate_delivery: { type: Boolean, default: false },
   // Shelf/bin where the item sits, e.g. "A3-02"; printed on its tag.
   bay: { type: String, default: null, trim: true, maxlength: 40 },
   // Packed size (cm) and weight (kg); channels use it unless overridden.
