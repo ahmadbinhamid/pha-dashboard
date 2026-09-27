@@ -12,9 +12,7 @@ export interface VerifyOtpPayload {
   otp: string;
 }
 
-// Creates a BRAND NEW tenant plus its first (admin) user — distinct from a
-// hypothetical "join an existing tenant" flow, which this dashboard's UI
-// doesn't expose (that's a staff-invite scenario, not self-service signup).
+// Creates a brand new tenant plus its first (admin) user — distinct from "join an existing tenant" (a staff-invite scenario, not self-service signup).
 export interface RegisterTenantPayload {
   company_name: string;
   first_name: string;
@@ -23,9 +21,7 @@ export interface RegisterTenantPayload {
   password: string;
 }
 
-// A 2FA-enabled account resolves to just { email } (no token) — the caller
-// verifies the OTP separately via verifyOtp — while everyone else gets the
-// full AuthUser + token in one step, same as before 2FA existed.
+// A 2FA-enabled account resolves to just { email } (no token), verified separately via verifyOtp; everyone else gets AuthUser + token in one step.
 export type LoginResponseData = AuthUser | { email: string };
 
 export async function login(payload: LoginPayload) {
@@ -37,8 +33,7 @@ export async function login(payload: LoginPayload) {
 }
 
 export async function registerTenant(payload: RegisterTenantPayload) {
-  // Same response shape as login — new account is active immediately and
-  // logged straight in, no separate verification step.
+  // Same response shape as login — new account is active immediately, no separate verification step.
   const { data } = await apiClient.post<BeResponse<AuthUser>>(
     "/auth/register-tenant",
     payload,

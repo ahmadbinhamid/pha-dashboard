@@ -13,18 +13,14 @@ const LISTING_STATE = Object.freeze({
   ENDED: "ended",
 });
 
-// Superset of the legacy EBAY_SYNC_STATUS values on Product so the
-// inventory-list cache stays forward-compatible.
+// Superset of the legacy EBAY_SYNC_STATUS values, keeping the inventory-list cache forward-compatible.
 const LISTING_SYNC_STATUS = Object.freeze({
   NOT_LISTED: "not_listed",
   PENDING: "pending",
   SYNCED: "synced",
   OUT_OF_STOCK: "out_of_stock",
-  // Listing is live and otherwise in sync, but eBay rejected the last price
-  // update because the offer is part of an active eBay sale/promotion — see
-  // EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE. Distinct from ERROR: this
-  // isn't a failure to fix, just a state that resolves itself once the sale
-  // ends (or is reconfigured on eBay to allow price updates).
+  // Listing is live but eBay rejected the last price update since it's part of an active sale.
+  // Distinct from ERROR: self-resolves once the sale ends or allows price updates.
   PRICE_LOCKED: "price_locked",
   ERROR: "error",
 });

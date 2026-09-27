@@ -2,9 +2,7 @@
 
 const Joi = require("joi");
 
-// RFC 1123-ish hostname — letters/digits/hyphens per label, dot-separated,
-// no scheme/path/port (this is a bare hostname for DNS + Origin matching,
-// not a URL).
+// RFC 1123-ish hostname, no scheme/path/port — this is a bare hostname for DNS/Origin matching.
 const HOSTNAME_PATTERN = /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))+$/;
 
 const createDomain = {

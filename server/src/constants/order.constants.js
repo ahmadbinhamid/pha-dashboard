@@ -2,9 +2,7 @@
 
 const ORDER_STATUS = Object.freeze({
   PENDING_PAYMENT: "pending_payment",
-  // Some, but not all, of the order total has been collected — e.g. a
-  // manual-sale deposit, with the remainder still due via cash/online
-  // transfer/payment link. See utils/paymentStatus.js#derivePaymentStatus.
+  // Some, not all, of the order total collected — e.g. a deposit with the remainder still due.
   PARTIALLY_PAID: "partially_paid",
   PAID: "paid",
   FULFILLED: "fulfilled",
@@ -13,8 +11,7 @@ const ORDER_STATUS = Object.freeze({
   PARTIALLY_REFUNDED: "partially_refunded",
 });
 
-// Where an order originated. Orders are a single unified collection
-// regardless of channel — this just tags where each one came from.
+// Where an order originated; orders are one unified collection regardless of channel.
 const ORDER_CHANNEL = Object.freeze({
   STOREFRONT: "storefront",
   EBAY: "ebay",
@@ -22,23 +19,15 @@ const ORDER_CHANNEL = Object.freeze({
   MANUAL: "manual",
 });
 
-// How a storefront order reaches the customer. Pickup orders carry no
-// shipping_address and no shipping_cost — eBay orders are always DELIVERY.
+// How a storefront order reaches the customer; pickup carries no shipping_address/cost.
 const ORDER_DELIVERY_METHOD = Object.freeze({
   DELIVERY: "delivery",
   PICKUP: "pickup",
 });
 
-// refund-redesign-spec.md §1.2 — splits ORDER_STATUS's two mixed concerns
-// (payment state vs fulfilment state) apart, since finalizeSucceededRefund
-// overwriting FULFILLED with REFUNDED was exactly the bug that motivated the
-// split. Distinct name from payment.constants.js's PAYMENT_STATUS (that one
-// describes a single Payment/Stripe-intent's own lifecycle; this one
-// describes an Order's aggregate payment position across all its payments
-// and refunds) — same word, deliberately different enum, do not conflate.
-// Additive only for now: `status` (below) stays authoritative until the
-// derived-field backfill (§6.2) and the services that read it are migrated
-// (§9) — nothing writes or reads these two new fields yet.
+// Splits ORDER_STATUS's mixed payment/fulfilment concerns apart, since overwriting FULFILLED
+// with REFUNDED was exactly the bug that motivated this. Distinct from payment.constants.js's
+// PAYMENT_STATUS (a single Payment's lifecycle vs. an Order's aggregate position) — do not conflate.
 const ORDER_PAYMENT_STATUS = Object.freeze({
   PENDING_PAYMENT: "pending_payment",
   PARTIALLY_PAID: "partially_paid",
@@ -47,10 +36,7 @@ const ORDER_PAYMENT_STATUS = Object.freeze({
   REFUNDED: "refunded",
 });
 
-// Admin-editable order lifecycle — deliberately independent of
-// ORDER_PAYMENT_STATUS (a Completed order isn't necessarily fully paid, and
-// a Paid order isn't necessarily fulfilled yet). Matches flowpos's 5-state
-// order status exactly.
+// Admin-editable order lifecycle, deliberately independent of ORDER_PAYMENT_STATUS.
 const ORDER_FULFILLMENT_STATUS = Object.freeze({
   PENDING: "pending",
   PROCESSING: "processing",

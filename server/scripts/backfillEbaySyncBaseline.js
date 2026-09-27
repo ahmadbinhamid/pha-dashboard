@@ -15,11 +15,9 @@
 // A tenant whose getAllInventoryItems() fetch comes back incomplete
 // (complete: false — see ebay.api.service.js) is skipped entirely for the
 // per-listing backfill, logged, and left for a re-run — better to leave a
-// stale baseline in place than seed one from a fetch that might be missing
-// SKUs.
+// stale baseline in place than seed one from a fetch that might be missing SKUs.
 //
-// Usage:
-//   node scripts/backfillEbaySyncBaseline.js [--dry-run]
+// Usage: node scripts/backfillEbaySyncBaseline.js [--dry-run]
 
 require("dotenv").config();
 

@@ -44,11 +44,7 @@ function initialize(httpServer) {
 
     // Join a personal room so the server can target this user
     if (socket.user?.sub) {
-      // NOTE (lint fix): Socket#join is typed Promise<void> | void because
-      // socket.io supports async adapters (e.g. Redis) — this server uses
-      // the default in-memory adapter (no adapter configured), where join()
-      // is actually synchronous. `void` documents that this is a known,
-      // deliberately-ignored return, not a missed await.
+      // join() returns void with the sync in-memory adapter; `void` marks this deliberate, not a missed await.
       void socket.join(`user:${socket.user.sub}`);
     }
 
@@ -65,10 +61,7 @@ function initialize(httpServer) {
   return io;
 }
 
-// Targets the per-user rooms `initialize()` already joins each connection
-// to — no new room scheme needed. Best-effort: a caller's notification
-// pipeline should never throw just because no socket server is up yet
-// (e.g. under test), so this silently no-ops instead.
+// Targets the per-user rooms initialize() already joins; no-ops silently if no socket server is up (e.g. tests).
 function emitToUsers(userIds, event, payload) {
   if (!io) return;
   for (const userId of userIds) {

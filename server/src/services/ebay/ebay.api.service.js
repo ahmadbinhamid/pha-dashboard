@@ -1,24 +1,12 @@
 // services/ebay/ebay.api.service.js
-// Pure eBay API communication layer — no database access, no orchestration
-//
-// Multi-tenant: client_id/client_secret belong to OUR eBay Application
-// (config.ebay.*, shared across every tenant, like a Stripe platform key).
-// Everything else — refresh_token, marketplace, sandbox, policies, warehouse
-// address — is per-tenant and passed in as a `settings` object (the shape
-// returned by ebay.settings.service.js#getSettings(tenantId)). OAuth tokens
-// are cached per-tenant (keyed by tenant_id), not as a single global value.
+// Pure eBay API layer, no DB; app creds shared, tenant data via `settings`.
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { EBAY_SCOPES, currencyForMarketplace } = require("../../constants/ebay.constants");
+const { httpError } = require("../../utils/http/httpError");
 
-// eBay's error envelope for a rejected Inventory/Offer API call is
-// `{ errors: [{ errorId, message, longMessage, parameters }, ...] }`. Callers
-// that only care about "did this fail" can still just read `.message`
-// (unchanged format: "<action> failed: <status> <raw body>"), but anything
-// that needs to branch on a specific eBay error code (e.g. recovering from
-// "offer already exists", or treating "price locked by an active sale" as
-// non-fatal) can check `.errorId(code)` instead of parsing the message string.
+// Parsed eBay `errors`; branch on a specific code via `.hasErrorId(code)`.
 class EbayApiError extends Error {
   constructor(message, { status, body } = {}) {
     super(message);
@@ -32,10 +20,7 @@ class EbayApiError extends Error {
   }
 }
 
-// eBay's error body is documented JSON, but isn't guaranteed to parse that
-// way (a gateway timeout or an unrelated 5xx can return plain text/HTML) —
-// fall back to an empty list rather than let a malformed body crash the
-// error-handling path itself.
+// Body may be HTML on 5xx/timeout, so fall back to an empty error list.
 function parseEbayErrorBody(body) {
   try {
     const parsed = JSON.parse(body);
@@ -50,7 +35,7 @@ async function throwEbayApiError(action, res) {
   throw new EbayApiError(`${action} failed: ${res.status} ${text}`, { status: res.status, body: text });
 }
 
-// Strip HTML tags and collapse whitespace for fields that only accept plain text
+// Strip HTML and collapse whitespace for plain-text-only fields
 function toPlainText(html, maxLen = 4000) {
   return (html || "")
     .replace(/<[^>]*>/g, " ")
@@ -64,9 +49,7 @@ function toPlainText(html, maxLen = 4000) {
     .slice(0, maxLen);
 }
 
-// ── Base URLs ────────────────────────────────────────────────────────────────
-// EBAY_API_BASE_URL/EBAY_TAXONOMY_BASE_URL remain a global override (e.g. for
-// a proxy) when set; otherwise derived from each tenant's own `sandbox` flag.
+// ── Base URLs ── env override (e.g. proxy), else tenant `sandbox` flag
 function apiBaseUrlFor(sandbox) {
   return config.ebay.apiBaseUrl || (sandbox ? "https://api.sandbox.ebay.com" : "https://api.ebay.com");
 }
@@ -83,20 +66,16 @@ function tokenEndpointFor(sandbox) {
   return `${apiBaseUrlFor(sandbox)}/identity/v1/oauth2/token`;
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-// Token caches keyed by tenant_id — a single global variable would leak one
-// tenant's access token into every other tenant's API calls.
+// ── Auth ── per-tenant caches so tokens never leak across tenants
 const _tokenCache = new Map(); // tenantId -> { token, expiry }
 const _appTokenCache = new Map(); // tenantId -> { token, expiry }
 
-// Catalog/Taxonomy tokens use client_credentials (the app's own credentials,
-// no seller consent involved) — genuinely app-level, safe to share globally.
+// Catalog/Taxonomy tokens are app-level (client_credentials), safe to share.
 let _cachedCatalogToken = null;
 let _catalogTokenExpiry = 0;
 let _cachedCategoryTreeId = null;
 
-// Called after a tenant (re)connects via OAuth so a stale access token minted
-// against their previous refresh_token can never be served from cache.
+// Called on OAuth (re)connect so an old refresh_token's token isn't reused.
 function clearTokenCache(tenantId) {
   const key = String(tenantId);
   _tokenCache.delete(key);
@@ -156,7 +135,7 @@ async function getAppToken(settings) {
 
   const credentials = Buffer.from(`${config.ebay.clientId}:${config.ebay.clientSecret}`).toString("base64");
 
-  // Uses refresh_token grant so the notification scope rides on the seller's existing OAuth consent
+  // refresh_token grant so the notification scope rides on existing consent
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: settings.refresh_token,
@@ -180,19 +159,7 @@ async function getAppToken(settings) {
   return data.access_token;
 }
 
-// App token scoped for Taxonomy / Catalog APIs (client_credentials, base scope)
-// — not tenant-specific, cached once for the whole process.
-// Catalog/Taxonomy calls always use PRODUCTION app credentials + the
-// PRODUCTION token endpoint (see the fetch below and taxonomyBaseUrlFor's
-// own callers) — this is intentional even for an otherwise all-sandbox
-// setup, since eBay's sandbox taxonomy tree doesn't work. Practically, this
-// means a developer running a sandbox-only tenant still needs real
-// PRODUCTION EBAY_CLIENT_ID/EBAY_CLIENT_SECRET (App ID + Cert ID) in .env
-// for anything that touches categories/aspects — see server/.env.example
-// and server/docs/ebay-setup.md. Get eBay to reject those specifically
-// (invalid_client) and this used to surface as a bare, unhelpful 500 from
-// GET /api/v1/ebay/category-aspects — see ebay.controller.js#getCategoryAspects,
-// which now maps this to a 502 naming the actual cause.
+// Process-wide app token, always PRODUCTION (sandbox taxonomy is broken).
 async function getCatalogToken() {
   const now = Date.now();
   if (_cachedCatalogToken && now < _catalogTokenExpiry - 30_000) return _cachedCatalogToken;
@@ -206,8 +173,7 @@ async function getCatalogToken() {
 
   const body = new URLSearchParams({ grant_type: "client_credentials", scope: EBAY_SCOPES.BASE });
 
-  // Catalog/Taxonomy calls are never sandboxed per-tenant today — production
-  // app credentials against the production endpoint.
+  // Catalog/Taxonomy calls are never sandboxed: always production.
   const res = await fetch(tokenEndpointFor(false), {
     method: "POST",
     headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
@@ -216,9 +182,7 @@ async function getCatalogToken() {
 
   if (!res.ok) {
     const text = await res.text();
-    // Never log `credentials` (the Basic auth header) or clientSecret
-    // itself — only the App ID (not sensitive the way Cert ID/secret is)
-    // and whatever eBay's own response body says.
+    // Never log the Basic auth header or secret, only App ID and eBay's body.
     let isInvalidClient = false;
     try {
       isInvalidClient = JSON.parse(text)?.error === "invalid_client";
@@ -237,8 +201,7 @@ async function getCatalogToken() {
         "eBay rejected the configured app credentials (invalid_client). Catalog/taxonomy calls require " +
           "PRODUCTION eBay app keys (App ID + Cert ID), even for an otherwise sandbox-connected tenant.",
       );
-      // Surfaces as a clear 502 (not a bare 500) via systemfailure()'s
-      // generic err.status handling — see ebay.controller.js#getCategoryAspects.
+      // err.status makes systemfailure() return 502, not 500.
       err.status = 502;
       err.code = "EBAY_APP_CREDENTIALS_REJECTED";
       throw err;
@@ -254,7 +217,7 @@ async function getCatalogToken() {
   return _cachedCatalogToken;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ──
 
 const MARKETPLACE_LANGUAGE = {
   EBAY_US: "en-US",
@@ -281,8 +244,9 @@ async function upsertInventoryItem(token, settings, inventoryItem) {
 
   const imageUrls = inventoryItem.product?.imageUrls || [];
   if (!imageUrls.length) {
-    throw new Error(
+    throw httpError(
       "No HTTPS image URLs found. Add images to the listing's Photos section and ensure UPLOADS_URL in .env is set to your public HTTPS URL (e.g. https://yourdomain.com/uploads).",
+      400,
     );
   }
 
@@ -296,13 +260,12 @@ async function upsertInventoryItem(token, settings, inventoryItem) {
   );
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`upsert inventory_item failed: ${res.status} ${text}`);
+    await throwEbayApiError("upsert inventory_item", res);
   }
   return { ok: true };
 }
 
-// ── Resolved-based builders (used by EbayAdapter / MarketplaceListing path) ──
+// ── Resolved-based builders (EbayAdapter / MarketplaceListing path) ──
 
 function resolveImageUrls(photos, settings) {
   const uploadsUrl = config.uploads.url;
@@ -321,9 +284,7 @@ function resolveImageUrls(photos, settings) {
 
   if (httpsUrls.length > 0) return httpsUrls;
 
-  // In sandbox/dev, fall back to this tenant's fallback image so the sync
-  // flow can be tested without a public HTTPS upload server. Production
-  // requires real images.
+  // Sandbox uses the tenant fallback image so sync works without public HTTPS.
   if (settings?.sandbox && settings?.fallback_image_url) {
     if (allUrls.length > 0) {
       logger.warn(
@@ -344,35 +305,11 @@ function resolveImageUrls(photos, settings) {
   return [];
 }
 
-// Our UI stores "NEW" or "USED". "NEW" is valid as-is; "USED" is not an eBay
-// enum — map it to USED_GOOD as the safe default. Any other stored value is
-// assumed to already be a valid eBay condition enum (for future granularity).
-// "USED" maps to USED_EXCELLENT (3000), not USED_GOOD (5000) — 4000/5000/
-// 6000 are eBay's MEDIA condition grades (books, DVDs, games); most eBay
-// Motors parts categories only accept 3000/6000/7000, so defaulting to a
-// media-only grade was silently wrong for this app's whole domain (auto
-// parts). See CONDITION_FALLBACK_ORDER in ebay.adapter.js for the matching
-// fix to the per-category fallback search order.
-//
-// A falsy condition used to silently default to FOR_PARTS_OR_NOT_WORKING —
-// listing a part as broken because a field was left blank is a bad failure
-// mode nobody would notice until a buyer complained. Throws instead
-// (naming the SKU when the caller has one), so it surfaces as a listing
-// that needs attention. Every call site (ebay.adapter.js's
-// resolveCategoryCondition, buildInventoryItemFromResolved below) is only
-// ever reached from sync.service.js#syncListing's try/catch, which already
-// classifies and records ANY thrown error as a per-item sync failure — this
-// is not a new crash risk, just a more honest one than silently guessing
-// "broken".
+// USED -> USED_EXCELLENT (4000-6000 are media-only grades); throws if unset.
 function normalizeCondition(condition, sku = null) {
   if (!condition) {
     const err = new Error(`Item condition is required${sku ? ` for SKU ${sku}` : ""} — set a condition before publishing to eBay`);
-    // A missing condition is a per-item listing-data problem, never
-    // evidence the eBay connection itself is broken — see
-    // circuitBreaker.js#isTransportOrAuthFailure, which only counts
-    // >=500/401/403 (or no status at all) toward the breaker. Set here
-    // rather than at each call site so nothing that forgets to classify it
-    // accidentally trips the breaker on a blank condition field.
+    // 400 = data problem, so it never trips the circuit breaker.
     err.status = 400;
     throw err;
   }
@@ -380,20 +317,7 @@ function normalizeCondition(condition, sku = null) {
   return condition;
 }
 
-// Builds Make/Model/Series/Year aspects strictly from the vehicle entered on
-// the Product itself (Product Details > Vehicle section, captured once at
-// product creation) — never from the listing's own Vehicle Fitment table.
-//
-// That table can legitimately hold several distinct compatible vehicles for
-// the buyer-facing description/compatibility chart, but eBay's Make/Model/
-// Series aspects are single-value (cardinality SINGLE) in motor-parts
-// categories — sending more than one value is rejected with errorId 25002
-// ("Model should contain only one value"). This used to paper over that by
-// taking the fitment table's first row for Make/Model/Series and min/max-ing
-// the year across every row, which silently substituted whatever the first
-// row happened to be (and a blended year range spanning models it was never
-// actually true for) in place of what the seller entered for this part —
-// see bug report "Incorrect Vehicle Fitment Mapping to eBay Item Specifics".
+// Vehicle aspects from Product.vehicle, not fitment: eBay aspects are 1-value.
 function buildVehicleAspects(product) {
   const vehicle = product?.vehicle;
   if (!vehicle || (!vehicle.make && !vehicle.model)) return {};
@@ -410,17 +334,15 @@ function buildVehicleAspects(product) {
 }
 
 function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null, settings = null) {
-  const { sku, title, description, brand, photos, listing, product } = resolved;
+  const { sku, title, description, brand, photos, listing, product, authenticity } = resolved;
   const imageUrls = resolveImageUrls(photos, settings);
-  const condition = conditionOverride || normalizeCondition(listing.condition, sku);
+  const condition = conditionOverride || normalizeCondition(resolved.condition, sku);
 
-  // Resolve brand/mpn once — used for both aspects and the product-level fields.
-  // eBay validates Brand/MPN as a pair at the product level (error 25002 if one
-  // is present without the other), so we default the missing side rather than
-  // omitting one.
+  // eBay requires brand/mpn as a pair (error 25002), so default the missing side.
   const specs = listing.item_specifics || {};
   const resolvedBrand = (specs.brand || brand || "").trim();
-  const resolvedMpn = (specs.mpn || "").trim();
+  // Empty listing MPN inherits the product's.
+  const resolvedMpn = (specs.mpn || product?.mpn || "").trim();
 
   const hasBrand = !!resolvedBrand;
   const hasMpn = !!resolvedMpn;
@@ -435,25 +357,13 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
   const spnArr = (Array.isArray(rawSpn) ? rawSpn : rawSpn != null ? [rawSpn] : [])
     .map((s) => (s == null ? "" : String(s).trim()))
     .filter((s) => s !== "" && s !== "null");
-  // Same class of error as buildVehicleAspects above (errorId 25002):
-  // "Superseded Part Number" is cardinality SINGLE in eBay's motor-parts
-  // category schema, even though this app's own data model allows several
-  // (a part can legitimately supersede/be superseded by more than one other
-  // part number — see MarketplaceListing.js's superseded_part_number array).
-  // Sending the whole array got every affected listing stuck in a
-  // permanent sync Error ("Superseded Part Number should contain only one
-  // value. Remove the extra values and try again."). Only the first entry
-  // is sent to eBay; the rest still show on this app's own product page,
-  // just not as an eBay item specific — no dynamic per-category cardinality
-  // lookup here, matching how Brand/MPN/Authenticity/Warranty/Make/Model/
-  // Series/Year are all already handled as single-value in this function.
+  // SPN is single-value on eBay (25002), so only the first entry is sent.
   if (spnArr.length > 0) aspects["Superseded Part Number"] = [spnArr[0]];
-  // Dedicated authenticity / warranty fields (override dynamic aspects of same name)
-  if (specs.authenticity) aspects["Authenticity"] = [String(specs.authenticity)];
+  // Authenticity/warranty fields override dynamic aspects of the same name
+  if (authenticity) aspects["Authenticity"] = [String(authenticity)];
   if (specs.warranty) aspects["Warranty"] = [String(specs.warranty)];
 
-  // Make/Model/Series/Year from the product's own vehicle field — see
-  // buildVehicleAspects for why this deliberately ignores listing.fitment.
+  // Vehicle aspects from product.vehicle; see buildVehicleAspects re fitment.
   const vehicleAspects = buildVehicleAspects(product);
   for (const [name, value] of Object.entries(vehicleAspects)) {
     if (!aspects[name]) aspects[name] = value;
@@ -467,10 +377,10 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
     if (value && !aspects[name]) aspects[name] = [String(value)];
   }
 
-  // packageWeightAndSize — only included when at least one dimension/weight is set
-  const pkg = listing.package || {};
+  // Resolved package: the listing's, else the product's (null when neither).
+  const pkg = resolved.package || {};
   const hasAnyDimension = pkg.length || pkg.width || pkg.height;
-  const hasWeight = pkg.weight != null && String(pkg.weight).trim() !== "";
+  const hasWeight = pkg.weight != null;
   const packageWeightAndSize =
     hasAnyDimension || hasWeight
       ? {
@@ -492,22 +402,16 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 
   return {
     sku,
-    // null quantity means "this merchant doesn't track stock for this
-    // product" (Product.stock_control === false — see
-    // ebay.adapter.js#resolveQuantity). Omitting the whole availability
-    // block rather than sending a fabricated number keeps eBay's own
-    // quantity as whatever the seller set directly there, instead of this
-    // app overwriting it with a guess it has no real basis for.
+    // null = untracked stock: omit availability rather than guess eBay's qty.
     ...(quantity != null ? { availability: { shipToLocationAvailability: { quantity } } } : {}),
     condition,
     ...(packageWeightAndSize ? { packageWeightAndSize } : {}),
     product: {
       title,
-      // Inventory API product.description is plain-text only, max 4000 chars.
-      // The full HTML listing description lives in the offer's listingDescription.
+      // Plain text, max 4000; the full HTML goes in the offer's listingDescription.
       description: toPlainText(description || title) || title,
       imageUrls,
-      // Brand and MPN must always be paired — eBay rejects one without the other (error 25002)
+      // Brand and MPN must be paired; eBay rejects one alone (error 25002)
       ...(productBrand ? { brand: productBrand, mpn: productMpn } : {}),
       ...(Object.keys(aspects).length > 0 ? { aspects } : {}),
     },
@@ -516,6 +420,8 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
 
 function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const { sku, price, description, title, listing } = resolved;
+  // Listing category, else the tenant's mapping.
+  const categoryId = resolved.category?.id || listing.ebay_category_id;
 
   // Policy IDs: listing-level override ?? this tenant's EbaySettings default
   const fulfillmentPolicyId = listing.fulfillment_policy_id || settings.fulfillment_policy_id;
@@ -523,25 +429,18 @@ function buildOfferFromResolved(resolved, settings, quantity = 1) {
   const returnPolicyId = listing.return_policy_id || settings.return_policy_id;
   const merchantLocationKey = listing.merchant_location_key || settings.merchant_location_key;
 
-  // Was hardcoded "AUD" regardless of this tenant's configured marketplace —
-  // EbaySettings.marketplace_id has no enum restricting it to AU, so a
-  // tenant on EBAY_US/EBAY_GB/etc. would publish offers in the wrong
-  // currency, which eBay is likely to reject for that marketplace. Found live.
+  // Currency follows the tenant's marketplace (not a fixed AUD).
   const currency = currencyForMarketplace(settings.marketplace_id);
 
-  // require_immediate_payment cannot be set per-offer in the eBay Inventory API —
-  // it is governed by the payment policy (paymentPolicyId). To enforce it, enable
-  // "Require immediate payment" on the eBay payment policy itself via Seller Hub.
-  // listing.require_immediate_payment is intentionally not forwarded here.
+  // require_immediate_payment comes from the Seller Hub payment policy.
 
   return {
     sku,
     marketplaceId: settings.marketplace_id,
     format: listing.format || "FIXED_PRICE",
-    // See buildInventoryItemFromResolved's comment — null means "don't
-    // touch eBay's quantity for this untracked-stock product."
+    // null = untracked stock; leave eBay's quantity alone.
     ...(quantity != null ? { availableQuantity: quantity } : {}),
-    ...(listing.ebay_category_id ? { categoryId: listing.ebay_category_id } : {}),
+    ...(categoryId ? { categoryId } : {}),
     listingDescription: description || title,
     pricingSummary: {
       price: { value: String(price || 0), currency },
@@ -590,7 +489,7 @@ async function updateOffer(token, settings, offerId, offerBody) {
   return { ok: true };
 }
 
-// ── Step 3: Publish ───────────────────────────────────────────────────────────
+// ── Step 3: Publish ──
 
 async function publishOffer(token, settings, offerId) {
   const res = await fetch(
@@ -608,7 +507,28 @@ async function publishOffer(token, settings, offerId) {
   return data.listingId;
 }
 
-// ── Delete ────────────────────────────────────────────────────────────────────
+async function getOffer(token, settings, offerId) {
+  const res = await fetch(
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
+    { method: "GET", headers: ebayHeaders(token, settings.marketplace_id) },
+  );
+
+  if (!res.ok) await throwEbayApiError("getOffer", res);
+  return res.json();
+}
+
+// Ends the live listing but keeps the offer, so publishOffer can relist it.
+async function withdrawOffer(token, settings, offerId) {
+  const res = await fetch(
+    `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}/withdraw`,
+    { method: "POST", headers: ebayHeaders(token, settings.marketplace_id), body: JSON.stringify({}) },
+  );
+
+  if (!res.ok) await throwEbayApiError("withdrawOffer", res);
+  return { ok: true };
+}
+
+// ── Delete ──
 
 async function deleteProduct(settings, sku, offerId = null) {
   if (!credentialsConfigured(settings)) {
@@ -617,10 +537,10 @@ async function deleteProduct(settings, sku, offerId = null) {
   }
 
   const token = await getAccessToken(settings);
-  if (!token) return { error: "Could not obtain access token" };
+  if (!token) return { error: "Could not obtain access token", status: 401 };
 
   try {
-    // Step 1 — withdraw the offer first (eBay blocks inventory item deletion while an offer exists)
+    // Step 1 - withdraw the offer first (eBay blocks item delete while it exists)
     if (offerId) {
       const offerRes = await fetch(
         `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
@@ -629,7 +549,7 @@ async function deleteProduct(settings, sku, offerId = null) {
       if (!offerRes.ok && offerRes.status !== 404) {
         const text = await offerRes.text();
         logger.error(`[eBay] deleteProduct withdraw offer ${offerId} failed: ${offerRes.status} ${text}`);
-        return { error: `withdraw offer failed: ${offerRes.status}: ${text}` };
+        return { error: `withdraw offer failed: ${offerRes.status}: ${text}`, status: offerRes.status };
       }
       logger.info(`[eBay] offer withdrawn: ${offerId}`);
     }
@@ -643,23 +563,20 @@ async function deleteProduct(settings, sku, offerId = null) {
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
       logger.error(`[eBay] deleteProduct ${sku} failed: ${res.status} ${text}`);
-      return { error: `${res.status}: ${text}` };
+      return { error: `${res.status}: ${text}`, status: res.status };
     }
 
     logger.info(`[eBay] inventory_item deleted: ${sku}`);
     return { ok: true };
   } catch (err) {
     logger.error(`[eBay] deleteProduct error: ${err.message}`);
-    return { error: err.message };
+    return { error: err.message, cause: err };
   }
 }
 
-// ── Merchant Location ─────────────────────────────────────────────────────────
+// ── Merchant Location ──
 
-// Lists this tenant's existing merchant locations on eBay — used right after
-// OAuth connect to auto-fill merchant_location_key from a location the seller
-// already set up (e.g. via eBay's own seller hub), instead of requiring them
-// to type the key in manually.
+// Lists merchant locations; used post-OAuth to fill merchant_location_key.
 async function getInventoryLocations(token, settings) {
   const res = await fetch(
     `${inventoryBaseFor(settings.sandbox)}/location?limit=100`,
@@ -674,7 +591,7 @@ async function getInventoryLocations(token, settings) {
 
 async function ensureLocation(token, settings) {
   const key = settings.merchant_location_key;
-  if (!key) throw new Error("This tenant has no merchant_location_key set — configure it in eBay settings first");
+  if (!key) throw httpError("This tenant has no merchant_location_key set — configure it in eBay settings first", 422);
 
   const checkRes = await fetch(
     `${inventoryBaseFor(settings.sandbox)}/location/${encodeURIComponent(key)}`,
@@ -687,8 +604,7 @@ async function ensureLocation(token, settings) {
   }
 
   if (checkRes.status !== 404) {
-    const text = await checkRes.text();
-    throw new Error(`GET location/${key} failed: ${checkRes.status} ${text}`);
+    await throwEbayApiError(`GET location/${key}`, checkRes);
   }
 
   // Location doesn't exist — build from this tenant's warehouse address
@@ -699,9 +615,10 @@ async function ensureLocation(token, settings) {
   if (!settings.warehouse_postcode) missing.push("warehouse_postcode");
 
   if (missing.length) {
-    throw new Error(
+    throw httpError(
       `Merchant location "${key}" does not exist on eBay and cannot be auto-created. ` +
       `Set these fields in this tenant's eBay settings: ${missing.join(", ")}`,
+      422,
     );
   }
 
@@ -731,18 +648,18 @@ async function ensureLocation(token, settings) {
   );
 
   if (!createRes.ok) {
-    const text = await createRes.text();
-    throw new Error(`Create merchant location "${key}" failed: ${createRes.status} ${text}`);
+    await throwEbayApiError(`Create merchant location "${key}"`, createRes);
   }
 
   logger.info(`[eBay] merchant location created: "${key}" (${settings.warehouse_city}, ${settings.warehouse_state})`);
 }
 
-// ── Fulfillment / Orders ──────────────────────────────────────────────────────
+// ── Fulfillment / Orders ──
 
 async function getOrders(settings, { limit = 50, offset = 0 } = {}) {
   const token = await getAccessToken(settings);
-  if (!token) throw new Error("[eBay] getOrders: could not obtain access token");
+  // NOTE: 401 because a null token means eBay refused the refresh (auth).
+  if (!token) throw httpError("[eBay] getOrders: could not obtain access token", 401);
 
   const url = `${fulfillmentBaseFor(settings.sandbox)}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
 
@@ -755,22 +672,14 @@ async function getOrders(settings, { limit = 50, offset = 0 } = {}) {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    // Thrown (not swallowed) so an auth/scope failure surfaces as a failed
-    // Bull job instead of silently looking like "no new orders".
-    throw new Error(`[eBay] getOrders failed: ${res.status} ${text}`);
+    // Thrown so auth/scope failures fail the job, not return "no orders".
+    await throwEbayApiError("[eBay] getOrders", res);
   }
 
   return res.json();
 }
 
-// getOrders only fetches one page (default limit=50) — a tenant with more
-// than 50 open (NOT_STARTED/IN_PROGRESS) orders (extended outage, high
-// volume) silently only had the first page processed per poll, and the
-// overflow was never guaranteed to surface on a later poll if the backlog
-// stayed above 50. This walks every page using eBay's own `total`, capped at
-// MAX_PAGES as a defensive bound against an unexpected/misbehaving response
-// looping forever (same concern as getAllInventoryItems's pagination below).
+// Walks all getOrders pages (capped) so a backlog isn't silently dropped.
 const MAX_ORDER_PAGES = 100; // 100 * 200 = 20,000 open orders — generous ceiling
 async function getAllOpenOrders(settings, { pageSize = 200 } = {}) {
   const orders = [];
@@ -789,30 +698,12 @@ async function getAllOpenOrders(settings, { pageSize = 200 } = {}) {
   return orders;
 }
 
-// Bulk-fetches every inventory item on the account (paginated) so the
-// inventory-sync poller can diff eBay's live quantities against ours in a
-// handful of calls instead of one GET per SKU.
-// MAX_INVENTORY_PAGES bounds what was previously a `while (true)` loop whose
-// only exit condition was a batch smaller than pageSize — if eBay ever
-// returned a full page regardless of the requested offset (an API bug, or
-// an account with a genuinely unexpected number of items), this looped
-// forever, growing `items` unboundedly and blocking that tenant's inventory
-// job indefinitely. Now fails loudly instead.
+// Bulk-fetch all inventory items for the poller diff; page cap fails loudly.
 const MAX_INVENTORY_PAGES = 500; // 500 * 100 = 50,000 items — generous ceiling
-// Returns { items, complete }. `complete: false` means the fetch stopped
-// before covering the whole account (a short/empty page came back while
-// eBay's own reported `total` says more items exist) — a transient API
-// hiccup, not proof those SKUs are actually gone. Callers that use a
-// missing-from-eBay result to decide "delete this listing" (see
-// ebay.inventory-sync.service.js#handleMissingFromEbay) must skip that
-// decision entirely for the cycle when complete is false, or a flaky page
-// read could wrongly delete a listing that's still live. Found live: the
-// stock-corruption incident this whole file's fencing/reconciliation logic
-// exists to prevent was a version of exactly this kind of "trust one
-// possibly-incomplete read" mistake.
+// complete:false = short page; callers skip delete-if-missing that cycle.
 async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
   const token = await getAccessToken(settings);
-  if (!token) throw new Error("[eBay] getAllInventoryItems: could not obtain access token");
+  if (!token) throw httpError("[eBay] getAllInventoryItems: could not obtain access token", 401);
 
   const items = [];
   let offset = 0;
@@ -825,8 +716,7 @@ async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
     );
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`[eBay] getAllInventoryItems failed: ${res.status} ${text}`);
+      await throwEbayApiError("[eBay] getAllInventoryItems", res);
     }
 
     const data = await res.json();
@@ -846,12 +736,7 @@ async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
   );
 }
 
-// ── Taxonomy ──────────────────────────────────────────────────────────────────
-// Not tenant-scoped — client_credentials app token, same category tree
-// regardless of which tenant is asking (categories are eBay-marketplace-wide,
-// not seller-specific). marketplaceId still matters (different sites have
-// different trees), so it's passed explicitly rather than pulled from a
-// per-tenant settings object.
+// ── Taxonomy ── app token; trees are per marketplace, not per tenant
 
 async function getDefaultCategoryTreeId(marketplaceId = "EBAY_AU") {
   if (_cachedCategoryTreeId) return _cachedCategoryTreeId;
@@ -921,6 +806,8 @@ module.exports = {
   createOffer,
   updateOffer,
   publishOffer,
+  getOffer,
+  withdrawOffer,
   deleteProduct,
   getInventoryLocations,
   ensureLocation,

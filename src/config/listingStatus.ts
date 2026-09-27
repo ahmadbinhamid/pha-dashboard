@@ -10,3 +10,13 @@ export const LISTING_SYNC_STATUS_CONFIG: Record<ListingSyncStatus, { label: stri
   price_locked: { label: "Price Locked (On Sale)", variant: "warn" },
   error: { label: "Error", variant: "danger" },
 };
+
+// Worst-first order, for summarising several listings as one status.
+export const LISTING_SYNC_STATUS_SEVERITY: ListingSyncStatus[] = [
+  "error",
+  "price_locked",
+  "pending",
+  "out_of_stock",
+  "synced",
+  "not_listed",
+];

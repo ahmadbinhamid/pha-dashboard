@@ -5,11 +5,8 @@ const Joi = require("joi");
 const createIntent = {
   body: Joi.object({
     order_id: Joi.string().hex().length(24).required(),
-    // Same guest_access_token issued once at order creation — required here
-    // for the same reason it's required on GET /orders/:id: without it,
-    // order_id is guessable/enumerable and would leak order totals via the
-    // intent amount, let a stranger spam PaymentIntents against our Stripe
-    // account, and let a stranger initiate payment on someone else's order.
+    // Same guest_access_token as GET /orders/:id; without it, order_id is guessable and would
+    // leak totals, let a stranger spam PaymentIntents, or pay on someone else's order.
     token: Joi.string().required(),
   }),
 };
@@ -24,7 +21,6 @@ const listPayments = {
   }),
 };
 
-// createRefund/createManualRefund removed (refund-redesign-spec.md §9) —
-// refunds are issued via POST /order/:orderId/refunds now (validators/refund.validation.js).
+// createRefund/createManualRefund removed — refunds are issued via POST /order/:orderId/refunds now.
 
 module.exports = { createIntent, byIdParam, listPayments };

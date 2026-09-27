@@ -42,8 +42,7 @@
 // can say that; nothing local records it. This script checks broadly
 // (regardless of which code path a hypothetical webhook/sweep call came
 // through) since that's the only way to actually find real damage, not just
-// re-derive the (mathematically empty, per the proof above) sweep-only
-// subset.
+// re-derive the (mathematically empty, per the proof above) sweep-only subset.
 //
 // ── The correction path, if this ever finds something (NOT called here) ──
 //
@@ -55,8 +54,7 @@
 // never a direct Inventory.stock_count write, which would skip the eBay/
 // Google fan-out entirely and leave marketplace listings still wrong.
 //
-// Usage:
-//   node scripts/auditUnreversedRestocks.js [--tenant=<tenantId>] [--summary]
+// Usage: node scripts/auditUnreversedRestocks.js [--tenant=<tenantId>] [--summary]
 //
 //   --tenant=<id>   Restrict to one tenant.
 //   --summary       Print only the summary block, not the per-refund detail.
@@ -150,8 +148,7 @@ async function verifyAgainstStripe(refund, getStripeClientCached) {
       if (err.code === "resource_missing") {
         // Matches handleChargeRefundUpdated's own resource_missing handling
         // in the reconciliation sweep — Stripe has no record of this
-        // refund at all any more, which the sweep treats the same as
-        // "canceled".
+        // refund at all any more, which the sweep treats the same as "canceled".
         affectedAllocations.push({ stripe_refund_id: alloc.stripe_refund_id, stripe_status: "resource_missing" });
       } else {
         return { checkable: false, reason: `Stripe error on ${alloc.stripe_refund_id}: ${err.message}`, affectedAllocations: [] };

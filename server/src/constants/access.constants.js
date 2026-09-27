@@ -1,25 +1,23 @@
 // constants/access.constants.js
 
-// The roles every tenant is seeded with. They can't be renamed, re-permissioned
-// or deleted — a tenant always has a way back in, and "Super Admin" stays the
-// thing permission checks can short-circuit on. Tenants add their own roles on
-// top of these (see role.service.js#createRole).
-//
-// Mirrors flowpos-backend's Role::SUPER_ADMIN convention, where the super-admin
-// role is likewise special-cased rather than permission-checked.
+// Protected per-tenant roles; Admin is the owner (superadmin is User.role).
 const SYSTEM_ROLE = Object.freeze({
-  SUPER_ADMIN: "Super Admin",
   ADMIN: "Admin",
   STAFF: "Staff",
 });
 
-// A membership is how a user belongs to ONE organisation. The same person can
-// hold several, each with its own role — which is why role lives here and not
-// on the User.
+// Pre-rename owner role; treated as Admin until migrateTenantAdminRoles runs.
+const LEGACY_OWNER_ROLE = "Super Admin";
+const TENANT_ADMIN_ROLE_NAMES = Object.freeze([SYSTEM_ROLE.ADMIN, LEGACY_OWNER_ROLE]);
+
+// Role lives on the membership, so one person can hold a role per tenant.
 const MEMBERSHIP_STATUS = Object.freeze({
   ACTIVE: "active",
   SUSPENDED: "suspended",
 });
+
+// "Last active" is stamped at most this often, so auth rarely writes.
+const LAST_ACTIVE_THROTTLE_MS = 5 * 60 * 1000;
 
 const INVITE_STATUS = Object.freeze({
   PENDING: "pending",
@@ -28,8 +26,11 @@ const INVITE_STATUS = Object.freeze({
   REVOKED: "revoked",
 });
 
-// How long an invite link stays redeemable. Matches flowpos-backend's
-// USER_INVITE_EXPIRY_DAYS default.
-const INVITE_EXPIRY_DAYS = Number(process.env.USER_INVITE_EXPIRY_DAYS || 7);
-
-module.exports = { SYSTEM_ROLE, MEMBERSHIP_STATUS, INVITE_STATUS, INVITE_EXPIRY_DAYS };
+module.exports = {
+  SYSTEM_ROLE,
+  LEGACY_OWNER_ROLE,
+  TENANT_ADMIN_ROLE_NAMES,
+  MEMBERSHIP_STATUS,
+  LAST_ACTIVE_THROTTLE_MS,
+  INVITE_STATUS,
+};

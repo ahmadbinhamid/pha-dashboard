@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { SaveStatusText } from "@/components/shared/SaveStatusText";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SettingsHeaderActions } from "@/context/settingsHeaderActions";
@@ -9,9 +11,12 @@ import { IntegrationCard, type IntegrationStatus } from "@/components/settings/I
 import { StripeKeysCard, STRIPE_KEYS_FORM_ID } from "@/components/tenant-settings/StripeKeysCard";
 import { SmtpSettingsCard, SMTP_SETTINGS_FORM_ID } from "@/components/tenant-settings/SmtpSettingsCard";
 import { PaymentDomainForm, PAYMENT_DOMAIN_FORM_ID } from "@/components/tenant-settings/PaymentDomainForm";
+import { TransdirectSettingsCard, TRANSDIRECT_SETTINGS_FORM_ID } from "@/components/shipping-settings/TransdirectSettingsCard";
+import { SHIPPING_SETTINGS_QUERY_KEY, getShippingSettings } from "@/lib/api/shipping";
 import { EbayConnectCard } from "@/components/ebay-settings/EbayConnectCard";
 import { EbaySettingsForm, EBAY_SETTINGS_FORM_ID } from "@/components/ebay-settings/EbaySettingsForm";
 import { GoogleConnectCard } from "@/components/google-settings/GoogleConnectCard";
+import { CategoryMappingsPanel } from "@/components/category-mappings/CategoryMappingsPanel";
 import DomainsPage from "@/pages/erp/settings/DomainsPage";
 import { getEbaySettings } from "@/lib/api/ebay";
 import { getChannels } from "@/lib/api/channels";
@@ -50,9 +55,11 @@ function EbayPanel() {
     <div className="space-y-6">
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={EBAY_SETTINGS_FORM_ID} disabled={!settings || state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={EBAY_SETTINGS_FORM_ID} disabled={!settings || state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
 
       <EbayConnectCard />
@@ -67,9 +74,11 @@ function StripePanel() {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={STRIPE_KEYS_FORM_ID} disabled={state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={STRIPE_KEYS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       <StripeKeysCard onMutationStateChange={setState} />
     </>
@@ -82,9 +91,11 @@ function PaymentLinksPanel({ settings }: { settings?: TenantSettings }) {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={PAYMENT_DOMAIN_FORM_ID} disabled={!settings || state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={PAYMENT_DOMAIN_FORM_ID} disabled={!settings || state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       {settings ? <PaymentDomainForm settings={settings} onMutationStateChange={setState} /> : <SkeletonCard />}
     </>
@@ -97,11 +108,30 @@ function EmailPanel() {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={SMTP_SETTINGS_FORM_ID} disabled={state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={SMTP_SETTINGS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       <SmtpSettingsCard onMutationStateChange={setState} />
+    </>
+  );
+}
+
+function TransdirectPanel() {
+  const [state, setState] = useState<MutationState>(IDLE);
+  return (
+    <>
+      <SettingsHeaderActions>
+        <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
+        <Can permission={PERMISSIONS.shipping.update}>
+          <Button type="submit" form={TRANSDIRECT_SETTINGS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
+      </SettingsHeaderActions>
+      <TransdirectSettingsCard onMutationStateChange={setState} />
     </>
   );
 }
@@ -117,11 +147,11 @@ export function IntegrationsTab({
 }) {
   // Stripe's status rides along on tenant settings; SMTP has its own endpoint.
   const { data: smtpRes } = useQuery({ queryKey: ["smtp-status"], queryFn: getSmtpStatus });
-  // Shared queryKeys with EbayConnectCard/GoogleConnectCard/DomainsPage, so
-  // visiting a detail panel warms the cache the overview grid reads from.
+  // Shares queryKeys with the detail panels, so visiting one warms this grid.
   const { data: ebayRes } = useQuery({ queryKey: ["ebay-settings"], queryFn: getEbaySettings });
   const { data: channelsRes } = useQuery({ queryKey: ["channels"], queryFn: getChannels });
   const { data: domainsRes } = useQuery({ queryKey: ["domains"], queryFn: getDomains });
+  const { data: shippingRes } = useQuery({ queryKey: SHIPPING_SETTINGS_QUERY_KEY, queryFn: getShippingSettings });
 
   const stripeStatus: IntegrationStatus = settings?.stripe_connection_status ?? "unknown";
   const smtpStatus: IntegrationStatus = smtpRes?.data?.connection_status ?? "unknown";
@@ -139,6 +169,22 @@ export function IntegrationsTab({
     : "unknown";
   const paymentLinksStatus: IntegrationStatus =
     settings?.payment_domain_mode === "vendor_slug" ? "connected" : "not_connected";
+  const transdirectStatus: IntegrationStatus = shippingRes?.data
+    ? shippingRes.data.transdirect_configured
+      ? "connected"
+      : "not_connected"
+    : "unknown";
+  // Every catalogue entry must map to a status (enforced by the Record type).
+  const statusById: Record<IntegrationId, IntegrationStatus> = {
+    ebay: ebayStatus,
+    google: googleStatus,
+    "channel-categories": "unknown",
+    stripe: stripeStatus,
+    email: smtpStatus,
+    transdirect: transdirectStatus,
+    domains: domainsStatus,
+    "payment-links": paymentLinksStatus,
+  };
 
   if (providerId) {
     const label = findIntegration(providerId)?.name ?? "Integration";
@@ -159,10 +205,14 @@ export function IntegrationsTab({
           <EbayPanel />
         ) : providerId === "google" ? (
           <GoogleConnectCard />
+        ) : providerId === "channel-categories" ? (
+          <CategoryMappingsPanel />
         ) : providerId === "stripe" ? (
           <StripePanel />
         ) : providerId === "email" ? (
           <EmailPanel />
+        ) : providerId === "transdirect" ? (
+          <TransdirectPanel />
         ) : providerId === "payment-links" ? (
           <PaymentLinksPanel settings={settings} />
         ) : (
@@ -175,10 +225,7 @@ export function IntegrationsTab({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {INTEGRATION_CATALOGUE.map((integration) => {
-        // "Custom Domains" stands in for the tenant's own storefront — once
-        // they've uploaded a logo (Branding settings), show that instead of
-        // the generic Globe fallback, same idea as eBay/Google showing their
-        // own mark rather than a placeholder shopping-bag icon.
+        // Stands in for the storefront: show the tenant logo once uploaded.
         const icon =
           integration.id === "domains" && settings?.logo_url ? (
             <img src={settings.logo_url} alt="" className="h-full w-full object-contain" />
@@ -193,19 +240,7 @@ export function IntegrationsTab({
             description={integration.description}
             icon={icon}
             logoTile={integration.logoTile}
-            status={
-              integration.id === "stripe"
-                ? stripeStatus
-                : integration.id === "email"
-                  ? smtpStatus
-                  : integration.id === "ebay"
-                    ? ebayStatus
-                    : integration.id === "google"
-                      ? googleStatus
-                      : integration.id === "domains"
-                        ? domainsStatus
-                        : paymentLinksStatus
-            }
+            status={statusById[integration.id]}
             onManage={() => onSelectProvider(integration.id)}
           />
         );

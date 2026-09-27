@@ -10,8 +10,7 @@ interface InventoryStockLocationSummaryProps {
   nextLabel?: string;
 }
 
-// Shared "Location / stock count" info box used by both Adjust Stock and Set
-// Stock — previously each dialog reimplemented this inline.
+// Shared "Location / stock count" info box used by Adjust Stock and Set Stock, previously reimplemented inline in each.
 export function InventoryStockLocationSummary({
   locationName,
   currentLabel = "Current",

@@ -3,6 +3,8 @@ import type { BeResponse } from "./base";
 import type {
   Invitation,
   InvitationPreview,
+  InviteResult,
+  MyAccess,
   Member,
   MembershipStatus,
   MyOrganisation,
@@ -10,7 +12,7 @@ import type {
   Role,
 } from "@/types/access";
 
-// ── Members ─────────────────────────────────────────────────────────────────
+// ── Members ──
 
 export const getMembers = async () => {
   const { data } = await apiClient.get<BeResponse<Member[]>>("/members");
@@ -29,19 +31,26 @@ export const removeMember = async (userId: string) => {
   return data;
 };
 
+export const MY_ACCESS_QUERY_KEY = ["my-access"] as const;
+
+export const getMyAccess = async () => {
+  const { data } = await apiClient.get<BeResponse<MyAccess>>("/members/me/access");
+  return data;
+};
+
 export const getMyOrganisations = async () => {
   const { data } = await apiClient.get<BeResponse<MyOrganisation[]>>("/members/me/organisations");
   return data;
 };
 
-// ── Roles ───────────────────────────────────────────────────────────────────
+// ── Roles ──
 
 export const getRoles = async () => {
   const { data } = await apiClient.get<BeResponse<Role[]>>("/roles");
   return data;
 };
 
-/** The catalogue the permission matrix renders from — served, not duplicated. */
+/** The permission catalogue the matrix renders from (served, not copied). */
 export const getPermissionGroups = async () => {
   const { data } = await apiClient.get<BeResponse<PermissionGroup[]>>("/roles/permissions");
   return data;
@@ -70,19 +79,16 @@ export const deleteRole = async (id: string) => {
   return data;
 };
 
-// ── Invitations ─────────────────────────────────────────────────────────────
+// ── Invitations ──
 
 export const getInvitations = async () => {
   const { data } = await apiClient.get<BeResponse<Invitation[]>>("/invitations");
   return data;
 };
 
-/**
- * The response carries `link` — the only moment a shareable link exists,
- * since the server stores only its hash. Copy it now or resend for a new one.
- */
-export const sendInvitation = async (payload: { email: string; role_id: string }) => {
-  const { data } = await apiClient.post<BeResponse<Invitation>>("/invitations", payload);
+/** Adds someone with a role; the result says if they were invited or added. */
+export const sendInvitation = async (payload: { first_name: string; last_name: string; email: string; role_id?: string }) => {
+  const { data } = await apiClient.post<BeResponse<InviteResult>>("/invitations", payload);
   return data;
 };
 
@@ -96,10 +102,16 @@ export const revokeInvitation = async (id: string) => {
   return data;
 };
 
-// ── The invitee's side (public / newly signed-in) ───────────────────────────
+// ── The invitee's side (public or newly signed in) ──
 
 export const getInvitationByToken = async (token: string) => {
   const { data } = await apiClient.get<BeResponse<InvitationPreview>>(`/invitations/token/${encodeURIComponent(token)}`);
+  return data;
+};
+
+/** Sets a new member's first password from their invite link. */
+export const activateInvitation = async (token: string, password: string) => {
+  const { data } = await apiClient.post<BeResponse<{ email: string }>>(`/invitations/token/${encodeURIComponent(token)}/activate`, { password });
   return data;
 };
 

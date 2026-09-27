@@ -3,10 +3,13 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { PaletteRow } from "@/components/shell/CommandPaletteRow";
 import { CommandPaletteSection } from "@/components/shell/CommandPaletteSection";
-import { NAV_ITEMS } from "@/config/nav";
+import { visibleNavItems } from "@/config/nav";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 import { getProducts } from "@/lib/api/products";
 import { getOrders } from "@/lib/api/orders";
@@ -45,6 +48,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { can } = useMyAccess();
   const trimmed = query.trim();
   const hasQuery = debouncedQuery.length > 0;
 
@@ -65,7 +69,7 @@ export function CommandPalette({
       setQuery("");
       setDebouncedQuery("");
       setActiveIndex(0);
-      // Focus after the dialog's own mount/animation frame.
+      // Focus after the dialog's own mount/animation frame
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -73,12 +77,12 @@ export function CommandPalette({
   const pageResults = useMemo(
     () =>
       trimmed
-        ? NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(trimmed.toLowerCase())).slice(
+        ? visibleNavItems(can).filter((item) => item.label.toLowerCase().includes(trimmed.toLowerCase())).slice(
             0,
             RESULT_LIMIT.pages,
           )
         : [],
-    [trimmed],
+    [trimmed, can],
   );
 
   const {
@@ -88,7 +92,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "products", debouncedQuery],
     queryFn: () => getProducts({ search: debouncedQuery, limit: RESULT_LIMIT.products }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.products.view),
     retry: false,
   });
   const products = productsRes?.data?.items ?? [];
@@ -100,7 +104,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "orders", debouncedQuery],
     queryFn: () => getOrders({ search: debouncedQuery, limit: RESULT_LIMIT.orders }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.orders.view),
     retry: false,
   });
   const orders = ordersRes?.data?.items ?? [];
@@ -112,7 +116,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "customers", debouncedQuery],
     queryFn: () => getCustomers({ search: debouncedQuery, limit: RESULT_LIMIT.customers }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.customers.view),
     retry: false,
   });
   const customers = customersRes?.data?.items ?? [];
@@ -121,9 +125,7 @@ export function CommandPalette({
     onOpenChange(false);
   }
 
-  // Flattened in the same order every section renders in, so Up/Down/Enter
-  // can move across Pages → Products → Orders → Customers with one shared
-  // index instead of each section owning separate keyboard state.
+  // Flat list in render order so Up/Down/Enter share one index across sections.
   const flatEntries = useMemo(() => {
     const entries: { id: string; onSelect: () => void }[] = [];
     for (const item of pageResults) {
@@ -161,11 +163,7 @@ export function CommandPalette({
 
   const anyLoading = productsLoading || ordersLoading || customersLoading;
   const anyErrored = productsErrored || ordersErrored || customersErrored;
-  // A section that failed to search isn't the same as one that genuinely
-  // found nothing — surfacing that distinction (rather than the query
-  // silently reading as an empty array) is what caught product search
-  // returning zero everywhere because its backing search service was
-  // unreachable, not because nothing matched.
+  // Distinguish a failed search from zero results so outages aren't silent.
   const noResults = hasQuery && !anyLoading && !anyErrored && flatEntries.length === 0;
 
   return (
@@ -189,13 +187,7 @@ export function CommandPalette({
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <div className="shrink-0 border-b border-border p-3">
-            {/* A plain `outline-none` on the input loses to this app's global,
-                unlayered :focus-visible rule (globals.css) — same fix as
-                Input.tsx: `!` to actually win, plus the same rounded
-                border+glow focus treatment Input.tsx uses instead of a bare
-                outline, applied to the whole row via focus-within since the
-                border/glow belongs on this rounded container, not the
-                borderless <input> itself. */}
+            {/* `!` beats globals.css :focus-visible, as in Input.tsx; glow on the box */}
             <div
               className={cn(
                 "flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2.5",
@@ -203,12 +195,13 @@ export function CommandPalette({
               )}
             >
               <Search className="h-4 w-4 shrink-0 text-fg/40" />
-              <input
+              <Input
                 ref={inputRef}
+                variant="ghost"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search products, SKUs, orders, customers…"
-                className="w-full bg-transparent text-sm text-fg outline-none! placeholder:text-fg/40"
+                className="h-auto w-full flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none placeholder:text-fg/40 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
               />
               <button
                 type="button"
@@ -338,7 +331,7 @@ export function CommandPalette({
 
           <div className="flex shrink-0 items-center justify-end border-t border-border px-4 py-2.5 text-xs text-fg/40">
             Press
-            <kbd className="mx-1.5 rounded-xs border border-border bg-bg-2 px-1.5 py-0.5 text-[10px] font-medium text-fg/50">
+            <kbd className="mx-1.5 rounded-xs border border-border bg-bg-2 px-1.5 py-0.5 text-3xs font-medium text-fg/50">
               ESC
             </kbd>
             to close

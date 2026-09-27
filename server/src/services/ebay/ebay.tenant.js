@@ -1,10 +1,5 @@
 // services/ebay/ebay.tenant.js
-//
-// eBay integration is multi-tenant — each tenant authorizes our one eBay
-// Application and gets their own EbaySettings record (refresh_token,
-// marketplace, warehouse address, policies). This resolves the full set of
-// {tenant, settings} pairs the poller/worker needs to iterate, and a
-// single-tenant lookup by id for request-scoped (webhook, controller) paths.
+// Resolves {tenant, settings} pairs for the poller/worker across all eBay-connected tenants.
 
 const Tenant = require("../../models/Tenant");
 const { listConfiguredTenants } = require("./ebay.settings.service");

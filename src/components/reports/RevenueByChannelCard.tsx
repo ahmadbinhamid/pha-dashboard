@@ -6,17 +6,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CHANNEL_COLOR_VARS } from "@/config/categoricalColors";
 import type { OrderChannel } from "@/types/orders";
 import type { RevenueByChannelRow } from "@/types/reports";
-
-const CHANNEL_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
-];
 
 function channelLabel(key: string) {
   return ORDER_CHANNEL_LABEL[key as OrderChannel] ?? key;
@@ -47,7 +39,7 @@ export function RevenueByChannelCard({ rows, loading }: { rows: RevenueByChannel
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-[10px] font-medium uppercase text-fg/40">Total Revenue</span>
+              <span className="text-3xs font-medium uppercase text-fg/40">Total Revenue</span>
               <span className="text-sm font-bold text-fg">{formatCurrencyFromCents(totalCents)}</span>
             </div>
           </div>
@@ -66,14 +58,14 @@ export function RevenueByChannelCard({ rows, loading }: { rows: RevenueByChannel
               </div>
               <div className="text-right">
                 <span className="font-bold text-fg">{row.pct.toFixed(1)}%</span>
-                <span className="block text-[11px] text-fg/40">{formatCurrencyFromCents(row.revenueCents)}</span>
+                <span className="block text-2xs text-fg/40">{formatCurrencyFromCents(row.revenueCents)}</span>
               </div>
             </div>
           ))}
         </div>
       </CardContent>
 
-      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/listings")}>
+      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/channel-sync?status=all")}>
         View Channel Performance
       </Button>
     </Card>

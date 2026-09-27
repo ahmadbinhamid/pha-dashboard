@@ -1,17 +1,11 @@
 // services/marketplace/adapters/google.adapter.batch.test.js
-//
-// Task 3 (batch path) coverage: a per-item failure inside publishBatch must
-// not fail the rest of the batch, and sync.service.js#syncBatch must
-// respect each listing's own fencing token (push_seq/last_pushed_seq),
-// dropping a stale one exactly like syncListing does for a single listing.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/adapters/google.adapter.batch.test.js
+// publishBatch isolates item failures; syncBatch drops stale seqs. Needs Mongo.
 
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../../config");
 
@@ -26,7 +20,7 @@ const ChannelConnection = require("../../../models/ChannelConnection");
 const ChannelSyncLog = require("../../../models/ChannelSyncLog");
 const { encrypt, packCiphertext } = require("../../../utils/crypto/tokenCipher");
 const { DOMAIN_STATUS } = require("../../../constants/domain.constants");
-const { resolveListing } = require("../listing.resolver");
+const { resolveListing, hydrateResolved } = require("../listing.resolver");
 const registry = require("../registry");
 
 const googleAdapter = require("./google.adapter");
@@ -42,15 +36,7 @@ function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) };
 }
 
-// TASK 1 (this run): a zero-photo product is now rejected the same way a
-// bad-URL one is (see google.adapter.js#buildProductInputFromResolved's own
-// comment) — makeTenantWithListings below gives every product a real
-// Attachment so sync.service.js#syncBatch's own real Mongoose population
-// resolves an actual usable image, exercising the real success path rather
-// than the (now-rejected) photo-less one. Attachment.url is a virtual built
-// from config.uploads.url (utils/attachment.js#buildAttachmentUrl) — this
-// env's real UPLOADS_URL is plain http://, so it's overridden to a fake
-// https:// host for the life of this file, restored after.
+// Zero-photo products are rejected, so fixtures get https photos (env is http).
 let originalUploadsUrl;
 before(() => {
   originalUploadsUrl = config.uploads.url;
@@ -62,7 +48,7 @@ after(() => {
 
 async function makeTenantWithListings(count) {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await Domain.create({
     tenant_id: tenantId,
@@ -149,6 +135,8 @@ test("publishBatch: a per-item failure is isolated — the rest of the batch sti
     ),
   );
 
+  // Stock/URL lookups happen in hydration, not in the adapter.
+  await hydrateResolved(resolvedList, googleAdapter, tenantId);
   const results = await googleAdapter.publishBatch(resolvedList, settings);
   assert.equal(results.length, 3);
   assert.equal(results[0].ok, true);
@@ -190,11 +178,7 @@ test("sync.service.js#syncBatch: respects the per-listing fencing token — a st
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  // A stale-seq skip is logged via the SKIPPED status, which
-  // logSyncEvent only writes when config.channels.logSuccesses is true
-  // (failures are always logged; skips/successes are opt-in — see
-  // sync.service.js) — needed here so the log-row assertion below has
-  // something to find.
+  // Skips log only with logSuccesses, so the log-row assertion below finds one.
   const originalLogSuccesses = config.channels.logSuccesses;
   config.channels.logSuccesses = true;
   t.after(() => {
@@ -204,11 +188,7 @@ test("sync.service.js#syncBatch: respects the per-listing fencing token — a st
   const { tenantId, listings } = await makeTenantWithListings(1);
   const { listing } = listings[0];
 
-  // Simulate "something newer already landed" between the cursor read and
-  // dispatch: bump push_seq (what the cursor will read as this item's
-  // "seq to apply") but set last_pushed_seq even HIGHER — exactly the
-  // state a newer single-listing sync_listing job landing concurrently
-  // would leave behind.
+  // Simulate a newer concurrent sync_listing job: push_seq < last_pushed_seq.
   await MarketplaceListing.updateOne({ _id: listing._id }, { $set: { push_seq: 3, last_pushed_seq: 5 } });
 
   const calls = [];
@@ -226,7 +206,7 @@ test("sync.service.js#syncBatch: respects the per-listing fencing token — a st
   assert.equal(logRow.status, "skipped");
   assert.equal(logRow.error_code, "stale_seq");
 
-  // last_pushed_seq must be untouched — still 5, not regressed to 3.
+  // last_pushed_seq must be untouched, not regressed to 3.
   const after = await MarketplaceListing.findById(listing._id).lean();
   assert.equal(after.last_pushed_seq, 5);
 });

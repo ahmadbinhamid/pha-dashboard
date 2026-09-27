@@ -10,6 +10,8 @@ import { BalanceDueBanner } from "@/components/orders/BalanceDueBanner";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { getTotalPaid, getBalanceDue } from "@/utils/paymentTotals";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { OrderChannel, OrderPaymentStatus, OrderPaymentSummary } from "@/types/orders";
 import type { Refund } from "@/types/refund";
 
@@ -33,16 +35,13 @@ export function OrderPaymentSummaryCard({
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const { can } = useMyAccess();
   const isManual = channel === "manual";
   const hasOutstandingBalance = paymentStatus === "pending_payment" || paymentStatus === "partially_paid";
-  // Collecting more only ever applies to manual/in-store sales — storefront
-  // and eBay orders are always settled in full by Stripe/the marketplace
-  // before they reach this card.
-  const canCollectMore = isManual && hasOutstandingBalance;
-  // refund-redesign-spec.md §7 — one refund action regardless of channel or
-  // settlement method now (the dialog auto-detects Stripe vs manual per
-  // payment allocation) — any payment actually collected can be refunded.
-  const canRefund = getTotalPaid(payments) > 0;
+  // Storefront and eBay orders arrive paid in full; only manual ones owe.
+  const canCollectMore = isManual && hasOutstandingBalance && can(PERMISSIONS.payments.create);
+  // One refund action for every channel; the dialog picks Stripe vs manual.
+  const canRefund = getTotalPaid(payments) > 0 && can(PERMISSIONS.orders.refund);
 
   if (payments.length === 0 && !isManual) {
     return <div className="py-6 text-center text-sm text-fg/50">No payment recorded for this order yet.</div>;
@@ -58,11 +57,7 @@ export function OrderPaymentSummaryCard({
         <span className="text-xs text-fg/50">of {formatCurrencyFromCents(total)}</span>
       </div>
 
-      {/* Gated on hasOutstandingBalance (not just balanceDue > 0) so a refund
-          never gets mistaken for money still owed — refunding a paid order
-          moves paymentStatus to refunded/partially_refunded, which leaves the
-          same arithmetic remainder as an uncollected balance but means the
-          opposite thing. */}
+      {/* A refund also leaves a remainder; only an unpaid status means owed. */}
       {isManual && hasOutstandingBalance && balanceDue > 0 && <BalanceDueBanner amount={balanceDue} />}
 
       {canCollectMore && (

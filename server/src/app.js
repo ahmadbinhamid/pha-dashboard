@@ -12,7 +12,7 @@ const config = require("./config");
 const routes = require("./routes");
 const domainService = require("./services/domain.service");
 
-// Register marketplace adapters — needed by the API process for endListing on delete
+// Register marketplace adapters, needed by the API process for endListing on delete.
 require("./services/marketplace/registerAdapters").registerAdapters();
 const { requestLogger, errorLogger } = require("./middlewares/logging");
 const notFound = require("./middlewares/notFound");
@@ -21,20 +21,16 @@ const requestId = require("./middlewares/requestId");
 
 const app = express();
 
-// Trust exactly one hop (nginx) so req.protocol resolves to "https" via
-// X-Forwarded-Proto, without trusting arbitrary client-supplied X-Forwarded-For
-// values — `true` trusts every hop, which lets clients spoof req.ip and bypass
-// IP-keyed rate limiting (see middlewares/rateLimit.js).
+// Trust exactly one hop (nginx), not `true` (every hop), which would let clients spoof
+// req.ip and bypass IP-keyed rate limiting.
 app.set("trust proxy", 1);
 
 // Core middlewares
 app.use(requestId);
 app.use(helmet());
 const allowedOrigins = config.cors.allowedOrigins;
-// Every tenant gets its own payment host (<slug>.PAYMENT_LINK_DOMAIN, e.g.
-// parts-hub-australia.autopartspro.au — see buildPaymentBaseUrl), so a fixed
-// allowedOrigins list can never enumerate them all. Accept any subdomain of
-// the configured payment domain in addition to the explicit list.
+// Every tenant gets its own payment host, so a fixed allowedOrigins list can't enumerate
+// them all — accept any subdomain of the configured payment domain too.
 const paymentDomain = config.payment.linkDomain;
 
 async function checkOrigin(origin, cb) {
@@ -48,12 +44,10 @@ async function checkOrigin(origin, cb) {
         return cb(null, true);
       }
     } catch {
-      // malformed Origin header — fall through to rejection
+      // malformed Origin header — fall through to rejection.
     }
   }
-  // A tenant's own DNS-verified custom domain (Settings > Domains) — see
-  // domain.service.js#getActiveHostnames. Only ever accepts hostnames that
-  // passed TXT-record verification, never a pending/unverified one.
+  // A tenant's own DNS-verified custom domain; only accepts hostnames that passed TXT verification.
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol === "https:") {
@@ -61,8 +55,7 @@ async function checkOrigin(origin, cb) {
       if (activeHostnames.includes(hostname)) return cb(null, true);
     }
   } catch {
-    // malformed Origin header, or the DB lookup failed — fall through to
-    // rejection rather than fail the request open.
+    // malformed Origin header, or the DB lookup failed — fall through to rejection, never fail open.
   }
   cb(new Error(`CORS: origin ${origin} not allowed`));
 }
@@ -71,16 +64,8 @@ app.use(
   cors({
     origin:
       allowedOrigins.length > 0
-        ? // NOTE (lint fix): was `async (origin, cb) => {...}` passed
-          // directly as `origin` — the `cors` package never awaits or
-          // attaches a handler to what this function returns, it only acts
-          // on `cb(...)` being called as a side effect. Every current path
-          // here does call cb(), but marking it async meant any future
-          // change that threw outside a try/catch would become an
-          // unhandled promise rejection (crashes the process on Node's
-          // default unhandledRejection behavior) instead of a normal CORS
-          // rejection. Wrapping the call site here — not async itself,
-          // its own uncaught throw routed to cb(err) — closes that off.
+        ? // Not async itself — the `cors` package never awaits the return value, only reacts to
+          // cb(). An async origin fn would turn a future uncaught throw into an unhandled rejection.
           (origin, cb) => {
             checkOrigin(origin, cb).catch((err) => cb(err));
           }
@@ -97,8 +82,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
-// Serve uploaded files
-// Override helmet's same-origin CORP so the FE (different port) can load images
+// Serve uploaded files; override helmet's same-origin CORP so the FE (different port) can load images.
 app.use("/uploads", (_req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();

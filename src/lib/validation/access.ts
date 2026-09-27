@@ -1,9 +1,10 @@
 import { z } from "zod";
 
-// Mirrors server/src/validators/access.validation.js, so the dialog catches
-// what the API would reject before a round trip.
+// Mirrors server access.validation.js to catch API rejections early.
 
 export const inviteMemberSchema = z.object({
+  first_name: z.string().trim().min(1, "First name is required").max(60),
+  last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().min(1, "An email address is required").email("Enter a valid email address"),
   role_id: z.string().min(1, "Choose a role"),
 });

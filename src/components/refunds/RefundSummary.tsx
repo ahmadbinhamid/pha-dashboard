@@ -1,11 +1,6 @@
 import { formatCurrencyFromCents } from "@/utils/format";
 
-// refund-redesign-spec.md §7 — "the client computes no money — post the
-// intent and render what /refundable and the response return." Before
-// submit, this shows an ESTIMATE built only from figures /refundable already
-// computed server-side (effective_unit_price × the quantity the admin
-// picked) — never re-derived discount/GST apportionment. The authoritative
-// total only ever comes from the POST response, shown once available.
+// refund-redesign-spec.md §7: the client computes no money — post the intent, render what the server returns. Before submit, shows an estimate from /refundable's own figures, never re-derived discount/GST; the authoritative total comes only from the POST response.
 export interface RefundSummaryFigures {
   items: number; // cents
   shipping: number;

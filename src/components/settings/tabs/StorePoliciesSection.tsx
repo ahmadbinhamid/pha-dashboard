@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { RichTextField } from "@/components/ui/RichTextField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SettingsSection } from "@/components/settings/SettingsSection";
@@ -42,14 +44,14 @@ export function StorePoliciesSection({ settings, loading }: { settings?: TenantS
       title="Fitment & Warranty Policies"
       description="Printed at the foot of every tax invoice, and shown to buyers before checkout."
       footer={
-        <>
+        <Can permission={PERMISSIONS.settings.update}>
           <Button variant="ghost" disabled={!settings || mutation.isPending} onClick={() => settings && setForm(toState(settings))}>
             Reset
           </Button>
           <Button variant="primary" disabled={mutation.isPending} onClick={() => mutation.mutate(form)}>
             {mutation.isPending ? "Saving…" : "Save Policies"}
           </Button>
-        </>
+        </Can>
       }
     >
       <div className="space-y-5">

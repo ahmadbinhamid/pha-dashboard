@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/ActionsMenu";
 import { OrderStatusSelect } from "@/components/orders/OrderStatusSelect";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderDeliveryMethodBadge } from "@/components/orders/OrderDeliveryMethodBadge";
 import { OrderItemsTable } from "@/components/orders/OrderItemsTable";
@@ -27,6 +28,8 @@ import { EditableOrderText } from "@/components/orders/EditableOrderText";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
 import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost, updateOrderReferenceNumber } from "@/lib/api/orders";
 import { useToast } from "@/context";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderAddress } from "@/types/orders";
@@ -90,6 +93,8 @@ export default function OrderDetailPage() {
   const { toast } = useToast();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
+  const { can } = useMyAccess();
+  const canUpdate = can(PERMISSIONS.orders.update);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["order", id],
@@ -116,15 +121,7 @@ export default function OrderDetailPage() {
     },
   });
 
-  // "Print Invoice" opens the same server-rendered PDF the "Download PDF"
-  // action uses (real, pre-paginated pdfkit output) in a new tab, rather
-  // than driving the browser's own print dialog off the on-page HTML — a
-  // browser print reflow has no reliable way to paginate a multi-page
-  // invoice cleanly (rows/sections splitting mid-content, or getting bumped
-  // to a fresh page with a large blank gap left behind), while a real PDF
-  // always paginates exactly as rendered. The window opens synchronously
-  // (before the PDF fetch) so the browser doesn't treat the later redirect
-  // as an unrelated popup and block it.
+  // Window opens before the fetch so popup blockers allow it.
   const printPdfMutation = useMutation({
     mutationFn: async () => {
       const printWindow = window.open("", "_blank");
@@ -134,8 +131,7 @@ export default function OrderDetailPage() {
         if (printWindow) {
           printWindow.location.href = url;
         } else {
-          // Popup blocked — fall back to a plain download so the invoice
-          // isn't lost, rather than silently doing nothing.
+          // Popup blocked: download instead so the invoice isn't lost.
           const link = document.createElement("a");
           link.href = url;
           link.download = `invoice-${id}.pdf`;
@@ -157,26 +153,18 @@ export default function OrderDetailPage() {
   if (isError || !order) return <NotFoundState />;
 
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
-  // Item-level discounts plus any legacy order-level discount (see
-  // Order.js's discount_amount comment) — a single combined figure, no
-  // longer split into an "Item Discount" line vs a separately-editable
-  // order-level one. Always shown, even when $0.
+  // Line discounts plus any legacy order-level discount, shown even at $0.
   const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, order.discount_amount);
-  // eBay and manual (in-store) orders can have their shipping cost and
-  // per-item price/discount corrected after the fact — storefront orders
-  // can't (see order.service.js#EDITABLE_CHANNELS).
-  const amountsEditable = order.channel === "ebay" || order.channel === "manual";
+  // Storefront orders are locked server-side (order.service EDITABLE_CHANNELS).
+  const amountsEditable = canUpdate && (order.channel === "ebay" || order.channel === "manual");
   const totalPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
-  // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
-  // in full, then refunded" (due $0) from "never paid in full, then refunded
-  // on top of that" (due reflects the real remaining shortfall).
+  // Paid-then-refunded owes $0; never-fully-paid still shows the shortfall.
   const totalDue = getBalanceDue(order.total, order.payments, order.payment_status);
 
   return (
     <div className="space-y-5 pb-24 print:pb-0">
-      {/* On-screen admin view — the actual invoice (matching what's emailed
-          to the customer) is rendered separately below, for print only. */}
+      {/* Screen view; the printable invoice renders separately below. */}
       <div className="space-y-5 print:hidden">
         <BreadcrumbNav items={[{ label: "Orders", href: "/orders" }, { label: formatOrderNumber(order.order_number_prefix, order.order_number) }]} />
 
@@ -195,7 +183,7 @@ export default function OrderDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start">
-            <OrderStatusSelect order={order} />
+            {canUpdate ? <OrderStatusSelect order={order} /> : <OrderStatusBadge status={order.fulfillment_status} />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="md" className="gap-2">
@@ -218,10 +206,12 @@ export default function OrderDetailPage() {
                   <Download className="h-3.5 w-3.5 text-fg/50" />
                   {downloadPdfMutation.isPending ? "Preparing…" : "Download PDF"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setEmailModalOpen(true)}>
-                  <Mail className="h-3.5 w-3.5 text-fg/50" />
-                  Send Email
-                </DropdownMenuItem>
+                {canUpdate && (
+                  <DropdownMenuItem onSelect={() => setEmailModalOpen(true)}>
+                    <Mail className="h-3.5 w-3.5 text-fg/50" />
+                    Send Email
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -246,11 +236,7 @@ export default function OrderDetailPage() {
         )}
 
         <div className="grid gap-5 lg:grid-cols-3">
-          {/* min-w-0 overrides the grid item's default min-width: auto — without
-              it, OrderItemsTable's own min-w (needed so its columns don't
-              crush together) forces this whole grid track wider than the
-              viewport instead of just scrolling internally, pushing the
-              entire page into horizontal scroll on mobile. */}
+          {/* min-w-0 lets the items table scroll instead of widening the grid. */}
           <div className="min-w-0 space-y-5 lg:col-span-2">
             <Card>
               <CardHeader title="Items" description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`} />
@@ -260,10 +246,6 @@ export default function OrderDetailPage() {
                   <span>Subtotal</span>
                   <span>{formatCurrencyFromCents(order.subtotal + totalDiscount)}</span>
                 </div>
-                {/* Sum of every line item's own discount (editable per line,
-                    in the items table above) plus any legacy order-level
-                    discount — always shown, even at $0, so it's never
-                    unclear whether an order has one. */}
                 <div className="flex justify-between text-fg/60">
                   <span>Discount</span>
                   <span>{totalDiscount > 0 ? `-${formatCurrencyFromCents(totalDiscount)}` : formatCurrencyFromCents(0)}</span>
@@ -317,16 +299,18 @@ export default function OrderDetailPage() {
               <CardHeader
                 title="Customer & Addresses"
                 right={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => setEditDetailsModalOpen(true)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
+                  canUpdate && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => setEditDetailsModalOpen(true)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  )
                 }
               />
               <CardContent className="grid gap-5 sm:grid-cols-2">
@@ -355,15 +339,19 @@ export default function OrderDetailPage() {
                 )}
                 <div>
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Order Number</div>
-                  <EditableOrderText
-                    orderId={order._id}
-                    label="Order Number"
-                    value={order.reference_number}
-                    placeholder="Add order number"
-                    mutationFn={updateOrderReferenceNumber}
-                    successMessage="Order number updated"
-                    errorMessage="Couldn't update order number"
-                  />
+                  {canUpdate ? (
+                    <EditableOrderText
+                      orderId={order._id}
+                      label="Order Number"
+                      value={order.reference_number}
+                      placeholder="Add order number"
+                      mutationFn={updateOrderReferenceNumber}
+                      successMessage="Order number updated"
+                      errorMessage="Couldn't update order number"
+                    />
+                  ) : (
+                    <span className="text-sm text-fg/60">{order.reference_number || "—"}</span>
+                  )}
                 </div>
                 {order.billing_address && (
                   <div>

@@ -7,6 +7,8 @@ import type {
   CategoryListData,
   Location,
   Attachment,
+  ProductListData,
+  ProductStats,
 } from "@/types/product";
 
 export interface ProductListParams {
@@ -20,14 +22,6 @@ export interface ProductListParams {
   channel?: string;
 }
 
-export interface ProductListData {
-  items: Product[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
 export const getProducts = async (params: ProductListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<ProductListData>>(
     "/product",
@@ -35,14 +29,6 @@ export const getProducts = async (params: ProductListParams = {}) => {
   );
   return data;
 };
-
-export interface ProductStats {
-  totalSkus: number;
-  totalStockUnits: number;
-  outOfStockCount: number;
-  avgPrice: number;
-  avgMarginPct: number | null;
-}
 
 export const getProductStats = async () => {
   const { data } = await apiClient.get<BeResponse<ProductStats>>("/product/stats");

@@ -36,9 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getProfile()
       .then((res) => setUser(res.data))
       .catch((err: Error & { status?: number }) => {
-        // Only kill the session on a genuine auth failure (401).
-        // Network errors, 500s, timeouts etc. should NOT log the user out —
-        // the axios interceptor already handles the 401 → redirect case.
+        // Only kill the session on a genuine 401 — network errors/500s/timeouts shouldn't log the user out (the axios interceptor handles the 401 redirect).
         if (err.status === 401) {
           queryClient.clear();
           clearToken();
@@ -53,12 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setAuth = useCallback(
     (user: AuthUser, token: string) => {
-      // The query client is a single app-wide instance shared across every
-      // tenant session — without clearing it here, logging in as a
-      // different tenant right after another one's session re-renders
-      // whatever tenant-scoped queries (orders, products, dashboard stats,
-      // ...) are still cached under the same query keys, until a manual
-      // page refresh rebuilds the client from scratch. Found live.
+      // Query client is a single app-wide instance shared across tenant sessions — without clearing it, logging in as a different tenant re-renders the previous tenant's still-cached queries until a manual refresh.
       queryClient.clear();
       setToken(token);
       setTokenState(token);

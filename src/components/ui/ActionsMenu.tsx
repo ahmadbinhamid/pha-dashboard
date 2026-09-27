@@ -15,12 +15,7 @@ const DropdownMenuTrigger = React.forwardRef<
   <DropdownMenuPrimitive.Trigger
     ref={ref}
     asChild={asChild}
-    // The default icon-button sizing (fixed 28px square, muted text) is only
-    // right for the bare "···" trigger below — with asChild, the caller
-    // supplies its own fully-styled element (e.g. a labelled Button), and
-    // Radix's Slot merges these classes onto it regardless, so applying them
-    // unconditionally clipped/greyed out any asChild trigger that wasn't
-    // also a 28px icon square. Only the bare (non-asChild) trigger gets them.
+    // The default 28px icon-button sizing is only right for the bare "···" trigger — asChild callers supply their own styled element, so only non-asChild triggers get these classes.
     className={cn(
       !asChild &&
         "flex h-7 w-7 items-center justify-center rounded-md text-fg/40 outline-none transition hover:bg-bg-2 hover:text-fg data-[state=open]:bg-bg-2 data-[state=open]:text-fg",
@@ -61,13 +56,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      // outline-none! (not plain outline-none) — globals.css's :focus-visible
-      // ring is an unlayered rule, so it wins over a plain Tailwind utility
-      // regardless of source order; only the `!important` form actually
-      // suppresses it. Needed here because Radix gives a highlighted item
-      // real DOM focus (roving tabindex) on hover/keyboard nav, and the
-      // item's own focus:bg-* already communicates "highlighted" — the gold
-      // ring on top of that was the bug being fixed.
+      // outline-none! needed since globals.css's unlayered :focus-visible rule otherwise beats a plain utility — Radix gives highlighted items real DOM focus, and focus:bg-* already communicates "highlighted".
       "flex w-full cursor-default select-none items-center gap-2.5 px-3 py-2 text-sm outline-none! transition",
       destructive
         ? "text-danger focus:bg-danger/8"

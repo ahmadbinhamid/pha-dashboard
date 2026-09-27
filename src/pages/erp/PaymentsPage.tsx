@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
@@ -86,7 +86,7 @@ export default function PaymentsPage() {
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
+          <SingleSelect size="sm" options={STATUS_FILTERS} value={status} onChange={setStatus} />
           {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
         </div>
 

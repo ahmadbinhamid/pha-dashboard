@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Badge } from "@/components/ui/Badge";
 import {
   Modal,
@@ -31,9 +31,7 @@ interface AdjustStockDialogProps {
 
 const EMPTY_FORM: AdjustStockFormValues = { adjustment: 0, type: "", note: "" };
 
-// Relative +/- stock change — distinct from Set Stock's absolute count. The
-// reason dropdown's options flip with the sign of the adjustment (you can't
-// "restock" a decrease, or mark an increase "damaged").
+// Relative +/- change (Set Stock is absolute); reasons depend on the sign.
 export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -71,8 +69,7 @@ export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?._id]);
 
-  // Reset the reason whenever the adjustment flips from increase to decrease
-  // (or vice versa) — the previous choice may no longer be a valid option.
+  // A sign flip may invalidate the previous reason, so reset it.
   useEffect(() => {
     const sign = adjustment > 0 ? 1 : adjustment < 0 ? -1 : 0;
     if (sign !== 0 && sign !== prevSignRef.current) setValue("type", "");
@@ -89,9 +86,7 @@ export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps
     onSuccess: () => {
       toast({ title: "Stock adjusted", tone: "success" });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      // Product.stock_count is a separate cached copy (Products list, the
-      // product-edit page's live preview) — without this it stays stale
-      // until an unrelated action happens to invalidate it, or a reload.
+      // Product.stock_count is a separate cache (list, preview); refresh it too.
       queryClient.invalidateQueries({ queryKey: ["product"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       onOpenChange(false);
@@ -190,12 +185,20 @@ export function AdjustStockDialog({ item, onOpenChange }: AdjustStockDialogProps
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-fg">Reason</label>
-                <NativeSelect {...register("type")} disabled={adjustment === 0}>
-                  <option value="">{adjustment === 0 ? "Set adjustment first…" : "Select a reason…"}</option>
-                  {reasons.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </NativeSelect>
+                <Controller
+                  control={control}
+                  name="type"
+                  render={({ field }) => (
+                    <SingleSelect
+                      options={reasons}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      disabled={adjustment === 0}
+                      placeholder={adjustment === 0 ? "Set adjustment first…" : "Select a reason…"}
+                    />
+                  )}
+                />
               </div>
 
               <div className="space-y-1.5">

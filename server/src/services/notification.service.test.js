@@ -1,18 +1,11 @@
 // services/notification.service.test.js
-//
-// notifyNewOrder's recipient resolution (active admin/superadmin only —
-// never a plain "user"-role account, since routes/order.routes.js gates
-// every order-reading route behind admin/superadmin, so a "user"-role
-// account couldn't open the order a notification would link to anyway),
-// the websocket push, and the list/mark-read API surface.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/notification.service.test.js
+// notifyNewOrder recipients (active admins), push, list/mark-read. Needs Mongo.
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -21,10 +14,7 @@ const User = require("../models/User");
 const websocketService = require("./websocket.service");
 const notificationService = require("./notification.service");
 
-// Single connection for the whole file — t.after() hooks run in
-// REGISTRATION order, not LIFO, so per-test connect/disconnect is a
-// footgun (see inventory-digest.service.test.js's own note on this, fixed
-// this same session).
+// One connection per file: t.after() runs in registration order, not LIFO.
 before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
 
@@ -43,7 +33,7 @@ async function makeUser(tenantId, { role = "user", status = "active" } = {}) {
 
 function makeFakeOrder(tenantId, overrides = {}) {
   return {
-    _id: new mongoose.Types.ObjectId(),
+    _id: fixtureId(),
     tenant_id: tenantId,
     order_number: `TEST-${crypto.randomUUID()}`,
     channel: "manual",
@@ -62,7 +52,7 @@ function cleanupNotifications(t, tenantId) {
 }
 
 test("notifyNewOrder: creates one Notification per active admin/superadmin, skips plain users and inactive admins", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const admin = await makeUser(tenantId, { role: "admin", status: "active" });
   const superadmin = await makeUser(tenantId, { role: "superadmin", status: "active" });
   const plainUser = await makeUser(tenantId, { role: "user", status: "active" });
@@ -93,7 +83,7 @@ test("notifyNewOrder: creates one Notification per active admin/superadmin, skip
 });
 
 test("notifyNewOrder: pushes a websocket event to exactly the notified recipients' rooms", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const admin = await makeUser(tenantId, { role: "admin", status: "active" });
   cleanupUsers(t, [admin]);
   cleanupNotifications(t, tenantId);
@@ -113,7 +103,7 @@ test("notifyNewOrder: pushes a websocket event to exactly the notified recipient
 });
 
 test("notifyNewOrder: a tenant with zero admin/superadmin users is a no-op — no Notification, no emit, no throw", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const plainUser = await makeUser(tenantId, { role: "user", status: "active" });
   cleanupUsers(t, [plainUser]);
   cleanupNotifications(t, tenantId);
@@ -132,8 +122,8 @@ test("notifyNewOrder: a tenant with zero admin/superadmin users is a no-op — n
 });
 
 test("listNotifications: pagination and unread_count are correct against a mix of read/unread fixtures", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
-  const otherTenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
+  const otherTenantId = fixtureId();
   const user = await makeUser(tenantId, { role: "admin" });
   cleanupUsers(t, [user]);
   cleanupNotifications(t, tenantId);
@@ -143,10 +133,8 @@ test("listNotifications: pagination and unread_count are correct against a mix o
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "A", message: "a", read_at: null },
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "B", message: "b", read_at: null },
     { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "C", message: "c", read_at: new Date() },
-    // Another tenant's notification to the SAME user id would be impossible
-    // in practice (a User belongs to one tenant), but a different user under
-    // a different tenant proves tenant scoping regardless.
-    { tenant_id: otherTenantId, user_id: new mongoose.Types.ObjectId(), type: "order.new", title: "D", message: "d", read_at: null },
+    // Same user id across tenants can't happen; a different user proves scoping.
+    { tenant_id: otherTenantId, user_id: fixtureId(), type: "order.new", title: "D", message: "d", read_at: null },
   ]);
   t.after(() => Notification.deleteMany({ _id: { $in: docs.map((d) => d._id) } }));
 
@@ -161,7 +149,7 @@ test("listNotifications: pagination and unread_count are correct against a mix o
 });
 
 test("markAsRead: only the requesting user's own notification can be marked read", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const owner = await makeUser(tenantId, { role: "admin" });
   const otherUser = await makeUser(tenantId, { role: "admin" });
   cleanupUsers(t, [owner, otherUser]);
@@ -186,8 +174,8 @@ test("markAsRead: only the requesting user's own notification can be marked read
 });
 
 test("markAllAsRead: only marks the requesting user's notifications within their own tenant", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
-  const otherTenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
+  const otherTenantId = fixtureId();
   const user = await makeUser(tenantId, { role: "admin" });
   cleanupUsers(t, [user]);
   cleanupNotifications(t, tenantId);

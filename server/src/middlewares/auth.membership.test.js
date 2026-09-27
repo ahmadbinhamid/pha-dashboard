@@ -1,16 +1,10 @@
 // middlewares/auth.membership.test.js
-//
-// How a request picks its organisation now that a user can belong to several.
-// The rule that matters for isolation: the X-Tenant-Id header only ever
-// SELECTS between organisations the caller already belongs to — it can never
-// grant access to one they don't.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/middlewares/auth.membership.test.js
+// X-Tenant-Id picks among the caller's orgs, never grants one. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const User = require("../models/User");
@@ -23,7 +17,7 @@ const { SYSTEM_ROLE, MEMBERSHIP_STATUS } = require("../constants/access.constant
 const { signJwt } = require("../utils/auth/jwt");
 const { auth, requirePermission } = require("./auth");
 
-/** Minimal Express doubles — enough to see which branch the middleware took. */
+/** Minimal Express doubles, enough to see which branch the middleware took. */
 function makeReq(token, headers = {}) {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
   return {
@@ -57,9 +51,9 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
 
-  const orgA = await Tenant.create({ name: `Auth A ${suffix}`, slug: `auth-a-${suffix}`, code: `AA${suffix.slice(0, 6)}`, company_name: `Auth A ${suffix}` });
-  const orgB = await Tenant.create({ name: `Auth B ${suffix}`, slug: `auth-b-${suffix}`, code: `AB${suffix.slice(0, 6)}`, company_name: `Auth B ${suffix}` });
-  const outsider = await Tenant.create({ name: `Auth X ${suffix}`, slug: `auth-x-${suffix}`, code: `AX${suffix.slice(0, 6)}`, company_name: `Auth X ${suffix}` });
+  const orgA = trackFixtureTenant(await Tenant.create({ name: `Auth A ${suffix}`, slug: `auth-a-${suffix}`, code: `AA${suffix.slice(0, 6)}`, company_name: `Auth A ${suffix}` }));
+  const orgB = trackFixtureTenant(await Tenant.create({ name: `Auth B ${suffix}`, slug: `auth-b-${suffix}`, code: `AB${suffix.slice(0, 6)}`, company_name: `Auth B ${suffix}` }));
+  const outsider = trackFixtureTenant(await Tenant.create({ name: `Auth X ${suffix}`, slug: `auth-x-${suffix}`, code: `AX${suffix.slice(0, 6)}`, company_name: `Auth X ${suffix}` }));
 
   const user = await User.create({
     tenant_id: orgA._id,
@@ -85,7 +79,7 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
     let out = await runMiddleware(auth(), req, res);
     assert.equal(out.nextCalled, true, "authenticated");
     assert.equal(String(req.tenantId), String(orgA._id), "defaults to the first organisation joined");
-    assert.ok(req.permissions.includes("settings.update"), "carries the Admin permissions of that org");
+    assert.ok(membershipService.requestPermissions(req).includes("users.create"), "carries the Admin permissions of that org");
 
     // Header → that organisation, with the role held THERE.
     req = makeReq(token, { "X-Tenant-Id": String(orgB._id) });
@@ -93,7 +87,7 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
     out = await runMiddleware(auth(), req, res);
     assert.equal(out.nextCalled, true);
     assert.equal(String(req.tenantId), String(orgB._id), "switches organisation");
-    assert.ok(!req.permissions.includes("settings.update"), "and switches to the Staff permissions held there");
+    assert.ok(!membershipService.requestPermissions(req).includes("users.create"), "and switches to the Staff permissions held there");
 
     // Header naming an organisation they don't belong to → refused.
     req = makeReq(token, { "X-Tenant-Id": String(outsider._id) });
@@ -122,7 +116,7 @@ test("requirePermission: gates on the role held in the ACTIVE organisation", asy
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
 
-  const org = await Tenant.create({ name: `Perm ${suffix}`, slug: `perm-${suffix}`, code: `PM${suffix.slice(0, 6)}`, company_name: `Perm ${suffix}` });
+  const org = trackFixtureTenant(await Tenant.create({ name: `Perm ${suffix}`, slug: `perm-${suffix}`, code: `PM${suffix.slice(0, 6)}`, company_name: `Perm ${suffix}` }));
   const user = await User.create({
     tenant_id: org._id,
     first_name: "Perm",
@@ -151,9 +145,12 @@ test("requirePermission: gates on the role held in the ACTIVE organisation", asy
     assert.equal(out.nextCalled, false, "refused what it doesn't");
     assert.equal(denied.statusCode, 403);
 
-    // Promote, and the same request-level check now passes.
-    await membershipService.updateMember(user._id, org._id, { roleId: roles[SYSTEM_ROLE.ADMIN]._id });
-    out = await runMiddleware(requirePermission("users.create"), req, makeRes());
+    // Move to a role that can invite: the next request, same token, passes.
+    const hiring = await roleService.createRole(org._id, { name: "Hiring", permissions: ["users.create"] });
+    await membershipService.updateMember(user._id, org._id, { roleId: hiring._id });
+    const next = makeReq(token);
+    await runMiddleware(auth(), next, makeRes());
+    out = await runMiddleware(requirePermission("users.create"), next, makeRes());
     assert.equal(out.nextCalled, true, "a role change takes effect without re-issuing the token");
   } finally {
     await Membership.deleteMany({ user_id: user._id });

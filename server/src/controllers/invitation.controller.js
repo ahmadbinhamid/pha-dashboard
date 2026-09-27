@@ -1,47 +1,47 @@
 // controllers/invitation.controller.js
-//
-// Thin: validates what the route didn't, calls invite.service, shapes the
-// response. Split across three audiences, matching how the routes are
-// mounted — the inviting organisation, and the invitee (signed in or not).
+// Thin: calls invite.service, sends the matching email, shapes the response.
 
 const config = require("../config");
 const { signJwt } = require("../utils/auth/jwt");
 const inviteService = require("../services/invite.service");
 const { getCompanyProfile } = require("../services/tenantSettings.service");
-const { sendTeamInvite } = require("../services/email/email.service");
+const { sendTeamInvite, sendTeamSetPassword, sendTeamAdded } = require("../services/email/email.service");
 const { success, created, notFound, systemfailure } = require("../utils/http/response");
 
-/**
- * The link the invitee clicks. The dashboard owns the landing page, so this
- * points at CLIENT_URL — the same base the other account emails use.
- */
-function buildInviteUrl(token) {
-  return `${config.emailBrand.clientUrl.replace(/\/$/, "")}/invite?token=${encodeURIComponent(token)}`;
+const clientUrl = (path) => `${config.emailBrand.clientUrl.replace(/\/$/, "")}${path}`;
+const setPasswordUrl = (token) => clientUrl(`/set-password?token=${encodeURIComponent(token)}`);
+// Pre-flow invites still land on the old join page.
+const legacyInviteUrl = (token) => clientUrl(`/invite?token=${encodeURIComponent(token)}`);
+
+const fullName = (user) => (user ? `${user.first_name} ${user.last_name}`.trim() : null);
+
+// Team emails come from the platform; the tenant appears only by name.
+async function teamEmailContext(tenantId, inviter) {
+  const companyProfile = await getCompanyProfile(tenantId);
+  return { organisationName: companyProfile?.company_name || "your team", inviterName: fullName(inviter) };
 }
 
-/**
- * Email the link, from the inviting organisation's own brand. Deliberately
- * not awaited-into-failure: the invite itself is already saved, so a mail
- * problem shouldn't fail the request and leave the dashboard thinking nothing
- * happened — the link comes back in the response either way.
- */
-async function deliverInvite({ tenantId, invitation, token, inviter }) {
-  const companyProfile = await getCompanyProfile(tenantId);
-  const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : null;
-
-  return sendTeamInvite({
-    to: invitation.email,
-    organisationName: companyProfile?.company_name || "your team",
-    inviterName,
-    roleName: invitation.role_id?.name || null,
-    inviteUrl: buildInviteUrl(token),
-    expiresAt: invitation.expires_at,
-    companyProfile,
-    tenantId,
+async function deliverSetPassword({ tenantId, email, firstName, token, inviter }) {
+  return sendTeamSetPassword({
+    ...(await teamEmailContext(tenantId, inviter)),
+    to: email,
+    firstName,
+    setPasswordUrl: setPasswordUrl(token),
+    expiresInHours: config.invites.expiryHours,
   });
 }
 
-// ── Inviting organisation ───────────────────────────────────────────────────
+async function deliverLegacyInvite({ tenantId, invitation, token, inviter }) {
+  return sendTeamInvite({
+    ...(await teamEmailContext(tenantId, inviter)),
+    to: invitation.email,
+    roleName: invitation.role_id?.name || null,
+    inviteUrl: legacyInviteUrl(token),
+    expiresAt: invitation.expires_at,
+  });
+}
+
+// ── Inviting organisation ──
 
 exports.listInvitations = async (req, res) => {
   try {
@@ -54,18 +54,28 @@ exports.listInvitations = async (req, res) => {
 
 exports.sendInvitation = async (req, res) => {
   try {
-    const { invitation, token } = await inviteService.sendInvite({
+    const { first_name, last_name, email, role_id } = req.body;
+    const result = await inviteService.inviteUser({
       tenantId: req.tenantId,
-      email: req.body.email,
-      roleId: req.body.role_id,
+      firstName: first_name,
+      lastName: last_name,
+      email,
+      roleId: role_id || null,
       invitedBy: req.user._id,
     });
 
-    await deliverInvite({ tenantId: req.tenantId, invitation, token, inviter: req.user });
+    if (result.mode === "added") {
+      await sendTeamAdded({
+        ...(await teamEmailContext(req.tenantId, req.user)),
+        to: email,
+        firstName: result.user.first_name,
+        loginUrl: clientUrl("/login"),
+      });
+      return created(res, { mode: "added", email }, "They already had an account and were added to this organisation");
+    }
 
-    // The only moment a shareable link exists — only its hash is stored, so
-    // it can't be recovered afterwards (see models/Invitation.js).
-    return created(res, { ...invitation, link: buildInviteUrl(token) });
+    await deliverSetPassword({ tenantId: req.tenantId, email, firstName: first_name, token: result.token, inviter: req.user });
+    return created(res, { mode: "invited", ...result.invitation }, "Invite sent");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -80,9 +90,13 @@ exports.resendInvitation = async (req, res) => {
     });
     if (!result) return notFound(res, "Invitation not found");
 
-    await deliverInvite({ tenantId: req.tenantId, invitation: result.invitation, token: result.token, inviter: req.user });
-
-    return success(res, { ...result.invitation, link: buildInviteUrl(result.token) });
+    const { invitation, token, pendingUser } = result;
+    if (pendingUser) {
+      await deliverSetPassword({ tenantId: req.tenantId, email: invitation.email, firstName: pendingUser.first_name, token, inviter: req.user });
+    } else {
+      await deliverLegacyInvite({ tenantId: req.tenantId, invitation, token, inviter: req.user });
+    }
+    return success(res, invitation, "Invite resent; the previous link no longer works");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -98,7 +112,7 @@ exports.revokeInvitation = async (req, res) => {
   }
 };
 
-// ── Invitee ─────────────────────────────────────────────────────────────────
+// ── Invitee ──
 
 /** Public: what the landing page shows before anyone signs in. */
 exports.getInvitationByToken = async (req, res) => {
@@ -106,6 +120,16 @@ exports.getInvitationByToken = async (req, res) => {
     const preview = await inviteService.getInvitePreview(req.params.token);
     if (!preview) return notFound(res, "That invitation link is no longer valid");
     return success(res, preview);
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+/** Public: sets the invitee's first password; the client then logs in. */
+exports.activateInvitation = async (req, res) => {
+  try {
+    const result = await inviteService.activateInvite(req.params.token, req.body.password);
+    return success(res, result, "Password set");
   } catch (err) {
     return systemfailure(res, err);
   }
@@ -132,8 +156,7 @@ exports.declineInvitation = async (req, res) => {
 exports.registerFromInvitation = async (req, res) => {
   try {
     const { user } = await inviteService.registerFromInvite(req.params.token, req.body);
-    // Signing them in here is what makes the link a one-step join; the token
-    // shape matches auth.controller's own login response.
+    // Signs them in so the link is a one-step join; same token shape as login.
     const token = signJwt({ sub: String(user._id), role: user.role });
     return created(res, { user, token }, "Account created");
   } catch (err) {

@@ -1,10 +1,7 @@
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/utils/cn";
 
-// One titled block of settings — the unit every tab is built from. Deliberately
-// not <CardHeader>/<CardContent>: those put a divider under a small-caps title,
-// whereas Settings leads each block with a heading + explanatory line and an
-// optional status chip opposite it, then closes with its own Save/Reset row.
+// One titled block of settings, the unit every tab is built from. Not <CardHeader>/<CardContent>: those divider under a small-caps title, whereas this leads with a heading + explanatory line and closes with its own Save/Reset row.
 export function SettingsSection({
   title,
   description,
@@ -20,8 +17,7 @@ export function SettingsSection({
   right?: React.ReactNode;
   /** Action row, divided off at the foot of the card (usually Reset + Save). */
   footer?: React.ReactNode;
-  /** Set false to drop the hairline above `footer` — for a card whose footer
-   * reads as its own block rather than a divided action row. */
+  /** Set false to drop the hairline above `footer`, for a footer that reads as its own block rather than a divided action row. */
   footerDivider?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -47,9 +43,7 @@ export function SettingsSection({
   );
 }
 
-// Two-column field grid — the layout every settings form in the reference
-// uses. Collapses to one column below `sm`, where side-by-side inputs get too
-// narrow to type in.
+// Two-column field grid used by every settings form; collapses to one column below `sm` where side-by-side inputs get too narrow.
 export function SettingsFieldGrid({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn("grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2", className)}>{children}</div>;
 }

@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { priceSchema, optionalNonNegativePriceSchema } from "@/lib/validation/commonFields";
 import { vehicleYearRangeSchema } from "@/lib/validation/commonFields";
-import type { StockEntry } from "@/types/product";
+import type { PackageFormState, StockEntry } from "@/types/product";
+import { missingPackageFields } from "@/lib/products/packageDimensions";
 import type { Attachment } from "@/types/product";
 
-// Fields the original hand-written validators (ProductCreatePage/EditPage)
-// never checked (categories, images, stock entries, notes, etc.) stay
-// permissive here too — this migration fixes the price/year validation
-// gaps that were found live, not adds new restrictions nobody asked for.
+// Price, package and year are checked; the rest stay permissive.
 const productFormShape = {
   title: z.string().trim().min(1, "Title is required"),
   description: z.string(),
@@ -25,6 +23,14 @@ const productFormShape = {
   vehicle_model_code: z.string(),
   vehicle_year: z.string(),
   vehicle_year_to: z.string(),
+  package: z.object({
+    length: optionalNonNegativePriceSchema("Length"),
+    width: optionalNonNegativePriceSchema("Width"),
+    height: optionalNonNegativePriceSchema("Height"),
+    weight: optionalNonNegativePriceSchema("Weight"),
+  }),
+  bay: z.string().trim().max(40, "Bay must be 40 characters or fewer"),
+  shipping_method: z.enum(["standard", "calculated"]),
   type: z.string(),
   status: z.string(),
   is_published_online: z.boolean(),
@@ -56,6 +62,14 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
       });
     }
 
+    // Transdirect can't quote without every dimension and the weight.
+    const pkg = (values as { package: PackageFormState }).package;
+    if ((values as { shipping_method: string }).shipping_method === "calculated") {
+      for (const key of missingPackageFields(pkg)) {
+        ctx.addIssue({ code: "custom", message: "Calculated shipping needs every package field", path: ["package", key] });
+      }
+    }
+
     const v = values as { vehicle_year: string; vehicle_year_to: string };
     const yearResult = vehicleYearRangeSchema.safeParse({ year_from: v.vehicle_year, year_to: v.vehicle_year_to });
     if (!yearResult.success) {
@@ -68,27 +82,23 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
   });
 }
 
-export const productCreateFormSchema = withPriceAndYearChecks({
-  ...productFormShape,
-  stock_entries: z.custom<StockEntry[]>(),
-  notes: z.array(z.string()),
-}).superRefine((values, ctx) => {
-  // Stock is always tracked (no "track stock" toggle) — the opening
-  // quantity for the single Main Warehouse location is required.
-  const entries = (values as { stock_entries: StockEntry[] }).stock_entries;
-  const qty = entries[0]?.qty;
-  if (entries.length === 0 || typeof qty !== "number" || qty < 0) {
-    ctx.addIssue({ code: "custom", message: "Stock quantity is required", path: ["stock_entries"] });
-  }
-});
-
-export const productEditFormSchema = withPriceAndYearChecks({
+// One shape for create and edit; each mode ignores the other's extras.
+export const productFormSchema = withPriceAndYearChecks({
   ...productFormShape,
   sku: z.string(),
   brand: z.string(),
   has_variants: z.boolean(),
   choices: z.custom<import("@/types/product").Choice[]>(),
+  stock_entries: z.custom<StockEntry[]>(),
+  notes: z.array(z.string()),
 });
 
-export type ProductCreateFormValues = z.infer<typeof productCreateFormSchema>;
-export type ProductEditFormValues = z.infer<typeof productEditFormSchema>;
+// Create also needs the opening quantity (stock is always tracked, no toggle).
+export const productCreateFormSchema = productFormSchema.superRefine((values, ctx) => {
+  const qty = values.stock_entries[0]?.qty;
+  if (values.stock_entries.length === 0 || typeof qty !== "number" || qty < 0) {
+    ctx.addIssue({ code: "custom", message: "Stock quantity is required", path: ["stock_entries"] });
+  }
+});
+
+export type ProductFormValues = z.infer<typeof productFormSchema>;

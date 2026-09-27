@@ -1,26 +1,12 @@
 // services/google/google.merchant.api.service.js
-//
-// Pure Merchant API HTTP layer — no DB access, no orchestration. Mirrors
-// ebay.api.service.js's shape: every function takes an already-valid access
-// token plus a per-tenant `settings` object, never caches a token or any
-// tenant-scoped state at module level.
+// Pure Merchant API HTTP layer (no DB/orchestration); mirrors ebay.api.service.js — token+settings passed per call, nothing cached at module level.
 
 const { logger } = require("../../loaders/logging");
 
-// v1beta was discontinued by Google on 2026-02-28 — see
-// google.datasource.service.js's own comment on the same migration.
+// v1beta was discontinued by Google 2026-02-28 — see google.datasource.service.js's migration note.
 const MERCHANT_API_BASE = "https://merchantapi.googleapis.com/products/v1";
 
-// NOTE on base URLs and the eBay environment-invariants precedent: this
-// module's base URL constants are NOT the same class of bug
-// ebay.environment-invariants.test.js guards against (a tenant-scoped
-// TOKEN paired with a base URL hardcoded to the WRONG of two environments).
-// Google's Merchant API has no sandbox/production URL split the way eBay
-// does — a Merchant Center "test account" changes which merchant_id you
-// push to, not the API host — so there is no second environment's base URL
-// this could be wrong against. What IS tenant-scoped (the access token) is
-// always threaded through as a per-call argument below, never cached or
-// hardcoded at module level.
+// Unlike eBay, Google has no sandbox/prod URL split (a test account just changes merchant_id), so there's no second base URL to guard against — only the token is tenant-scoped and always passed per call.
 
 function headersFor(token) {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };

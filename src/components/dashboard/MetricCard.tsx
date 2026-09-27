@@ -5,17 +5,8 @@ import { cn } from "@/utils/cn";
 
 export type MetricCardTone = "accent" | "danger" | "warn" | "ok";
 
-// Tailwind can't resolve a template-literal class like `bg-${tone}/10` at
-// build time — it only ever picks up classes it can see written out in full
-// in source, so each tone's full class string has to be spelled out here
-// rather than interpolated.
-//
-// `bar` is a two-stop gradient, same idea as the reference's per-card
-// gradient top edge (indigo→blue, rose→amber, etc). Where the reference
-// shifts hue entirely, ours only does that for `danger`, because
-// danger→warn (red→amber) are two real, distinct semantic tokens — the
-// other three fade the same token toward transparent instead of inventing
-// a second arbitrary color.
+// Tailwind can't resolve a template-literal class like `bg-${tone}/10` at build time, so each tone's full class string is spelled out here.
+// `bar` is a two-stop gradient; only `danger` shifts hue (to `warn`, both real semantic tokens) — the other three just fade the same token toward transparent.
 const TONE_STYLES: Record<
   MetricCardTone,
   { icon: string; iconHover: string; bar: string; ring: string; caption: string }
@@ -52,9 +43,7 @@ const TONE_STYLES: Record<
 
 export type MetricCardSize = "sm" | "md";
 
-// Two densities of the same card. "md" is the Dashboard's hero row; "sm" is
-// for pages where the numbers are context rather than the point of the page
-// (the Activity Log), so the cards shouldn't outweigh the content below them.
+// Two densities: "md" for the Dashboard's hero row, "sm" for pages (Activity Log) where numbers are context, not the point.
 const SIZE_STYLES: Record<MetricCardSize, { card: string; icon: string; value: string; gap: string; footer: string }> = {
   md: {
     card: "p-4 sm:p-5",
@@ -153,11 +142,7 @@ export function MetricCard({
       {loading ? (
         <Skeleton className={cn("h-7 w-20", sizeStyles.gap)} />
       ) : (
-        // flex-wrap + min-w-0 on the value — a long currency value next to a
-        // badge can exceed the card's width at some viewport sizes; without
-        // these the badge got hard-clipped by the card's overflow-hidden
-        // instead of wrapping to its own line. Found live: an extreme
-        // percentage badge ("+2094...") got cut off mid-character.
+        // flex-wrap + min-w-0: without these, a long value + badge got hard-clipped by overflow-hidden instead of wrapping (seen live with an extreme "+2094..." badge).
         <div className={cn("flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1", sizeStyles.gap)}>
           <span className={cn("min-w-0 truncate font-bold tracking-tight text-fg tabular-nums", sizeStyles.value)}>
             {value}

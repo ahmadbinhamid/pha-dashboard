@@ -59,7 +59,7 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
                   <div className="truncate text-sm font-semibold leading-tight tracking-tight">
                     {settings.storeName || APP_NAME}
                   </div>
-                  <div className="truncate text-[11px] text-fg/50">{APP_NAME}</div>
+                  <div className="truncate text-2xs text-fg/50">{APP_NAME}</div>
                 </>
               )}
             </div>

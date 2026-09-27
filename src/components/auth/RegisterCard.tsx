@@ -32,8 +32,7 @@ export function RegisterCard() {
 
   const registerMutation = useMutation({
     mutationFn: registerTenant,
-    // Active immediately — a brand-new tenant has no other admin to approve
-    // this account, so signup logs straight in, same as login's onSuccess.
+    // Active immediately: a new tenant has no other admin to approve this account.
     onSuccess: (res) => {
       if (!res.token || !res.data) {
         setErrorMsg("Unexpected server response. Please try again.");
@@ -61,8 +60,7 @@ export function RegisterCard() {
   return (
     <div className="w-full max-w-105">
       <div className="mb-6 flex flex-col items-center justify-center gap-2">
-        {/* The lockup already spells out the app name — no separate text label
-            beside it, or the name would show up twice. */}
+        {/* Lockup already spells out the app name — no separate label, or it'd show twice. */}
         <AppLogoMark className="h-12" />
         <div className="text-xs text-fg/60">Inventory &amp; Listings</div>
       </div>

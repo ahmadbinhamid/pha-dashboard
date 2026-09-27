@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 import Link from "@/components/ui/Link";
-import { LoginCheckbox } from "@/components/auth/LoginCheckbox";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { OtpInput } from "@/components/auth/OtpInput";
 
 type Step = "credentials" | "otp";
@@ -190,9 +190,9 @@ export function LoginCard() {
                   />
                 </div>
 
-                <LoginCheckbox
+                <Checkbox
                   checked={remember}
-                  onChange={setRemember}
+                  onChange={(e) => setRemember(e.target.checked)}
                   label="Keep me signed in on this device"
                 />
 

@@ -1,15 +1,9 @@
-// Client-side PDF export — same role csv.ts's downloadCsv played (the
-// Reports page has no backend report-generation feature, so this turns data
-// already loaded on the page into a real downloaded file), just producing an
-// actual PDF report instead of a raw CSV. Same (filename, rows) shape as
-// downloadCsv so every call site swaps over with no other changes.
+// Client-side PDF export, same role as csv.ts's downloadCsv (no backend report-generation feature, so this turns page-loaded data into a real file). Same (filename, rows) shape so every call site swaps over unchanged.
 
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
-// "avgOrderValue" -> "Avg Order Value", "items_sold" -> "Items Sold" — same
-// column keys the CSV export already used as headers verbatim; this just
-// makes them readable in a printed report instead of showing raw camelCase.
+// "avgOrderValue" -> "Avg Order Value": same column keys the CSV export used verbatim, made readable instead of showing raw camelCase.
 function humanizeHeader(key: string): string {
   return key
     .replace(/_/g, " ")
@@ -25,9 +19,7 @@ function cellText(value: unknown): string {
 
 export function downloadPdf(filename: string, rows: Record<string, unknown>[], options: { title?: string } = {}) {
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-  // Landscape once there are enough columns that portrait would squeeze
-  // them unreadably narrow — matches how wide the turnover export's
-  // per-category columns can get.
+  // Landscape once enough columns exist that portrait would squeeze them unreadably narrow, matching how wide the turnover export's per-category columns get.
   const doc = new jsPDF({ orientation: headers.length > 6 ? "landscape" : "portrait", unit: "pt" });
 
   const title = options.title ?? humanizeHeader(filename.replace(/\.pdf$/i, ""));

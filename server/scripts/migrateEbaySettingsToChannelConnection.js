@@ -66,8 +66,7 @@ async function run({ dryRun = false, tenantId = null, log = console.log, logErro
       // $setOnInsert (race-safe — see its own comment), same idempotent path
       // the lazy per-tenant read-through uses. Re-reading here instead of
       // inserting `fields` directly keeps this script and the lazy path
-      // provably doing the exact same thing, not two implementations that
-      // could drift.
+      // provably doing the exact same thing, not two implementations that could drift.
       const conn = await migrateFromLegacy(rowTenantId);
       if (!conn) {
         log(`  [SKIP] tenant ${rowTenantId}: no longer has an EbaySettings row (raced with a delete?)`);

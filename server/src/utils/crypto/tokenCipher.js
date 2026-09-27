@@ -1,10 +1,7 @@
 // utils/crypto/tokenCipher.js
-//
-// Reversible, app-level encryption for long-lived third-party credentials we
-// must store (e.g. a tenant's eBay refresh_token) — unlike passwords, these
-// need to be read back in plaintext to make API calls, so hashing (crypto.js)
-// doesn't apply here. AES-256-GCM: authenticated encryption, so a tampered
-// ciphertext fails to decrypt rather than silently returning garbage.
+// Reversible, app-level encryption for stored third-party credentials that must be read back
+// in plaintext to make API calls, unlike passwords. AES-256-GCM authenticates, so a tampered
+// ciphertext fails to decrypt rather than returning garbage.
 
 const crypto = require("crypto");
 const config = require("../../config");
@@ -22,9 +19,7 @@ function getKey() {
   return buf;
 }
 
-// Returns null in, null out — callers store this shape directly on a
-// Mongoose field group; encrypting `null` (nothing configured yet) should
-// stay `null`, not an encrypted empty string.
+// Returns null in, null out — encrypting "nothing configured yet" should stay null.
 function encrypt(plaintext) {
   if (plaintext == null) return { ciphertext: null, iv: null, tag: null };
 
@@ -53,21 +48,10 @@ function decrypt({ ciphertext, iv, tag }) {
 }
 
 // ── ciphertext packing ───────────────────────────────────────────────────────
-//
-// encrypt() above returns {ciphertext, iv, tag} — three base64 strings.
-// ChannelConnection's generic contract (see models/ChannelConnection.js) has
-// a single *_ct string per token slot, shared across every platform's cipher
-// output, so the three parts are packed into one delimited string here
-// rather than widening that schema per platform.
-// NOTE: base64 alphabets never contain ".", so joining/splitting on "." is
-// unambiguous and reversible.
-//
-// NOTE: services/ebay/ebay.settings.service.js already has its OWN private
-// copy of these exact two functions, predating this shared extraction. It
-// is intentionally left untouched and NOT switched over to import these —
-// this run's invariants forbid editing anything under services/ebay/. New
-// platforms (starting with Google) use this shared copy; eBay's copy stays
-// where it is.
+// Packs {ciphertext, iv, tag} into one delimited string for ChannelConnection's single *_ct
+// field per token slot. Base64 never contains ".", so joining/splitting on it is safe.
+// ebay.settings.service.js has its own private copy of these two functions predating this
+// extraction, deliberately left untouched; new platforms use this shared copy instead.
 function packCiphertext({ ciphertext, iv, tag }) {
   if (!ciphertext) return null;
   return `${iv}.${tag}.${ciphertext}`;

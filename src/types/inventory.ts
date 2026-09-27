@@ -50,10 +50,25 @@ export interface InventoryHistoryRecord {
   created_at: string;
 }
 
+export type DigestFrequency = "daily" | "weekly" | "monthly";
+
 export interface InventorySettings {
   _id: string;
   low_stock_threshold: number;
   email_notifications: boolean;
   notification_email: string | null;
+  // UTC "HH:MM"; the modal shows it in Sydney time.
   notification_send_time: string;
+  notification_frequency: DigestFrequency;
+  // Sydney weekday for weekly digests: 0 = Sunday ... 6 = Saturday.
+  notification_weekday: number;
+  notification_month_day: number;
+}
+
+export interface InventoryListData {
+  items: InventoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }

@@ -3,8 +3,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Input, type InputProps } from "@/components/ui/Input";
 import { cn } from "@/utils/cn";
 
-// Masked-by-default text input for secrets (API keys, webhook signing
-// secrets) — a show/hide toggle instead of always rendering plaintext.
+// Masked-by-default text input for secrets, with a show/hide toggle instead of always rendering plaintext.
 export function SecretInput({ className, ...props }: InputProps) {
   const [visible, setVisible] = useState(false);
 

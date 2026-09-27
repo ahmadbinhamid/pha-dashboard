@@ -1,15 +1,6 @@
 // services/ebay/ebay.order.mapper.js
-//
-// Pure transform: raw eBay Order resource (Sell Fulfillment API) -> the plain
-// shape order.service.js needs to build a local Order. No DB access here —
-// keeps the field-mapping logic (the part most likely to need tweaking once
-// we see real eBay payloads) isolated and independently testable from the
-// persistence logic in order.service.js.
-//
-// Field names below follow eBay's documented Order resource. eBay masks or
-// omits buyer PII in most regions (Managed Payments) — email/phone are best-
-// effort with clear placeholders when absent, never a hard failure, since we
-// still need to satisfy Order's required customer fields.
+// Pure transform: raw eBay Order resource -> the shape order.service.js needs, no DB access.
+// eBay masks/omits buyer PII (Managed Payments) — email/phone fall back to placeholders, never fail.
 
 const GST_DIVISOR = 11; // AU GST is 1/11 of a GST-inclusive price — same convention order.service.js uses
 
@@ -26,8 +17,7 @@ function mapCustomer(rawOrder, shipTo) {
   const username = rawOrder.buyer?.username || null;
   return {
     name: shipTo?.fullName || username || "eBay buyer",
-    // eBay rarely exposes a real email under Managed Payments — fall back to
-    // a clearly-marked placeholder rather than fail the required field.
+    // eBay rarely exposes a real email under Managed Payments — use a marked placeholder instead.
     email: shipTo?.email || (username ? `${username}@ebay.marketplace` : "unknown@ebay.marketplace"),
     phone: shipTo?.primaryPhone?.phoneNumber || shipTo?.phoneNumber || "Not provided",
   };
@@ -44,9 +34,7 @@ function mapShippingAddress(shipTo) {
   };
 }
 
-// Per line item: prefer the line's own total (covers quantity > 1 correctly),
-// fall back to per-unit cost, fall back to 0 with the item flagged for review
-// rather than guessing.
+// Prefer the line's own total (covers qty > 1), then per-unit cost, then 0 flagged for review.
 function mapLineItem(item) {
   const quantity = Number(item.quantity) || 1;
   const lineTotalRaw = item.total?.value;
@@ -70,22 +58,15 @@ function mapLineItem(item) {
   };
 }
 
-// eBay is documented to report lineItems[].total as the line's own
-// price/discount/tax — excluding shipping — but in practice some orders
-// (observed on Motors "freight"/calculated-shipping listings) report a
-// total that already folds the delivery cost in, which would otherwise
-// inflate that item's derived unit price by the shipping amount. eBay's
-// order-level pricingSummary.priceSubtotal is authoritative for what the
-// items themselves cost, so reconcile the per-line totals against it
-// whenever they disagree by more than incidental rounding.
+// Some Motors freight listings fold shipping into lineItems[].total; reconcile against the
+// authoritative pricingSummary.priceSubtotal whenever they disagree by more than rounding.
 function reconcileLineItemTotals(lineItems, subtotalCents) {
   if (!lineItems.length || subtotalCents == null) return;
 
   const sumCents = lineItems.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
   const diff = sumCents - subtotalCents;
 
-  // Rounding across N items can legitimately drift by ~1 cent per item —
-  // only reconcile when the mismatch is bigger than that.
+  // Only reconcile beyond ~1 cent/item of expected rounding drift.
   if (Math.abs(diff) <= lineItems.length) return;
 
   if (lineItems.length === 1) {
@@ -94,9 +75,7 @@ function reconcileLineItemTotals(lineItems, subtotalCents) {
     return;
   }
 
-  // Multiple items: prorate the authoritative subtotal across items in
-  // proportion to their (mismatched) reported totals, rather than trust
-  // any single one of them.
+  // Multiple items: prorate the authoritative subtotal across items by their reported totals.
   let allocated = 0;
   lineItems.forEach((li, idx) => {
     const isLast = idx === lineItems.length - 1;
@@ -108,9 +87,7 @@ function reconcileLineItemTotals(lineItems, subtotalCents) {
   });
 }
 
-// eBay's orderFulfillmentStatus/orderPaymentStatus -> our ORDER_STATUS.
-// Anything beyond "paid" vs "fulfilled" (refunds, partial refunds, disputes)
-// is explicitly out of scope for this phase — surfaced later if needed.
+// Maps eBay's status fields to ORDER_STATUS; refunds/disputes are out of scope for now.
 function mapStatus(rawOrder, { ORDER_STATUS }) {
   if (rawOrder.orderFulfillmentStatus === "FULFILLED") return ORDER_STATUS.FULFILLED;
   return ORDER_STATUS.PAID;
@@ -135,12 +112,7 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
     : subtotalCents + shippingCents;
   const taxCents = pricing.tax?.value != null ? toCents(pricing.tax.value) : Math.round(subtotalCents / GST_DIVISOR);
 
-  // Was previously discarded entirely — order.service.js hardcoded "aud" on
-  // every imported eBay order regardless of what currency it actually
-  // transacted in. eBay's own order payload reports it directly; only a
-  // tenant on a non-AU marketplace with a payload genuinely missing it
-  // (shouldn't happen in practice) falls through to order.service.js's
-  // marketplace-derived default.
+  // Previously hardcoded to "aud" in order.service.js; now read directly from the eBay payload.
   const currency = pricing.total?.currency || pricing.priceSubtotal?.currency || null;
 
   return {

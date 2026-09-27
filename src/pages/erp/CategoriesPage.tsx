@@ -5,6 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
@@ -44,7 +46,7 @@ function categoryToForm(c: Category): CategoryFormValues {
   };
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ──
 export default function CategoriesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -192,10 +194,12 @@ export default function CategoriesPage() {
             : "Organise your products into categories"
         }
       >
-        <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          New Category
-        </Button>
+        <Can permission={PERMISSIONS.categories.create}>
+          <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            New Category
+          </Button>
+        </Can>
       </PageHeader>
 
       <Card>
@@ -259,12 +263,16 @@ export default function CategoriesPage() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(category)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(category)}>
-                          <Trash2 className="h-3.5 w-3.5 text-danger" />
-                        </Button>
+                        <Can permission={PERMISSIONS.categories.update}>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(category)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </Can>
+                        <Can permission={PERMISSIONS.categories.delete}>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(category)}>
+                            <Trash2 className="h-3.5 w-3.5 text-danger" />
+                          </Button>
+                        </Can>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -415,10 +423,12 @@ function EmptyState({ search, onNew }: { search: string; onNew: () => void }) {
         </p>
       </div>
       {!search && (
-        <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
-          <Plus className="h-3.5 w-3.5" />
-          New Category
-        </Button>
+        <Can permission={PERMISSIONS.categories.create}>
+          <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
+            <Plus className="h-3.5 w-3.5" />
+            New Category
+          </Button>
+        </Can>
       )}
     </div>
   );

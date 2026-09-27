@@ -8,6 +8,7 @@ import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
 import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
 import { cn } from "@/utils/cn";
 import { formatCurrencyFromCents, formatCompactNumber } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CHANNEL_COLOR_VARS } from "@/config/categoricalColors";
 import type { OrderVolumePoint } from "@/types/dashboard";
 import type { OrderChannel } from "@/types/orders";
 
@@ -16,18 +17,6 @@ type ViewMode = "total" | "channels";
 const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: "total", label: "Total" },
   { key: "channels", label: "Channels" },
-];
-
-// Categorical palette (globals.css --cat-1..6) — same tokens
-// ProductChannelStatus.tsx uses to identify a channel by dot color. Cycled
-// in case a tenant somehow has more channels than the palette has slots.
-const CHANNEL_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
 ];
 
 function channelLabel(key: string) {
@@ -91,10 +80,7 @@ export function RevenueTrendChart({
 }: {
   points: OrderVolumePoint[];
   previousPeriodRevenueCents?: number;
-  // The dashboard's shared date-range filter, already formatted (see
-  // formatDateRangeLabel in utils/dateRange.ts) — this chart and Order
-  // Volume both read the exact same range, so the badge always shows the
-  // real applied window instead of a value that can drift from the filter.
+  // Shared date-range label so this and Order Volume show the same window.
   rangeLabel: string;
   loading?: boolean;
 }) {
@@ -109,9 +95,7 @@ export function RevenueTrendChart({
         totals.set(key, (totals.get(key) || 0) + cents);
       }
     }
-    // Every ORDER_CHANNEL is pre-seeded at 0 server-side so lines don't
-    // break on a zero-order day — but a channel this tenant has never once
-    // used shouldn't clutter the legend/chart with a flat zero line.
+    // Hide never-used channels (pre-seeded at 0) from the legend.
     return Array.from(totals.entries())
       .filter(([, cents]) => cents > 0)
       .sort((a, b) => b[1] - a[1])
@@ -126,9 +110,7 @@ export function RevenueTrendChart({
       null,
     );
 
-    // Which channel contributed the most revenue on the peak day
-    // specifically (not across the whole period) — matches "Top performing
-    // channel: eBay" sitting under the Peak Day figure.
+    // Top revenue channel on the peak day, for the "Top performing" caption.
     let peakChannel: string | null = null;
     if (peak) {
       for (const [key, cents] of Object.entries(peak.byChannel)) {
@@ -136,15 +118,13 @@ export function RevenueTrendChart({
       }
     }
 
-    // Real period-over-period comparison — vs the same-length window
-    // immediately before this one, computed server-side.
+    // Period-over-period vs same-length prior window, computed server-side.
     const hasPriorPeriod = typeof previousPeriodRevenueCents === "number" && previousPeriodRevenueCents > 0;
     const periodChangePct = hasPriorPeriod
       ? ((totalRevenueCents - previousPeriodRevenueCents!) / previousPeriodRevenueCents!) * 100
       : null;
 
-    // "Pacing" caption for the average tile — real signal (is the latest
-    // day running hot/cold vs the period average), not a static string.
+    // "Pacing" caption: latest day vs period average.
     const latest = points[points.length - 1] ?? null;
     let pacing: "up" | "down" | "steady" = "steady";
     if (latest && dailyAverageCents > 0) {
@@ -171,7 +151,7 @@ export function RevenueTrendChart({
               type="button"
               onClick={() => setViewMode(tab.key)}
               className={cn(
-                "rounded-sm px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                "rounded-sm px-2.5 py-1 text-2xs font-semibold uppercase tracking-wide transition-colors",
                 viewMode === tab.key ? "bg-card text-fg shadow-sm" : "text-fg/50 hover:text-fg",
               )}
             >

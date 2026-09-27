@@ -1,21 +1,10 @@
 // services/product.service.deletedUniqueness.test.js
-//
-// Regression guard for a live prod incident: product creation failed with
-// "Product slug already exists" for every title, permanently.
-//
-// The unique indexes { tenant_id, sku } and { tenant_id, slug } cover
-// soft-deleted products, but the soft-delete plugin hides those rows from
-// find/findOne. So generateNextSku and ensureUniqueSlug both picked values a
-// soft-deleted row still held, and the insert died on a duplicate key. The
-// retry in createWithUniqueSlug could not help: each attempt recomputed the
-// same invisible-conflict answer.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/product.service.deletedUniqueness.test.js
+// SKU/slug generation must skip values held by soft-deleted rows. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -23,17 +12,16 @@ const { generateNextSku } = require("./product.service");
 const { ensureUniqueSlug } = require("../utils/slug");
 const Product = require("../models/Product");
 
-// Unique per run so concurrent/repeat runs never collide on the real indexes
+// Unique per run so concurrent/repeat runs never collide on the real indexes.
 const tenantCode = `ZZ${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-const tenant = { _id: new mongoose.Types.ObjectId(), code: tenantCode };
+const tenant = { _id: fixtureId(), code: tenantCode };
 
 test.before(async () => {
   await mongoose.connect(config.mongoUri);
 });
 
 test.after(async () => {
-  // deleteMany is not intercepted by the soft-delete plugin, so this really
-  // purges the fixtures rather than soft-deleting them again
+  // deleteMany bypasses soft-delete, so this really purges the fixtures.
   await Product.deleteMany({ tenant_id: tenant._id });
   await mongoose.disconnect();
 });
@@ -99,9 +87,8 @@ test("ensureUniqueSlug treats a soft-deleted product's slug as taken", async () 
 });
 
 test("slug uniqueness stays scoped per tenant", async () => {
-  // A slug taken in another tenant must not bump this tenant's slug — the
-  // index is compound, so cross-tenant reuse is legitimate.
-  const otherTenant = new mongoose.Types.ObjectId();
+  // Another tenant's slug must not bump this one's; the index is per-tenant.
+  const otherTenant = fixtureId();
   const base = `shared-${tenantCode.toLowerCase()}`;
 
   await Product.create({

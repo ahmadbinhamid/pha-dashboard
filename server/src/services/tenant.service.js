@@ -1,10 +1,5 @@
 // services/tenant.service.js
-//
-// Self-service tenant signup — previously the only way to get a new tenant
-// into this system was a manual DB insert (or a seed script); there was no
-// path for a new business to sign themselves up. This creates a brand-new
-// Tenant plus its first user (that tenant's own admin, active immediately —
-// there's no other admin on a brand-new tenant to approve them) in one flow.
+// Self-service signup: a new Tenant plus its active first Admin user.
 
 const Tenant = require("../models/Tenant");
 const { createUser } = require("./user.service");
@@ -18,16 +13,21 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-// Used by auth.controller.js#login to label each organization a
-// multi-tenant account can choose between.
+// Labels each organization a multi-tenant account can choose between.
 async function findTenantsByIds(ids) {
   return Tenant.find({ _id: { $in: ids } }).select("name slug");
 }
 
-// Order/invoice numbers are prefixed with this (e.g. "PHA-00001") — kept
-// short and letters-only. Falls back to a fixed prefix for a company name
-// with no usable letters (e.g. entirely numeric/symbolic) rather than
-// producing an empty code.
+async function findTenantById(id) {
+  return Tenant.findById(id);
+}
+
+// Emails are unique per tenant, so joining a tenant resolves it by slug first.
+async function findTenantBySlug(slug) {
+  return Tenant.findOne({ slug });
+}
+
+// Order/invoice prefix (e.g. "PHA-00001"); fixed fallback when no letters.
 function baseCodeFromCompanyName(companyName) {
   const letters = companyName.toUpperCase().replace(/[^A-Z]/g, "");
   return letters.slice(0, 4) || "TEN";
@@ -48,9 +48,7 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
   const baseSlug = generateSlug(company_name);
   if (!baseSlug) throw httpError("Company name must contain at least one letter or number", 400);
 
-  // check-then-create races (see utils/slug.js's own comment) are retried
-  // below on a genuine unique-index conflict, same pattern used everywhere
-  // else in this codebase a slug/code needs to be unique.
+  // Check-then-create can race; retry on a real slug/code unique conflict.
   const MAX_ATTEMPTS = 5;
   let tenant;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -83,29 +81,20 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
       verified_at: new Date(),
     });
 
-    // Give the organisation its system roles and make the founder a Super
-    // Admin member of it. Membership — not User.tenant_id — is what grants
-    // access now (see membership.service.js), and a tenant whose only user
-    // has no membership would be one nobody can administer.
+    // Membership, not User.tenant_id, grants access; the owner needs one.
     const roles = await seedSystemRoles(tenant._id);
     await addMember({
       tenantId: tenant._id,
       userId: user._id,
-      roleId: roles[SYSTEM_ROLE.SUPER_ADMIN]._id,
+      roleId: roles[SYSTEM_ROLE.ADMIN]._id,
     });
 
     return { tenant, user };
   } catch (err) {
-    // No DB transaction spans Tenant + User creation (standalone MongoDB,
-    // no replica set — see stripe.webhook.service.js's own comment on the
-    // same constraint elsewhere in this codebase). A brand-new tenant with
-    // no admin user is useless and, left behind, would confusingly occupy
-    // its slug/code forever — clean it up rather than orphaning it. Safe:
-    // nothing else could have referenced this tenant yet, it was only just
-    // created in this same request.
+    // No transactions on standalone Mongo; drop the orphan to free its slug/code.
     await Tenant.deleteOne({ _id: tenant._id });
     throw err;
   }
 }
 
-module.exports = { registerTenantWithAdmin, findTenantsByIds };
+module.exports = { registerTenantWithAdmin, findTenantsByIds, findTenantById, findTenantBySlug };

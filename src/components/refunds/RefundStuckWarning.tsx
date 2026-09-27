@@ -5,14 +5,7 @@ interface RefundStuckWarningProps {
   stuckRefunds: StuckRefund[];
 }
 
-// Corrections round — a refund can sit in pending/processing long enough
-// that getRefundableSummary's max_refundable figure stops accounting for it
-// (see refund.service.js#getReservingRefunds' age bound). That's necessary
-// so a dropped webhook can't lock out further refunds forever, but it means
-// the numbers on THIS screen can look like they don't add up unless this is
-// surfaced explicitly — refund.reconciliation.service.js resolves these
-// automatically within minutes; this is informational, not something to act
-// on immediately.
+// A refund stuck in pending/processing long enough falls out of max_refundable's accounting (refund.service.js#getReservingRefunds' age bound), so a dropped webhook can't lock out refunds forever — but the numbers here can look off unless surfaced. refund.reconciliation.service.js resolves these within minutes; informational only.
 export function RefundStuckWarning({ stuckRefunds }: RefundStuckWarningProps) {
   if (stuckRefunds.length === 0) return null;
 

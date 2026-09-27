@@ -1,20 +1,11 @@
 // services/google/google.oauth.service.connect-flow.test.js
-//
-// TASK 4: covers the restructured two-step connect flow — consent first
-// (buildConsentUrl/resolveState no longer carry merchant fields, only
-// tenant_id + purpose, but the signed/verified/purpose-checked state
-// mechanism itself is unchanged), then savePendingConnection (saves a
-// PENDING ChannelConnection with just the token), listAccessibleAccounts
-// (accounts.list, keyed off that saved token), and completeConnection
-// (upgrades PENDING -> CONNECTED once a Merchant Center account is chosen).
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/google/google.oauth.service.connect-flow.test.js
+// Two-step connect: consent, pending, pick account, CONNECTED. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
@@ -27,7 +18,7 @@ function jsonResponse(status, body) {
 }
 
 test("buildConsentUrl/resolveState: state carries ONLY tenant_id + purpose now — no merchant fields required or round-tripped", () => {
-  const tenantId = new mongoose.Types.ObjectId().toString();
+  const tenantId = fixtureId().toString();
   const url = oauthService.buildConsentUrl({ tenantId });
 
   const parsed = new URL(url);
@@ -52,7 +43,7 @@ test("savePendingConnection: saves a PENDING connection with just the token, no 
   mock.method(global, "fetch", async () => jsonResponse(200, { access_token: "acc-1", refresh_token: "ref-1", expires_in: 3600 }));
   t.after(() => mock.restoreAll());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await oauthService.savePendingConnection({ tenantId, code: "fake-code" });
 
   const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: "google" })
@@ -60,11 +51,7 @@ test("savePendingConnection: saves a PENDING connection with just the token, no 
     .lean();
   assert.ok(conn, "a ChannelConnection row must exist after savePendingConnection");
   assert.equal(conn.status, "pending");
-  // Not $set at all by savePendingConnection (no merchant account has been
-  // chosen yet) — a base-model upsert doesn't apply a discriminator-only
-  // field's schema default for a field it never touched, so this reads
-  // back as genuinely absent (undefined), not an explicit null. Either way
-  // reads as "missing" to assertConfigured's `!settings?.merchant_id` check.
+  // savePendingConnection never $sets this, so it reads back as undefined.
   assert.equal(conn.merchant_id, undefined);
   assert.equal(conn.data_source_id, undefined);
   assert.equal(decrypt(unpackCiphertext(conn.access_token_ct)), "acc-1");
@@ -74,7 +61,7 @@ test("listAccessibleAccounts: throws NO_PENDING_CONNECTION for a tenant that nev
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await assert.rejects(
     () => oauthService.listAccessibleAccounts(tenantId),
     (err) => {
@@ -103,7 +90,7 @@ test("listAccessibleAccounts: returns the accounts.list result for a tenant with
   });
   t.after(() => mock.restoreAll());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await oauthService.savePendingConnection({ tenantId, code: "fake-code" });
 
   const accounts = await oauthService.listAccessibleAccounts(tenantId);
@@ -124,7 +111,7 @@ test("completeConnection: rejects a merchantId not present in verifiedAccountIds
   });
   t.after(() => mock.restoreAll());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   await assert.rejects(
     () =>
@@ -149,7 +136,7 @@ test("completeConnection: with no PENDING row for this tenant, fails loudly (NO_
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await assert.rejects(
     () =>
       oauthService.completeConnection({
@@ -178,7 +165,7 @@ test("completeConnection: upgrades a PENDING connection to CONNECTED with the ch
   });
   t.after(() => mock.restoreAll());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await oauthService.savePendingConnection({ tenantId, code: "fake-code" });
 
   const conn = await oauthService.completeConnection({

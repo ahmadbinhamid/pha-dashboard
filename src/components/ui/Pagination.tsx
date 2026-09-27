@@ -64,8 +64,7 @@ const Pagination = ({
       className={cn(
         // Stacks on mobile — the row/page controls on the right previously
         // shared one row with the "Showing X-Y of Z" text unconditionally,
-        // which overflowed/clipped once page-number buttons appeared on a
-        // narrow screen.
+        // which overflowed/clipped once page-number buttons appeared on a narrow screen.
         "flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5",
         className,
       )}

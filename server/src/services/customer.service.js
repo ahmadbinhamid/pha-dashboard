@@ -5,9 +5,7 @@ const Order = require("../models/Order");
 const { ORDER_STATUS } = require("../constants/order.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 
-// Orders aren't a relation stored on Customer itself — pulled on demand so a
-// customer's order count/outstanding-invoice count always reflects the
-// current Order collection rather than a denormalized field that can drift.
+// Pulled on demand (not denormalized) so counts always reflect the current Order collection.
 async function getOrderStatsByCustomer(customerIds) {
   if (!customerIds.length) return new Map();
 
@@ -69,9 +67,7 @@ async function getCustomerById(id, tenantId) {
   ]);
 
   const stats = statsMap.get(customer._id.toString());
-  // Outstanding invoices = this customer's orders still awaiting payment (in
-  // full or in part) — there's no separate Invoice entity, an unpaid or
-  // partially-paid order IS the invoice.
+  // Outstanding invoices = unpaid/partially-paid orders — there's no separate Invoice entity.
   const outstandingInvoices = orders.filter((order) =>
     [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status),
   );

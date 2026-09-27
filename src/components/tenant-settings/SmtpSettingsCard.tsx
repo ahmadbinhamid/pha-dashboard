@@ -48,8 +48,7 @@ export function SmtpSettingsCard({
   const status = data?.data;
 
   useEffect(() => {
-    // Never pre-fill the password — the API never returns it, so leaving it
-    // blank means "unchanged" on save (see onSubmit below).
+    // Never pre-fill the password — the API never returns it, so blank means "unchanged" on save (see onSubmit below).
     reset({
       host: status?.host ?? "",
       port: status?.port ? String(status.port) : "",
@@ -79,8 +78,7 @@ export function SmtpSettingsCard({
   }, [mutation.isPending, mutation.isSuccess, mutation.isError]);
 
   const onSubmit = (form: SmtpSettingsFormValues) => {
-    // pass omitted entirely (not sent as "") when left blank, so the
-    // previously-saved password stays in place unless deliberately changed.
+    // pass omitted entirely (not sent as "") when blank, so the previously-saved password stays unless deliberately changed.
     const payload: UpdateSmtpCredentialsPayload = {
       host: form.host,
       port: form.port ? Number(form.port) : null,

@@ -198,8 +198,7 @@ async function main() {
     // A brand-new, never-registered project is a real, expected outcome
     // here (dry-run against an unregistered account, or right after a
     // failed register) — surface it plainly rather than as a bare stack
-    // trace, but don't mask other failures behind a false "not registered"
-    // reading.
+    // trace, but don't mask other failures behind a false "not registered" reading.
     console.error(`\nCould not verify current registration: ${err.message}`);
     const explanation = explainKnownRestriction(err);
     if (explanation) console.error(`  -> ${explanation}`);

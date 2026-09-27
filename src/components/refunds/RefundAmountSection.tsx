@@ -9,9 +9,7 @@ interface RefundAmountSectionProps {
   error?: string;
 }
 
-// refund-redesign-spec.md §7 — "Amount only: a single amount input capped
-// at max_refundable. No restock control at all" (scope: amount never
-// touches quantities/lines — see §3.5).
+// refund-redesign-spec.md §7: "Amount only" is a single input capped at max_refundable, no restock control — this scope never touches quantities/lines (§3.5).
 export function RefundAmountSection({ amountDollars, onAmountChange, maxRefundable, error }: RefundAmountSectionProps) {
   return (
     <FormField label="Refund Amount" required error={error}>

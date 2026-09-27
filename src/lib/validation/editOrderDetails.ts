@@ -3,9 +3,7 @@ import { addressFieldsSchema, requiredAddressSchema } from "@/lib/validation/add
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Pickup orders have no address section at all — factory since which
-// address rules apply depends on the order's delivery method, not on
-// another form field.
+// Pickup orders have no address section — factory since which address rules apply depends on delivery method, not another form field.
 export function editOrderDetailsFormSchema(isPickup: boolean) {
   return z
     .object({

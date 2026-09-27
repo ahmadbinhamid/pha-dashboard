@@ -8,26 +8,9 @@ const { seedSystemRoles } = require("../src/services/role.service");
 const { SYSTEM_ROLE } = require("../src/constants/access.constants");
 const { USER_ROLE } = require("../src/constants/user.constants");
 
-/**
- * Backfills the membership model onto data that predates it.
- *
- * Access used to come from `User.tenant_id` plus a three-value `User.role`
- * enum; it now comes from a Membership row carrying a per-organisation Role
- * (see models/Membership.js). This gives every tenant its system roles and
- * every existing user a membership of the tenant they were stamped with,
- * mapping their old role across:
- *
- *   superadmin -> Super Admin      admin -> Admin      user -> Staff
- *
- * Idempotent and additive: it creates nothing that already exists and deletes
- * nothing, so it is safe to re-run, and `User.tenant_id`/`User.role` are left
- * in place as the fallback the auth layer still honours for any account this
- * hasn't reached.
- *
- * Usage:
- *   node scripts/backfillMemberships.js --dry-run
- *   node scripts/backfillMemberships.js
- */
+/** Backfills the Membership model onto data that predates it, mapping legacy User.role
+ * (superadmin/admin/user) to Super Admin/Admin/Staff. Idempotent and additive; safe to re-run.
+ * Usage: node scripts/backfillMemberships.js [--dry-run] */
 
 const LEGACY_ROLE_TO_SYSTEM_ROLE = {
   [USER_ROLE.SUPERADMIN]: SYSTEM_ROLE.SUPER_ADMIN,

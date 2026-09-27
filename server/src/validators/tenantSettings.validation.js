@@ -33,17 +33,13 @@ const updateSettings = {
     brand_colour: hexColour.allow("", null),
     accent_colour: hexColour.allow("", null),
     payment_domain_mode: Joi.string().valid("default", "vendor_slug"),
-    // Letters/digits only — the "-" before the number is always added at
-    // format time (see orderNumberFormat.js), never part of the stored
-    // prefix itself. Only ever affects orders created after this save.
+    // Letters/digits only; the "-" is added at format time, never part of the stored prefix.
     order_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
     invoice_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
   }),
 };
 
-// secret_key/publishable_key are each optional independently (e.g. update
-// just the publishable key without re-entering the secret) — "" clears a
-// previously-saved secret key (see stripe.keys.service.js#updateStripeKeys).
+// secret_key/publishable_key are each independently optional; "" clears a previously-saved secret key.
 const updateStripeKeys = {
   body: Joi.object({
     secret_key: Joi.string().trim().allow(""),
@@ -57,9 +53,7 @@ const updateStripeWebhookSecret = {
   }),
 };
 
-// Each field is independently optional (e.g. update just the From name
-// without re-entering the password) — pass: "" clears previously-saved
-// credentials entirely (see smtp.keys.service.js#updateSmtpCredentials).
+// Each field is independently optional; pass: "" clears previously-saved credentials entirely.
 const updateSmtpCredentials = {
   body: Joi.object({
     host: Joi.string().trim().allow("", null),

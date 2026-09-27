@@ -1,7 +1,4 @@
-// Imperative handle shared by wizard steps whose "continue" action needs to
-// run internal validation (or an async submit) before the parent advances —
-// exposed via forwardRef so the page header's Next/Create button can trigger
-// it without lifting each step's validation state out of the step itself.
+// Imperative handle for wizard steps whose "continue" needs internal validation/async submit first; exposed via forwardRef for the page header's Next/Create button to trigger.
 export interface StepHandle {
   submit: () => void;
 }

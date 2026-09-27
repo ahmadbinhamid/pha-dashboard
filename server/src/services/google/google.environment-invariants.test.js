@@ -1,26 +1,8 @@
 // services/google/google.environment-invariants.test.js
-//
-// Adapted from services/ebay/ebay.environment-invariants.test.js's static-
-// source-scan technique — NOT a verbatim copy, because the underlying risk
-// it guards against doesn't literally apply to Google the same way: eBay
-// has a real sandbox/production URL split (settings.sandbox), and the
-// original incident was a tenant-scoped SANDBOX token sent to a hardcoded
-// PRODUCTION host. Google's Merchant API has no such split (see
-// google.merchant.api.service.js's own module comment) — there is no
-// second, "wrong environment" its base URL could point at, so the literal
-// eBay rule ("no *BaseFor(false) inside a function taking settings")
-// doesn't map onto real Google code.
-//
-// What DOES carry over, in spirit: a tenant-scoped credential must never be
-// cached in a module-level variable — the same CLASS of bug (one tenant's
-// data leaking into every other tenant's calls) in a different shape.
-// ebay.api.service.js's own _tokenCache/_cachedCatalogToken exist
-// specifically because a bare module-level token slot would do exactly
-// that. This statically verifies no such bare slot exists here — every
-// token is either a function parameter or lives in a Map keyed by tenant id
-// (see google.oauth.service.js's own _refreshInFlight).
-//
-// Run with: node --test src/services/google/google.environment-invariants.test.js
+// Adapted from ebay.environment-invariants.test.js: Google has no sandbox/production URL split,
+// but the same class of bug applies — a tenant-scoped credential must never be cached in a
+// module-level variable. Statically verifies every token is a function parameter or Map-keyed.
+// Run: node --test src/services/google/google.environment-invariants.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,15 +15,8 @@ const FILES = [
   path.join(__dirname, "google.oauth.service.js"),
 ];
 
-// A mutable (`let`) module-level variable whose name looks like a token
-// slot — deliberately NOT matching `const` here: this codebase's own URL
-// constants (TOKEN_ENDPOINT, AUTH_BASE, MERCHANT_API_BASE...) legitimately
-// have "token"-adjacent names but are fixed config values, not a cache a
-// credential could get written into. A `let` is the actual shape a mutable
-// single-tenant cache slot would take (see ebay.api.service.js's own
-// `let _cachedCatalogToken = null;` for exactly this pattern, deliberately
-// safe there ONLY because that one specific token is genuinely app-level,
-// not per-tenant — see that function's own comment).
+// Matches only `let`, not `const` — fixed config values like TOKEN_ENDPOINT legitimately have
+// token-adjacent names, but a `let` is the shape a mutable single-tenant cache slot would take.
 const MODULE_LEVEL_MUTABLE_TOKEN_RE = /^\s*let\s+(_?\w*[Tt]oken\w*)\s*=/gm;
 
 for (const file of FILES) {

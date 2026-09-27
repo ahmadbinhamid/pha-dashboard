@@ -1,17 +1,10 @@
 // services/marketplace/circuitBreaker.test.js
-//
-// Regression guard for Task 7: only transport/auth-level failures (5xx,
-// network, 401/403) count toward the breaker — a 400-level per-item
-// validation failure (bad category, missing GTIN, etc.) is a product data
-// problem, not evidence the connection is unhealthy, and must never trip
-// it. Also covers the explicit resume path clearing a tripped breaker.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/circuitBreaker.test.js
+// Only transport/auth failures trip the breaker, not 400s. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const config = require("../../config");
 
 require("../../models/index");
@@ -33,12 +26,11 @@ function validationError() {
 test("circuit breaker: item validation errors never trip it, transport/auth errors do at the threshold", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const platform = "ebay";
   const threshold = config.channels.circuitBreakerThreshold;
 
-  // A burst of 400-level validation failures — well past the threshold —
-  // must never increment consecutive_failures at all.
+  // A burst of 400s well past the threshold must never bump consecutive_failures.
   for (let i = 0; i < threshold + 5; i++) {
     await circuitBreaker.recordFailure(tenantId, platform, validationError());
   }
@@ -46,29 +38,25 @@ test("circuit breaker: item validation errors never trip it, transport/auth erro
   const afterValidation = await ChannelConnection.findOne({ tenant_id: tenantId, platform }).lean();
   assert.equal(afterValidation, null, "validation errors that never count must never even create a ChannelConnection row");
 
-  // Fewer than threshold transport errors — not tripped yet.
+  // Fewer than threshold transport errors: not tripped yet.
   for (let i = 0; i < threshold - 1; i++) {
     await circuitBreaker.recordFailure(tenantId, platform, transportError(503));
   }
   assert.equal(await circuitBreaker.isOpen(tenantId, platform), false, "must not trip before reaching the threshold");
 
-  // One more (401, exercising the auth branch, not just 5xx) reaches the
-  // threshold and trips it.
+  // One more (401, the auth branch) reaches the threshold and trips it.
   const { tripped } = await circuitBreaker.recordFailure(tenantId, platform, transportError(401));
   assert.equal(tripped, true);
   assert.equal(await circuitBreaker.isOpen(tenantId, platform), true, "must be open once the threshold is reached");
 
-  // A success does NOT resume a tripped breaker on its own — only an
-  // explicit resume (or the next failure that never comes) does; recordSuccess
-  // itself is what a normal successful adapter call reports, exercised on its
-  // own contract here: it resets consecutive_failures and marks CONNECTED.
+  // A success doesn't resume a tripped breaker; only an explicit resume does.
   await circuitBreaker.recordSuccess(tenantId, platform);
   const afterSuccess = await ChannelConnection.findOne({ tenant_id: tenantId, platform }).lean();
   assert.equal(afterSuccess.consecutive_failures, 0);
   assert.equal(afterSuccess.status, "connected");
   assert.ok(afterSuccess.last_success_at);
 
-  // Explicit resume path — trip it again, then resume.
+  // Trip it again, then resume.
   for (let i = 0; i < threshold; i++) {
     await circuitBreaker.recordFailure(tenantId, platform, transportError(500));
   }

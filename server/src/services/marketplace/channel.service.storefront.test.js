@@ -1,17 +1,10 @@
 // services/marketplace/channel.service.storefront.test.js
-//
-// TASK 5 (requiresStorefront capability): a tenant with no verified default
-// Domain must see Google Shopping marked unavailable (with a clear reason)
-// in GET /api/v1/channels, and checkStorefrontRequirement — the same
-// generic, manifest-driven check — must refuse the same tenant a connect
-// attempt. eBay (no requiresStorefront) must be completely unaffected.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/channel.service.storefront.test.js
+// No verified Domain: Google unavailable, connect refused. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -32,7 +25,7 @@ test("checkStorefrontRequirement: a platform with no requiresStorefront flag is 
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const result = await checkStorefrontRequirement(tenantId, "ebay");
   assert.deepEqual(result, { ok: true });
 });
@@ -41,7 +34,7 @@ test("checkStorefrontRequirement: google, tenant with NO verified default Domain
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const result = await checkStorefrontRequirement(tenantId, "google");
   assert.equal(result.ok, false);
   assert.match(result.reason, /verified storefront domain/);
@@ -52,7 +45,7 @@ test("checkStorefrontRequirement: google, tenant WITH a verified default Domain 
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await Domain.create({
     tenant_id: tenantId,
     hostname: `store-${crypto.randomUUID()}.example.com`,
@@ -69,7 +62,7 @@ test("checkStorefrontRequirement: google, tenant with a Domain that is verified 
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await Domain.create({
     tenant_id: tenantId,
     hostname: `store-${crypto.randomUUID()}.example.com`,
@@ -86,7 +79,7 @@ test("listChannelsForTenant: marks google unavailable with a reason for a tenant
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const channels = await listChannelsForTenant(tenantId);
   const google = channels.find((c) => c.key === "google");
   const ebay = channels.find((c) => c.key === "ebay");
@@ -102,7 +95,7 @@ test("listChannelsForTenant: google becomes available once the tenant has a veri
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   await Domain.create({
     tenant_id: tenantId,
     hostname: `store-${crypto.randomUUID()}.example.com`,

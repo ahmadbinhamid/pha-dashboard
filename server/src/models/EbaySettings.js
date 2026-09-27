@@ -1,10 +1,6 @@
 // models/EbaySettings.js
 //
-// One record per tenant — each tenant authorizes our single eBay Application
-// (client_id/client_secret stay global, config.ebay.*, like a platform key)
-// and gets their own refresh_token here, analogous to a Stripe Connect
-// connected account. Everything seller-specific (marketplace, warehouse
-// address, business policy IDs, webhook credentials) lives here too.
+// One record per tenant: authorizes our single eBay app (client_id/secret stay global in config.ebay.*) and stores their own refresh_token, like a Stripe Connect account.
 
 const { model, Schema } = require("mongoose");
 const { EBAY_CONNECTION_STATUS } = require("../constants/ebay.constants");
@@ -13,11 +9,7 @@ const ebaySettingsSchema = new Schema(
   {
     tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, unique: true },
 
-    // OAuth — obtained via the consent flow (ebay.oauth.service.js), never
-    // set directly by an admin. Encrypted at rest (AES-256-GCM — see
-    // utils/crypto/tokenCipher.js); ebay.settings.service.js is the only
-    // place that encrypts/decrypts this, so every other consumer just reads
-    // `settings.refresh_token` as plaintext.
+    // OAuth token from consent flow (ebay.oauth.service.js), never set by admin; encrypted at rest (AES-256-GCM, tokenCipher.js) — only ebay.settings.service.js decrypts it.
     refresh_token_ciphertext: { type: String, default: null, select: false },
     refresh_token_iv: { type: String, default: null, select: false },
     refresh_token_tag: { type: String, default: null, select: false },
@@ -38,8 +30,7 @@ const ebaySettingsSchema = new Schema(
     payment_policy_id: { type: String, default: null },
     return_policy_id: { type: String, default: null },
 
-    // Warehouse address — used to auto-create the merchant location on eBay
-    // if it doesn't exist yet for this tenant.
+    // Warehouse address — used to auto-create the merchant location on eBay if missing for this tenant.
     warehouse_street: { type: String, default: null },
     warehouse_city: { type: String, default: null },
     warehouse_state: { type: String, default: null },
@@ -50,12 +41,7 @@ const ebaySettingsSchema = new Schema(
     // Sandbox-only fallback when no HTTPS product image is available.
     fallback_image_url: { type: String, default: null },
 
-    // Webhook — an opaque, unguessable identifier (NOT this tenant's real
-    // _id) embedded in the query string of the one shared callback URL
-    // (/api/v1/ebay/webhook?wt=<this>), so the URL itself can't be enumerated
-    // to find real tenant ids. verification_token is the actual HMAC secret
-    // eBay signs deliveries with — checked before anything from a request is
-    // trusted, regardless of which tenant the URL claims to be.
+    // webhook_token is an opaque per-tenant id (not the real _id) in the shared callback URL, so it can't be enumerated; verification_token is the actual HMAC secret eBay signs deliveries with.
     webhook_token: { type: String, default: null, unique: true, sparse: true },
     verification_token: { type: String, default: null },
   },

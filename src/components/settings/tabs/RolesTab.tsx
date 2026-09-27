@@ -18,10 +18,17 @@ import { RoleEditor } from "@/components/settings/team/RoleEditor";
 import { useToast } from "@/context";
 import { deleteRole, getPermissionGroups, getRoles } from "@/lib/api/access";
 import type { Role } from "@/types/access";
+import { TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 
 export function RolesTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { can } = useMyAccess();
+  const canCreate = can(PERMISSIONS.roles.create);
+  const canUpdate = can(PERMISSIONS.roles.update);
+  const canDelete = can(PERMISSIONS.roles.delete);
 
   // null = list; { role: null } = creating; { role } = editing.
   const [editing, setEditing] = useState<{ role: Role | null } | null>(null);
@@ -44,7 +51,9 @@ export function RolesTab() {
   });
 
   if (editing) {
-    return <RoleEditor role={editing.role} groups={groups} onDone={() => setEditing(null)} />;
+    return (
+      <RoleEditor role={editing.role} groups={groups} canSave={editing.role ? canUpdate : canCreate} onDone={() => setEditing(null)} />
+    );
   }
 
   return (
@@ -53,10 +62,12 @@ export function RolesTab() {
         title="Roles & Permissions"
         description="Every member holds one role in this organisation, and the role decides what they can reach."
         right={
-          <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setEditing({ role: null })}>
-            <Plus className="h-4 w-4" />
-            New role
-          </Button>
+          canCreate ? (
+            <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setEditing({ role: null })}>
+              <Plus className="h-4 w-4" />
+              New role
+            </Button>
+          ) : undefined
         }
       >
         {isLoading ? (
@@ -108,14 +119,13 @@ export function RolesTab() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onSelect={() => setEditing({ role })}>
                             <Pencil className="h-3.5 w-3.5 text-fg/50" />
-                            {role.is_system ? "View permissions" : "Edit role"}
+                            {TENANT_ADMIN_ROLE_NAMES.includes(role.name) || !canUpdate ? "View permissions" : "Edit role"}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             destructive
-                            // Both are refused server-side too — a built-in
-                            // role, or one someone still holds.
-                            disabled={role.is_system || (role.members_count ?? 0) > 0}
+                            // Refused server-side too: built-in, or still held by someone.
+                            disabled={!canDelete || role.is_system || (role.members_count ?? 0) > 0}
                             onSelect={() => setDeleteTarget(role)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />

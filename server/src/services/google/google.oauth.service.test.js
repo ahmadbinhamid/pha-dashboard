@@ -1,18 +1,11 @@
 // services/google/google.oauth.service.test.js
-//
-// Token refresh: proactive (near-expiry) refresh, persistence back to
-// ChannelConnection, and safety under a concurrent-refresh race (two jobs
-// asking for a valid token around the same moment must not both hit
-// Google's token endpoint and clobber each other — see
-// google.oauth.service.js#refreshAccessToken's own comment).
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/google/google.oauth.service.test.js
+// Token refresh: near-expiry, persistence, concurrent safety. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -26,7 +19,7 @@ function jsonResponse(status, body) {
 }
 
 async function makeConnection({ accessTokenExpired = false } = {}) {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const encAccess = encrypt("stale-access-token");
   const encRefresh = encrypt(`refresh-${crypto.randomUUID()}`);
   await ChannelConnection.collection.insertOne({
@@ -103,8 +96,7 @@ test("refreshAccessToken: a concurrent-refresh race for the SAME tenant only hit
   let fetchCalls = 0;
   mock.method(global, "fetch", async () => {
     fetchCalls++;
-    // A small delay so the two calls below genuinely overlap in time,
-    // rather than one finishing before the other even starts.
+    // Small delay so the two calls below genuinely overlap in time.
     await new Promise((resolve) => setTimeout(resolve, 30));
     return jsonResponse(200, { access_token: `token-${fetchCalls}`, expires_in: 3600 });
   });

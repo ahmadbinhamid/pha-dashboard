@@ -1,10 +1,7 @@
 import { Badge } from "@/components/ui/Badge";
 import type { OrderPaymentStatus } from "@/types/orders";
 
-// Read-only — payment status is always derived server-side from actual
-// payments/refunds (see order.service.js's derivePaymentStatus and
-// refund.service.js's recomputeLedger), never set by hand. Deliberately
-// separate from OrderStatusBadge (order lifecycle) — see that component.
+// Read-only: payment status is always derived server-side (order.service.js#derivePaymentStatus, refund.service.js#recomputeLedger), never set by hand; kept separate from OrderStatusBadge (order lifecycle).
 const PAYMENT_STATUS_VARIANT: Record<OrderPaymentStatus, "ok" | "warn" | "danger" | "muted" | "default"> = {
   pending_payment: "muted",
   partially_paid: "warn",

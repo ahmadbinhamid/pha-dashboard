@@ -28,8 +28,7 @@ const EMPTY_FORM: SendProductEmailFormValues = { name: "", email: "" };
 
 // Emails the product's title/SKU (plus every product image as an
 // attachment) to a recipient the admin picks — triggered by the "Send
-// Email" item in the Add to Cart split button's dropdown on the product
-// edit page.
+// Email" item in the Add to Cart split button's dropdown on the product edit page.
 export function SendProductEmailModal({ product, open, onOpenChange }: SendProductEmailModalProps) {
   const { toast } = useToast();
 

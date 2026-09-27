@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/Button";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { NotificationBell } from "@/components/shell/NotificationBell";
 import { UserMenu } from "@/components/shell/UserMenu";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/context/cart";
 import { Menu, Search, ShoppingCart } from "lucide-react";
@@ -57,7 +59,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
           >
             <Search className="h-3.5 w-3.5 shrink-0 text-fg/40 group-hover:text-fg/60" />
             <span className="flex-1 truncate text-left text-sm text-fg/45">Search…</span>
-            <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-fg/45 sm:inline-flex">
+            <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 text-3xs font-medium text-fg/45 sm:inline-flex">
               ⌘K
             </kbd>
           </button>
@@ -74,27 +76,26 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
             >
               <Search className="h-4 w-4" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative h-9 w-9 shrink-0"
-              onClick={() => navigate("/create-order")}
-              aria-label="Create order"
-              title="Create Order"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              {totalItems > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
-                  {totalItems > 99 ? "99+" : totalItems}
-                </span>
-              )}
-            </Button>
+            <Can permission={PERMISSIONS.orders.create}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9 shrink-0"
+                onClick={() => navigate("/create-order")}
+                aria-label="Create order"
+                title="Create Order"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                {totalItems > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-3xs font-semibold leading-none text-accent-fg">
+                    {totalItems > 99 ? "99+" : totalItems}
+                  </span>
+                )}
+              </Button>
+            </Can>
             <NotificationBell />
-            {/* Settings and the theme toggle used to be their own icons
-                here — both now live inside the account dropdown (see
-                UserMenu), so the icon row is just Search / Create Order /
-                Notifications, set off from the account menu by this rule. */}
+            {/* Divides the icon row from the account menu. */}
             <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
             <UserMenu />
           </div>

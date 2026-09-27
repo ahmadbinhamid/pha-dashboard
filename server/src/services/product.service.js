@@ -12,6 +12,7 @@ const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
 const { withAttachmentUrls, buildAttachmentFilePath } = require("../utils/attachment");
 const inventoryService = require("./inventory.service");
+const locationService = require("./location.service");
 const { getTotalStockForProduct } = inventoryService;
 const { getCompanyProfile } = require("./tenantSettings.service");
 const emailService = require("./email/email.service");
@@ -19,15 +20,10 @@ const { STOCK_STATUS, STOCK_LOW_THRESHOLD } = require("../constants/product.cons
 const { LISTING_STATE } = require("../constants/marketplace.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
-// ── SKU generation ────────────────────────────────────────────────────────────
+// ── SKU generation ──
 
 async function generateNextSku(tenant) {
-  // SKUs are zero-padded to 6 digits, so lexicographic desc = numeric desc.
-  // withDeleted: the unique { tenant_id, sku } index still covers
-  // soft-deleted products, so this counter has to see them too. Without it,
-  // deleting the newest product makes the next create re-issue that row's
-  // SKU and die on a duplicate key — permanently, since every retry
-  // recomputes the same number.
+  // withDeleted: the unique sku index covers soft-deleted rows too.
   const last = await Product.findOne(
     { tenant_id: tenant._id, sku: new RegExp(`^${tenant.code}-\\d{6}$`) },
     { sku: 1 },
@@ -39,7 +35,7 @@ async function generateNextSku(tenant) {
   return `${tenant.code}-${String(num + 1).padStart(6, "0")}`;
 }
 
-// ── Variant generation ────────────────────────────────────────────────────────
+// ── Variant generation ──
 
 function cartesian(arrays) {
   if (!arrays || arrays.length === 0) return [[]];
@@ -93,11 +89,7 @@ async function generateVariantsForProduct(product) {
   return newVariants;
 }
 
-// tenantId is required — without it this queried every tenant's active
-// locations, creating an Inventory row for THIS product at every OTHER
-// tenant's warehouse/showroom too. Found live during a multi-tenancy audit
-// (see backfillTenantId.js's own "found live" history for Location — same
-// class of bug, this call site was the one still missing the scope).
+// tenantId scope stops stock rows at other tenants' locations.
 async function ensureInventoryForProduct(productId, variantId = null, tenantId) {
   if (!tenantId) throw new Error("[product.service] ensureInventoryForProduct: tenantId is required");
   const locations = await Location.find({ is_active: true, tenant_id: tenantId });
@@ -118,14 +110,9 @@ async function ensureInventoryForProduct(productId, variantId = null, tenantId) 
   }
 }
 
-// ── Product CRUD ──────────────────────────────────────────────────────────────
+// ── Product CRUD ──
 
-// Stock is joined in from the separate Inventory collection (aggregation
-// can't use Mongoose .populate()), so the whole list query is an aggregation
-// pipeline rather than Product.find() — this also lets `stockFilter` match
-// against the just-computed stock_count in the same query. Shared by
-// getProducts (Mongo-filtered listing) and getProductsByIds (Typesense-ranked
-// search results) so both stay in sync on what "in stock" etc. means.
+// Aggregation so stock (Inventory) can be joined and filtered in one query.
 function buildStockStages(stockFilter) {
   const stages = [
     {
@@ -163,11 +150,7 @@ function buildStockStages(stockFilter) {
   return stages;
 }
 
-// Joins each product to its active marketplace listings (by platform) so
-// `channel` can filter on them — a $lookup rather than a Product-side field
-// since a listing's platform lives on MarketplaceListing, not Product.
-// $lookup bypasses the soft-delete plugin's find middleware, so deleted_at
-// is matched explicitly here.
+// $lookup skips soft-delete middleware, so deleted_at is matched here.
 function buildChannelStages(channel) {
   if (!channel) return [];
 
@@ -201,8 +184,7 @@ function buildChannelStages(channel) {
   return stages;
 }
 
-// Same reasoning — shared attachment/category hydration for both listing
-// paths.
+// Shared attachment/category hydration for both listing paths.
 const HYDRATION_STAGES = [
   {
     $lookup: {
@@ -210,8 +192,7 @@ const HYDRATION_STAGES = [
       localField: "attachments",
       foreignField: "_id",
       as: "attachments",
-      // `url` is a Mongoose virtual, not a stored field — projecting it
-      // here is a no-op; it's backfilled below via withAttachmentUrls().
+      // `url` is a virtual; projecting it is a no-op, see withAttachmentUrls.
       pipeline: [
         { $project: { original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
       ],
@@ -231,8 +212,7 @@ const HYDRATION_STAGES = [
 function withComputedFields(p) {
   return {
     ...p,
-    // $lookup fetches raw attachment docs, bypassing the Attachment model's
-    // `url` virtual entirely — backfill it explicitly.
+    // $lookup bypasses the `url` virtual; backfilled explicitly.
     attachments: withAttachmentUrls(p.attachments),
     stock_status: getStockStatus(p.stock_count, p.stock_control),
   };
@@ -265,9 +245,7 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   };
 }
 
-// Summary tiles for the admin Products page header. Reuses buildStockStages
-// so "out of stock" here means exactly what the Stock filter dropdown means
-// (getProducts above) — one $facet pass rather than separate count queries.
+// Header tiles; reuses buildStockStages so counts match the filter.
 async function getProductStats(tenantId) {
   const [result] = await Product.aggregate([
     { $match: { tenant_id: tenantId } },
@@ -310,11 +288,7 @@ async function getProductStats(tenantId) {
   };
 }
 
-// Search-driven listing: `ids` is a relevance-ordered candidate set already
-// produced by Typesense (see product.search.service.js#searchProducts) and
-// already scoped to tenant/published/structured filters — this only adds the
-// stock join/filter (not indexed in Typesense) and re-sorts to match
-// Typesense's relevance order, since $in does not preserve array order.
+// Re-sorts to Typesense relevance order; $in doesn't preserve order.
 async function getProductsByIds(ids, { stockFilter, channelFilter } = {}) {
   if (!ids.length) return { items: [] };
 
@@ -341,8 +315,12 @@ async function findProductById(id, tenantId) {
   return Product.findOne({ _id: id, tenant_id: tenantId });
 }
 
-// Adds a staff comment to a product's internal notes thread — never shown
-// to customers. Mirrors order.service.js#addOrderNote exactly.
+// Index workers have no tenantId; null = deleted since enqueued.
+async function findProductByIdForIndexing(id) {
+  return Product.findById(id);
+}
+
+// Staff-only note; mirrors order.service.js#addOrderNote.
 async function addProductNote(productId, { text, userId }, tenantId) {
   const product = await Product.findOne({ _id: productId, tenant_id: tenantId });
   if (!product) return null;
@@ -352,10 +330,7 @@ async function addProductNote(productId, { text, userId }, tenantId) {
   return product;
 }
 
-// Emails a product's title/SKU to a recipient the admin picks, with every
-// product image attached — triggered by the "Send Email" action beside Add
-// to Cart on the product edit page. Attachments are handed to nodemailer by
-// disk path rather than base64 — see buildAttachmentFilePath.
+// Attachments go to nodemailer by disk path, not base64.
 async function sendProductInfoEmail(productId, { name, email }, tenantId) {
   const product = await getPopulatedProduct(productId, tenantId);
   if (!product) return null;
@@ -382,8 +357,15 @@ async function sendProductInfoEmail(productId, { name, email }, tenantId) {
   return product;
 }
 
-async function getProductBySlug(slug, tenantId) {
-  const product = await Product.findOne({ slug, tenant_id: tenantId })
+// Scanned tags carry the id (autopartspro://product/<id>).
+function slugOrIdFilter(key) {
+  return mongoose.isValidObjectId(key) && /^[a-f0-9]{24}$/i.test(key)
+    ? { $or: [{ slug: key }, { _id: key }] }
+    : { slug: key };
+}
+
+async function getProductBySlugOrId(key, tenantId) {
+  const product = await Product.findOne({ ...slugOrIdFilter(key), tenant_id: tenantId })
     .populate("attachments")
     .populate("categories")
     .populate("digital_file")
@@ -391,8 +373,7 @@ async function getProductBySlug(slug, tenantId) {
     .lean();
   if (!product) return null;
 
-  // .lean() returns a plain object, so the Attachment model's `url` virtual
-  // never runs here either — backfill it explicitly, same as the list endpoint.
+  // .lean() skips the `url` virtual; backfill as the list does.
   product.attachments = withAttachmentUrls(product.attachments);
 
   product.stock_count = product.stock_control
@@ -400,32 +381,22 @@ async function getProductBySlug(slug, tenantId) {
     : null;
   product.stock_status = getStockStatus(product.stock_count, product.stock_control);
 
-  // internal_notes was added to the schema after existing products were
-  // created — .lean() returns the raw stored document with no schema
-  // defaults applied (unlike a hydrated Mongoose document), so any product
-  // saved before this field existed comes back with the key missing entirely.
+  // .lean() skips defaults; products older than this field lack it.
   product.internal_notes = product.internal_notes ?? [];
 
-  // Active marketplace listings (currently only eBay) carry storefront-useful
-  // content — warranty, condition notes, fitment — layered on top of the
-  // product record. A product can have more than one (per platform/variant),
-  // so this is always an array, even though today it's usually 0 or 1 item.
+  // Active listings add warranty/fitment content; always an array.
   const listings = await MarketplaceListing.find({
     product: product._id,
     state: LISTING_STATE.ACTIVE,
   })
     .populate("photo_overrides", "file_name")
     .lean();
-  // Same .lean()-strips-virtuals issue as above, for each listing's photos.
+  // Same .lean() virtual issue, for each listing's photos.
   listings.forEach((listing) => {
     listing.photo_overrides = withAttachmentUrls(listing.photo_overrides);
   });
 
-  // `display` resolves the "which value wins" precedence (listing override
-  // vs. the product's own value) and merges/dedupes vehicle fitment — the
-  // frontend renders this as-is rather than re-deriving it. `listings` stays
-  // available too, for fields with no product-level counterpart to resolve
-  // against (superseded part numbers, raw item specifics, photos).
+  // `display` resolves listing vs product precedence for the frontend.
   product.display = buildProductDisplay(product, listings);
   product.listings = listings.map(toPublicListing);
 
@@ -439,13 +410,12 @@ async function getPopulatedProduct(id, tenantId) {
     .populate("digital_file");
 }
 
-// Retries on a genuine slug conflict instead of trusting a single
-// check-then-insert (see utils/slug.js for why).
+// Retries on a real slug conflict (see utils/slug.js).
 async function createProductRecordWithSlug(data, baseSlug, tenantId) {
   return createWithUniqueSlug(Product, baseSlug, (slug) => ({ ...data, tenant_id: tenantId, slug }), { tenantId });
 }
 
-// ── Variant CRUD ──────────────────────────────────────────────────────────────
+// ── Variant CRUD ──
 
 async function getVariantsByProduct(productId, tenantId) {
   return ProductVariant.find({ product: productId, tenant_id: tenantId })
@@ -458,10 +428,7 @@ async function findVariant(variantId, productId, tenantId) {
   return ProductVariant.findOne({ _id: variantId, product: productId, tenant_id: tenantId });
 }
 
-// Lean id-only lookup for marketplace fan-out (product.controller.js#updateProduct)
-// — unlike getVariantsByProduct above, this never needs the populated
-// attachments/digital_file, just which variant ids exist so each one's own
-// listings can be fanned out to individually.
+// Id-only variant lookup for marketplace fan-out; no populate needed.
 async function listVariantIdsForProduct(productId, tenantId) {
   const variants = await ProductVariant.find({ product: productId, tenant_id: tenantId })
     .select("_id")
@@ -483,8 +450,7 @@ async function saveProduct(product) {
   return product.save();
 }
 
-// For renames: retries on a genuine slug conflict instead of trusting a
-// single check-then-save (see utils/slug.js for why).
+// Rename retries on a real slug conflict (see utils/slug.js).
 async function saveProductWithUniqueSlug(product, baseSlug) {
   return saveWithUniqueSlug(product, Product, baseSlug, product._id.toString(), { tenantId: product.tenant_id });
 }
@@ -497,37 +463,37 @@ async function saveVariant(variant) {
   return variant.save();
 }
 
-// Routed through inventory.service#adjustStock (rather than a raw
-// Inventory.updateOne) so the opening quantity set at product creation
-// shows up in that inventory record's stock history — same as every other
-// stock change (manual adjust, sale, refund, eBay sync). Without this, a
-// product created with e.g. 50 units on hand would read "No stock changes
-// recorded yet." in the History sheet despite genuinely having stock.
+// Via adjustStock so opening stock shows in the stock history.
 async function applyStockEntries(productId, stockEntries, { tenantId, userId } = {}) {
-  for (const entry of stockEntries) {
-    if (entry.qty > 0) {
-      const record = await Inventory.findOne({
-        product: productId,
-        variant: null,
-        location: entry.location_id,
-      });
-      if (!record) continue;
-
-      await inventoryService.adjustStock(record, {
-        adjustment: entry.qty,
-        reason: "Opening stock on product creation",
-        type: ADJUSTMENT_TYPE.RESTOCK,
-        userId,
-        tenantId,
-      });
+  // Looked up once, only if an entry arrives without a location.
+  let mainWarehouseId;
+  const locationFor = async (entry) => {
+    if (entry.location_id) return entry.location_id;
+    if (mainWarehouseId === undefined) {
+      mainWarehouseId = (await locationService.findMainWarehouse(tenantId))?._id ?? null;
     }
+    return mainWarehouseId;
+  };
+
+  for (const entry of stockEntries) {
+    if (!(entry.qty > 0)) continue;
+    const location = await locationFor(entry);
+    if (!location) continue;
+
+    const record = await Inventory.findOne({ product: productId, variant: null, location });
+    if (!record) continue;
+
+    await inventoryService.adjustStock(record, {
+      adjustment: entry.qty,
+      reason: "Opening stock on product creation",
+      type: ADJUSTMENT_TYPE.RESTOCK,
+      userId,
+      tenantId,
+    });
   }
 }
 
-// Lightweight hydration for the autocomplete dropdown — `ids` is the
-// relevance-ordered set Typesense returned (see
-// product.search.service.js#suggestProducts); only the fields a suggestion
-// row actually renders are selected/populated.
+// Autocomplete hydration: only the fields a suggestion row renders.
 async function getProductSuggestions(ids) {
   if (!ids.length) return [];
 
@@ -554,9 +520,10 @@ module.exports = {
   getProductsByIds,
   getProductSuggestions,
   findProductById,
+  findProductByIdForIndexing,
   addProductNote,
   sendProductInfoEmail,
-  getProductBySlug,
+  getProductBySlugOrId,
   getPopulatedProduct,
   createProductRecordWithSlug,
   getVariantsByProduct,

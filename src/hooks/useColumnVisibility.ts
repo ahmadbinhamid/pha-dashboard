@@ -16,8 +16,7 @@ function readStored(tableKey: string): Record<string, boolean> {
   }
 }
 
-// Persists which optional columns are shown for a given table, per browser —
-// e.g. useColumnVisibility("orders", ORDER_COLUMNS).
+// Persists which optional columns are shown for a given table, per browser, e.g. useColumnVisibility("orders", ORDER_COLUMNS).
 export function useColumnVisibility(tableKey: string, columns: ColumnDef[]) {
   const [visibility, setVisibility] = useState<Record<string, boolean>>(() => readStored(tableKey));
 

@@ -11,7 +11,7 @@ const {
   findProductById,
   addProductNote,
   sendProductInfoEmail,
-  getProductBySlug,
+  getProductBySlugOrId,
   getPopulatedProduct,
   createProductRecordWithSlug,
   getVariantsByProduct,
@@ -27,10 +27,13 @@ const {
 } = require("../services/product.service");
 const searchService = require("../services/search/product.search.service");
 const vehicleModelService = require("../services/vehicle-model.service");
+const tagService = require("../services/tag.service");
 const { fanOutMarketplaceInventory } = require("../services/inventory.service");
 const { enqueueSearchJob } = require("../queues/search.queue");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
+const { toPackage } = require("../utils/packageDimensions");
+const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 const { duplicateKeyMessage } = require("../utils/duplicateKey");
 const { buildProductFilter } = require("../utils/productFilter");
 const {
@@ -53,10 +56,7 @@ const {
   systemfailure,
 } = require("../utils/http/response");
 
-// Best-effort: adds this make/model/model_code/year combo to this tenant's
-// OWN vehicle catalog (covers custom values typed into the vehicle
-// Combobox) without letting a catalog write failure block the product save.
-// Never writes to the shared/global catalog — see vehicle-model.service.js.
+// Best-effort: adds vehicle combo to tenant catalog; never blocks the save.
 async function syncVehicleModelCatalog(vehicle, tenantId) {
   if (!vehicle) return;
   try {
@@ -66,9 +66,7 @@ async function syncVehicleModelCatalog(vehicle, tenantId) {
   }
 }
 
-// Fire-and-forget, same as syncVehicleModelCatalog above — a slow/unreachable
-// search queue must never block a product save. The worker re-fetches the
-// product itself (see search.worker.js), so only the id needs to travel here.
+// Fire-and-forget; the worker re-fetches the product, so only the id is sent.
 async function syncSearchIndex(productId) {
   try {
     await enqueueSearchJob("index_product", { productId: productId.toString() });
@@ -85,81 +83,57 @@ async function removeFromSearchIndex(productId) {
   }
 }
 
-// ── Marketplace fan-out on product/variant edits (TASK 1) ──────────────────
-//
-// BUG being fixed: updateProduct saved the product, synced the vehicle
-// catalog, and reindexed search, but never told eBay/Google anything
-// changed. Only a stock change (inventory.service.js#fanOutMarketplaceInventory,
-// called from adjustStock/setStock), a listing-level edit, or Google's
-// 25-day refresh sweep ever re-pushed a listing — so a plain price/title/
-// photo edit silently drifted the channel feed from the Product for up to
-// 25 days (worse for Google: a Google listing has almost no fields of its
-// own, so title/description/price/photos come from the Product with no
-// per-listing override at all in the common case).
-//
-// Fields below mirror exactly what listing.resolver.js#resolveListing/
-// resolveIdentifiers and resolveProductUrl read off Product when building a
-// channel payload: title, description, price, brand, mpn, attachments
-// (photos — resolvePhotos falls back to product.attachments whenever a
-// variant/listing has none of its own; order matters too, since Google's
-// imageLink is photos[0]) and slug (resolveProductUrl). This controller
-// never accepts `slug` as its own body field — the only way a product's
-// slug changes here is as a side effect of a title change (pendingSlugBase
-// below) — so watching `title` already covers `slug`.
-//
-// NOTE: `condition` is included per the review's explicit list even though
-// no adapter reads Product.condition today — both eBay's and Google's
-// listing discriminators carry their OWN `condition` field (edited via the
-// listing itself, defaulting to "NEW"), and listing.resolver.js never
-// merges Product.condition into a resolved payload. Kept in the watch list
-// anyway: a false-positive fan-out here just enqueues a same-data no-op
-// push, while dropping it silently breaks the moment any adapter starts
-// reading it.
-const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = ["title", "description", "price", "brand", "mpn", "condition"];
+// Channel-read fields, each normalised so subdocs/id lists compare by value.
+const scalar = (v) => (v === undefined || v === "" ? null : v);
+const idList = (list) => (list || []).map((a) => String(a?._id ?? a));
+const vehicleValue = (v) => ({
+  make: scalar(v?.make),
+  model: scalar(v?.model),
+  model_code: scalar(v?.model_code),
+  year_from: scalar(v?.year_from),
+  year_to: scalar(v?.year_to),
+});
 
-function snapshotMarketplaceProductFields(product) {
-  const snap = {};
-  for (const field of MARKETPLACE_RELEVANT_PRODUCT_FIELDS) snap[field] = product[field];
-  snap.attachments = (product.attachments || []).map((a) => a.toString());
-  return snap;
+const packageValue = (v) => toPackage(v);
+
+// NOTE: sku excluded; it's the channel identity, a new one would duplicate.
+const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
+  title: scalar,
+  description: scalar,
+  price: scalar,
+  brand: scalar,
+  mpn: scalar,
+  condition: scalar,
+  authenticity: scalar,
+  vehicle: vehicleValue,
+  // Google's product link is built from the slug.
+  slug: scalar,
+  // Untracked stock sends no eBay quantity and drops the item from Google.
+  stock_control: scalar,
+  shipping_cost: scalar,
+  package: packageValue,
+  attachments: idList,
+  // Categories pick the mapped eBay/Google category; order decides which wins.
+  categories: idList,
+});
+
+// Variant listings take title/description/brand/mpn/condition from the parent.
+const MARKETPLACE_RELEVANT_VARIANT_FIELDS = Object.freeze({ price: scalar, sku: scalar, attachments: idList });
+
+function snapshotFields(doc, fields) {
+  return Object.fromEntries(Object.entries(fields).map(([field, normalise]) => [field, JSON.stringify(normalise(doc[field]))]));
 }
 
-function arraysEqual(a, b) {
-  if (a.length !== b.length) return false;
-  return a.every((v, i) => v === b[i]);
+function fieldsChanged(before, after) {
+  return Object.keys(before).some((field) => before[field] !== after[field]);
 }
 
-function marketplaceProductFieldsChanged(before, after) {
-  for (const field of MARKETPLACE_RELEVANT_PRODUCT_FIELDS) {
-    if (before[field] !== after[field]) return true;
-  }
-  return !arraysEqual(before.attachments, after.attachments);
-}
+const snapshotMarketplaceProductFields = (product) => snapshotFields(product, MARKETPLACE_RELEVANT_PRODUCT_FIELDS);
+const snapshotMarketplaceVariantFields = (variant) => snapshotFields(variant, MARKETPLACE_RELEVANT_VARIANT_FIELDS);
+const marketplaceProductFieldsChanged = fieldsChanged;
+const marketplaceVariantFieldsChanged = fieldsChanged;
 
-// Variant counterpart: variant has no title/description/brand/mpn/condition
-// of its own (those always come from the parent Product — see
-// ProductVariant.js), so only its own price/photo/sku overrides matter here
-// — resolvePrice/resolvePhotos prefer these over the product's when present,
-// and resolveSku reads variant.sku directly as the offerId fallback whenever
-// the listing itself has no store_sku override.
-const MARKETPLACE_RELEVANT_VARIANT_FIELDS = ["price", "sku"];
-
-function snapshotMarketplaceVariantFields(variant) {
-  const snap = {};
-  for (const field of MARKETPLACE_RELEVANT_VARIANT_FIELDS) snap[field] = variant[field];
-  snap.attachments = (variant.attachments || []).map((a) => a.toString());
-  return snap;
-}
-
-function marketplaceVariantFieldsChanged(before, after) {
-  for (const field of MARKETPLACE_RELEVANT_VARIANT_FIELDS) {
-    if (before[field] !== after[field]) return true;
-  }
-  return !arraysEqual(before.attachments, after.attachments);
-}
-
-// Best-effort single fan-out call — never lets a queue/DB hiccup fail the
-// product/variant update response, same convention as syncSearchIndex above.
+// Best-effort fan-out; a queue/DB hiccup never fails the update response.
 async function bestEffortFanOut(productId, variantId, tenantId) {
   try {
     await fanOutMarketplaceInventory(productId, variantId, tenantId);
@@ -171,12 +145,7 @@ async function bestEffortFanOut(productId, variantId, tenantId) {
   }
 }
 
-// A product-level field change can affect listings across every variant
-// (variants without their own price/photo override fall back to the
-// product's), not just the base no-variant listings — so this fans out to
-// the base listings AND every variant's listings. fanOutMarketplaceInventory
-// itself is a no-op per call when a given product/variant combo has no
-// active listings, so this is cheap for a product with no variants.
+// Product changes can affect variant listings; fan out to base + variants.
 async function fanOutProductChangeToListings(productId, tenantId) {
   await bestEffortFanOut(productId, null, tenantId);
   try {
@@ -189,9 +158,7 @@ async function fanOutProductChangeToListings(productId, tenantId) {
   }
 }
 
-// In-memory equivalent of a Mongo `{field: 1|-1, ...}` sort spec, for
-// re-ordering the already-hydrated/stock-filtered search results (Typesense
-// itself only ranks by relevance).
+// Mongo-style sort for hydrated hits; Typesense only ranks by relevance.
 function sortByFields(items, sortSpec) {
   const entries = Object.entries(sortSpec);
   return [...items].sort((a, b) => {
@@ -203,12 +170,48 @@ function sortByFields(items, sortSpec) {
   });
 }
 
-// Bounds how many Typesense hits are hydrated/paginated in JS below — the
-// stock filter (not indexed in Typesense) has to be applied after hydration,
-// so this caps how much of the catalog a single search page reads. Fine for
-// a per-tenant auto-parts catalog; would need a real Typesense-side stock
-// field if a tenant's catalog grows far beyond this.
+// Caps Typesense hits hydrated/stock-filtered in JS per page; raise if needed.
 const SEARCH_CANDIDATE_LIMIT = 250;
+
+// Mobile create's "Add to Tag Queue"; a queue hiccup never fails the create.
+async function queueNewProductTags(productId, req) {
+  try {
+    await tagService.addToQueue(req.tenantId, req.user?._id, { product_id: productId });
+  } catch (err) {
+    logger.warn(`[product.controller] failed to queue tags for new product ${productId}: ${err.message}`);
+  }
+}
+
+// Typesense-ranked page for a search query (throws if Typesense is down).
+async function typesenseProductPage(req, { page, limit, skip, stockFilter, channelFilter }) {
+  const categories = req.query.categories
+    ? (Array.isArray(req.query.categories) ? req.query.categories : req.query.categories.split(","))
+        .map((c) => c.trim())
+        .filter(Boolean)
+    : [];
+
+  const { ids } = await searchService.searchProducts({
+    q: req.query.search,
+    tenantId: req.tenantId,
+    publishedOnly: !req.user,
+    categories,
+    condition: req.query.condition || undefined,
+    authenticity: req.query.authenticity || undefined,
+    priceMin: req.query.price_min,
+    priceMax: req.query.price_max,
+    make: req.query.make || undefined,
+    model: req.query.model || undefined,
+    page: 1,
+    perPage: SEARCH_CANDIDATE_LIMIT,
+  });
+
+  const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
+  // Only override Typesense's relevance order if the caller asked for a sort.
+  const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
+  const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
+  const total = ordered.length;
+  return { items: ordered.slice(skip, skip + limit), total, page, pageSize: limit, totalPages: Math.ceil(total / limit) };
+}
 
 exports.getProducts = async (req, res) => {
   try {
@@ -217,42 +220,12 @@ exports.getProducts = async (req, res) => {
     const channelFilter = req.query.channel || undefined;
 
     if (req.query.search) {
-      const categories = req.query.categories
-        ? (Array.isArray(req.query.categories) ? req.query.categories : req.query.categories.split(","))
-            .map((c) => c.trim())
-            .filter(Boolean)
-        : [];
-
-      const { ids } = await searchService.searchProducts({
-        q: req.query.search,
-        tenantId: req.tenantId,
-        publishedOnly: !req.user,
-        categories,
-        condition: req.query.condition || undefined,
-        authenticity: req.query.authenticity || undefined,
-        priceMin: req.query.price_min,
-        priceMax: req.query.price_max,
-        make: req.query.make || undefined,
-        model: req.query.model || undefined,
-        page: 1,
-        perPage: SEARCH_CANDIDATE_LIMIT,
+      // NOTE: Typesense down degrades to the Mongo regex search, never a 500.
+      const result = await typesenseProductPage(req, { page, limit, skip, stockFilter, channelFilter }).catch((err) => {
+        logger.warn(`[product.controller] Typesense search failed, using Mongo fallback: ${err.message}`);
+        return null;
       });
-
-      const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
-
-      // Typesense's relevance order is the default ("best match") — only
-      // override it with an explicit sort spec if the caller asked for one.
-      const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
-      const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
-
-      const total = ordered.length;
-      return success(res, {
-        items: ordered.slice(skip, skip + limit),
-        total,
-        page,
-        pageSize: limit,
-        totalPages: Math.ceil(total / limit),
-      });
+      if (result) return success(res, result);
     }
 
     const filter = buildProductFilter(req.query, { authenticated: !!req.user, tenantId: req.tenantId });
@@ -297,7 +270,7 @@ exports.suggestProducts = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   try {
-    const product = await getProductBySlug(req.params.slug, req.tenantId);
+    const product = await getProductBySlugOrId(req.params.slug, req.tenantId);
     if (!product) return notFound(res, "Product not found");
     // Unauthenticated callers can't see unpublished/draft products by slug either
     if (
@@ -312,13 +285,7 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-// NOTE (TASK 1): createProduct and duplicateProduct (below) deliberately do
-// NOT fan out to marketplace listings. Checked: a MarketplaceListing is
-// always created via its own separate "list on eBay/Google" action, never
-// as a side effect of createProductRecordWithSlug — so at the moment either
-// of these returns, hasMarketplaceListings(product._id) is unconditionally
-// false and fanOutMarketplaceInventory would find zero listings to push to.
-// Adding a call here would be a guaranteed no-op on every single call.
+// create/duplicate skip fan-out: a new product has no listings yet.
 exports.createProduct = async (req, res) => {
   try {
     const body = req.body || {};
@@ -344,6 +311,9 @@ exports.createProduct = async (req, res) => {
       stock_entries,
       vehicle,
       shipping_cost,
+      package: pkg,
+      bay,
+      shipping_method,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -364,6 +334,9 @@ exports.createProduct = async (req, res) => {
       compare_price: compare_price ? Number(compare_price) : null,
       cost_price: cost_price ? Number(cost_price) : null,
       shipping_cost: shipping_cost ? Number(shipping_cost) : null,
+      package: toPackage(pkg),
+      bay: bay || null,
+      shipping_method: shipping_method || SHIPPING_METHOD.STANDARD,
       is_taxable: toBool(is_taxable),
       sku: autoSku,
       barcode: barcode || null,
@@ -405,10 +378,11 @@ exports.createProduct = async (req, res) => {
       }
     }
 
+    if (toBool(body.add_to_tag_queue)) await queueNewProductTags(product._id, req);
+
     return created(res, await getPopulatedProduct(product._id, req.tenantId), "Product created");
   } catch (err) {
-    // Name the index that actually rejected the write: slug and sku are both
-    // unique here, so a hardcoded slug message misreports sku collisions.
+    // Name the index that rejected the write; slug and sku are both unique.
     const conflict = duplicateKeyMessage(err, "Product", { slug: "slug", sku: "SKU" });
     if (conflict) return requestConflict(res, conflict);
     return systemfailure(res, err);
@@ -420,8 +394,7 @@ exports.updateProduct = async (req, res) => {
     const product = await findProductById(req.params.id, req.tenantId);
     if (!product) return notFound(res, "Product not found");
 
-    // Snapshot BEFORE any mutation below — compared against the same fields
-    // post-save to decide whether this edit needs to reach eBay/Google (TASK 1).
+    // Snapshot pre-mutation; compared post-save to decide the channel fan-out.
     const beforeMarketplaceFields = snapshotMarketplaceProductFields(product);
 
     const body = req.body || {};
@@ -446,6 +419,9 @@ exports.updateProduct = async (req, res) => {
       digital_file,
       vehicle,
       shipping_cost,
+      package: pkg,
+      bay,
+      shipping_method,
     } = body;
 
     let pendingSlugBase = null;
@@ -483,6 +459,9 @@ exports.updateProduct = async (req, res) => {
     if (authenticity !== undefined) product.authenticity = authenticity || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
     if (vehicle !== undefined) product.vehicle = parseField(vehicle, null);
+    if (pkg !== undefined) product.package = toPackage(pkg);
+    if (bay !== undefined) product.bay = bay || null;
+    if (shipping_method) product.shipping_method = shipping_method;
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
@@ -510,9 +489,7 @@ exports.updateProduct = async (req, res) => {
     if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle, req.tenantId);
     await syncSearchIndex(product._id);
 
-    // TASK 1: fan out to marketplace listings only if something a channel
-    // payload actually reads changed — an internal-notes/vehicle-catalog/
-    // categories/tags-only edit must not queue a push for every listing.
+    // Fan out only when a field a channel payload reads changed (not notes/tags).
     if (marketplaceProductFieldsChanged(beforeMarketplaceFields, snapshotMarketplaceProductFields(product))) {
       await fanOutProductChangeToListings(product._id, req.tenantId);
     }
@@ -616,8 +593,7 @@ exports.updateVariant = async (req, res) => {
     const variant = await findVariant(req.params.variantId, req.params.id, req.tenantId);
     if (!variant) return notFound(res, "Variant not found");
 
-    // TASK 1: same before/after snapshot as updateProduct, scoped to the
-    // fields this variant can actually override for a channel payload.
+    // Same snapshot as updateProduct, scoped to this variant's override fields.
     const beforeMarketplaceFields = snapshotMarketplaceVariantFields(variant);
 
     const body = req.body || {};
@@ -651,8 +627,7 @@ exports.updateVariant = async (req, res) => {
 
     await saveVariant(variant);
 
-    // TASK 1: fan out only to THIS variant's own listings — a variant price/
-    // photo/sku change never affects a sibling variant's listing.
+    // Fan out to this variant's listings only; siblings are never affected.
     if (marketplaceVariantFieldsChanged(beforeMarketplaceFields, snapshotMarketplaceVariantFields(variant))) {
       await bestEffortFanOut(variant.product, variant._id, req.tenantId);
     }

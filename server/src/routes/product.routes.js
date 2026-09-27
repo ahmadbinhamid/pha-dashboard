@@ -2,7 +2,7 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
@@ -12,9 +12,7 @@ const { upload } = require("../middlewares/upload");
 
 const formFields = upload.none();
 
-// auth(false) resolves req.tenant from a staff JWT when present (admin
-// dashboard browsing); resolveGuestTenant() fills in from X-Tenant-Slug
-// otherwise (public storefront browsing).
+// Staff JWT sets the tenant when present; else X-Tenant-Slug does.
 router.get(
   "/",
   auth(false),
@@ -30,10 +28,8 @@ router.get(
   validate(v.suggestProducts),
   asyncHandler(ctrl.suggestProducts),
 );
-// Registered ahead of "/:slug" below — same single path segment, and that
-// route is public (auth(false)), so it would otherwise serve this as an
-// unauthenticated storefront lookup for a product literally named "stats".
-router.get("/stats", auth(), asyncHandler(ctrl.getProductStats));
+// Must precede "/:slug", which would treat "stats" as a product slug.
+router.get("/stats", auth(), requirePermission("products.view"), asyncHandler(ctrl.getProductStats));
 router.get(
   "/:slug",
   auth(false),
@@ -42,48 +38,48 @@ router.get(
   asyncHandler(ctrl.getProduct),
 );
 
-router.post("/", auth(), formFields, asyncHandler(ctrl.createProduct));
+router.post("/", auth(), requirePermission("products.create"), formFields, asyncHandler(ctrl.createProduct));
 router.put(
   "/:id",
-  auth(),
+  auth(), requirePermission("products.update"),
   formFields,
   validate(v.byIdParam),
   asyncHandler(ctrl.updateProduct),
 );
 router.delete(
   "/:id",
-  auth(),
+  auth(), requirePermission("products.delete"),
   validate(v.byIdParam),
   asyncHandler(ctrl.deleteProduct),
 );
 router.post(
   "/:id/duplicate",
-  auth(),
+  auth(), requirePermission("products.create"),
   validate(v.byIdParam),
   asyncHandler(ctrl.duplicateProduct),
 );
 router.get(
   "/:id/variants",
-  auth(),
+  auth(), requirePermission("products.view"),
   validate(v.byIdParam),
   asyncHandler(ctrl.getVariants),
 );
 router.put(
   "/:id/variants/:variantId",
-  auth(),
+  auth(), requirePermission("products.update"),
   formFields,
   validate(v.byVariantParam),
   asyncHandler(ctrl.updateVariant),
 );
 router.post(
   "/:id/notes",
-  auth(),
+  auth(), requirePermission("products.update"),
   validate(v.addProductNote),
   asyncHandler(ctrl.addProductNote),
 );
 router.post(
   "/:id/send-email",
-  auth(),
+  auth(), requirePermission("products.view"),
   validate(v.sendProductEmail),
   asyncHandler(ctrl.sendProductEmail),
 );

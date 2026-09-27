@@ -36,11 +36,7 @@ const systemfailure = (response, err) => {
     ].includes(err?.name) &&
     process.env.APP_ENV === "production"
   ) {
-    // NOTE (lint fix): sendErrorAlert has its own internal try/catch (see
-    // utils/emailSender.js) and never actually rejects — `void` documents
-    // this fire-and-forget alert is deliberate, not a missed await
-    // (awaiting it would delay every failed request on an SMTP round trip
-    // for an alert the caller doesn't need the result of).
+    // sendErrorAlert never actually rejects; `void` documents this fire-and-forget as deliberate.
     void sendErrorAlert(
       "🚨 MongoDB Connection Error",
       `${err?.name}\n\n${err?.stack || ""}`,

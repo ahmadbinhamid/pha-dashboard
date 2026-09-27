@@ -1,28 +1,13 @@
 import { cn } from "@/utils/cn";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
+import { ViewOnChannelLink } from "@/components/channels/ViewOnChannelLink";
 import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, GroupedListingSummary } from "@/types/marketplace";
 
-// Extracted from ListingsPage.tsx's own per-product expand pattern so the
-// Products page (channel status per product, collapsed dot row + expandable
-// detail) and the Listings page's grouped fallback don't each reimplement
-// it. Takes `channels` from GET /channels (never a
-// hardcoded platform list) so a newly-registered adapter shows up here
-// automatically, with no changes to this component.
-//
-// A colored dot means ONE thing everywhere on this page: sync status/health
-// (ok=live, warn=needs a push, danger=error, dim=not listed) — the same
-// mapping the collapsed row and the expanded panel both use below, and the
-// same one the page's top channel-summary cards use. Earlier, the expanded
-// panel colored its dot by CHANNEL IDENTITY instead (a categorical palette,
-// unrelated to status), so the same visual read as "health" one line and
-// "which channel" the next — that's what made this confusing. Identity is
-// now its own separate element (ChannelAvatar), which never carries a
-// status color, so the two questions ("which channel" / "is it OK") never
-// compete for the same pixel.
+// NOTE: channels come from GET /channels; a dot's colour is only ever status.
 
-type ListingLike = Pick<AnyMarketplaceListing | GroupedListingSummary, "platform" | "sync_status" | "synced_at">;
+type ListingLike = Pick<AnyMarketplaceListing | GroupedListingSummary, "platform" | "sync_status" | "synced_at" | "external_url">;
 
 const DOT_COLOR: Record<string, string> = {
   synced: "bg-ok",
@@ -33,10 +18,7 @@ const DOT_COLOR: Record<string, string> = {
   not_listed: "bg-fg/20",
 };
 
-// Status → plain text color (no pill/badge background) — the expanded
-// detail panel shows status as bare colored text right next to "Not
-// listed" (also bare text), so a real listing's status doesn't visually
-// jump out with a pill background its unlisted neighbors don't have.
+// Plain text colour, no pill, so a status doesn't outweigh "Not listed" rows.
 const STATUS_TEXT_COLOR: Record<string, string> = {
   synced: "text-ok",
   pending: "text-warn",
@@ -45,9 +27,7 @@ const STATUS_TEXT_COLOR: Record<string, string> = {
   error: "text-danger",
 };
 
-// Collapsed row's "Channels" cell — a dot per registered channel (colored by
-// that channel's listing status, dim if not listed) plus a short summary
-// string, e.g. "2/6 live · 1 syncing".
+// Collapsed "Channels" cell: a status dot per channel plus "2/6 live".
 export function ProductChannelDots({
   channels,
   listings,
@@ -55,9 +35,7 @@ export function ProductChannelDots({
   channels: ChannelSummary[];
   listings: ListingLike[];
 }) {
-  // Keyed by plain string, not MarketplacePlatform — channel.key comes from
-  // the backend's dynamic adapter registry (any future platform), a wider
-  // set than the frontend's closed MarketplacePlatform union.
+  // Keyed by string: channel keys come from the server registry.
   const byPlatform = new Map<string, ListingLike>(listings.map((l) => [l.platform, l]));
   const liveCount = channels.filter((c) => byPlatform.get(c.key)?.sync_status === "synced").length;
   const pendingCount = channels.filter((c) => byPlatform.get(c.key)?.sync_status === "pending").length;
@@ -84,12 +62,7 @@ export function ProductChannelDots({
   );
 }
 
-// Expanded detail panel — one row per registered channel, showing this
-// product's real status on it (or "Ready to publish" if not listed yet),
-// with a single primary action: "Open" (edit) for a listed channel, "List"
-// (create) for one it isn't on yet. Push/retry/delete stay Listings-tab-only
-// — this view is for browsing "is this product live where it should be",
-// not day-to-day per-listing operations.
+// Expanded panel: per-channel status, a live link, and one Open/List action.
 export function ProductChannelDetail({
   channels,
   listings,
@@ -101,9 +74,7 @@ export function ProductChannelDetail({
   onOpen: (platform: string) => void;
   onList: (platform: string) => void;
 }) {
-  // Keyed by plain string, not MarketplacePlatform — channel.key comes from
-  // the backend's dynamic adapter registry (any future platform), a wider
-  // set than the frontend's closed MarketplacePlatform union.
+  // Keyed by string: channel keys come from the server registry.
   const byPlatform = new Map<string, ListingLike>(listings.map((l) => [l.platform, l]));
 
   return (
@@ -117,17 +88,11 @@ export function ProductChannelDetail({
 
         return (
           <div key={channel.key} className="flex items-center gap-3 py-2.5">
-            {/* Icon only, no name label — the brand mark itself (eBay's
-                wordmark, Google Merchant Center's icon) already identifies
-                the channel at a glance, so repeating it as text next to an
-                icon built to say the same thing was redundant. Sized up to
-                "md" now that it doesn't have to share the row with text. */}
+            {/* Icon only: the brand mark already names the channel. */}
             <span className="flex w-10 shrink-0 items-center" title={channel.name}>
               <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="md" />
             </span>
-            {/* Same dot/color the collapsed row uses for this exact status —
-                see this file's header comment for why that consistency is
-                the point. */}
+            {/* Same status dot as the collapsed row. */}
             <span
               className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_COLOR[status ?? "not_listed"])}
               aria-hidden="true"
@@ -140,6 +105,7 @@ export function ProductChannelDetail({
                   ? "Queued for next sync"
                   : "Ready to publish"}
             </span>
+            <ViewOnChannelLink url={listing?.external_url} channelName={channel.name} compact />
             <button
               type="button"
               onClick={() => (isListed ? onOpen(channel.key) : onList(channel.key))}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Expand } from "lucide-react";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/utils/cn";
+import { Card } from "@/components/ui/Card";
 import { ImageViewerModal } from "@/components/media/ImageViewerModal";
 import type { Attachment } from "@/types/product";
 
@@ -14,9 +15,7 @@ interface ProductLivePreviewCardProps {
   stockCount?: number | null;
 }
 
-// Read-only reflection of the form's current values — lets the user see
-// roughly what the product will look like before saving. Clicking the
-// cover opens a full-screen viewer (zoom + next/prev) over every image.
+// Live preview of the form's values; clicking the cover opens a viewer.
 export function ProductLivePreviewCard({
   title,
   images = [],
@@ -30,8 +29,8 @@ export function ProductLivePreviewCard({
   const [viewerOpen, setViewerOpen] = useState(false);
 
   return (
-    <div className="rounded-md bg-card p-4 shadow-card ring-1 ring-inset ring-border">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-fg/40">Live Preview</p>
+    <Card className="p-4">
+      <p className="text-3xs font-semibold uppercase tracking-wider text-fg/40">Live Preview</p>
 
       <div
         className={cn(
@@ -72,6 +71,6 @@ export function ProductLivePreviewCard({
       </div>
 
       <ImageViewerModal images={images} open={viewerOpen} onOpenChange={setViewerOpen} initialIndex={0} />
-    </div>
+    </Card>
   );
 }

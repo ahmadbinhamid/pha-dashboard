@@ -1,24 +1,15 @@
-import { CreditCard, Globe, Link2, Mail } from "lucide-react";
+import { CreditCard, FolderTree, Globe, Link2, Mail, Truck } from "lucide-react";
 import { EbayLogo, GoogleLogo } from "@/components/channels/channelLogos";
 
-// The integrations Settings can configure, in catalogue order. Lives in
-// config/ (like settingsTabs.tsx and nav.tsx) rather than inside the tab that
-// renders it, because the id is also the URL segment
-// (/settings/integrations/:provider) that SettingsPage routes on — two files
-// need the list, so neither should own it.
-export type IntegrationId = "ebay" | "google" | "stripe" | "email" | "domains" | "payment-links";
+// In config/ because the id is also the URL segment SettingsPage routes on.
+export type IntegrationId = "ebay" | "google" | "channel-categories" | "stripe" | "email" | "transdirect" | "domains" | "payment-links";
 
 export type IntegrationDefinition = {
   id: IntegrationId;
   name: string;
   description: string;
   icon: (props: { className?: string }) => React.ReactNode;
-  // eBay/Google get their own brand mark, and "Custom Domains" — the
-  // tenant's own storefront — gets the tenant's uploaded logo when they've
-  // set one (see IntegrationsTab.tsx). All three read as "which channel/
-  // storefront is this", so they share the neutral logo-chip treatment
-  // instead of the accent-tinted circle every other (purely functional)
-  // integration icon uses.
+  // These three use the neutral logo chip, not the accent-tinted circle.
   logoTile?: boolean;
 };
 
@@ -38,6 +29,12 @@ export const INTEGRATION_CATALOGUE: IntegrationDefinition[] = [
     logoTile: true,
   },
   {
+    id: "channel-categories",
+    name: "Channel Categories",
+    description: "Map your product categories to eBay and Google categories once, instead of per listing.",
+    icon: (p) => <FolderTree {...p} />,
+  },
+  {
     id: "stripe",
     name: "Stripe Payments",
     description: "Your own Stripe keys, used for checkout, payment links and refunds.",
@@ -50,11 +47,15 @@ export const INTEGRATION_CATALOGUE: IntegrationDefinition[] = [
     icon: (p) => <Mail {...p} />,
   },
   {
+    id: "transdirect",
+    name: "Transdirect Shipping",
+    description: "Live courier rates by postcode for products set to calculated shipping.",
+    icon: (p) => <Truck {...p} />,
+  },
+  {
     id: "domains",
     name: "Custom Domains",
-    // Fallback icon when the tenant hasn't uploaded a logo yet — see
-    // IntegrationsTab.tsx, which swaps this for <img src={settings.logo_url}>
-    // once they have.
+    // Fallback until the tenant uploads a logo (swapped in IntegrationsTab).
     description: "Point your own domain at the storefront, and verify it for customer-facing links.",
     icon: (p) => <Globe {...p} />,
     logoTile: true,

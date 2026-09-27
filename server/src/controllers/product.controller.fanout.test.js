@@ -1,46 +1,10 @@
 // controllers/product.controller.fanout.test.js
-//
-// Regression guard for TASK 1: updateProduct/updateVariant must fan out to
-// marketplace listings ONLY when a field a channel payload actually reads
-// changed (title/description/price/brand/mpn/condition/attachments on the
-// product; price/sku/attachments on a variant) — never on an unrelated
-// field, and never in a way that fails the HTTP response if the queue call
-// itself fails.
-//
-// Calls the exported controller functions directly with plain fake
-// req/res objects (this repo has no supertest/app-level HTTP test harness
-// and "no npm dependencies" is a hard constraint for this change) — same
-// spirit as inventory.service.fanout.test.js, one level up the call stack.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/controllers/product.controller.fanout.test.js
-//
-// HISTORY: this file used to hang `npm test`'s full `--test-concurrency=1`
-// run indefinitely (confirmed via `ps` while stuck: minutes elapsed, still
-// sitting on this file). Traced (by bisecting product.controller.js's
-// require graph against a plain mongoose connect/disconnect,
-// process._getActiveHandles() showing a lingering Redis Socket) to
-// product.service.js -> services/email/email.service.js ->
-// queues/email.queue.js constructing a real `new Queue("email", ...)` at
-// require time — a real ioredis connection nothing ever closed, completely
-// unrelated to anything updateProduct/updateVariant themselves do.
-// services/refund.reconciliation.service.test.js turned out to hang the
-// SAME way, via the same email.service.js require, one hop further through
-// refund.service.js.
-//
-// FIXED AT THE ROOT (see queues/email.queue.js, queues/search.queue.js,
-// queues/channel.queue.js's existing getQueue): every Bull queue in this
-// repo is now constructed LAZILY, on first real use, not at require() time
-// — a getter-backed export for email/search (channel.queue.js's own
-// getQueue already worked this way). Requiring product.controller.js (or
-// anything else) no longer opens any Redis connection on its own, so this
-// file goes back to the plain, ordinary `mock.method()` shape every other
-// test in this repo already uses (inventory.service.fanout.test.js, right
-// next to this one) — no require.cache stubbing needed any more.
+// Edits fan out only on channel-read fields; never fail HTTP. Needs Mongo.
 const test = require("node:test");
 const { mock, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -61,21 +25,11 @@ registry.register({ key: "google", publish: async () => {}, update: async () => 
 
 const productController = require("./product.controller");
 
-// getPopulatedProduct/getPopulatedVariant (called at the end of every
-// controller path under test) populate "attachments"/"categories"/
-// "digital_file" — Mongoose needs those models registered on this
-// connection before a populate touching them will resolve, which normally
-// happens as a side effect of the app's full route/controller graph
-// loading at boot. This test only requires product.controller.js directly,
-// so it never pulls those model files in on its own; require them
-// explicitly rather than let populate fail with a MissingSchemaError.
+// Register populated models explicitly, or populate throws MissingSchemaError.
 require("../models/Attachment");
 require("../models/Category");
 
-// One connection for the whole file (matching the single-connect/disconnect
-// shape every other *.test.js in this repo uses) rather than one per test —
-// avoids cycling the Mongo driver's connection/monitor setup 4x in one
-// process.
+// One connection for the whole file, not one per test.
 before(async () => {
   await mongoose.connect(config.mongoUri);
 });
@@ -106,7 +60,7 @@ async function setup() {
   const { LISTING_STATE } = require("../constants/marketplace.constants");
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   const product = await Product.create({
     tenant_id: tenantId,
@@ -144,7 +98,7 @@ test("updateProduct: a price change fans out to both an eBay and a Google listin
   const req = {
     params: { id: product._id.toString() },
     tenantId,
-    user: { _id: new mongoose.Types.ObjectId() },
+    user: { _id: fixtureId() },
     body: { price: "149.99" },
   };
   const res = fakeRes();
@@ -166,10 +120,9 @@ test("updateProduct: an irrelevant-field edit fans out to nothing", async (t) =>
   const req = {
     params: { id: product._id.toString() },
     tenantId,
-    user: { _id: new mongoose.Types.ObjectId() },
-    // is_taxable/stock_control/tags are never read by listing.resolver.js
-    // or any adapter — must not queue anything.
-    body: { is_taxable: true, stock_control: false, tags: ["a", "b"] },
+    user: { _id: fixtureId() },
+    // None of these is read by a channel payload (stock_control is: see below).
+    body: { is_taxable: true, tags: ["a", "b"], compare_price: 150, barcode: "9300000000001", cost_price: 40 },
   };
   const res = fakeRes();
 
@@ -180,6 +133,21 @@ test("updateProduct: an irrelevant-field edit fans out to nothing", async (t) =>
   assert.equal(syncCalls.length, 0, "an edit to fields no adapter reads must not fan out");
 });
 
+test("updateProduct: a stock_control change fans out (untracked stock changes both payloads)", async () => {
+  const { tenantId, product } = await setup();
+  enqueueSpy.mock.resetCalls();
+
+  const res = fakeRes();
+  await productController.updateProduct(
+    { params: { id: product._id.toString() }, tenantId, user: { _id: fixtureId() }, body: { stock_control: false } },
+    res,
+  );
+
+  assert.equal(res.statusCode, 200);
+  const syncCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[1] === "sync_listing");
+  assert.ok(syncCalls.length > 0, "a stock_control edit must queue a sync");
+});
+
 test("updateProduct: a queue failure does not fail the request", async (t) => {
   const { tenantId, product } = await setup();
   enqueueSpy.mock.resetCalls();
@@ -188,7 +156,7 @@ test("updateProduct: a queue failure does not fail the request", async (t) => {
   const req = {
     params: { id: product._id.toString() },
     tenantId,
-    user: { _id: new mongoose.Types.ObjectId() },
+    user: { _id: fixtureId() },
     body: { title: "A brand new title" },
   };
   const res = fakeRes();
@@ -240,7 +208,7 @@ test("updateVariant: a variant price change fans out only for that variant's own
   const req = {
     params: { id: product._id.toString(), variantId: variant._id.toString() },
     tenantId,
-    user: { _id: new mongoose.Types.ObjectId() },
+    user: { _id: fixtureId() },
     body: { price: "65.00" },
   };
   const res = fakeRes();

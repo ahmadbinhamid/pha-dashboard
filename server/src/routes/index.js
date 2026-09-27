@@ -22,6 +22,7 @@ router.use("/ebay", require("./ebay.routes"));
 router.use("/google", require("./google.routes"));
 router.use("/listings", require("./listing.routes"));
 router.use("/channels", require("./channel.routes"));
+router.use("/category-mappings", require("./categoryMapping.routes"));
 router.use("/inquiry", require("./inquiry.routes"));
 router.use("/newsletter", require("./newsletter.routes"));
 router.use("/demo-request", require("./demoRequest.routes"));
@@ -34,5 +35,7 @@ router.use("/notification", require("./notification.routes"));
 router.use("/members", require("./member.routes"));
 router.use("/roles", require("./role.routes"));
 router.use("/invitations", require("./invitation.routes"));
+router.use("/tags", require("./tag.routes"));
+router.use("/shipping", require("./shipping.routes"));
 
 module.exports = router;

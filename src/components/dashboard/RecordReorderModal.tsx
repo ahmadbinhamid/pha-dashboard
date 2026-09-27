@@ -24,9 +24,7 @@ interface RecordReorderModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Quick "I've restocked this" action from the dashboard's Critical Stock
-// table — credits the item's stock via the same adjustStock endpoint the
-// full Inventory page uses, so history/marketplace sync stay consistent.
+// Quick "I've restocked this" action from the Critical Stock table, using the same adjustStock endpoint as the Inventory page so history/sync stay consistent.
 export function RecordReorderModal({ item, onOpenChange }: RecordReorderModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

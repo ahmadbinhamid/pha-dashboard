@@ -15,10 +15,7 @@ export const customerFormSchema = z
     useDifferentBilling: z.boolean(),
     billingAddress: addressFieldsSchema,
   })
-  // Shipping address: optional as a whole, but if any field is filled the
-  // rest become required (a half-typed address shouldn't silently save as
-  // empty). Billing address: same rule, but only enforced at all when
-  // "use a different billing address" is checked.
+  // Shipping: optional as a whole, but filling any field makes the rest required. Billing: same rule, only enforced when "use a different billing address" is checked.
   .superRefine((values, ctx) => {
     const shippingErrors = validatePartialAddress(values.shippingAddress);
     for (const [key, message] of Object.entries(shippingErrors)) {

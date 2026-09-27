@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
 import { useToast } from "@/context";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { OrderChannel, OrderItem } from "@/types/orders";
 import {
   editableUnitPriceFormSchema,
@@ -91,9 +93,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
         setEditing(true);
       }}
     >
-      {/* Absolutely positioned so it never reserves layout space — otherwise
-          this value would sit left of the column's right edge even while
-          the pencil itself is invisible at opacity-0. */}
+      {/* Absolute so it reserves no space and stays at the column's right edge. */}
       <span className="relative">
         {formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}
         <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/price:opacity-100" />
@@ -174,9 +174,7 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
         setEditing(true);
       }}
     >
-      {/* Absolutely positioned so it never reserves layout space — otherwise
-          this value would sit left of the column's right edge even while
-          the pencil itself is invisible at opacity-0. */}
+      {/* Absolute so it reserves no space and stays at the column's right edge. */}
       <span className="relative">
         {item.discount_amount > 0 ? `-${formatCurrencyFromCents(item.discount_amount)}` : formatCurrencyFromCents(0)}
         <Pencil className="absolute left-full top-1/2 ml-1.5 h-3 w-3 -translate-y-1/2 opacity-0 transition-opacity group-hover/discount:opacity-100" />
@@ -194,10 +192,9 @@ export function OrderItemsTable({
   orderId: string;
   channel: OrderChannel;
 }) {
-  // eBay and manual (in-store) order prices/discounts can be corrected after
-  // the fact — the backend rejects an edit for storefront orders, so don't
-  // offer it here.
-  const editable = channel === "ebay" || channel === "manual";
+  const { can } = useMyAccess();
+  // Storefront order edits are rejected by the backend, so only offer for others.
+  const editable = (channel === "ebay" || channel === "manual") && can(PERMISSIONS.orders.update);
   const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 
   return (
@@ -239,7 +236,7 @@ export function OrderItemsTable({
                 )}
                 {item.unit_price_updated_at && (
                   <div className="mt-1 flex justify-end">
-                    <Badge variant="warn" className="whitespace-nowrap px-1.5 py-0.5 text-[10px] font-medium">
+                    <Badge variant="warn" className="whitespace-nowrap px-1.5 py-0.5 text-3xs font-medium">
                       Edited{" "}
                       {new Date(item.unit_price_updated_at).toLocaleDateString("en-AU", {
                         day: "numeric",

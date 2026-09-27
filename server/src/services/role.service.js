@@ -1,64 +1,46 @@
 // services/role.service.js
-//
-// Owns every Role query. Roles are per-tenant: two organisations can both
-// have an "Admin", and neither can see or touch the other's.
-//
-// Every tenant is seeded with the three SYSTEM_ROLEs, which are protected —
-// renaming, re-permissioning or deleting them is refused, so a tenant can
-// never lock itself out of its own settings. Tenants add their own roles on
-// top. (flowpos-backend protects its super-admin role the same way, and
-// likewise refuses to delete a role that still has users.)
+// Owns every Role query; each tenant is seeded with protected Admin and Staff.
 
-const { Types } = require("mongoose");
 const Role = require("../models/Role");
 const Membership = require("../models/Membership");
+const Invitation = require("../models/Invitation");
 const inviteService = require("./invite.service");
-const { SYSTEM_ROLE } = require("../constants/access.constants");
+const membershipService = require("./membership.service");
+const { SYSTEM_ROLE, LEGACY_OWNER_ROLE, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
 const { ALL_PERMISSIONS, unknownPermissions, groupPermissions } = require("../config/permissions");
 
-// Aggregations don't get Mongoose's automatic casting, so an id has to be a
-// real ObjectId before it reaches $match.
-function toObjectId(id) {
-  return typeof id === "string" ? new Types.ObjectId(id) : id;
-}
+const ADMIN_DESCRIPTION = "Owner of this organisation, with full access. Cannot be edited or removed.";
 
-// What each seeded role can do. Super Admin is listed as everything for
-// display purposes; permission checks short-circuit on it anyway
-// (see membership.service.js#hasPermission), so it stays correct as the
-// catalogue grows.
+// Staff: everything except managing the team; an Admin can narrow it.
+const STAFF_DEFAULT_PERMISSIONS = ALL_PERMISSIONS.filter((p) => !p.startsWith("users.") && !p.startsWith("roles."));
+
+// Staff's pre-permissions seed; roles still exactly this were never edited.
+const LEGACY_STAFF_PERMISSIONS = [
+  "dashboard.view",
+  ...groupPermissions("products").filter((p) => p.endsWith(".view")),
+  ...groupPermissions("categories").filter((p) => p.endsWith(".view")),
+  "inventory.view",
+  "inventory.update",
+  "orders.view",
+  "orders.create",
+  "payments.view",
+  "payments.create",
+  "customers.view",
+  "customers.create",
+  "listings.view",
+  "locations.view",
+];
+
 const SYSTEM_ROLE_DEFINITIONS = [
-  {
-    name: SYSTEM_ROLE.SUPER_ADMIN,
-    description: "Full access, including roles and billing. Cannot be edited or removed.",
-    permissions: () => ALL_PERMISSIONS,
-  },
-  {
-    name: SYSTEM_ROLE.ADMIN,
-    description: "Runs the store day to day and manages the team, but can't redefine what roles may do.",
-    // Everything except restructuring permissions themselves — that stays a
-    // Super Admin concern, so an Admin can't quietly widen their own access.
-    permissions: () => ALL_PERMISSIONS.filter((p) => !["roles.create", "roles.update", "roles.delete"].includes(p)),
-  },
+  { name: SYSTEM_ROLE.ADMIN, description: ADMIN_DESCRIPTION, permissions: () => ALL_PERMISSIONS },
   {
     name: SYSTEM_ROLE.STAFF,
-    description: "Sells, picks and counts stock. No settings, integrations or team access.",
-    permissions: () => [
-      "dashboard.view",
-      ...groupPermissions("products").filter((p) => p.endsWith(".view")),
-      ...groupPermissions("categories").filter((p) => p.endsWith(".view")),
-      "inventory.view",
-      "inventory.update",
-      "orders.view",
-      "orders.create",
-      "payments.view",
-      "payments.create",
-      "customers.view",
-      "customers.create",
-      "listings.view",
-      "locations.view",
-    ],
+    description: "Day-to-day work across the store. The Admin can change what Staff can do.",
+    permissions: () => STAFF_DEFAULT_PERMISSIONS,
   },
 ];
+
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 
 function assertPermissionsAreKnown(permissions = []) {
   const unknown = unknownPermissions(permissions);
@@ -69,11 +51,7 @@ function assertPermissionsAreKnown(permissions = []) {
   }
 }
 
-/**
- * Give a tenant its system roles. Idempotent — safe to call on every tenant
- * creation and from the backfill script, and it repairs a tenant that is
- * missing one. Returns the tenant's system roles by name.
- */
+/** Seeds a tenant's system roles; idempotent and repairs a missing one. */
 async function seedSystemRoles(tenantId) {
   const existing = await Role.find({ tenant_id: tenantId, is_system: true }).lean();
   const byName = new Map(existing.map((r) => [r.name, r]));
@@ -97,24 +75,16 @@ async function seedSystemRoles(tenantId) {
 
 /** Roles for a tenant, each with how many members currently hold it. */
 async function listRoles(tenantId) {
-  const roles = await Role.find({ tenant_id: tenantId }).sort({ is_system: -1, name: 1 }).lean();
-
-  // One grouped count rather than a query per role.
-  const counts = await Membership.aggregate([
-    { $match: { tenant_id: toObjectId(tenantId), deleted_at: null } },
-    { $group: { _id: "$role_id", count: { $sum: 1 } } },
+  const [roles, countByRole] = await Promise.all([
+    Role.find({ tenant_id: tenantId }).sort({ is_system: -1, name: 1 }).lean(),
+    membershipService.countMembersByRole(tenantId),
   ]);
-  const countByRole = new Map(counts.map((c) => [String(c._id), c.count]));
 
   return roles.map((role) => ({ ...role, members_count: countByRole.get(String(role._id)) || 0 }));
 }
 
 async function getRoleById(roleId, tenantId) {
   return Role.findOne({ _id: roleId, tenant_id: tenantId }).lean();
-}
-
-async function getRoleByName(tenantId, name) {
-  return Role.findOne({ tenant_id: tenantId, name }).lean();
 }
 
 async function createRole(tenantId, { name, description = null, permissions = [] }) {
@@ -126,8 +96,14 @@ async function createRole(tenantId, { name, description = null, permissions = []
 async function updateRole(roleId, tenantId, { name, description, permissions }) {
   const role = await Role.findOne({ _id: roleId, tenant_id: tenantId });
   if (!role) return null;
-  if (role.is_system) {
-    const err = new Error("System roles cannot be edited.");
+  if (TENANT_ADMIN_ROLE_NAMES.includes(role.name)) {
+    const err = new Error("The Admin role always has full access and can't be edited.");
+    err.status = 403;
+    throw err;
+  }
+  // System roles (Staff) keep their name; only permissions are editable.
+  if (role.is_system && name !== undefined && name !== role.name) {
+    const err = new Error("A built-in role's name can't be changed; edit its permissions instead.");
     err.status = 403;
     throw err;
   }
@@ -137,19 +113,13 @@ async function updateRole(roleId, tenantId, { name, description, permissions }) 
     role.permissions = permissions;
   }
   if (name !== undefined) role.name = name;
-  if (description !== undefined) role.description = description;
+  if (description !== undefined && !role.is_system) role.description = description;
 
   await role.save();
   return role.toObject();
 }
 
-/**
- * Refused for system roles, for any role still held by a member, and for any
- * role a pending invite still promises — the alternative is silently
- * stranding people with no permissions (a member who is demoted away from a
- * deleted role, or an invitee who accepts one, would resolve to no role at
- * all).
- */
+/** Refused for system roles and roles held by a member or pending invite. */
 async function deleteRole(roleId, tenantId) {
   const role = await Role.findOne({ _id: roleId, tenant_id: tenantId });
   if (!role) return null;
@@ -176,12 +146,63 @@ async function deleteRole(roleId, tenantId) {
   return role.toObject();
 }
 
+// Folds a tenant's old Super Admin + Admin roles into one Admin role.
+async function mergeTenantOwnerRoles(tenantId, dryRun) {
+  const roles = await Role.find({ tenant_id: tenantId, is_system: true, name: { $in: [LEGACY_OWNER_ROLE, SYSTEM_ROLE.ADMIN] } }).lean();
+  const legacy = roles.find((r) => r.name === LEGACY_OWNER_ROLE);
+  const oldAdmin = roles.find((r) => r.name === SYSTEM_ROLE.ADMIN);
+  if (!legacy) return null;
+
+  const [movedMembers, movedInvites] = await Promise.all([
+    oldAdmin ? Membership.countDocuments({ tenant_id: tenantId, role_id: oldAdmin._id }) : 0,
+    oldAdmin ? Invitation.countDocuments({ tenant_id: tenantId, role_id: oldAdmin._id }) : 0,
+  ]);
+  if (!dryRun) {
+    if (oldAdmin) {
+      await Membership.updateMany({ tenant_id: tenantId, role_id: oldAdmin._id }, { $set: { role_id: legacy._id } });
+      await Invitation.updateMany({ tenant_id: tenantId, role_id: oldAdmin._id }, { $set: { role_id: legacy._id } });
+      // Hard delete: the unique name index must be free for the rename.
+      await Role.collection.deleteOne({ _id: oldAdmin._id });
+    }
+    await Role.updateOne(
+      { _id: legacy._id },
+      { $set: { name: SYSTEM_ROLE.ADMIN, description: ADMIN_DESCRIPTION, permissions: ALL_PERMISSIONS } },
+    );
+  }
+  return { tenant_id: String(tenantId), moved_members: movedMembers, moved_invites: movedInvites, removed_old_admin: !!oldAdmin };
+}
+
+/** Migrates every tenant still on Super Admin; dry run by default. */
+async function migrateTenantAdminRoles({ dryRun = true, tenantId = null } = {}) {
+  const filter = { is_system: true, name: LEGACY_OWNER_ROLE, ...(tenantId ? { tenant_id: tenantId } : {}) };
+  const tenantIds = await Role.distinct("tenant_id", filter);
+  const results = [];
+  for (const id of tenantIds) {
+    const result = await mergeTenantOwnerRoles(id, dryRun);
+    if (result) results.push(result);
+  }
+  return { dryRun, tenants: results.length, results, staff: await refreshStaffDefaults({ dryRun, tenantId }) };
+}
+
+// Untouched Staff roles move to the new default; edited ones are left alone.
+async function refreshStaffDefaults({ dryRun, tenantId }) {
+  const staffRoles = await Role.find({ is_system: true, name: SYSTEM_ROLE.STAFF, ...(tenantId ? { tenant_id: tenantId } : {}) })
+    .select("_id permissions")
+    .lean();
+  const stale = staffRoles.filter((r) => sameSet(r.permissions, LEGACY_STAFF_PERMISSIONS));
+  if (!dryRun && stale.length) {
+    await Role.updateMany({ _id: { $in: stale.map((r) => r._id) } }, { $set: { permissions: STAFF_DEFAULT_PERMISSIONS } });
+  }
+  return { updated: stale.length, customised: staffRoles.length - stale.length };
+}
+
 module.exports = {
   SYSTEM_ROLE_DEFINITIONS,
+  STAFF_DEFAULT_PERMISSIONS,
   seedSystemRoles,
+  migrateTenantAdminRoles,
   listRoles,
   getRoleById,
-  getRoleByName,
   createRole,
   updateRole,
   deleteRole,

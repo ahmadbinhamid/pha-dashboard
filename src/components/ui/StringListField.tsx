@@ -2,10 +2,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-// Reusable "add/remove rows of free text" input — same row pattern as eBay's
-// Superseded Part Number(s) list (EbayItemSpecificsSection.tsx), pulled out
-// here so other string[] fields (e.g. tenant pickup trading hours) don't
-// duplicate the same markup.
+// Reusable "add/remove rows of free text" input, same pattern as eBay's Superseded Part Numbers list, so other string[] fields don't duplicate the markup.
 export function StringListField({
   values,
   onChange,

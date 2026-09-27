@@ -1,18 +1,7 @@
 // services/reports.service.js
-//
-// Backs the Reports & Analytics page. Follows dashboard.service.js's
-// conventions: every function is tenant-scoped, money moves in cents
-// (except where it's read straight off Product.price/cost_price, which are
-// dollars — converted to cents at the point of use, same as
-// dashboard.service.js#getInventoryValue does with Product.price), and date
-// ranges are bucketed by UTC calendar day so a chart never has to guess
-// about a missing day.
-//
-// Gross-profit/turnover figures below use Product.cost_price, which is
-// nullable — a product with no cost set contributes revenue but $0 cost to
-// any gross-profit/COGS figure, so those figures are an UPPER bound on
-// profit (and a lower bound on COGS/turnover), not exact, whenever any
-// product in the range has no cost recorded.
+// Backs the Reports & Analytics page, following dashboard.service.js's conventions: tenant-scoped,
+// money in cents, dates bucketed by UTC calendar day. Gross-profit/turnover figures use nullable
+// Product.cost_price, so they're an upper bound on profit whenever any product has no cost recorded.
 
 const Order = require("../models/Order");
 const Product = require("../models/Product");
@@ -24,10 +13,8 @@ function startOfUtcDay(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-// Same shape as dashboard.service.js#getOrderVolumeTrend's own range
-// resolution (days vs explicit from/to, plus the matching previous-period
-// window) — kept as its own small copy here rather than exported from that
-// file, since it's a few lines of date arithmetic, not a DB query to reuse.
+// Same shape as dashboard.service.js#getOrderVolumeTrend's range resolution, kept as its own
+// copy since it's a few lines of date arithmetic, not a DB query worth sharing.
 function resolveRange({ days = 30, from, to } = {}) {
   let sinceUtc, untilUtc;
   if (from && to) {
@@ -48,12 +35,8 @@ function pctChange(current, previous) {
   return ((current - previous) / previous) * 100;
 }
 
-// Fetches every non-cancelled order in [previousSinceUtc, exclusiveUntilUtc)
-// — the requested window plus the same-length prior window, in one query —
-// along with a productId -> {costCents, categoryId} lookup for every
-// product referenced by an item in those orders. Every report below is
-// derived from this same pair (orders, productInfo) rather than re-querying
-// per metric.
+// Fetches every non-cancelled order in the window plus the same-length prior window, in one
+// query, plus a productId -> {costCents, categoryId} lookup. Every report reuses this same pair.
 async function fetchRangeOrdersWithProductInfo(tenantId, { exclusiveUntilUtc, previousSinceUtc }) {
   const orders = await Order.find({
     tenant_id: tenantId,
@@ -89,9 +72,7 @@ function isCurrentPeriod(order, sinceUtc) {
   return new Date(order.created_at) >= sinceUtc;
 }
 
-// Sums an order's items into { itemsSold, costCents } — costCents is null
-// contribution skipped (see file-level cost_price caveat), unit costs summed
-// per line quantity.
+// Sums an order's items into { itemsSold, costCents }; a null cost_price contributes 0.
 function summarizeItems(items, productInfo) {
   let itemsSold = 0;
   let costCents = 0;
@@ -260,17 +241,9 @@ async function getSalesPerformanceByChannel(tenantId, params = {}) {
 }
 
 // ── Inventory turnover & stock velocity (over the requested range) ──────────
-//
-// Inventory turnover = COGS / average inventory value. This app keeps no
-// historical inventory-*value* time series (only point-in-time value, plus
-// per-adjustment InventoryHistory deltas) — so "average inventory value"
-// over the window can't be reconstructed exactly. This uses today's total
-// inventory value as a constant denominator against real, cumulative COGS
-// (Product.cost_price x quantity sold) building up day by day, which is an
-// approximation, not an exact historical ratio — it trends the same
-// direction a real one would (more sold against a roughly-steady inventory
-// base pushes the ratio up) without pretending to know what inventory value
-// looked like on each past day.
+// Turnover = COGS / average inventory value, but this app has no historical inventory-value
+// series — uses today's total value as a constant denominator against cumulative COGS instead,
+// an approximation that trends the same direction as a real ratio without exact history.
 async function getInventoryTurnover(tenantId, params = {}) {
   const range = resolveRange(params);
   const { sinceUtc, dayCount } = range;
@@ -307,16 +280,9 @@ async function getInventoryTurnover(tenantId, params = {}) {
     }
   }
 
-  // Category value denominators — the REAL current stock value held in each
-  // category, so a category's turnover reflects its own inventory rather than
-  // a share of the tenant's total. It used to be `total / number of
-  // categories`, which made every category's ratio move whenever an unrelated
-  // category happened to make a sale, and made "fastest turning" meaningless
-  // when categories held wildly different amounts of stock.
-  //
-  // A category with no stock on record keeps the old fallback: dividing by
-  // zero would blow its ratio up to Infinity, and the tenant total at least
-  // keeps it finite and comparable-ish.
+  // Real current stock value per category, so turnover reflects its own inventory rather than
+  // a share of the tenant total (the old approach made every category's ratio move on any sale).
+  // A category with no stock on record falls back to the tenant total to avoid dividing by zero.
   const valueByCategory = await getInventoryValueByCategory(tenantId);
   const categoryValueCents = new Map();
   for (const categoryId of categoryIds) {

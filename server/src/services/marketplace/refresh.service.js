@@ -38,8 +38,7 @@ const { LISTING_STATE } = require("../../constants/marketplace.constants");
 // Re-pushes every stale listing for every usable tenant connected to
 // `platformKey`. Returns a small summary object; never throws for an
 // individual tenant's own trouble (a bad tenant must not abort the sweep
-// for every other tenant on the same platform) — see sweepTenant's own
-// try/catch.
+// for every other tenant on the same platform) — see sweepTenant's own try/catch.
 async function sweepStaleListings(platformKey) {
   // NOTE: checked FIRST, before even resolving the adapter — the kill
   // switch must short-circuit the sweep as completely and cheaply as

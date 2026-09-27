@@ -1,7 +1,6 @@
 export interface DashboardStats {
   totalInventoryValue: number; // dollars
-  // % change in inventory value over the last 7 days, derived from real
-  // stock adjustments — null when there's no baseline to compare against.
+  // % change in inventory value over the last 7 days; null when there's no baseline to compare against.
   inventoryValueChangePct: number | null;
   lowStockCount: number;
   outOfStockCount: number;
@@ -17,36 +16,26 @@ export interface OrderVolumePoint {
   orders: number;
   revenueCents: number;
   items: number;
-  // Keyed by whatever ORDER_CHANNEL values actually appear in this tenant's
-  // orders (e.g. "storefront", "ebay", "manual") — not a fixed list, since
-  // not every tenant uses every channel.
+  // Keyed by whatever ORDER_CHANNEL values actually appear in this tenant's orders, not a fixed list.
   byChannel: Record<string, number>;
 }
 
 export interface OrderVolumeResponse {
   points: OrderVolumePoint[];
-  // Total revenue for the same-length window immediately before `points` —
-  // a real, computed baseline (not a fabricated target) for a "vs prior
-  // period" comparison.
+  // Total revenue for the same-length window immediately before `points`, a real computed baseline for "vs prior period".
   previousPeriodRevenueCents: number;
 }
 
 export type OrderVolumeMetric = "orders" | "revenueCents" | "items";
 
-// Either a preset day count (last N days ending today) or an explicit
-// from/to range — the backend prefers from/to when both are present. This is
-// the single date-range filter for the whole dashboard: both the Order
-// Volume chart and the Revenue Trends & Channel Analytics chart are driven
-// off the same window.
+// Either a preset day count or an explicit from/to range (backend prefers from/to when both present) — the single date-range filter driving both dashboard charts.
 export interface OrderVolumeParams {
   days?: number;
   from?: string;
   to?: string;
 }
 
-// Only channels this app actually integrates with are ever returned —
-// "not_connected" exists for a real channel with zero activity yet, never a
-// platform (Amazon/Walmart/Shopify) that isn't built.
+// Only channels this app integrates with are ever returned — "not_connected" is a real channel with zero activity, never an unbuilt platform.
 export type ChannelStatus = "operational" | "attention" | "not_connected";
 
 export interface ChannelHealth {
@@ -66,8 +55,7 @@ export interface ActivityEvent {
   type: ActivityEventType;
   title: string;
   description: string;
-  // Only ever set on "stock" events — the product/variant SKU the
-  // adjustment applies to, rendered on its own line under the description.
+  // Only set on "stock" events — the SKU the adjustment applies to, rendered on its own line under the description.
   sku?: string | null;
   timestamp: string;
   tags: string[];

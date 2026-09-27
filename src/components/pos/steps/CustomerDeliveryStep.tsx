@@ -23,8 +23,7 @@ interface FulfilmentOptionProps {
   onSelect: () => void;
 }
 
-// Card-style option instead of a bare native radio input — same selectable-
-// card pattern as the rest of the app's "pick one of a few things" moments.
+// Card-style option instead of a bare native radio input, same selectable-card pattern used elsewhere for "pick one of a few things".
 function FulfilmentOption({ icon: Icon, label, description, selected, onSelect }: FulfilmentOptionProps) {
   return (
     <button
@@ -76,10 +75,7 @@ interface CustomerDeliveryStepProps {
   onContinue: () => void;
 }
 
-// Combines what were two separate steps (customer, and pickup/delivery mode)
-// into one — the two are always decided together for a manual sale. Back
-// needs no validation so the page header handles it directly; Continue does,
-// so it's exposed via ref for the header's Next button to trigger.
+// Combines two formerly-separate steps (customer, pickup/delivery mode) since they're always decided together; Continue needs validation so it's exposed via ref for the header's Next button.
 export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepProps>(function CustomerDeliveryStep(
   { state, onChange, onContinue },
   ref,
@@ -96,9 +92,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
     setCustomerFormOpen(true);
   }
 
-  // Selecting (or just creating) a customer with a saved address carries it
-  // over as a starting point — staff can still edit it per-order without
-  // touching the customer's profile.
+  // Selecting/creating a customer with a saved address carries it over as a starting point; staff can still edit it per-order without touching the profile.
   function selectCustomer(c: Customer) {
     onChange({
       customer: c,

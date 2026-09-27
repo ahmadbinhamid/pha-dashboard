@@ -191,8 +191,7 @@ function reservedQuantityByItem(refunds, itemIds) {
 // comments), so reaching this staleness window at all should be rare in
 // practice. 30s stays generous rather than tight, on the assumption that
 // "rare" isn't "never" — a slow Mongo write under load, a GC pause — and
-// the fencing token below is what actually makes a stale reclaim safe
-// regardless.
+// the fencing token below is what actually makes a stale reclaim safe regardless.
 const REFUND_LOCK_STALE_MS = 30_000;
 
 // A single claim attempt fails fast the instant another request holds the
@@ -554,8 +553,7 @@ async function createRefund(orderId, body, userId, tenantId) {
       tenant_id: tenantId,
       order: order._id,
       // Legacy top-level fields, kept populated so any not-yet-migrated
-      // reader still sees something sane during the transition (§9 removes
-      // them).
+      // reader still sees something sane during the transition (§9 removes them).
       payment: allocations[0].payment,
       amount: computed.total_amount,
       reason,
@@ -565,8 +563,7 @@ async function createRefund(orderId, body, userId, tenantId) {
       // settled defaults true (schema) but MUST start false for a Stripe
       // allocation — §3.7's "do NOT apply effects optimistically" means
       // even a successful stripe.refunds.create() call below doesn't count
-      // as settled, only the charge.refunded/charge.refund.updated webhook
-      // does.
+      // as settled, only the charge.refunded/charge.refund.updated webhook does.
       payment_allocations: allocations.map((a) => ({
         payment: a.payment,
         amount: a.amount,
@@ -675,8 +672,7 @@ async function settleRefund(refund) {
       } catch (err) {
         // §3.1's guardrail on partial failure: earlier allocations in this
         // loop may have already succeeded at Stripe. Mark failed and
-        // surface exactly which allocations settled rather than silently
-        // retrying.
+        // surface exactly which allocations settled rather than silently retrying.
         refund.status = REFUND_STATUS.FAILED;
         refund.failure_reason = err.message;
         await refund.save();
@@ -704,8 +700,7 @@ async function settleRefund(refund) {
   // SUCCEEDED-with-effects-never-applied was also tried and reverted — see
   // refund.reconciliation.service.js's own comment on why (indistinguishable
   // from old, legitimately fine historical refunds; re-running it against
-  // one auto-voided a real settled refund in testing). Accepted as a
-  // residual gap.
+  // one auto-voided a real settled refund in testing). Accepted as a residual gap.
   refund.status = REFUND_STATUS.SUCCEEDED;
   await refund.save();
   const settled = await applyRefundEffects(refund._id);

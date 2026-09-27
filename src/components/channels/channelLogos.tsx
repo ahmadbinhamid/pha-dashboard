@@ -1,22 +1,8 @@
 import { useId } from "react";
 
-// Real brand marks, shared by every place that shows "which channel is
-// this" — the Integrations catalogue, ChannelAvatar (Products page channel
-// rows, the dashboard's Sales Channels card), and the Products page's
-// channel filter pills. A generic lucide glyph (ShoppingBag/ShoppingCart) or
-// a plain initials chip doesn't actually identify eBay or Google at a glance
-// the way their own logo does. Official brand assets, reproduced locally
-// rather than fetched at runtime. Rendered in each brand's own color
-// (hardcoded, not a theme token) — a partner's logo should never be
-// recolored to match our own accent, the one place in this app a literal
-// hex is the right call over a CSS variable.
+// Real brand marks shared by every "which channel is this" spot (Integrations, ChannelAvatar, filter pills); official assets in each brand's own hardcoded color, never a theme token.
 
-// eBay's mark is a wordmark, not a square glyph (native aspect ratio is
-// ~2.5:1) — every caller sizes this into a square slot (ChannelAvatar's
-// round chip, the filter pills), so at those sizes it renders "contained"
-// (SVG's default preserveAspectRatio), i.e. centered and letterboxed rather
-// than stretched. That's the correct tradeoff: a slightly smaller mark reads
-// far better than a distorted one.
+// eBay's mark is a wordmark (~2.5:1 aspect), so in a square slot it renders "contained" (centered/letterboxed) rather than stretched or distorted.
 export function EbayLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0.1 0.1 299.8 120.125" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -29,14 +15,7 @@ export function EbayLogo({ className }: { className?: string }) {
   );
 }
 
-// Google Merchant Center's icon (not the plain "G" mark) — the integration
-// this represents pushes the catalogue to Merchant Center specifically (see
-// integrations.tsx's description), so its own icon identifies that more
-// precisely than the generic Google logo would. Its gradient/shadow/shape
-// defs need a unique id per render — this component renders once per row in
-// lists (Products page channel dots, filter pills), and duplicate SVG
-// `id`s across multiple instances on one page produce invalid, potentially
-// misresolved references — so every id is namespaced with useId().
+// Google Merchant Center's own icon, not the generic "G" mark, since this integration pushes the catalogue to Merchant Center specifically. useId() namespaces the gradient/shadow/shape defs since this renders once per row in a list.
 export function GoogleLogo({ className }: { className?: string }) {
   const uid = useId();
   const gradId = `gmc-grad-${uid}`;
@@ -88,12 +67,7 @@ const CHANNEL_LOGOS: Record<string, BrandLogoComponent> = {
   google: (p) => <GoogleLogo {...p} />,
 };
 
-// Storefront is deliberately excluded — it isn't a third-party brand with a
-// fixed mark, it's the tenant's OWN site, so its "logo" is whatever they've
-// uploaded (or nothing) rather than something this lookup can resolve on its
-// own. Callers handle channelKey === "storefront" themselves (tenant's
-// logo_url, else a generic Store icon) — see ChannelAvatar.tsx and
-// ActiveChannelsCard.tsx.
+// Storefront excluded: it's the tenant's own site, not a fixed third-party brand — callers handle channelKey === "storefront" themselves (ChannelAvatar.tsx, ActiveChannelsCard.tsx).
 export function getChannelLogo(channelKey: string): BrandLogoComponent | null {
   return CHANNEL_LOGOS[channelKey] ?? null;
 }

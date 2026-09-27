@@ -1,62 +1,52 @@
 // services/marketplace/circuitBreaker.js
-//
-// Per-tenant, per-platform circuit breaker backed by ChannelConnection
-// (consecutive_failures/status/last_success_at — see models/ChannelConnection.js).
-// Used by sync.service.js around every adapter call.
-//
-// NOTE on scope: the task this was built from describes tripping the
-// breaker as "pause that platform's queue". Taken literally (Bull's
-// queue.pause()) that would stop EVERY tenant's jobs on that platform's
-// shared Bull queue — one tenant's broken eBay credentials would silently
-// stall every other tenant's eBay sync too, which is a much worse outage
-// than the one this breaker exists to contain. Implemented instead as a
-// per-(tenant, platform) gate that sync.service.js checks before calling
-// the adapter — isOpen() below — which gets the intended effect (stop
-// hammering a connection that's confirmed broken) without the cross-tenant
-// blast radius. See server/docs/channel-architecture.md.
+// Per-(tenant, platform) breaker; not queue.pause(), which stalls all tenants.
 
 const ChannelConnection = require("../../models/ChannelConnection");
 const { logger } = require("../../loaders/logging");
 const config = require("../../config");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
 
-// Only transport/auth-level failures count toward the breaker — a 5xx, a
-// network/timeout/DNS error (no HTTP status at all), or 401/403. Per-item
-// validation failures (400-level: bad category, missing GTIN, etc.) are
-// product data problems, not evidence the connection itself is unhealthy,
-// and must never trip the breaker. Duck-typed on `.status`/`.statusCode`
-// rather than importing any platform-specific error class, so this stays
-// usable by every adapter, not just eBay's EbayApiError.
+// Node/undici codes; fetch puts them on err.cause or inside an AggregateError.
+const NETWORK_ERROR_CODES = new Set([
+  "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "EPIPE",
+  "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
+]);
+// fetch aborts are DOMExceptions identified by name, not code.
+const ABORT_ERROR_NAMES = new Set(["AbortError", "TimeoutError"]);
+const MAX_CAUSE_DEPTH = 4;
+
+function isNetworkFailure(err, depth = 0) {
+  if (!err || depth > MAX_CAUSE_DEPTH) return false;
+  // NOTE: our own DB failing isn't the channel's transport; never trip on it.
+  if (typeof err.name === "string" && err.name.startsWith("Mongo")) return false;
+  if (NETWORK_ERROR_CODES.has(err.code) || ABORT_ERROR_NAMES.has(err.name)) return true;
+  if (Array.isArray(err.errors) && err.errors.some((e) => isNetworkFailure(e, depth + 1))) return true;
+  return isNetworkFailure(err.cause, depth + 1);
+}
+
+// Positive match only: network error, 5xx, 401 or 403; nothing else trips.
 function isTransportOrAuthFailure(err) {
-  const status = err?.status ?? err?.statusCode;
-  if (status != null) return status >= 500 || status === 401 || status === 403;
-  // No HTTP status at all — a thrown network/timeout/programming error, not
-  // a well-formed API rejection. Treated as transport-level: an adapter that
-  // can't even complete a request is at least as concerning as one getting
-  // 5xx responses back.
-  return true;
+  const status = Number(err?.status ?? err?.statusCode);
+  if (Number.isInteger(status) && status > 0) return status >= 500 || status === 401 || status === 403;
+  return isNetworkFailure(err);
 }
 
 async function recordSuccess(tenantId, platform) {
   await ChannelConnection.updateOne(
     { tenant_id: tenantId, platform },
     {
-      $set: { consecutive_failures: 0, last_success_at: new Date(), status: CHANNEL_CONNECTION_STATUS.CONNECTED, last_error: null },
+      $set: {
+        consecutive_failures: 0,
+        last_success_at: new Date(),
+        status: CHANNEL_CONNECTION_STATUS.CONNECTED,
+        last_error: null,
+        status_reason: null,
+      },
     },
   );
 }
 
-// Returns { tripped } so callers can log/act on the transition specifically,
-// not just the fact that a failure happened.
-// upsert: true here relies on the adapter's own loadSettings (called
-// earlier in the SAME sync.service.js#syncListing invocation, before this
-// can ever be reached) having already migrated/created a fully-populated
-// ChannelConnection row — see ebay.settings.service.js's lazy read-through.
-// A future adapter that calls recordFailure without resolving settings
-// through an equivalent migration path first would get a bare row here
-// (tenant_id/platform/consecutive_failures only), and ensureMigrated would
-// then see "a row already exists" and skip populating the rest — keep
-// settings resolution ahead of failure recording for any new adapter.
+// upsert assumes loadSettings already made the row, else inserts a bare one.
 async function recordFailure(tenantId, platform, err) {
   if (!isTransportOrAuthFailure(err)) return { tripped: false, counted: false };
 
@@ -85,13 +75,11 @@ async function isOpen(tenantId, platform) {
   return conn?.status === CHANNEL_CONNECTION_STATUS.DEGRADED;
 }
 
-// Explicit resume path — used by the reconnect/manual-sync flow (see
-// channel.controller.js#retry and a fresh successful OAuth reconnect) to
-// clear a tripped breaker rather than waiting for it to self-heal.
+// Clears a tripped breaker on reconnect or manual sync.
 async function resume(tenantId, platform) {
   await ChannelConnection.updateOne(
     { tenant_id: tenantId, platform },
-    { $set: { status: CHANNEL_CONNECTION_STATUS.CONNECTED, consecutive_failures: 0, last_error: null } },
+    { $set: { status: CHANNEL_CONNECTION_STATUS.CONNECTED, consecutive_failures: 0, last_error: null, status_reason: null } },
   );
   logger.info(`[circuitBreaker] ${platform}/${tenantId}: resumed`);
 }

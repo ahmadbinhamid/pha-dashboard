@@ -33,8 +33,7 @@ export function EbayConnectCard() {
   const callbackResult = searchParams.get("ebay_connect");
   const callbackReason = searchParams.get("reason");
 
-  // Clear the one-time callback query params so a page refresh doesn't
-  // re-show a stale success/error banner.
+  // Clear the one-time callback query params so a refresh doesn't re-show a stale banner.
   useEffect(() => {
     if (!callbackResult) return;
     queryClient.invalidateQueries({ queryKey: ["ebay-status"] });

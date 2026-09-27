@@ -34,8 +34,7 @@ function MiniToggle({ checked, disabled, onClick }: { checked: boolean; disabled
   );
 }
 
-// Toolbar action, shown alongside a table's filter bar — lets the user
-// show/hide optional columns, persisted per-table via useColumnVisibility.
+// Toolbar action for show/hide of optional table columns, persisted per-table via useColumnVisibility.
 export function ManageColumns({ columns, visibility, onToggle }: ManageColumnsProps) {
   return (
     <PopoverPrimitive.Root>

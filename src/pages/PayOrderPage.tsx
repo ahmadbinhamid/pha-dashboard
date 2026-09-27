@@ -1,42 +1,14 @@
-import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { SkeletonText } from "@/components/ui/Skeleton";
+import { GuestCheckoutForm } from "@/components/payments/GuestCheckoutForm";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 
-// BYOK — this page is shared across every tenant's admin-generated "payment
-// link" orders, and each tenant now has their own Stripe account/publishable
-// key (see stripe.payment.service.js#createPaymentIntentForOrder), returned
-// alongside the client_secret rather than read from a single build-time env
-// var. Cached per publishable key so re-rendering doesn't re-init Stripe.js.
-const stripeInstances = new Map<string, ReturnType<typeof loadStripe>>();
-function getStripeForKey(publishableKey: string) {
-  if (!stripeInstances.has(publishableKey)) {
-    stripeInstances.set(publishableKey, loadStripe(publishableKey));
-  }
-  return stripeInstances.get(publishableKey)!;
-}
-
-// Shared, platform-hosted payment page — one page for every tenant's
-// admin-generated "payment link" orders (see stripe.payment.service.js#createPaymentLinkForOrder).
-// No login, no tenant branding: just enough to show what's owed and collect
-// a card payment. Security is the guest `token` in the URL, not a session.
-// One message for every failure hid the actual cause: a rotated token, a
-// suspended tenant, an unreachable API and a blocked CORS origin all read as
-// "invalid or expired link". Only a real 404 means the link is dead —
-// anything else is our side failing, and telling a customer to chase a new
-// link for a transport error is the worst version of that.
-//
-// Reads `.status`, not axios internals: the client's response interceptor
-// (lib/api/client.ts) rejects with a plain Error carrying `status`, so
-// isAxiosError() is never true by the time an error reaches a page. No
-// status at all means the request never got a response — wrong API base URL,
-// CORS refusal, DNS, or the server being down.
+// Shared, platform-hosted payment page for every tenant's payment-link orders (stripe.payment.service.js#createPaymentLinkForOrder). No login/branding — security is the guest `token` in the URL. Only a real 404 means the link is dead; other failures (rotated token, CORS, transport) shouldn't tell the customer to chase a new link.
+// Reads `.status`, not axios internals: the client's interceptor (lib/api/client.ts) rejects with a plain Error carrying `status`; no status means the request never got a response.
 function payLinkErrorMessage(error: unknown) {
   const status = (error as { status?: number } | null | undefined)?.status;
 
@@ -96,7 +68,7 @@ export default function PayOrderPage() {
           {alreadyPaid ? (
             <p className="text-sm text-fg/65">Nothing further to pay — thank you.</p>
           ) : intentMutation.data ? (
-            <CheckoutForm
+            <GuestCheckoutForm
               clientSecret={intentMutation.data.data.client_secret}
               publishableKey={intentMutation.data.data.stripe_publishable_key}
             />
@@ -115,58 +87,6 @@ export default function PayOrderPage() {
         </CardContent>
       </Card>
     </StatusShell>
-  );
-}
-
-function CheckoutForm({ clientSecret, publishableKey }: { clientSecret: string; publishableKey: string }) {
-  const options = useMemo(() => ({ clientSecret }), [clientSecret]);
-  const stripePromise = useMemo(() => getStripeForKey(publishableKey), [publishableKey]);
-  return (
-    <Elements stripe={stripePromise} options={options}>
-      <PaymentForm />
-    </Elements>
-  );
-}
-
-function PaymentForm() {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [succeeded, setSucceeded] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setSubmitting(true);
-    setErrorMessage(null);
-
-    const { error } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-    });
-
-    setSubmitting(false);
-    if (error) {
-      setErrorMessage(error.message || "Payment failed — please try again.");
-    } else {
-      setSucceeded(true);
-    }
-  };
-
-  if (succeeded) {
-    return <p className="text-sm text-ok">Payment received — thank you.</p>;
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
-      {errorMessage && <p className="text-xs font-medium text-danger">{errorMessage}</p>}
-      <Button type="submit" disabled={!stripe || submitting} className="w-full">
-        {submitting ? "Processing…" : "Pay"}
-      </Button>
-    </form>
   );
 }
 

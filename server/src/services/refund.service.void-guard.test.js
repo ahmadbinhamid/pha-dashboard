@@ -1,20 +1,10 @@
 // services/refund.service.void-guard.test.js
-//
-// Corrections round — voidRefund only reverses OUR books; there is no
-// Stripe API to "un-refund" a charge. Once a Stripe allocation has settled
-// (webhook-confirmed), voiding here would desync the ledger from what
-// Stripe actually did rather than fix anything. This proves the admin void
-// path is blocked on a settled Stripe refund without an explicit `force`,
-// while the legitimate exception (source: "stripe_reversal", used by
-// stripe.webhook.service.js#handleChargeRefundUpdated for §4.2) still goes
-// through — and that force: true still works when genuinely intended.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/refund.service.void-guard.test.js
+// Voiding a settled Stripe allocation needs `force`. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 const Order = require("../models/Order");
@@ -23,7 +13,7 @@ const Refund = require("../models/Refund");
 const refundService = require("./refund.service");
 const { REFUND_STATUS } = require("../constants/refund.constants");
 
-const TEST_TENANT_ID = new mongoose.Types.ObjectId();
+const TEST_TENANT_ID = fixtureId();
 
 async function makeSettledStripeRefund(order, payment, suffix, idemSuffix) {
   const refundNumber = await refundService.nextRefundNumber(TEST_TENANT_ID);
@@ -57,7 +47,7 @@ test("voidRefund: blocks a settled Stripe refund without force, allows stripe_re
     invoice_number: `TEST-VOIDGUARD-INV-${suffix}`,
     items: [
       {
-        product: new mongoose.Types.ObjectId(),
+        product: fixtureId(),
         variant: null,
         name: "Void guard test item",
         sku: null,

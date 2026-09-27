@@ -2,14 +2,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/utils/cn";
 import type { PermissionGroup } from "@/types/access";
 
-/**
- * The permission grid, grouped by area. The catalogue is SERVED
- * (GET /roles/permissions) rather than duplicated here, so what can be ticked
- * is always exactly what the server will accept.
- *
- * `readOnly` renders a system role: its permissions are shown for reference
- * but can't be changed, since the server refuses to edit them either.
- */
+/** The permission grid, grouped by area. Catalogue is served (GET /roles/permissions), not duplicated, so what can be ticked always matches what the server accepts. `readOnly` renders a system role: shown for reference, can't be changed. */
 export function PermissionMatrix({
   groups,
   selected,
@@ -71,8 +64,7 @@ export function PermissionMatrix({
                     disabled={readOnly}
                     onChange={() => toggle(permission)}
                     label={label}
-                    // The raw key, so what's being granted is unambiguous —
-                    // it's the same string the API enforces.
+                    // The raw key, so what's being granted is unambiguous — the same string the API enforces.
                     description={permission}
                   />
                 );

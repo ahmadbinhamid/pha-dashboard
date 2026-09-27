@@ -4,31 +4,21 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const { PAYMENT_STATUS } = require("../constants/payment.constants");
 
-// Sums every succeeded Payment on an order, net of its own refunds — the
-// single source of truth for "how much has actually been collected",
-// whether that came from one payment or several (deposit + top-up,
-// deposit + payment-link remainder, etc). A pending/failed/canceled Payment
-// never counts, and a refund only ever reduces its own payment's
-// contribution, never another payment's.
+// Sums every succeeded Payment on an order, net of its own refunds — the single source of
+// truth for how much has actually been collected. A refund only reduces its own payment's total.
 async function getTotalPaidForOrder(orderId) {
   const payments = await Payment.find({ order: orderId, status: PAYMENT_STATUS.SUCCEEDED });
   return payments.reduce((sum, p) => sum + Math.max(0, p.amount - p.amount_refunded), 0);
 }
 
-// Sums every payment's own amount_refunded, regardless of that payment's
-// current status — the other half of the same figure getTotalPaidForOrder
-// nets out, not a separate ledger. Used to distinguish "still owed" from
-// "already refunded" (see invoicePdf.js's isRefunded handling) — a refunded
-// order was paid in full, and the refund was a deliberate decision
-// afterward, not an unpaid balance.
+// Sums every payment's amount_refunded regardless of status — the other half of the figure
+// getTotalPaidForOrder nets out. Distinguishes "still owed" from "already refunded".
 async function getTotalRefundedForOrder(orderId) {
   const payments = await Payment.find({ order: orderId });
   return payments.reduce((sum, p) => sum + (p.amount_refunded || 0), 0);
 }
 
-// Full payment history for an order, newest first — used by the admin order
-// detail view instead of the old single `order.payment` populate, which only
-// ever reflected the most recently created Payment.
+// Full payment history for an order, newest first, unlike the old single `order.payment` populate.
 async function getPaymentsForOrder(orderId) {
   return Payment.find({ order: orderId }).sort({ created_at: -1 });
 }

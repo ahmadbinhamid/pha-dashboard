@@ -5,18 +5,15 @@ const Inventory = require("../models/Inventory");
 const InventoryHistory = require("../models/InventoryHistory");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
-const { enqueueChannelJob } = require("../queues/channel.queue");
+// Not destructured, so test mocks apply whenever they're installed.
+const channelQueue = require("../queues/channel.queue");
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 
-// ── List / aggregation ────────────────────────────────────────────────────────
+// ── List / aggregation ──
 
-// tenantId is required — Inventory has no tenant_id field of its own (see
-// Inventory.js), so scoping goes through this $match on product.tenant_id
-// right after the product $lookup. Previously entirely unscoped: any
-// authenticated admin, from any tenant, saw every OTHER tenant's inventory
-// on this list. Found live, the moment a second real tenant existed.
+// Inventory has no tenant_id; scope via the joined product.tenant_id.
 async function listInventory(tenantId, { page = 1, limit = 20, search, location, product, variant } = {}) {
   if (!tenantId) throw new Error("[inventory.service] listInventory: tenantId is required");
   const skip = (page - 1) * limit;
@@ -113,26 +110,7 @@ async function listInventory(tenantId, { page = 1, limit = 20, search, location,
   };
 }
 
-// Fan-out: enqueue a sync_listing job for every active MarketplaceListing tied
-// to this product/variant — the ONE place in the app that pushes a stock
-// change to a marketplace. tenantId is mandatory (not "scope it if you
-// happened to pass one") — every other MarketplaceListing query in this
-// codebase is tenant-scoped unconditionally (see feedback_service_layer),
-// and silently falling back to an unscoped query on a missing tenantId is
-// exactly the kind of gap that's bitten this app before.
-//
-// Claims a fencing token (MarketplaceListing.push_seq) atomically for each
-// listing before enqueueing, and carries it in the job data — sync_listing's
-// worker drops any job whose seq is older than what's already landed (see
-// MarketplaceListing.js's push_seq/last_pushed_seq schema comment). This is
-// the ONLY place that claims that token, so every caller that changes stock
-// (manual corrections, Stripe sales via order-stock-sync.service.js,
-// eBay-originated sales) goes through one consistently-fenced writer path —
-// no second, unfenced way to push a quantity to a marketplace.
-//
-// Returns one result per listing found, so callers that need to know
-// whether a push was actually queued (e.g. order-stock-sync.service.js
-// setting a line item's ebay_sync_status) don't have to re-query.
+// The one stock-to-marketplace path: claims a fencing seq, then enqueues.
 async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
   if (!tenantId) {
     throw new Error("[inventory.service] fanOutMarketplaceInventory: tenantId is required");
@@ -153,10 +131,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
     }).select("_id platform").lean();
 
     for (const listing of listings) {
-      // A listing can outlive its adapter being registered (e.g. a platform
-      // temporarily disabled in this worker process) — skip it rather than
-      // let one unknown platform throw and abort every other listing's
-      // fan-out below.
+      // A listing can outlive its adapter; skip it, don't abort the fan-out.
       if (!registry.has(listing.platform)) {
         logger.warn(`[inventory.service] fan-out skipped: no adapter registered for platform "${listing.platform}" (listing ${listing._id})`);
         results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: false, error: "no_adapter" });
@@ -164,9 +139,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
       }
 
       try {
-        // push_seq now lives on the base schema (see MarketplaceListing.js)
-        // so every platform gets a real fencing token — no strict: false
-        // needed here any more.
+        // push_seq is on the base schema, so every platform gets a fencing token.
         const updated = await MarketplaceListing.findOneAndUpdate(
           { _id: listing._id, tenant_id: tenantId },
           { $inc: { push_seq: 1 } },
@@ -174,7 +147,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
         ).select("push_seq");
         const seq = updated ? (updated.push_seq ?? null) : null;
 
-        await enqueueChannelJob(listing.platform, "sync_listing", { listingId: listing._id.toString(), seq });
+        await channelQueue.enqueueChannelJob(listing.platform, "sync_listing", { listingId: listing._id.toString(), seq });
         logger.info(`[inventory.service] fan-out queued sync_listing for ${listing._id} (${listing.platform}, seq ${seq})`);
         results.push({ listingId: listing._id.toString(), platform: listing.platform, queued: true, seq });
       } catch (qErr) {
@@ -190,7 +163,7 @@ async function fanOutMarketplaceInventory(productId, variantId, tenantId) {
   return results;
 }
 
-// ── Record CRUD ───────────────────────────────────────────────────────────────
+// ── Record CRUD ──
 
 async function fetchPopulatedRecord(id) {
   return Inventory.findById(id)
@@ -199,12 +172,7 @@ async function fetchPopulatedRecord(id) {
     .populate("location", "name address");
 }
 
-// tenantId required — Inventory has no tenant_id of its own, so ownership
-// is verified via the record's product. Previously a bare findById with no
-// check at all: any authenticated admin, from any tenant, could adjust/set
-// stock or read history on ANY OTHER tenant's inventory record just by
-// knowing (or enumerating) a valid ObjectId — a write vulnerability, not
-// just a read leak. Found live.
+// Inventory has no tenant_id; ownership is checked via its product.
 async function findRecord(id, tenantId) {
   const record = await Inventory.findById(id);
   if (!record) return null;
@@ -213,11 +181,7 @@ async function findRecord(id, tenantId) {
   return record;
 }
 
-// tenantId required — verifies both `product` AND `location` actually
-// belong to this tenant before creating/upserting an Inventory record
-// linking them. Previously unchecked: any tenant could pass another
-// tenant's product or location id here and create a phantom stock record
-// linked to it. Found live.
+// Product and location must both belong to the tenant before linking.
 async function ensureRecord({ product, location, variant }, tenantId) {
   const Location = require("../models/Location");
   const [ownsProduct, ownsLocation] = await Promise.all([
@@ -241,14 +205,7 @@ async function ensureRecord({ product, location, variant }, tenantId) {
   );
 }
 
-// Compare-and-swap retry instead of a plain read-then-.save(): two
-// concurrent adjustments on the same record (e.g. a real-time eBay webhook
-// deduction racing the inventory-reconciliation poll, or a Stripe sale
-// racing an eBay order-poll deduction) previously both read the same
-// stock_count, computed independently, and the second .save() silently
-// clobbered the first — no error, no warning, lost stock movement. This
-// re-reads and retries on conflict instead of trusting an in-memory value
-// that may already be stale by the time it writes.
+// CAS retry: concurrent adjustments must not clobber each other's delta.
 async function adjustStock(record, { adjustment, reason, type, userId, tenantId, skipMarketplaceFanOut = false }) {
   let current = record;
   let stock_before, stock_after, updated;
@@ -277,17 +234,10 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
     );
   }
 
-  // Keep the caller's in-memory document consistent with what was actually
-  // persisted (callers like adjustStockForSku read record.stock_count
-  // afterward via the returned stock_after, but some also hold onto `record`).
+  // Keep the caller's in-memory doc in step with what was persisted.
   record.stock_count = stock_after;
 
-  // `adjustment` here is always the TRUE requested delta, never silently
-  // rewritten to whatever actually fit — stock_after is clamped at 0
-  // above, but the history row must still say what was actually asked for.
-  // clamped_shortfall carries the uncovered amount separately, so a row
-  // never reads as "adjustment: -1, stock_before: 0, stock_after: 0" (looks
-  // like nothing happened) when what really happened was an oversell.
+  // History keeps the true requested delta; clamped_shortfall is the gap.
   const clamped_shortfall = stock_before + adjustment < 0 ? Math.abs(stock_before + adjustment) : 0;
 
   await InventoryHistory.create({
@@ -304,15 +254,7 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
     user: userId || null,
   });
 
-  // Every stock change — manual correction or a sale/refund driving this via
-  // adjustStockForSku below — should keep the listing's sync_status (and, if
-  // it just hit/left zero, quantity on eBay) current. Centralized here
-  // instead of at each call site so no adjustment path can forget it.
-  // skipMarketplaceFanOut: true for the one case where pushing back to eBay
-  // would be pointless/wrong — accepting a PendingReconciliation row applies
-  // a delta that came FROM eBay in the first place (see
-  // pendingReconciliation.service.js#acceptReconciliation); re-announcing
-  // eBay's own number back to eBay is a no-op at best.
+  // Fan out every change, except a delta that came from eBay itself.
   const marketplaceResults = skipMarketplaceFanOut
     ? []
     : await fanOutMarketplaceInventory(record.product, record.variant, tenantId);
@@ -320,11 +262,7 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
   return { record, stock_before, stock_after, marketplaceResults };
 }
 
-// This is an absolute set (not a delta), so unlike adjustStock() there's
-// nothing to retry on conflict — but the pre-write value still needs to be
-// read atomically with the write itself, or a concurrent adjustment landing
-// between a plain read and this save would silently vanish AND get logged
-// with a wrong stock_before in the audit trail.
+// Absolute set: read the old value atomically so history stays right.
 async function setStock(record, { stock_count, reason, userId, tenantId }) {
   const newCount = Math.round(Number(stock_count));
 
@@ -373,20 +311,41 @@ async function getTotalStockForProductVariant(productId, variantId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
-// Product-level rollup across all variants/locations — used for the
-// product detail page's stock badge, unlike the variant-scoped helper above.
+// Batched: Map(stockKey -> total); missing pairs are 0.
+function stockKey(productId, variantId) {
+  return `${productId}:${variantId || ""}`;
+}
+
+async function getTotalStockForProductVariants(pairs) {
+  const totals = new Map(pairs.map(({ productId, variantId }) => [stockKey(productId, variantId), 0]));
+  if (!pairs.length) return totals;
+  const rows = await Inventory.aggregate([
+    { $match: { $or: pairs.map(({ productId, variantId }) => ({ product: new mongoose.Types.ObjectId(String(productId)), variant: variantId ? new mongoose.Types.ObjectId(String(variantId)) : null })) } },
+    { $group: { _id: { product: "$product", variant: "$variant" }, total: { $sum: { $ifNull: ["$stock_count", 0] } } } },
+  ]);
+  for (const row of rows) totals.set(stockKey(row._id.product, row._id.variant), row.total);
+  return totals;
+}
+
+/** Total stock per product (all variants and locations) in one query. */
+async function getTotalStockForProducts(productIds) {
+  const totals = new Map(productIds.map((id) => [String(id), 0]));
+  if (!productIds.length) return totals;
+  const rows = await Inventory.aggregate([
+    { $match: { product: { $in: productIds.map((id) => new mongoose.Types.ObjectId(String(id))) } } },
+    { $group: { _id: "$product", total: { $sum: { $ifNull: ["$stock_count", 0] } } } },
+  ]);
+  for (const row of rows) totals.set(String(row._id), row.total);
+  return totals;
+}
+
+// Product-level rollup across all variants/locations (detail badge).
 async function getTotalStockForProduct(productId) {
   const records = await Inventory.find({ product: productId }).lean();
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
-// Every (product, variant) whose total stock (summed across every location —
-// same aggregation shape as dashboard.service.js#getStockCounts, kept
-// deliberately identical so the dashboard's "low stock" tile and the
-// low-stock digest email (services/inventory-digest.service.js) never
-// disagree about what counts as low) is > 0 and <= threshold. Stock === 0 is
-// deliberately excluded — that's "out of stock", a different, already-
-// separately-surfaced state, not "low stock" needing a restock nudge.
+// Total stock > 0 and <= threshold; same shape as the dashboard tile.
 async function getLowStockItems(tenantId, lowStockThreshold) {
   const rows = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
@@ -416,10 +375,7 @@ async function getLowStockItems(tenantId, lowStockThreshold) {
         product_id: "$_id.product",
         variant_id: "$_id.variant",
         title: "$productTitle",
-        // Variant SKU wins when the variant HAS one — matches how a variant
-        // is identified/sold everywhere else in this codebase (e.g.
-        // resolveSkuToIds above) — falls back to the parent product's SKU
-        // for a variant with no SKU of its own, or a non-variant product.
+        // Variant SKU when it has one, else the parent product's SKU.
         sku: { $ifNull: ["$variant.sku", "$productSku"] },
         variant_name: "$variant.display_name",
         stock: "$totalStock",
@@ -430,19 +386,11 @@ async function getLowStockItems(tenantId, lowStockThreshold) {
   return rows;
 }
 
-// ── SKU-based stock adjustment (used by eBay webhook and Stripe payment/refund) ─
+// ── SKU-based stock adjustment (eBay webhook, Stripe) ──
 
 const FALLBACK_SKU_RE = /^ph-([0-9a-f]{24})(?:-([0-9a-f]{24}))?$/;
 
-// tenantId is required — SKUs are only unique PER TENANT (see Product.js's
-// {tenant_id, sku} unique index), never globally. An unscoped lookup here
-// previously meant two tenants sharing the same generic SKU string (common
-// for auto-part codes) could corrupt each other's stock: found live, see
-// git history for this comment. The fallback `ph-<productId>` form is exempt
-// since it already carries an unambiguous product id, but the id it embeds
-// still isn't verified as belonging to tenantId here — callers that need
-// that guarantee (e.g. order import) do their own tenant check on the
-// resolved ids, same as ever.
+// SKUs are unique per tenant only; ph-<id> callers check tenant themselves.
 async function resolveSkuToIds(sku, tenantId) {
   if (!tenantId) throw new Error("[inventory.service] resolveSkuToIds: tenantId is required");
 
@@ -464,16 +412,7 @@ async function resolveSkuToIds(sku, tenantId) {
   return null;
 }
 
-// Generic core: deducts/credits stock for a SKU across its location records
-// (largest-stock-first for deductions, same as before), under a caller-supplied
-// reason/type/userId. Unlike the old eBay-only version, this:
-//   - returns stock_before/stock_after per adjustment (previously computed by
-//     adjustStock() but silently discarded)
-//   - returns `shortfall` — how much of a deduction could NOT be covered by
-//     available stock, instead of silently clamping to 0 and hiding an oversell
-//   - returns `totalStockAfter` — the SKU's new total across all locations,
-//     which callers pushing quantity to a marketplace need as the absolute
-//     value to send (eBay's inventory API takes an absolute quantity, not a delta)
+// Adjusts a SKU across locations; returns per-record deltas and shortfall.
 async function adjustStockForSku(sku, delta, { reason, type, userId = null, tenantId, skipMarketplaceFanOut = false } = {}) {
   const ids = await resolveSkuToIds(sku, tenantId);
   if (!ids) {
@@ -495,12 +434,7 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null, tena
   const adjustments = [];
   let shortfall = 0;
 
-  // Last non-empty fan-out result seen across every adjustStock() call this
-  // invocation makes — every one of those calls targets the same
-  // product/variant, so they all fan out to the same set of listings; the
-  // last one is as representative as any. Callers (e.g.
-  // order-stock-sync.service.js) use this instead of making their own
-  // separate push, so there's exactly one enqueue per real stock change.
+  // One fan-out result per call: every adjustStock here hits one listing set.
   let marketplaceResults = [];
 
   if (delta < 0) {
@@ -526,15 +460,7 @@ async function adjustStockForSku(sku, delta, { reason, type, userId = null, tena
     shortfall = remaining;
     if (shortfall > 0) {
       logger.warn(`[inventory.service] oversold SKU ${sku} by ${shortfall}`);
-      // Every record is out of stock but `remaining` units were still
-      // requested — attribute the shortfall to the last record checked so
-      // the audit trail has a row that actually says an oversell happened
-      // (adjustment: -remaining, clamped_shortfall: remaining), instead of
-      // the attempt vanishing with no InventoryHistory entry at all. Forced
-      // skipMarketplaceFanOut: true regardless of the caller's own flag —
-      // this row represents zero real stock movement (0 -> 0), so it has
-      // nothing new to push; any real quantity change from this same call
-      // already triggered its own fan-out from the loop above.
+      // All out of stock: log the oversell on the last record, with no fan-out.
       const { stock_before, stock_after } = await adjustStock(lastRecord, {
         adjustment: -remaining,
         reason,
@@ -576,34 +502,7 @@ async function adjustStockBySku(sku, delta, tenantId) {
   });
   if (!result) return null;
 
-  // Stamp MarketplaceListing.ebay_synced_quantity synchronously with the
-  // post-adjustment total, right here, instead of relying solely on the
-  // async sync_listing queue job (fanned out by adjustStock() above) to get
-  // around to it. This function is ONLY ever called for an eBay-originated
-  // event (a real sale/cancellation eBay itself already told us about — see
-  // ebay.orders.service.js / ebay.webhook.service.js, the only two
-  // callers), so this total is usually an accurate reflection of what
-  // eBay's quantity now is — but it's still OUR BEST GUESS at eBay's state,
-  // not a confirmed read of it (see the field's own schema comment on
-  // MarketplaceListing.js). It's provably wrong on an oversell: eBay shows
-  // 1, our local record had already drifted to 0 (stale for whatever
-  // reason), a sale lands anyway — local stock clamps at 0 (see
-  // clamped_shortfall on InventoryHistory), this stamp writes 0 as the new
-  // baseline, and the real pre-existing 1-vs-0 drift is silently erased
-  // instead of ever surfacing for review. Deliberately kept anyway (an
-  // earlier draft of this fix considered deleting it entirely) — removing
-  // it would mean this baseline goes stale after every ordinary eBay sale
-  // until some unrelated future push happens, which would make the NEXT
-  // reconciliation poll flag every single normal sale as a "possible manual
-  // edit" needing human review — pure noise, and a worse failure mode than
-  // the rare oversell case above. The actual incident this baseline
-  // stamping caused (Aug 2026: a poll ran before eBay's OWN read-side had
-  // caught up to a sale it had just processed, saw baseline-vs-stale-eBay-
-  // read as a fresh drift, and re-applied it) is fixed at the read side
-  // instead — see ebay.inventory-sync.service.js's two-consecutive-poll
-  // confirmation before anything is even flagged, plus the fact that a
-  // confirmed drift now only ever creates a PendingReconciliation row for a
-  // human to review, never an automatic stock mutation.
+  // NOTE: best-guess eBay baseline; drift is caught by two-poll confirmation.
   try {
     const MarketplaceListing = require("../models/MarketplaceListing");
     const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
@@ -616,25 +515,14 @@ async function adjustStockBySku(sku, delta, tenantId) {
       },
       {
         $set: {
-          // TODO(dual-write): remove ebay_synced_quantity/ebay_synced_at
-          // after backfill — see MarketplaceListing.js. synced_quantity/
-          // synced_at (base schema) are the generic replacement.
+          // TODO(dual-write): drop ebay_synced_* after backfill; use synced_*.
           ebay_synced_quantity: result.totalStockAfter,
           ebay_synced_at: new Date(),
           synced_quantity: result.totalStockAfter,
           synced_at: new Date(),
         },
       },
-      // ebay_synced_quantity/ebay_synced_at are still declared on the eBay
-      // DISCRIMINATOR schema only, not MarketplaceListing's own base schema —
-      // Model.updateOne() called on the base model casts $set against only
-      // the base schema's paths, and in strict mode (the default) silently
-      // DROPS any field it doesn't recognize, with no error and a
-      // misleadingly successful modifiedCount. Confirmed live while adding
-      // this fix's tests: this stamp had been silently doing nothing.
-      // strict: false is the same fix ebay.listing.service.js#updateListing
-      // already uses for the same reason — keeping the pattern consistent
-      // rather than switching to MarketplaceListing.discriminators[...].
+      // strict: false, or updateOne drops these discriminator-only paths.
       { strict: false },
     );
   } catch (err) {
@@ -651,6 +539,7 @@ async function adjustStockBySku(sku, delta, tenantId) {
 module.exports = {
   listInventory,
   fanOutMarketplaceInventory,
+  getTotalStockForProducts,
   fetchPopulatedRecord,
   findRecord,
   ensureRecord,
@@ -658,6 +547,8 @@ module.exports = {
   setStock,
   getHistory,
   getTotalStockForProductVariant,
+  getTotalStockForProductVariants,
+  stockKey,
   getTotalStockForProduct,
   getLowStockItems,
   resolveSkuToIds,

@@ -16,4 +16,19 @@ const ADJUSTMENT_TYPE = Object.freeze({
   OTHER: "other",
 });
 
-module.exports = { ADJUSTMENT_TYPE };
+// Low-stock digest cadence; weekly/monthly send on one day at send time.
+const DIGEST_FREQUENCY = Object.freeze({ DAILY: "daily", WEEKLY: "weekly", MONTHLY: "monthly" });
+// Capped at 28 so a monthly digest fires in every month, February included.
+const DIGEST_MONTH_DAY_MAX = 28;
+// Single-market app: schedule days are Sydney days (matches the FE).
+const DIGEST_TIMEZONE = "Australia/Sydney";
+// Default stock location; the FE matches it by the same name.
+const MAIN_WAREHOUSE_NAME = "Main Warehouse";
+
+module.exports = {
+  ADJUSTMENT_TYPE,
+  DIGEST_FREQUENCY,
+  DIGEST_MONTH_DAY_MAX,
+  DIGEST_TIMEZONE,
+  MAIN_WAREHOUSE_NAME,
+};

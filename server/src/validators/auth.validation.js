@@ -10,8 +10,7 @@ const login = {
   }),
 };
 
-// Completes login for a multi-organization account — see
-// auth.controller.js#login/#selectOrganization.
+// Completes login for a multi-organization account.
 const selectOrganization = {
   body: Joi.object({
     pending_token: Joi.string().required(),
@@ -37,17 +36,13 @@ const register = {
     email: Joi.string().trim().lowercase().email().required(),
     password: Joi.string().min(6).max(128).required(),
     role: Joi.string().valid("user", "admin").default("user"),
-    // Which tenant this staff account joins — required now that every User
-    // is tenant-scoped. The storefront/dashboard client knows this from its
-    // own deployment config (see CLAUDE.md's tenant provisioning notes).
+    // Which tenant this staff account joins, required since every User is tenant-scoped.
     tenant_slug: Joi.string().trim().lowercase().required(),
   }),
 };
 
-// Self-service signup — creates a BRAND NEW tenant (unlike `register` above,
-// which joins an existing one via tenant_slug). No tenant_slug here since
-// there isn't one yet; tenant.service.js#registerTenantWithAdmin derives it
-// from company_name.
+// Self-service signup: creates a brand new tenant, unlike `register` above. No tenant_slug
+// here since there isn't one yet; registerTenantWithAdmin derives it from company_name.
 const registerTenant = {
   body: Joi.object({
     company_name: Joi.string().trim().min(2).max(100).required(),

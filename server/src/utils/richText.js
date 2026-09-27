@@ -1,10 +1,6 @@
-// Server-side mirror of src/utils/richText.ts — see that file for the why.
-// The policy fields in Settings are authored with a rich-text editor and
-// stored as HTML; pdfkit paints strings, so the HTML is parsed into blocks of
-// styled runs that invoicePdf.js draws with font switches. The two renderers
-// disagreeing about the footer is exactly what the shared GST/number helpers
-// exist to prevent, so keep the two files in step: same block handling, same
-// list markers, same "plain text saved before this was rich text" fallback.
+// Server-side mirror of src/utils/richText.ts. Policy fields are authored as HTML; pdfkit
+// paints strings, so HTML is parsed into styled runs invoicePdf.js draws with font switches.
+// Keep both files in step: same block handling, list markers, and plain-text fallback.
 
 const HTML_ENTITIES = {
   amp: "&",
@@ -58,17 +54,14 @@ function richTextToBlocks(value) {
 
   const blocks = [];
   let runs = [];
-  // Counters, not booleans: <strong>a <em>b</em> c</strong> has to stay bold
-  // after the inner tag closes.
+  // Counters, not booleans: <strong>a <em>b</em> c</strong> stays bold after the inner tag closes.
   let bold = 0;
   let italic = 0;
   let heading = 0;
-  // Open <ul>/<ol> elements, so an ordered list can number its own items and
-  // a nested list doesn't disturb its parent's count.
+  // Open <ul>/<ol> elements, so a nested list doesn't disturb its parent's count.
   const lists = [];
-  // Set by <li>, consumed by the first block that actually has text in it.
-  // The editor writes <li><p>…</p></li>, so the marker has to survive the
-  // inner <p> opening — which is exactly what an eager reset got wrong.
+  // Set by <li>, consumed by the first block with text — must survive the inner <p> opening
+  // the editor writes as <li><p>…</p></li>, which an eager reset got wrong.
   let pendingMarker = null;
 
   const endBlock = () => {
@@ -76,8 +69,7 @@ function richTextToBlocks(value) {
     runs = [];
     if (!normalized.length) return;
     blocks.push({ marker: pendingMarker, runs: normalized });
-    // Only the FIRST line of a list item is marked; a second paragraph inside
-    // the same <li> continues underneath it unmarked.
+    // Only the first line of a list item is marked; a second paragraph continues unmarked.
     pendingMarker = null;
   };
 

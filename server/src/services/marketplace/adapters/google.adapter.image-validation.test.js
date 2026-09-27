@@ -1,20 +1,7 @@
 // services/marketplace/adapters/google.adapter.image-validation.test.js
-//
-// Regression guard for TASK 2 (image URL validation) and TASK 1 of the
-// following run (zero-photo rejection): buildProductInputFromResolved must
-// never let an unusable primary image reach Google's Merchant API silently
-// — Google accepts a bad OR missing imageLink at insert time and only
-// disapproves the product later, off this app's radar, exactly the failure
-// shape eBay's own resolveImageUrls already guards against. A product with
-// zero photos fails this exact same way, just as reliably as a bad URL —
-// both are rejected here now.
-//
-// Pure unit tests against the exported builder/helper directly — no Mongo,
-// no network, matching google.adapter.contract.test.js's own style for the
-// adapter's pure building-block functions.
-//
-// Run with:
-//   node --test src/services/marketplace/adapters/google.adapter.image-validation.test.js
+// Regression guard: buildProductInputFromResolved must reject any unusable or missing primary
+// image, since Google otherwise accepts it and disapproves the product later, silently.
+// Pure unit tests, no Mongo/network. Run: node --test src/services/marketplace/adapters/google.adapter.image-validation.test.js
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

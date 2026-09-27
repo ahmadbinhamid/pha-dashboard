@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { getCategorySuggestions } from "@/lib/api/ebay";
@@ -42,25 +43,27 @@ export function EbayCategoryInput({ label, value, onChange, required, error }: P
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (q.trim().length < 2) { setOpen(false); return; }
 
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await getCategorySuggestions(q.trim());
-        if (res.data.sandbox) {
-          setSandboxMode(true);
-          setSuggestions([]);
-          setOpen(false);
-        } else {
-          setSandboxMode(false);
-          setSuggestions(res.data.suggestions.slice(0, 8));
-          setOpen(true);
-        }
-      } catch {
+    debounceRef.current = setTimeout(() => void fetchSuggestions(q.trim()), 350);
+  }
+
+  async function fetchSuggestions(q: string) {
+    setLoading(true);
+    try {
+      const res = await getCategorySuggestions(q);
+      if (res.data.sandbox) {
+        setSandboxMode(true);
         setSuggestions([]);
-      } finally {
-        setLoading(false);
+        setOpen(false);
+      } else {
+        setSandboxMode(false);
+        setSuggestions(res.data.suggestions.slice(0, 8));
+        setOpen(true);
       }
-    }, 350);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleSelect(s: CategorySuggestion) {
@@ -76,72 +79,65 @@ export function EbayCategoryInput({ label, value, onChange, required, error }: P
     onChange("");
   }
 
-  const showManual = sandboxMode || (!loading && query.length === 0 && !selectedName);
-
   return (
     <div ref={containerRef} className="space-y-1.5">
       <FormField label={label} required={required} error={error}>
-        <div className="relative">
-          <Input
-            value={selectedName ? query : query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            placeholder={sandboxMode ? "Sandbox mode — enter ID manually below" : "Search eBay categories…"}
-            disabled={sandboxMode}
-            className={selectedName ? "pr-16" : ""}
-          />
-          {loading && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-fg/40">
-              Searching…
-            </span>
-          )}
-          {selectedName && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-xs text-fg/50 hover:text-fg"
-            >
-              Clear
-            </button>
-          )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <Input
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder={sandboxMode ? "Sandbox mode — enter the ID instead" : "Search eBay categories…"}
+              disabled={sandboxMode}
+              className={selectedName ? "pr-16" : ""}
+            />
+            {loading && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-fg/40">Searching…</span>
+            )}
+            {selectedName && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClear}
+                className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2 text-xs text-fg/50"
+              >
+                Clear
+              </Button>
+            )}
 
-          {open && suggestions.length > 0 && (
-            <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-card shadow-lg">
-              {suggestions.map((s) => (
-                <li key={s.categoryId}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(s)}
-                    className="flex w-full flex-col px-3 py-2 text-left hover:bg-muted"
-                  >
-                    <span className="text-sm font-medium text-fg">{s.categoryName}</span>
-                    <span className="text-xs text-fg/50">{s.breadcrumb} · ID: {s.categoryId}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+            {open && suggestions.length > 0 && (
+              <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                {suggestions.map((s) => (
+                  <li key={s.categoryId}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => handleSelect(s)}
+                      className="h-auto w-full flex-col items-start gap-0 rounded-none px-3 py-2 text-left font-normal"
+                    >
+                      <span className="text-sm font-medium text-fg">{s.categoryName}</span>
+                      <span className="text-xs text-fg/50">{s.breadcrumb} · ID: {s.categoryId}</span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Manual ID: the only way in when sandbox has no category search. */}
+          <Input
+            value={value}
+            onChange={(e) => { onChange(e.target.value); setSelectedName(null); }}
+            placeholder="Category ID"
+            aria-label="eBay category ID"
+            className="tabular-nums sm:w-36"
+          />
         </div>
       </FormField>
 
-      {/* Manual ID input — always visible as fallback */}
-      <div className="flex items-center gap-2">
-        <Input
-          value={value}
-          onChange={(e) => { onChange(e.target.value); setSelectedName(null); }}
-          placeholder="Or enter category ID manually"
-          className="text-xs text-fg/70"
-        />
-        {value && (
-          <span className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-fg/60">
-            ID: {value}
-          </span>
-        )}
-      </div>
-
       {sandboxMode && (
-        <p className="text-xs text-fg/50">
-          Category search is unavailable in eBay sandbox — use the manual ID field above.
-        </p>
+        <p className="text-xs text-fg/50">Category search is unavailable in eBay sandbox; enter the ID.</p>
       )}
     </div>
   );

@@ -2,15 +2,14 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth, admin } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/category.validation");
 const ctrl = require("../controllers/category.controller");
 
-// Public routes — auth(false) resolves req.tenant from a staff JWT when
-// present, resolveGuestTenant() fills in from X-Tenant-Slug otherwise.
+// Public: tenant from a staff JWT if sent, else X-Tenant-Slug.
 router.get(
   "/",
   auth(false),
@@ -27,25 +26,25 @@ router.get(
   asyncHandler(ctrl.getCategory),
 );
 
-// Protected routes — require admin role
+// Protected routes: any member of the organisation
 router.post(
   "/",
   auth(),
-  admin,
+  requirePermission("categories.create"),
   validate(v.createCategory),
   asyncHandler(ctrl.createCategory),
 );
 router.put(
   "/:id",
   auth(),
-  admin,
+  requirePermission("categories.update"),
   validate({ ...v.byIdParam, ...v.updateCategory }),
   asyncHandler(ctrl.updateCategory),
 );
 router.delete(
   "/:id",
   auth(),
-  admin,
+  requirePermission("categories.delete"),
   validate(v.byIdParam),
   asyncHandler(ctrl.deleteCategory),
 );

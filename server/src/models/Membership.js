@@ -4,25 +4,15 @@ const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
 const { MEMBERSHIP_STATUS } = require("../constants/access.constants");
 
-/**
- * One person's place in one organisation — the join between User and Tenant,
- * carrying the role they hold there.
- *
- * This is what makes a user able to belong to several organisations at once
- * (the model flowpos-backend uses via its `tenant_user` pivot): the User doc
- * holds identity only, and everything tenant-scoped — role, status, when they
- * joined — lives here. Removing someone from an organisation deletes their
- * membership, never their account or their place in other organisations.
- */
+/** The join between User and Tenant carrying the role held there; removing someone from an
+ * organisation deletes only this membership, never their account or other memberships. */
 const membershipSchema = buildSchema({
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
   user_id: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
   role_id: { type: Schema.Types.ObjectId, ref: "Role", required: true },
-  // Which organisation the dashboard opens on when no other is requested.
-  // Exactly one per user — see membership.service.js#setDefaultMembership.
+  // Which organisation the dashboard opens on when no other is requested; exactly one per user.
   is_default: { type: Boolean, default: false },
-  // Suspended keeps the history (who did what) while removing every
-  // permission — hasPermission only ever considers an active membership.
+  // Suspended keeps the history while removing every permission; hasPermission only considers active.
   status: {
     type: String,
     enum: Object.values(MEMBERSHIP_STATUS),

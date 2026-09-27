@@ -1,15 +1,8 @@
-// Australia/Sydney is hardcoded — no per-tenant timezone field exists
-// anywhere in this app (single-market, confirmed: no timezone/region field
-// on Tenant, no timezone library dependency). notification_send_time is
-// stored in the DB as UTC ("HH:MM"); this converts to/from Sydney local time
-// at the load/save boundary only — see InventorySettingsModal.tsx, the one
-// place this is used today.
+// Australia/Sydney is hardcoded — no per-tenant timezone field exists anywhere (single-market app). notification_send_time is stored as UTC "HH:MM"; this converts to/from Sydney local time at the load/save boundary (InventorySettingsModal.tsx).
 
 const SYDNEY_TZ = "Australia/Sydney";
 
-// Sydney's UTC offset (in minutes) for a given reference date — computed
-// from the real IANA tz database via Intl, not hardcoded +10/+11, so this
-// is correct across the AEST/AEDT daylight-saving transition automatically.
+// Sydney's UTC offset (minutes) for a given date, computed from the real IANA tz database via Intl (not hardcoded +10/+11), so it's correct across DST transitions automatically.
 function sydneyOffsetMinutes(referenceDate: Date): number {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: SYDNEY_TZ,
@@ -22,8 +15,7 @@ function sydneyOffsetMinutes(referenceDate: Date): number {
     second: "2-digit",
   });
   const parts = Object.fromEntries(dtf.formatToParts(referenceDate).map((p) => [p.type, p.value]));
-  // Read the Sydney wall-clock components back AS IF they were UTC, then
-  // diff against the real UTC instant — that difference is the offset.
+  // Read the Sydney wall-clock components back as if they were UTC, then diff against the real UTC instant — that difference is the offset.
   const asIfUtc = Date.UTC(
     Number(parts.year),
     Number(parts.month) - 1,
@@ -42,11 +34,7 @@ function formatHhmm(totalMinutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/**
- * "HH:MM" UTC -> "HH:MM" Sydney-local, for display in the Send Time input
- * on load. `referenceDate` defaults to now — exposed as a param purely so
- * tests can pin a specific AEST/AEDT date deterministically.
- */
+/** "HH:MM" UTC -> "HH:MM" Sydney-local, for the Send Time input on load. `referenceDate` defaults to now; exposed as a param so tests can pin an AEST/AEDT date. */
 export function utcTimeToSydney(utcHhmm: string, referenceDate: Date = new Date()): string {
   const [h, m] = utcHhmm.split(":").map(Number);
   const refUtc = new Date(
@@ -56,17 +44,7 @@ export function utcTimeToSydney(utcHhmm: string, referenceDate: Date = new Date(
   return formatHhmm(h * 60 + m + offset);
 }
 
-/**
- * "HH:MM" Sydney-local -> "HH:MM" UTC, before saving. Same `referenceDate`
- * caveat as above.
- *
- * NOTE: a tenant who set their time before a DST transition and never
- * re-opens the modal keeps the OLD stored UTC value — their local send time
- * silently shifts by an hour on the actual transition date. This is
- * inherent to storing a plain "HH:MM" rather than a timezone-aware
- * recurrence rule, and true of every naive system like this — accepted as
- * a known limitation, not solved here.
- */
+/** "HH:MM" Sydney-local -> "HH:MM" UTC, before saving. Known limitation: a tenant who never reopens the modal after a DST transition keeps the old UTC value, shifting their local send time by an hour — inherent to storing plain "HH:MM", not solved here. */
 export function sydneyTimeToUtc(sydneyHhmm: string, referenceDate: Date = new Date()): string {
   const [h, m] = sydneyHhmm.split(":").map(Number);
   const refUtc = new Date(

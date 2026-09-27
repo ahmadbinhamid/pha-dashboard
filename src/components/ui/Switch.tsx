@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useFieldDensity } from "@/components/ui/FieldDensity";
 
 export type SwitchProps = {
   id?: string;
@@ -9,9 +10,7 @@ export type SwitchProps = {
   label?: string;
   description?: string;
   disabled?: boolean;
-  /** Shows a spinner in place of the knob and blocks interaction — for a
-   * toggle that fires straight off onCheckedChange (no surrounding form/Save
-   * button) while its mutation is in flight. */
+  // Spinner + locked while an instant-save toggle's mutation is in flight.
   loading?: boolean;
   className?: string;
 };
@@ -28,13 +27,21 @@ export function Switch({
 }: SwitchProps) {
   const innerId = React.useId();
   const switchId = id ?? innerId;
+  // Compact: an input-height row (h-9) so it lines up beside text fields.
+  const compact = useFieldDensity() === "compact";
 
   return (
-    <div className={cn("flex items-start justify-between gap-4 rounded-xl border border-border bg-bg-2/40 px-4 py-3", className)}>
+    <div
+      className={cn(
+        "flex justify-between gap-4 rounded-xl border border-border bg-bg-2/40",
+        compact ? "min-h-9 items-center px-3 py-1.5" : "items-start px-4 py-3",
+        className,
+      )}
+    >
       {(label || description) ? (
         <div className="min-w-0">
           {label ? (
-            <label htmlFor={switchId} className="cursor-pointer text-sm font-medium text-fg">
+            <label htmlFor={switchId} className={cn("cursor-pointer font-medium text-fg", compact ? "text-compact" : "text-sm")}>
               {label}
             </label>
           ) : null}

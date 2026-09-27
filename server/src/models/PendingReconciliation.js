@@ -1,13 +1,6 @@
 // models/PendingReconciliation.js
-//
-// A quantity drift the eBay inventory-sync poller confirmed on two
-// consecutive polls (see ebay.inventory-sync.service.js) but did NOT apply
-// automatically — auto-applying a "seller changed it on eBay" correction is
-// exactly the mechanism that twice corrupted live stock (see git history:
-// duplicate-listing incident, then the read-lag false-restock incident).
-// Surfacing it here for a human to accept/reject, instead, trades a little
-// operator friction for making automatic stock corruption structurally
-// impossible from this code path.
+// A quantity drift confirmed on two consecutive polls but never auto-applied — that mechanism
+// twice corrupted live stock historically. Surfaced for a human to accept/reject instead.
 
 const mongoose = require("mongoose");
 
@@ -28,10 +21,8 @@ const schema = new mongoose.Schema(
   { timestamps: false, versionKey: false },
 );
 
-// Only one open row per listing at a time — a second drift on an already
-// "pending" listing just extends the existing row (last_seen_at) rather than
-// spawning a duplicate. Once resolved (accepted/rejected), a fresh drift
-// starts a new row, which the partial filter allows.
+// Only one open row per listing; a second drift on a pending listing extends last_seen_at
+// rather than duplicating. Once resolved, a fresh drift starts a new row via the partial filter.
 schema.index(
   { tenant_id: 1, listing: 1 },
   { unique: true, partialFilterExpression: { status: "pending" } },

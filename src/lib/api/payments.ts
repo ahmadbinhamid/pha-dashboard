@@ -18,5 +18,4 @@ export const getPayment = async (id: string) => {
   return data;
 };
 
-// refundPayment/refundPaymentManual removed (refund-redesign-spec.md §9) —
-// see src/lib/api/refunds.ts#createRefund (POST /order/:orderId/refunds).
+// refundPayment/refundPaymentManual removed (refund-redesign-spec.md §9) — see src/lib/api/refunds.ts#createRefund.

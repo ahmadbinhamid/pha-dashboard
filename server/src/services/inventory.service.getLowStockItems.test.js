@@ -1,21 +1,11 @@
 // services/inventory.service.getLowStockItems.test.js
-//
-// getLowStockItems powers the low-stock digest email (see
-// inventory-digest.service.js) — same aggregation shape as
-// dashboard.service.js#getStockCounts, deliberately kept identical so the
-// dashboard's "low stock" tile and the digest email never disagree about
-// what counts as "low". Each boundary case below pairs a fixture that
-// SHOULD be included with a sibling that shouldn't, so an off-by-one in the
-// $gt/$lte aggregation stage would actually turn a specific assertion red,
-// not just change an array length.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/inventory.service.getLowStockItems.test.js
+// Must match dashboard getStockCounts on "low"; boundary-paired. Needs Mongo.
 
 const test = require("node:test");
 const { before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -41,10 +31,7 @@ async function makeProduct(tenantId, overrides = {}) {
   });
 }
 
-// Registers cleanup for every doc created in the test so fixtures never leak
-// into the dev DB across runs (see inventory-digest.service.test.js's own
-// note on t.after firing in registration order, not LIFO — cleanup here is
-// deliberately the LAST thing registered in each test for that reason).
+// Registered last in each test: t.after runs in registration order, not LIFO.
 function cleanupOnExit(t, { products = [], variants = [], locations = [] } = {}) {
   t.after(async () => {
     const productIds = products.map((p) => p._id);
@@ -57,7 +44,7 @@ function cleanupOnExit(t, { products = [], variants = [], locations = [] } = {})
 }
 
 test("getLowStockItems: threshold boundary — at threshold included, above excluded, zero (out of stock) excluded", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const location = await Location.create({ tenant_id: tenantId, name: `Loc ${crypto.randomUUID()}` });
 
   const atThreshold = await makeProduct(tenantId);
@@ -82,16 +69,14 @@ test("getLowStockItems: threshold boundary — at threshold included, above excl
 });
 
 test("getLowStockItems: multi-location stock is summed before comparing against threshold", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const locationA = await Location.create({ tenant_id: tenantId, name: `Loc A ${crypto.randomUUID()}` });
   const locationB = await Location.create({ tenant_id: tenantId, name: `Loc B ${crypto.randomUUID()}` });
 
   const product = await makeProduct(tenantId);
   cleanupOnExit(t, { products: [product], locations: [locationA, locationB] });
 
-  // 3 + 3 = 6 total, ABOVE a threshold of 5 — must NOT show up as low stock
-  // even though each individual location's count (3) would be under 5 on
-  // its own. Proves the aggregation sums across locations, not per-location.
+  // 3 + 3 = 6, above threshold 5: proves the aggregation sums across locations.
   await Inventory.create({ product: product._id, variant: null, location: locationA._id, stock_count: 3 });
   await Inventory.create({ product: product._id, variant: null, location: locationB._id, stock_count: 3 });
 
@@ -110,7 +95,7 @@ test("getLowStockItems: multi-location stock is summed before comparing against 
 });
 
 test("getLowStockItems: a variant's own SKU wins over the parent product's SKU", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const location = await Location.create({ tenant_id: tenantId, name: `Loc ${crypto.randomUUID()}` });
   const product = await makeProduct(tenantId, { has_variants: true });
   const variant = await ProductVariant.create({
@@ -131,7 +116,7 @@ test("getLowStockItems: a variant's own SKU wins over the parent product's SKU",
 });
 
 test("getLowStockItems: a variant with no SKU of its own falls back to the parent product's SKU", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const location = await Location.create({ tenant_id: tenantId, name: `Loc ${crypto.randomUUID()}` });
   const product = await makeProduct(tenantId, { has_variants: true });
   const variant = await ProductVariant.create({
@@ -150,8 +135,8 @@ test("getLowStockItems: a variant with no SKU of its own falls back to the paren
 });
 
 test("getLowStockItems: scoped to the requesting tenant only", async (t) => {
-  const tenantA = new mongoose.Types.ObjectId();
-  const tenantB = new mongoose.Types.ObjectId();
+  const tenantA = fixtureId();
+  const tenantB = fixtureId();
   const locationA = await Location.create({ tenant_id: tenantA, name: `Loc A ${crypto.randomUUID()}` });
 
   const productB = await makeProduct(tenantB);
@@ -167,7 +152,7 @@ test("getLowStockItems: scoped to the requesting tenant only", async (t) => {
 });
 
 test("getLowStockItems: a soft-deleted product is excluded", async (t) => {
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const location = await Location.create({ tenant_id: tenantId, name: `Loc ${crypto.randomUUID()}` });
   const product = await makeProduct(tenantId);
   cleanupOnExit(t, { products: [product], locations: [location] });

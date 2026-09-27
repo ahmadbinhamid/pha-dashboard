@@ -50,11 +50,7 @@ const inventoryHistorySchema = buildSchema(
         message: "stock_after must be a whole number",
       },
     },
-    // How much of `adjustment` could NOT actually be applied because it
-    // would have taken stock_count negative — stock_after is always clamped
-    // at 0, but `adjustment` itself is still the true requested value (an
-    // oversell), never silently rewritten to match what fit. 0 for every
-    // ordinary (non-oversell) row. See inventory.service.js#adjustStock.
+    // Portion of `adjustment` that couldn't apply (would go negative); stock_after clamps at 0 but adjustment keeps the true requested value. See inventory.service.js#adjustStock.
     clamped_shortfall: {
       type: Number,
       default: 0,
@@ -80,11 +76,7 @@ const inventoryHistorySchema = buildSchema(
 
 // inventory.service.js#getHistory: { inventory }, sort by created_at desc.
 inventoryHistorySchema.index({ inventory: 1, created_at: -1 });
-// dashboard.service.js's activity-log aggregation optionally $matches on a
-// bare created_at date range BEFORE the $lookup to products (tenant scoping
-// happens post-lookup, so it can't be part of a compound index here) — a
-// single-field index still lets that initial range filter use an index
-// instead of a full collection scan.
+// Lets dashboard.service.js's activity-log aggregation range-filter by created_at (pre-$lookup) use an index instead of a full scan.
 inventoryHistorySchema.index({ created_at: -1 });
 
 module.exports = model("InventoryHistory", inventoryHistorySchema);

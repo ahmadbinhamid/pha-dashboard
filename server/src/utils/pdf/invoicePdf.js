@@ -364,8 +364,7 @@ function drawItemsTableHeader(doc, y) {
 // pdfkit's own auto-pagination would kick in *inside* the item-name .text()
 // call, but the sibling cells (price/qty/discount/total) are drawn
 // afterwards at that same pre-computed rowY, now meaningless on whatever
-// page it auto-added, scattering a single row's columns across two or more
-// pages.
+// page it auto-added, scattering a single row's columns across two or more pages.
 const ROW_PAD_TOP = 9;
 const ROW_PAD_BOTTOM = 9;
 
@@ -510,8 +509,7 @@ function drawPaymentDetails(doc, order, companyProfile, totalPaidCents, x, y, wi
 
 // One line of the totals ledger — label left, figure right. `tone` picks the
 // emphasis: plain ink for a running figure, accent for a deduction, green
-// for a settled balance (same three tones as InvoicePrintView.tsx's
-// <TotalRow>).
+// for a settled balance (same three tones as InvoicePrintView.tsx's <TotalRow>).
 function drawTotalRow(doc, label, value, x, y, width, tone = "default") {
   const color = tone === "accent" ? COLORS.accent : tone === "green" ? COLORS.green : COLORS.text;
   doc

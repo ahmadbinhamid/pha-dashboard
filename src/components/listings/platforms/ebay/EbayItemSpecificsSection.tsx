@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { getCategoryAspects } from "@/lib/api/ebay";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { CategoryAspect } from "@/types/ebay";
 import { Plus, X } from "lucide-react";
 
-// Aspects already captured by dedicated form fields — skip them in dynamic list
+// Aspects with dedicated form fields; skipped in the dynamic list.
 const STATIC_ASPECT_NAMES = new Set([
   "brand",
   "manufacturer part number",
@@ -26,6 +21,8 @@ const STATIC_ASPECT_NAMES = new Set([
 interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
+  // Product MPN an empty eBay MPN inherits (shown as placeholder).
+  productMpn?: string | null;
 }
 
 function patchSpecs(
@@ -36,7 +33,7 @@ function patchSpecs(
   onChange({ item_specifics: { ...form.item_specifics, ...patch } });
 }
 
-export function EbayItemSpecificsSection({ form, onChange }: Props) {
+export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) {
   const specs = form.item_specifics;
   const patch = (p: Partial<EbayListingFormState["item_specifics"]>) =>
     patchSpecs(form, onChange, p);
@@ -95,16 +92,11 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
     const value = specs.aspects?.[aspect.name] ?? "";
     if (aspect.mode === "SELECTION_ONLY" && aspect.values.length > 0) {
       return (
-        <Select value={value} onValueChange={(v) => setAspectValue(aspect.name, v)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select…" />
-          </SelectTrigger>
-          <SelectContent>
-            {aspect.values.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SingleSelect
+          options={aspect.values.map((v) => ({ value: v, label: v }))}
+          value={value}
+          onChange={(v) => setAspectValue(aspect.name, v)}
+        />
       );
     }
     return (
@@ -136,20 +128,21 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
           />
         </FormField>
 
-        <FormField label="Manufacturer Part Number (MPN)">
+        <FormField
+          label="Manufacturer Part Number (MPN)"
+          hint={productMpn && !specs.mpn ? "From product — type to override for eBay only." : undefined}
+        >
           <Input
             value={specs.mpn}
             onChange={(e) => patch({ mpn: e.target.value })}
-            placeholder='e.g. 45022-TBC-A01 or "Does Not Apply"'
+            placeholder={productMpn || 'e.g. 45022-TBC-A01 or "Does Not Apply"'}
           />
         </FormField>
       </div>
 
       {/* Superseded Part Numbers — dynamic array */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-fg">
-          Superseded Part Number(s)
-        </label>
+        <Label>Superseded Part Number(s)</Label>
 
         <div className="space-y-2">
           {spnList.map((val, i) => (
@@ -158,23 +151,26 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
                 <span className="shrink-0 border-r border-border bg-bg-2 px-3 py-2 text-xs font-medium text-fg/45 select-none">
                   #{i + 1}
                 </span>
-                <input
+                <Input
                   type="text"
+                  variant="ghost"
                   value={val}
                   onChange={(e) => updateSpn(i, e.target.value)}
                   placeholder="e.g. 45022TBCA01"
-                  className="w-full bg-transparent px-3 py-2 text-sm text-fg placeholder:text-fg/35 outline-none"
+                  className="h-auto w-full rounded-none border-0 bg-transparent px-3 py-2 text-sm text-fg shadow-none placeholder:text-fg/35 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
                 />
               </div>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
                 onClick={() => removeSpn(i)}
                 disabled={spnList.length === 1 && val === ""}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs border border-border text-fg/40 transition-colors hover:border-danger/50 hover:bg-danger/5 hover:text-danger disabled:cursor-not-allowed disabled:opacity-30"
-                title="Remove"
+                className="h-8 w-8 shrink-0 rounded-md text-fg/40 hover:border-danger/50 hover:bg-danger/5 hover:text-danger"
+                aria-label="Remove part number"
               >
                 <X className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -190,7 +186,7 @@ export function EbayItemSpecificsSection({ form, onChange }: Props) {
           Add Part Number
         </Button>
 
-        <p className="text-[11px] text-fg/40">
+        <p className="text-2xs text-fg/40">
           List all older part numbers this part supersedes — helps buyers find this listing.
         </p>
       </div>

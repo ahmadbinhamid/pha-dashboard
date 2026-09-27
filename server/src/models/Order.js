@@ -1,7 +1,5 @@
 // models/Order.js
-//
-// All monetary fields are integer cents (AUD), matching Stripe's native unit —
-// never floats, to keep GST-extraction and totals math exact.
+// All monetary fields are integer cents (AUD), matching Stripe's native unit, never floats.
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
@@ -17,35 +15,25 @@ const orderItemSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     variant: { type: Schema.Types.ObjectId, ref: "ProductVariant", default: null },
-    // Snapshot at time of order — never re-read from Product at display time,
-    // so historical orders stay accurate if price/name changes later.
+    // Snapshot at order time; never re-read from Product, so historical orders stay accurate.
     name: { type: String, required: true },
     sku: { type: String, default: null },
     unit_price: { type: Number, required: true }, // cents, GST-inclusive
     quantity: { type: Number, required: true, min: 1 },
-    // Per-line discount (cents) — set at creation by admin-created manual
-    // orders (storefront/eBay orders always leave this at 0 at creation), and
-    // editable after the fact on eBay/manual orders via
-    // order.service.js#updateOrderItemDiscount.
+    // Per-line discount (cents), set at creation by manual orders; editable after the fact on
+    // eBay/manual orders via updateOrderItemDiscount.
     discount_amount: { type: Number, default: 0 },
-    // Customer-facing note about this specific line (e.g. "no engine oil
-    // included") — captured by staff when building a manual order.
+    // Customer-facing note about this line, captured by staff when building a manual order.
     note: { type: String, default: null },
 
-    // Price-edit audit trail — eBay/manual orders only (storefront prices are
-    // never reopened after the fact, see order.service.js#updateOrderItemPrice).
-    // original_unit_price is set once, on the first edit, so it always
-    // reflects what was originally charged even if the price is edited more
-    // than once afterward.
+    // Price-edit audit trail, eBay/manual orders only. original_unit_price is set once, on the
+    // first edit, so it always reflects what was originally charged.
     original_unit_price: { type: Number, default: null },
     unit_price_updated_at: { type: Date, default: null },
     unit_price_updated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
 
-    // Tracks whether this line item's quantity change (sale or restock) has
-    // been pushed to eBay. "not_applicable" covers SKUs with no inventory
-    // record / no eBay listing. A failed push is retried via the eBay queue;
-    // this field stays visible on the order for manual reconciliation if it
-    // never recovers.
+    // Whether this line's quantity change has been pushed to eBay. A failed push is retried
+    // via the eBay queue; this stays visible for manual reconciliation if it never recovers.
     ebay_sync_status: {
       type: String,
       enum: ["not_applicable", "pending", "synced", "failed"],
@@ -53,42 +41,25 @@ const orderItemSchema = new Schema(
     },
     ebay_sync_error: { type: String, default: null },
 
-    // refund-redesign-spec.md §1.1 — cumulative, derived state (see
-    // refund.service.js#applyRefundEffects once §3.7 lands): recomputed by
-    // summing every succeeded Refund's lines for this item and assigned
-    // absolutely, never incremented — the same pattern
-    // stripe.webhook.service.js#handleChargeRefunded already uses correctly
-    // for payment.amount_refunded. Additive only for now: nothing writes
-    // these yet, they just sit at their defaults until §6.2's backfill and
-    // the orchestration rewrite (§3.7) start populating them.
+    // Cumulative, derived state: recomputed by summing every succeeded Refund's lines for this
+    // item and assigned absolutely, never incremented (same pattern as payment.amount_refunded).
     quantity_refunded: { type: Number, default: 0, min: 0 },
     amount_refunded: { type: Number, default: 0, min: 0 }, // cents, this line's share only
-    // Tracked separately from quantity_refunded because restock is opt-in
-    // per refund line — refunding 2 units with restock unchecked must never
-    // later be mistaken for units that came back into stock.
+    // Tracked separately since restock is opt-in per refund line, never assumed from quantity_refunded.
     quantity_restocked: { type: Number, default: 0, min: 0 },
   },
   {
-    // §1.1: refund lines need a stable per-item reference that survives
-    // regardless of array position — index-based addressing (see
-    // order.service.js#updateOrderItemPrice/#updateOrderItemDiscount, still
-    // index-addressed and unaffected by this) breaks the moment items are
-    // ever reordered or removed. NOTE: this does not retroactively give
-    // historical items a persisted _id — see the §6.2 backfill and Order's
-    // own item_ids_migrated_at below for why POST /orders/:orderId/refunds
-    // must check that flag rather than trusting item._id's mere presence
-    // (Mongoose auto-generates one in memory on read even when nothing was
-    // ever actually persisted).
+    // Refund lines need a stable per-item reference that survives regardless of array position.
+    // Doesn't retroactively give historical items a persisted _id — see item_ids_migrated_at
+    // below for why refund creation must check that flag, not just item._id's presence.
     _id: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   },
 );
 
-// refund_calculator.service.js (§3) is the actual source of truth for what a
-// refund may take — this virtual exists so nothing else (a controller, a
-// frontend view) has to reimplement "quantity minus already-refunded" by
-// hand and risk drifting from that.
+// refund-calculator.service.js is the actual source of truth for what a refund may take; this
+// virtual exists so nothing else reimplements "quantity minus already-refunded" and risks drifting.
 orderItemSchema.virtual("refundable_quantity").get(function () {
   return this.quantity - this.quantity_refunded;
 });
@@ -103,9 +74,7 @@ const addressSchema = new Schema(
   { _id: false },
 );
 
-// Internal staff comment thread — distinct from `note` (customer-facing,
-// captured once at order creation): these accumulate over time, each
-// attributed to whichever admin wrote it.
+// Internal staff comment thread, distinct from `note` (customer-facing, set once at creation).
 const internalNoteSchema = new Schema(
   {
     text: { type: String, required: true, trim: true },
@@ -116,46 +85,31 @@ const internalNoteSchema = new Schema(
 );
 
 const orderSchema = buildSchema({
-  // Backfilled onto every existing Order by scripts/backfillTenantId.js —
-  // order_number/invoice_number/external_order_id's unique indexes below are
-  // compound with this.
+  // Backfilled via scripts/backfillTenantId.js; the unique indexes below are compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
-  // Bare zero-padded sequence only ("00001") — never a prefix baked in. The
-  // prefix an order displays with is order_number_prefix below, snapshotted
-  // once at creation time from Tenant.order_number_prefix, deliberately NOT
-  // looked up live from the tenant's CURRENT setting — that would silently
-  // relabel every past order the moment an admin changes the setting.
+  // Bare zero-padded sequence, never a prefix baked in; order_number_prefix below is snapshotted
+  // once at creation, not looked up live, so changing the tenant setting never relabels past orders.
   order_number: { type: String, required: true },
   order_number_prefix: { type: String, required: true, default: "ORD" },
-  // Separate sequence from order_number, minted at the same time — orders
-  // and invoices are 1:1 today, but this keeps the financial/tax-invoice
-  // document number independent of the operational order reference, since
-  // they diverge the moment partial shipments, credit notes, or consolidated
-  // billing exist. See scripts/migrateInvoiceNumbers.js for backfill. Same
-  // bare-number/snapshotted-prefix split as order_number above.
+  // Separate sequence from order_number, minted at the same time, keeping the invoice document
+  // number independent since they'll diverge once partial shipments/credit notes exist.
   invoice_number: { type: String, required: true },
   invoice_number_prefix: { type: String, required: true, default: "INV" },
   items: { type: [orderItemSchema], required: true },
 
-  // Required for storefront/eBay orders (enforced by their own request
-  // validation) but optional here — a manual/walk-in Customer record may
-  // have no email or phone on file.
+  // Required for storefront/eBay orders (their own validation enforces it), optional here since
+  // a manual/walk-in Customer record may have no email or phone on file.
   customer: {
     name: { type: String, required: true },
-    // Shown on the invoice instead of `name` when present — see
-    // utils/pdf/invoicePdf.js and InvoicePrintView.tsx.
+    // Shown on the invoice instead of `name` when present.
     company_name: { type: String, trim: true, default: null },
     email: { type: String, lowercase: true, trim: true, default: null },
     phone: { type: String, trim: true, default: null },
   },
-  // Link to the Customer collection, when this order belongs to a known
-  // customer record — null for guest storefront checkouts, which only ever
-  // populate the snapshot above. `customer` above stays the source of truth
-  // for what was actually shown/emailed at order time even if the linked
-  // Customer record is later edited.
+  // Link to a known Customer record; null for guest checkouts. `customer` above stays the
+  // source of truth for what was shown/emailed even if the linked record is later edited.
   customer_id: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
-  // How the order reaches the customer. eBay orders are always DELIVERY
-  // (imported with a real shipping_address); only storefront checkout lets
+  // How the order reaches the customer; eBay orders are always DELIVERY, only storefront lets
   // the customer choose PICKUP.
   delivery_method: {
     type: String,
@@ -172,9 +126,8 @@ const orderSchema = buildSchema({
   },
   billing_address: { type: addressSchema, default: null }, // null => same as shipping
 
-  // Customer-facing note for the whole order (e.g. a special request called
-  // out at checkout) — captured once, at creation. Distinct from
-  // `internal_notes` below, which is an ongoing staff comment thread.
+  // Customer-facing note for the whole order, captured once at creation. Distinct from
+  // `internal_notes` below, an ongoing staff comment thread.
   note: { type: String, default: null },
   internal_notes: { type: [internalNoteSchema], default: [] },
 
@@ -182,30 +135,17 @@ const orderSchema = buildSchema({
   // subtotal already includes GST; tax_amount is informational (subtotal / 11),
   // not added on top. total = subtotal - discount_amount + shipping_cost.
   subtotal: { type: Number, required: true },
-  // Legacy order-level manual adjustment (goodwill credit, negotiated
-  // discount) — distinct from each line item's own discount_amount, which is
-  // baked into subtotal already. Zero at creation on every channel. No
-  // longer editable after the fact (discounts are now applied per line item
-  // via order.service.js#updateOrderItemDiscount instead) — this field is
-  // kept only so historical orders that already had one keep reconciling
-  // correctly against their stored `total`.
+  // Legacy order-level manual adjustment, distinct from each line's own discount_amount (already
+  // baked into subtotal). No longer editable — kept only so historical orders reconcile against `total`.
   discount_amount: { type: Number, required: true, default: 0 },
   shipping_cost: { type: Number, required: true, default: 0 },
   tax_amount: { type: Number, required: true }, // GST extracted from subtotal, display-only
   total: { type: Number, required: true },
   currency: { type: String, required: true, default: "aud" },
 
-  // Legacy (refund-redesign-spec.md §1.2/§9) — mixes payment state and
-  // fulfilment state in one enum, which is exactly why finalizeSucceededRefund
-  // used to overwrite FULFILLED with REFUNDED. `payment_status` and
-  // `fulfillment_status` below are now the real, independently-editable/
-  // derived fields (admin UI writes fulfillment_status; payment_status is
-  // always derived from actual payments — see utils/paymentStatus.js). This
-  // field is kept as a DERIVED rollup of the two (see
-  // utils/paymentStatus.js#deriveLegacyOrderStatus) purely for the ~15
-  // remaining readers (dashboard aggregation, invoice PDF, eBay/Stripe
-  // internals) that haven't been migrated off it — never write it directly
-  // outside that derivation.
+  // Legacy: mixes payment and fulfilment state in one enum, which is exactly why refunds used
+  // to overwrite FULFILLED with REFUNDED. `payment_status`/`fulfillment_status` below are the
+  // real independent fields; this is kept as a derived rollup for readers not yet migrated off it.
   status: {
     type: String,
     enum: Object.values(ORDER_STATUS),
@@ -222,84 +162,50 @@ const orderSchema = buildSchema({
     default: ORDER_FULFILLMENT_STATUS.PENDING,
   },
 
-  // Set by the §6.2 backfill script once every item on this order has a
-  // real, persisted _id (orderItemSchema was `{ _id: false }` before this
-  // change — see that schema's own comment). Deliberately NOT inferred by
-  // checking item._id's presence at read time: Mongoose auto-generates an
-  // in-memory _id for an `{ _id: true }` subdocument on every hydrate, even
-  // when nothing was ever actually persisted, so item._id looks "present"
-  // on an unmigrated order too. POST /orders/:orderId/refunds (§2.2) must
-  // check this flag directly for scope: line_items | full_order and fail
-  // loud with "order needs migration" rather than trust item shape.
+  // Set by the backfill script once every item has a real, persisted _id. Not inferred by
+  // checking item._id's presence — Mongoose auto-generates one in memory on every hydrate even
+  // when nothing was ever persisted, so refund creation must check this flag directly.
   item_ids_migrated_at: { type: Date, default: null },
 
-  // Per-order mutex for POST /order/:id/refunds (§3.1/§9's concurrency fix).
-  // Validation is read-then-act (refundable_quantity, remaining money) —
-  // the derived-state ledger makes effect APPLICATION idempotent but does
-  // nothing for admission: two concurrent requests can both read the same
-  // pre-refund refundable_quantity, both pass validation, both insert. This
-  // lock serializes admission per order. The staleness window (checked by
-  // refund.service.js#acquireRefundLock, not encoded here) lets a crashed
-  // request's lock be reclaimed rather than wedging the order permanently.
+  // Per-order mutex for refund creation. Validation is read-then-act, so two concurrent
+  // requests could both pass and both insert without this lock serializing admission per order.
   refund_lock_at: { type: Date, default: null },
-  // Fencing token (corrections round), paired with refund_lock_at. Without
-  // this, a holder whose critical section outlasted the staleness window
-  // would have its lock reclaimed by a new caller, and the original
-  // holder's own release (in a `finally`) would then clear the NEW
-  // holder's lock out from under it — reopening the exact admission race
-  // this field exists to prevent. Generated fresh per acquisition; release
-  // only clears the lock when the token still matches, so a stale holder's
-  // release harmlessly no-ops instead of clobbering whoever holds it now.
+  // Fencing token paired with refund_lock_at, so a stale holder's release (after its lock was
+  // reclaimed) harmlessly no-ops instead of clobbering whoever holds it now.
   refund_lock_token: { type: String, default: null },
 
-  // Which channel this order came from — orders live in one unified
-  // collection regardless of origin, this just tags where each one is from.
+  // Which channel this order came from; orders live in one unified collection regardless of origin.
   channel: {
     type: String,
     enum: Object.values(ORDER_CHANNEL),
     default: ORDER_CHANNEL.STOREFRONT,
   },
-  // The channel's own order ID (e.g. eBay's orderId) — null for storefront
-  // orders. Used to detect an order we've already imported on re-poll.
+  // The channel's own order ID; null for storefront. Detects an order already imported on re-poll.
   external_order_id: { type: String },
-  // The channel's buyer identifier (e.g. eBay username) when the channel
-  // doesn't expose a real name/email the way our own checkout requires.
+  // The channel's buyer identifier when it doesn't expose a real name/email.
   external_buyer_username: { type: String, default: null },
-  // Full snapshot of the raw payload the channel sent us, for audit/debugging
-  // when the mapped fields above don't look right. Not returned by default.
+  // Full raw payload snapshot for audit/debugging. Not returned by default.
   external_raw_payload: { type: Schema.Types.Mixed, default: null, select: false },
 
   payment: { type: Schema.Types.ObjectId, ref: "Payment", default: null },
 
-  // Set once at creation, required to fetch this order from the public
-  // GET /orders/:id endpoint — never returned again after order creation.
+  // Set once at creation, required for the public GET /orders/:id endpoint; never returned after that.
   guest_access_token: { type: String, required: true, select: false },
 
-  // Set by the payment-success webhook if stock was insufficient at the
-  // point of decrement; surfaced to admins for manual reconciliation.
+  // Set by the payment-success webhook if stock was insufficient at decrement time.
   has_stock_issue: { type: Boolean, default: false },
   stock_issue_note: { type: String, default: null },
 
-  // Set together when an admin fulfils a DELIVERY order — capturing one
-  // without the other isn't meaningful, so both are written in the same
-  // update (see order.service.js#sendOrderNotification). Always null for
-  // PICKUP orders, which have nothing to hand off to a carrier.
+  // Set together when an admin fulfils a DELIVERY order; always null for PICKUP orders.
   tracking_number: { type: String, default: null },
   carrier_name: { type: String, default: null },
-  // Optional customer/staff-supplied reference (e.g. a customer's own PO
-  // number) — unrelated to order_number/invoice_number, which are always
-  // system-generated. Null until an admin fills it in on the order detail
-  // page; shown on the invoice only when set.
+  // Optional customer/staff-supplied reference, unrelated to the system-generated order/invoice numbers.
   reference_number: { type: String, default: null },
 });
 
-// Every order created after orderItemSchema switched to `{ _id: true }`
-// (see that schema's own comment) already has real, persisted item ids from
-// the moment it's inserted — there is no "unmigrated" state to wait out.
-// Without this hook item_ids_migrated_at only ever got set by the one-time
-// §6.2 backfill script, so any order created afterward would permanently
-// fail the refund.service.js#issueRefund guard with "needs migration" even
-// though its items were never actually missing ids.
+// Every order created after orderItemSchema switched to `{ _id: true }` already has real item
+// ids; without this hook, only the one-time backfill script set item_ids_migrated_at, so any
+// order created afterward would permanently fail the refund "needs migration" guard.
 orderSchema.pre("save", function (next) {
   if (this.isNew && !this.item_ids_migrated_at) {
     this.item_ids_migrated_at = new Date();
@@ -312,10 +218,8 @@ orderSchema.index({ customer_id: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ tenant_id: 1, order_number: 1 }, { unique: true });
 orderSchema.index({ tenant_id: 1, invoice_number: 1 }, { unique: true });
-// partialFilterExpression, NOT sparse — many existing (storefront) orders
-// have external_order_id stored as literal null rather than absent, and
-// sparse only excludes a field that's entirely unset. Unique (per tenant) so
-// a re-poll of the same eBay order can never create a duplicate.
+// partialFilterExpression, not sparse — many storefront orders store external_order_id as
+// literal null. Unique per tenant so a re-poll of the same eBay order can never duplicate.
 orderSchema.index(
   { tenant_id: 1, external_order_id: 1 },
   { unique: true, partialFilterExpression: { external_order_id: { $type: "string" } } },

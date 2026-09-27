@@ -12,22 +12,8 @@ import {
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
-// Print-only invoice, structured to match the tax-invoice PDF attached to
-// the pickup-ready/shipped emails (order.service.js#sendOrderNotification)
-// — same sections, same fields, same visual language — so a printed copy
-// and the emailed copy never disagree. Deliberately hardcoded to
-// light/print-safe colors (not the app's theme tokens) since this must stay
-// legible on paper regardless of whether the dashboard is in dark mode when
-// "Print Invoice" is clicked. (This is also why the badges/rules below are
-// hand-styled rather than the shared <Badge>/<Card> components, which pull
-// in theme-aware tokens.)
-//
-// Layout language (kept in lockstep with invoicePdf.js): a heavy rule under
-// the letterhead, a divided meta strip for the four transaction facts, Ship
-// To / Bill To pushed to opposite edges, a hairline-ruled items table, and a
-// solid ink bar for the grand total. Data values are set in a monospace face
-// so figures, dates and reference numbers align column-to-column; names and
-// headings stay in the sans face.
+// Print-only invoice matching the emailed tax-invoice PDF (order.service.js#sendOrderNotification); colors hardcoded for print, not theme tokens, so it stays legible on paper regardless of dark mode.
+// Layout mirrors invoicePdf.js: monospace for data values so columns align, sans for names/headings.
 
 const INK = "#18140f";
 const MUTED = "#6b6f7a";
@@ -35,8 +21,7 @@ const ACCENT = "#c2790b";
 const BORDER = "#e2e0da";
 const GREEN = "#15803d";
 
-// Small-caps, wide-tracked section label in the accent color — "SHIP TO",
-// "PAYMENT DETAILS", "WARRANTY & RETURNS".
+// Small-caps, wide-tracked section label in the accent color (e.g. "SHIP TO").
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: ACCENT }}>
@@ -45,9 +30,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// One cell of the header meta strip (Invoice Date / Due Date / Order Number
-// / Sales Channel) — divided from its neighbour by a hairline rule rather
-// than sitting in its own bordered box.
+// One cell of the header meta strip, divided from its neighbour by a hairline rule.
 function MetaCell({ label, value, first }: { label: string; value: string; first?: boolean }) {
   return (
     <div className={first ? "" : "border-l pl-5"} style={first ? undefined : { borderColor: BORDER }}>
@@ -61,8 +44,7 @@ function MetaCell({ label, value, first }: { label: string; value: string; first
   );
 }
 
-// Tiny caps label above a monospace value — the bank-details grid's four
-// fields.
+// Tiny caps label above a monospace value — the bank-details grid's four fields.
 function FieldBlock({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -76,8 +58,7 @@ function FieldBlock({ label, value }: { label: string; value: string }) {
   );
 }
 
-// One line of the totals ledger. `tone` picks the emphasis: plain ink for a
-// running figure, accent for a deduction, green for a settled balance.
+// One totals-ledger line; `tone` sets emphasis (plain/accent/green).
 function TotalRow({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "accent" | "green" }) {
   const color = tone === "accent" ? ACCENT : tone === "green" ? GREEN : INK;
   return (
@@ -111,20 +92,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
-  // Item-level discounts plus any legacy order-level discount (see Order.js's
-  // discount_amount comment) — order.subtotal already nets these out.
+  // Item-level discounts plus any legacy order-level discount; order.subtotal already nets these out.
   const itemDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
   const totalDiscount = itemDiscount + order.discount_amount;
-  // order.tax_amount is the authoritative GST embedded in order.subtotal
-  // (computed once at order-creation time from the POST-discount subtotal —
-  // order.service.js#GST_DIVISOR) — reused directly, matching
-  // invoicePdf.js's identical convention, so the emailed/downloaded PDF and
-  // this on-screen preview can never disagree about GST.
+  // order.tax_amount is the authoritative GST (order.service.js#GST_DIVISOR), reused as-is to match invoicePdf.js.
   const gstAmount = order.tax_amount;
   const exGstSubtotal = order.subtotal - gstAmount;
-  // See utils/paymentTotals.ts#getBalanceDue — correctly distinguishes "paid
-  // in full, then refunded" (due $0) from "never paid in full, then refunded
-  // on top of that" (due reflects the real remaining shortfall).
+  // See utils/paymentTotals.ts#getBalanceDue — distinguishes "paid then refunded" ($0 due) from a real shortfall.
   const amountDue = getBalanceDue(order.total, order.payments, order.payment_status);
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
@@ -133,17 +107,12 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   });
   const billingAddress = order.billing_address ?? order.shipping_address;
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
-  // "Order Number" is the customer's OWN reference, typed on the order detail
-  // page — optional, and omitted from the strip entirely when it's blank
-  // rather than falling back to our internal ORD-000xx (the invoice already
-  // carries its own number, so printing a second house number under a label
-  // the buyer reads as "yours" just looked like their PO had been ignored).
+  // "Order Number" is the customer's own reference; omitted entirely when blank, never falls back to our internal ORD-000xx.
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
   const sellerAddress = [tenant?.pickup_location.address, tenant?.pickup_location.country].filter(Boolean).join(", ");
-  // Phone / email / ABN collapse onto one letterhead line, separated by
-  // middots — only the parts the tenant has actually filled in.
+  // Phone / email / ABN collapse onto one letterhead line, only the parts the tenant filled in.
   const sellerContactLine = [tenant?.phone, tenant?.email, tenant?.abn ? `ABN ${tenant.abn}` : null]
     .filter(Boolean)
     .join(" · ");
@@ -159,8 +128,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
     <div
       // Stays a flex column when printing (unlike the shell containers in
       // AppShell.tsx, which switch to print:block) — that's what keeps the
-      // mt-auto footer pinned to the foot of the sheet on paper, not just on
-      // screen.
+      // mt-auto footer pinned to the foot of the sheet on paper, not just on screen.
       //
       // globals.css pins @page to `margin: 0; size: A4`, so the printable
       // area is the full 210×297mm sheet and this padding IS the page

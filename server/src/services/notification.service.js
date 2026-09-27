@@ -1,10 +1,6 @@
 // services/notification.service.js
-//
-// Owns all Notification model access. Recipients for an order-type
-// notification are every active admin/superadmin user on the tenant —
-// routes/order.routes.js gates every order-reading route behind the same
-// admin/superadmin check, so a plain "user"-role account couldn't open the
-// order a notification would link to anyway.
+// Owns all Notification model access. Order-type recipients are every active admin/superadmin
+// on the tenant, matching the same role check order.routes.js gates order-reading routes behind.
 
 const Notification = require("../models/Notification");
 const User = require("../models/User");

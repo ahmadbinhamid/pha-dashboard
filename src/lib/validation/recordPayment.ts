@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { formatCurrencyFromCents } from "@/utils/format";
 
-// Dollars-as-string, bounded by the order's current balance due — factory
-// since the max is per-order, not a fixed rule.
+// Dollars-as-string, bounded by the order's current balance due; factory since the max is per-order, not fixed.
 export function recordPaymentFormSchema(balanceDueCents: number) {
   const balanceDueDollars = balanceDueCents / 100;
   return z.object({

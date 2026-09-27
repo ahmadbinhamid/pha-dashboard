@@ -16,6 +16,7 @@ import {
 import type { TooltipContentProps } from "recharts";
 import { AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { DashboardStatTile } from "@/components/dashboard/DashboardStatTile";
@@ -23,6 +24,7 @@ import type { StatTileTone } from "@/components/dashboard/DashboardStatTile";
 import { cn } from "@/utils/cn";
 import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
+import { CATEGORICAL_COLOR_VARS as CATEGORY_COLOR_VARS } from "@/config/categoricalColors";
 import type { InventoryTurnoverResponse } from "@/types/reports";
 
 type ViewMode = "rate" | "dsi" | "categories";
@@ -33,39 +35,18 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: "categories", label: "Category Comparison" },
 ];
 
-const CATEGORY_COLOR_VARS = [
-  "var(--color-cat-1)",
-  "var(--color-cat-2)",
-  "var(--color-cat-3)",
-  "var(--color-cat-4)",
-  "var(--color-cat-5)",
-  "var(--color-cat-6)",
-];
-
 function formatDayLabel(dateStr: string) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-AU", { month: "short", day: "numeric" });
 }
 
-// Days-of-inventory is a ratio with COGS in the denominator (via
-// turnoverRate) — a product/category with little-to-no recorded cost data
-// (Product.cost_price is optional) sends this toward a meaningless
-// thousands-of-days figure rather than a real "how long this sits on the
-// shelf" estimate. Capping the display (not the underlying number, which
-// stays real for the tooltip/PDF export) keeps the KPI tiles readable
-// instead of printing something like "1130451.8 days". Found live against
-// this tenant's dev data, where only a handful of products have cost set.
+// Sparse COGS data inflates days-of-inventory; cap display only, not data.
 const DSI_DISPLAY_CAP = 365;
 function formatDsi(days: number) {
   if (!Number.isFinite(days) || days > DSI_DISPLAY_CAP) return `${DSI_DISPLAY_CAP}+ days`;
   return `${days.toFixed(1)} days`;
 }
 
-// A capped "365+ days" is the WORST reading this card can produce, so it
-// can't share the success tone with a genuinely fast-turning figure — the
-// caption color was previously fixed at "ok", which painted a category that
-// barely moves in green. Capped falls back to neutral rather than danger:
-// it usually means missing Product.cost_price data (see the service's own
-// caveat), not a real inventory problem worth alarming about.
+// Capped is worst-case; neutral not danger as it usually means no cost data.
 function dsiTone(days: number): StatTileTone {
   return Number.isFinite(days) && days <= DSI_DISPLAY_CAP ? "ok" : "neutral";
 }
@@ -115,11 +96,7 @@ export function InventoryTurnoverCard({
     [turnover],
   );
 
-  // A point's `categoryRates` is a nested object, which the PDF table could
-  // only render as "[object Object]" — flattened here into one column per
-  // category, in categoryRanking's order so every row carries the same
-  // columns. Days-of-inventory is exported UNCAPPED (the tiles cap the
-  // display; the file keeps the real figure).
+  // Flatten categoryRates for the PDF table; days-of-inventory stays uncapped.
   const exportRows = useMemo(
     () =>
       (turnover?.points ?? []).map((point) => ({
@@ -201,20 +178,19 @@ export function InventoryTurnoverCard({
           </div>
 
           {viewMode === "categories" && categoryNames.length > 0 && (
-            <select
+            <SingleSelect
+              size="sm"
+              options={[
+                {
+                  value: "All",
+                  label: `All ${categoryNames.length} ${categoryNames.length === 1 ? "category" : "categories"}`,
+                },
+                ...categoryNames.map((name) => ({ value: name, label: name })),
+              ]}
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-xl border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-fg outline-none"
-            >
-              <option value="All">
-                All {categoryNames.length} {categoryNames.length === 1 ? "category" : "categories"}
-              </option>
-              {categoryNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryFilter}
+              className="h-auto min-w-0 bg-muted/40 py-1.5 text-xs font-semibold shadow-none"
+            />
           )}
 
           <button
@@ -333,8 +309,8 @@ export function InventoryTurnoverCard({
           {categoryRanking.slice(0, 5).map((cat, i) => (
             <div key={cat.name} className="flex min-w-0 items-center justify-between rounded-xl border border-border bg-muted/40 p-2.5">
               <div className="min-w-0">
-                <span className="block truncate text-[11px] font-semibold text-fg">{cat.name}</span>
-                <span className="truncate text-[10px] text-fg/45">{formatDsi(cat.daysOfInventory)} turn</span>
+                <span className="block truncate text-2xs font-semibold text-fg">{cat.name}</span>
+                <span className="truncate text-3xs text-fg/45">{formatDsi(cat.daysOfInventory)} turn</span>
               </div>
               <span
                 className="rounded px-1.5 py-0.5 text-xs font-bold"

@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Blank is treated the same as "0" (matches the original inline-edit's
-// `Number(value)` coercion, where `Number("") === 0`) — only NaN/negative
-// are rejected.
+// Blank treated as "0" (matches the original `Number(value)` coercion) — only NaN/negative rejected.
 export const editableAmountFormSchema = z.object({
   amount: z.string().refine(
     (s) => {

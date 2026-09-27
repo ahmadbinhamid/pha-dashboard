@@ -1,18 +1,11 @@
 // services/marketplace/adapters/google.adapter.publish.test.js
-//
-// Exercises publish()/loadSettings() end to end against real fixtures
-// (Mongo — this is unavoidable here: resolveProductUrl needs a real Domain
-// query, resolveQuantity needs real Inventory records, and the whole point
-// of several of these tests is proving the adapter reads real stored data
-// correctly), with `fetch` stubbed so no real network call is ever made.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/adapters/google.adapter.publish.test.js
+// Hydration + publish() end to end, fetch stubbed. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../../config");
 
@@ -27,14 +20,13 @@ const ChannelSyncLog = require("../../../models/ChannelSyncLog");
 const { encrypt } = require("../../../utils/crypto/tokenCipher");
 const { packCiphertext } = require("../../../utils/crypto/tokenCipher");
 const { DOMAIN_STATUS } = require("../../../constants/domain.constants");
-const { resolveListing } = require("../listing.resolver");
+const { resolveListing, hydrateResolved } = require("../listing.resolver");
 const registry = require("../registry");
 
 const googleAdapter = require("./google.adapter");
 registry.register(googleAdapter);
 
-// Records every call made to the stubbed fetch so assertions can inspect
-// what was actually sent, without a real network call ever happening.
+// Records every stubbed fetch call so assertions can inspect what was sent.
 let fetchCalls = [];
 function installFetchStub(handler) {
   fetchCalls = [];
@@ -61,7 +53,7 @@ const VALID_MERCHANT_API_HANDLER = (url) => {
 
 async function makeFixture({ stockControl = true, stockCount = 5, withDomain = true, gtin = null, mpn = null, brand = null } = {}) {
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
 
   if (withDomain) {
     await Domain.create({
@@ -123,15 +115,14 @@ async function makeFixture({ stockControl = true, stockCount = 5, withDomain = t
   return { tenantId, product, listing };
 }
 
-// TASK 1 (this run): a real, usable HTTPS image — every fixture below now
-// carries one so these tests exercise the actual success path (a product
-// with NO image is a rejection now, not a null-imageLink success — see
-// google.adapter.image-validation.test.js for that case specifically).
+// Fixtures carry real HTTPS images; a photo-less product is a rejection.
 const VALID_HTTPS_IMAGE_URL = "https://cdn.example.com/photo.jpg";
 
 async function resolveFor(listing, product, { photos = [{ type: "image", url: VALID_HTTPS_IMAGE_URL }] } = {}) {
   const populatedProduct = { ...product.toObject(), attachments: photos };
-  return resolveListing(listing, populatedProduct, null);
+  const resolved = resolveListing(listing, populatedProduct, null);
+  await hydrateResolved([resolved], googleAdapter, listing.tenant_id);
+  return resolved;
 }
 
 test("google adapter: publish() with gtin sends only gtin, no mpn/brand/identifierExists", async (t) => {
@@ -243,13 +234,7 @@ test("google adapter: a listing with no resolvable public product URL (no defaul
   assert.equal(fetchCalls.length, 0, "no Merchant API call must happen when the product URL can't be resolved");
 });
 
-// TASK 1 (this run): a product with ZERO photos is now rejected the same
-// way a bad-URL photo is — Google's real API accepts a null imageLink and
-// only disapproves the product later, so a photo-less product used to fail
-// exactly as silently as a bad-URL one did before TASK 2 (previous run)
-// closed that gap. This is the end-to-end counterpart to
-// google.adapter.image-validation.test.js's pure-builder version of the
-// same case.
+// Google accepts a null imageLink but disapproves later, so reject zero photos.
 test("google adapter: a product with ZERO photos fails loudly (GoogleImageValidationError), never pushes", async (t) => {
   await mongoose.connect(config.mongoUri);
   installFetchStub(VALID_MERCHANT_API_HANDLER);
@@ -276,14 +261,11 @@ test("google adapter: loadSettings returns null for a tenant with no ChannelConn
   await mongoose.connect(config.mongoUri);
   t.after(() => mongoose.disconnect());
 
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const settings = await googleAdapter.loadSettings(tenantId);
   assert.equal(settings, null);
 
-  // Full integration through the generic dispatcher — proves
-  // sync.service.js#syncListing's existing "not connected" skip path
-  // (built for the generic contract already) handles Google's null
-  // loadSettings without an unhandled rejection.
+  // syncListing's "not connected" skip must handle Google's null loadSettings.
   const marketplaceSync = require("../sync.service");
   const product = await Product.create({
     tenant_id: tenantId,
@@ -312,8 +294,7 @@ test("google adapter, via sync.service.js: untracked-stock skip writes a Channel
   installFetchStub(VALID_MERCHANT_API_HANDLER);
   t.after(() => mongoose.disconnect());
 
-  // logSuccesses must be true for this run so the (non-failure) skip row
-  // actually gets written — see sync.service.js#logSyncEvent.
+  // logSuccesses needed so the non-failure skip row is written (logSyncEvent).
   const originalLogSuccesses = config.channels.logSuccesses;
   config.channels.logSuccesses = true;
   t.after(() => {

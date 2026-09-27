@@ -33,15 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const close = useMemo(() => () => setMobileOpen(false), []);
 
   return (
-    // print:block on this and the nested flex column below — a flex (or
-    // grid) container never fragments across printed pages in Chrome/Firefox
-    // regardless of its own height/overflow, so anything sized larger than
-    // one page just gets cut off rather than flowing onto page 2+. Switching
-    // both to plain block layout for print is what lets a multi-page
-    // printed invoice (see InvoicePrintView.tsx) actually print in full;
-    // h-auto/overflow-visible alone (still needed, for older engines that
-    // don't clip flex overflow but do still respect the fixed height) isn't
-    // sufficient on its own.
+    // print:block here and below: a flex/grid container never fragments across printed pages in Chrome/Firefox, so switching to block layout for print is what lets a multi-page invoice (InvoicePrintView.tsx) print in full.
     <div className="flex h-dvh w-full overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
       <div className="pointer-events-none absolute inset-0 noise" aria-hidden="true" />
 
@@ -59,11 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <MobileSidebar open={mobileOpen} onClose={close} />
       </div>
 
-      {/*
-        Outer column: NOT overflow-y-auto — so the toggle button (which uses
-        -translate-x-1/2 to sit on the sidebar border) is never clipped.
-        Only the inner content div scrolls.
-      */}
+      {/* Outer column: not overflow-y-auto, so the toggle button (-translate-x-1/2 onto the sidebar border) is never clipped. Only the inner content div scrolls. */}
       <div className="relative flex h-dvh min-w-0 flex-1 flex-col print:block print:h-auto">
         {/* Toggle button — lives here so overflow-y-auto can't clip it */}
         <button
@@ -96,11 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               "print:px-0 print:py-0",
             )}
           >
-            {/* max-w caps how wide content stretches on large/ultra-wide
-                monitors — without it, a 4-column stat grid or a chart on a
-                1600px+ screen just spreads out with huge gaps instead of
-                staying a comfortable reading width. mx-auto centers the
-                capped column instead of leaving it pinned to the left. */}
+            {/* max-w caps content width on ultra-wide monitors so grids/charts don't spread out with huge gaps; mx-auto centers the capped column. */}
             <div className="mx-auto w-full min-w-0 max-w-[1600px]">{children}</div>
           </main>
         </div>

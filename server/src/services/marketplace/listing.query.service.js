@@ -1,18 +1,5 @@
 // services/marketplace/listing.query.service.js
-//
-// Platform-AGNOSTIC listing browse/read/delete/push — the counterpart to
-// each platform's own CREATE endpoint (ebay.listing.service.js, google's
-// upcoming equivalent), which stay platform-specific because the fields a
-// tenant fills in to author a NEW listing genuinely differ per platform
-// (eBay: category/fitment/policies; Google: GTIN/MPN/condition, mostly
-// derived from the product itself). Browsing, reading, deleting, and
-// re-pushing an EXISTING listing don't have that problem — a
-// MarketplaceListing is a MarketplaceListing regardless of platform, and
-// sync.service.js#endListing / the sync_listing job already dispatch
-// generically via the adapter registry. This file is what the Listings
-// page and the Products page's per-product channel badges use instead of
-// going through one platform's own (e.g. eBay's) listing routes, so a
-// Google listing shows up in the exact same places an eBay one does.
+// Platform-agnostic listing browse/read/delete/push (create is per-platform).
 
 const mongoose = require("mongoose");
 const MarketplaceListing = require("../../models/MarketplaceListing");
@@ -23,19 +10,10 @@ const ebaySettingsService = require("../ebay/ebay.settings.service");
 const { buildEbayItemUrl } = require("../ebay/ebay.listing.service");
 const { MARKETPLACE_PLATFORM, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 
-// The two states that mean "something's actually wrong with this listing"
-// (matches channel.service.js#listChannelsForTenant's own needs_attention
-// definition, and listingStatus.ts's warn/danger badge variants on the
-// frontend) — everything else (not_listed/pending/synced/out_of_stock) is a
-// normal state, not an attention-worthy one.
+// Same needs_attention definition as channel.service#listChannelsForTenant.
 const NEEDS_ATTENTION_STATUSES = [LISTING_SYNC_STATUS.ERROR, LISTING_SYNC_STATUS.PRICE_LOCKED];
 
-// Same aggregation shape as ebay.listing.service.js#listListings (search
-// against the populated product's title/sku can't be done via .find()+populate
-// — mirrors inventory.service.js's listInventory pattern), just not scoped
-// to one platform. `platform` is an optional filter, not a requirement — the
-// default (omitted) returns every platform mixed together, which is exactly
-// what the Listings page's main table wants.
+// Cross-platform listListings; omit `platform` to mix every platform's rows.
 async function listListings(
   { skip, limit, product, product_in, platform, state, sync_status, needs_attention, search } = {},
   tenantId,
@@ -43,18 +21,12 @@ async function listListings(
   const match = { tenant_id: tenantId };
   if (platform) match.platform = platform;
   if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
-  // Batch lookup for "which of these specific products have a listing on any
-  // channel" (the Products page's Channels column) — bypasses skip/limit,
-  // same reasoning as ebay.listing.service.js's own product_in handling: the
-  // caller already bounded the input to one page's worth of product ids, not
-  // "give me some page of the whole listings table".
+  // Products page Channels batch: no skip/limit, ids are already one page.
   if (product_in?.length) {
     match.product = { $in: product_in.map((id) => mongoose.Types.ObjectId.createFromHexString(id)) };
   }
   if (state) match.state = state;
-  // needs_attention takes precedence over a plain sync_status — the
-  // Listings page's "Needs attention" segmented tab passes this instead of
-  // (never alongside, in practice) a single sync_status value.
+  // needs_attention takes precedence over a plain sync_status.
   if (needs_attention) match.sync_status = { $in: NEEDS_ATTENTION_STATUSES };
   else if (sync_status) match.sync_status = sync_status;
 
@@ -102,24 +74,23 @@ async function listListings(
     MarketplaceListing.aggregate(countPipeline),
   ]);
 
-  // eBay item URL enrichment only applies to eBay rows — every other
-  // platform's row just doesn't get the field, same as it never having been
-  // set. Settings are only fetched if at least one eBay row is present, so a
-  // tenant with a Google-only page of results doesn't pay for an unused
-  // eBay.settings lookup.
+  // eBay item URLs for eBay rows only; settings fetched only if one is present.
   const hasEbayRows = items.some((item) => item.platform === MARKETPLACE_PLATFORM.EBAY);
   const ebaySettings = hasEbayRows ? await ebaySettingsService.getSettings(tenantId) : null;
-  const shapedItems = items.map((item) =>
-    item.platform === MARKETPLACE_PLATFORM.EBAY
-      ? { ...item, ebay_item_url: buildEbayItemUrl(item.external_listing_id, ebaySettings) }
-      : item,
-  );
+  const shapedItems = items.map((item) => withExternalUrl(item, ebaySettings));
 
   return { items: shapedItems, total: countResult[0]?.total || 0 };
 }
 
-// Fields projected onto each nested listing summary — shared between the
-// two aggregation passes below so their $group stages stay identical.
+// Live listing URL, platform-neutral; null for Google (no public URL).
+function withExternalUrl(item, ebaySettings) {
+  if (item.platform !== MARKETPLACE_PLATFORM.EBAY) return { ...item, external_url: null };
+  const url = buildEbayItemUrl(item.external_listing_id, ebaySettings);
+  // ebay_item_url kept for existing readers.
+  return { ...item, ebay_item_url: url, external_url: url };
+}
+
+// Shared by both passes below so their $group stages stay identical.
 const GROUPED_LISTING_PROJECTION = {
   _id: "$_id",
   platform: "$platform",
@@ -133,25 +104,7 @@ const GROUPED_LISTING_PROJECTION = {
   updated_at: "$updated_at",
 };
 
-// TASK 6: one row per PRODUCT instead of one per listing — a product on two
-// channels currently renders as two disconnected rows with no relationship
-// between them; at real catalogue size that's ~2x the rows and a product's
-// overall state is split across them.
-//
-// TASK 3 (this run) — filter/grey-cell ambiguity fix: platform/state/
-// sync_status/search now determine which PRODUCTS qualify (a product
-// appears only if at least one of its listings matches every active
-// filter), never which of a QUALIFYING product's channels are shown. Once
-// a product qualifies, its row always carries its FULL listing set across
-// every platform. Previously the same filters were applied directly to the
-// listing rows before grouping, so an active platform filter silently
-// dropped a qualifying product's OTHER listings out of its own row —
-// leaving a grey "not listed" cell that could mean either "genuinely not
-// listed" or "filtered out", indistinguishably. Implemented as two
-// aggregation passes: (1) find the page of distinct qualifying product ids
-// (filtered, exactly as before), (2) re-fetch every listing for exactly
-// those product ids with NO filters — the full-picture pass a grey cell's
-// meaning now depends on.
+// One row per product; filters pick products, never hide a product's channels.
 async function listListingsGroupedByProduct(
   { skip, limit, product, product_in, platform, state, sync_status, needs_attention, search } = {},
   tenantId,
@@ -167,7 +120,7 @@ async function listListingsGroupedByProduct(
   if (needs_attention) match.sync_status = { $in: NEEDS_ATTENTION_STATUSES };
   else if (sync_status) match.sync_status = sync_status;
 
-  // ── Pass 1: which products qualify (filtered), paginated ──────────────────
+  // Pass 1: which products qualify (filtered), paginated
   const findPipeline = [
     { $match: match },
     {
@@ -210,7 +163,7 @@ async function listListingsGroupedByProduct(
   const pageProductIds = idRows.map((r) => r._id).filter(Boolean);
   if (!pageProductIds.length) return { items: [], total };
 
-  // ── Pass 2: the FULL, unfiltered listing set for exactly those products ───
+  // Pass 2: the full, unfiltered listing set for those products
   const fullPipeline = [
     { $match: { tenant_id: tenantId, product: { $in: pageProductIds } } },
     {
@@ -234,24 +187,17 @@ async function listListingsGroupedByProduct(
 
   const groups = await MarketplaceListing.aggregate(fullPipeline);
 
-  // Pass 2's own aggregate doesn't promise it returns groups in Pass 1's
-  // relevance order — re-order explicitly rather than relying on it.
+  // Pass 2 doesn't promise Pass 1's relevance order — re-order explicitly.
   const groupsById = new Map(groups.map((g) => [String(g._id), g]));
   const orderedGroups = pageProductIds.map((id) => groupsById.get(String(id))).filter(Boolean);
 
-  // eBay item URL enrichment, same as listListings above — only for eBay
-  // rows within each group's nested listings, and only fetched at all if at
-  // least one is present on this page.
+  // eBay item URL enrichment, same as listListings above.
   const hasEbayRows = orderedGroups.some((g) => g.listings.some((l) => l.platform === MARKETPLACE_PLATFORM.EBAY));
   const ebaySettings = hasEbayRows ? await ebaySettingsService.getSettings(tenantId) : null;
 
   const items = orderedGroups.map((g) => ({
     product: g.product,
-    listings: g.listings.map((l) =>
-      l.platform === MARKETPLACE_PLATFORM.EBAY
-        ? { ...l, ebay_item_url: buildEbayItemUrl(l.external_listing_id, ebaySettings) }
-        : l,
-    ),
+    listings: g.listings.map((l) => withExternalUrl(l, ebaySettings)),
   }));
 
   return { items, total };
@@ -261,7 +207,7 @@ async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate({
       path: "product",
-      select: "title slug sku price brand mpn attachments vehicle stock_control",
+      select: "title slug sku price brand mpn condition attachments vehicle stock_control",
       populate: { path: "attachments" },
     })
     .populate({
@@ -272,10 +218,7 @@ async function getListingById(id, tenantId) {
     .populate("photo_overrides");
 }
 
-// Mirrors ebay.listing.controller.js#deleteListing's own two-step shape
-// (withdraw from the platform if it's ever actually gone live, then soft
-// delete locally) — generalized via endListing's existing per-adapter
-// dispatch instead of anything eBay-specific.
+// Mirrors ebay.listing.controller.js#deleteListing, generalized via endListing.
 async function deleteListing(id, tenantId, { logger } = {}) {
   const listing = await MarketplaceListing.findOne({ _id: id, tenant_id: tenantId });
   if (!listing) return null;
@@ -291,10 +234,7 @@ async function deleteListing(id, tenantId, { logger } = {}) {
   return listing;
 }
 
-// Re-enqueues sync_listing for whichever platform this listing belongs to.
-// seq: null — a manual "push"/retry action has no stock-change fencing
-// token behind it, same convention syncListing itself already documents for
-// any caller outside the stock-change fan-out path.
+// Re-enqueues sync_listing; seq: null as a manual push has no fencing token.
 async function pushListing(id, tenantId) {
   const listing = await MarketplaceListing.findOne({ _id: id, tenant_id: tenantId }).select("platform");
   if (!listing) return null;

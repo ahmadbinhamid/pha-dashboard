@@ -1,58 +1,40 @@
-import {
-  DropdownMenu,
-  ActionsMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/ActionsMenu";
-import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
-import { Cloud, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { DropdownMenu, ActionsMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/ActionsMenu";
+import { Package, RefreshCw, ScrollText } from "lucide-react";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 
-// Platform-agnostic — the Listings table mixes every channel's rows
-// together (see listing.query.service.js), so this can't hardcode "eBay"
-// the way it originally did. `platform` drives the label text;
-// `externalUrl` is whichever platform's own "view live" link happens to be
-// populated (only eBay sets one today via ebay_item_url).
+// Read or re-sync only; listing edits live on the product page.
 export function ListingRowActionsMenu({
-  platform,
-  onPush,
-  pushDisabled,
-  onEdit,
-  onDelete,
-  externalUrl,
+  onViewProduct,
+  onResync,
+  resyncDisabled,
+  onViewLog,
 }: {
-  platform: string;
-  onPush: () => void;
-  pushDisabled?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  externalUrl?: string | null;
+  onViewProduct: (() => void) | null;
+  onResync: () => void;
+  resyncDisabled?: boolean;
+  onViewLog: () => void;
 }) {
-  const platformLabel = PLATFORM_LABEL[platform] ?? platform;
+  const canResync = useMyAccess().can(PERMISSIONS.listings.update);
   return (
     <DropdownMenu>
       <ActionsMenuTrigger />
       <DropdownMenuContent align="end">
-        {externalUrl && (
-          <DropdownMenuItem
-            onSelect={() => window.open(externalUrl, "_blank", "noopener,noreferrer")}
-          >
-            <ExternalLink className="h-3.5 w-3.5 text-fg/50" />
-            View on {platformLabel}
+        {onViewProduct && (
+          <DropdownMenuItem onSelect={onViewProduct}>
+            <Package className="h-3.5 w-3.5 text-fg/50" />
+            View product
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={onPush} disabled={pushDisabled}>
-          <Cloud className="h-3.5 w-3.5 text-fg/50" />
-          Push to {platformLabel}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onEdit}>
-          <Pencil className="h-3.5 w-3.5 text-fg/50" />
-          Edit
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem destructive onSelect={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete
+        {canResync && (
+          <DropdownMenuItem onSelect={onResync} disabled={resyncDisabled}>
+            <RefreshCw className="h-3.5 w-3.5 text-fg/50" />
+            Re-sync
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={onViewLog}>
+          <ScrollText className="h-3.5 w-3.5 text-fg/50" />
+          View sync log
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,18 +1,10 @@
 // services/ebay/ebay.settings.migration-script.test.js
-//
-// Regression guard for scripts/migrateEbaySettingsToChannelConnection.js:
-// --dry-run writes nothing, and a real run is idempotent (a second run
-// skips a tenant it already migrated, never overwriting it). Requires the
-// script's `run()` directly (mongoose connect/disconnect handled here, same
-// as this script's own CLI entry point does) rather than shelling out to it
-// as a subprocess.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/ebay/ebay.settings.migration-script.test.js
+// Migration: --dry-run writes nothing; a real run is idempotent. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -28,7 +20,7 @@ test("migrateEbaySettingsToChannelConnection: --dry-run writes nothing, a real r
   await mongoose.connect(config.mongoUri);
 
   const suffix = crypto.randomUUID();
-  const tenantId = new mongoose.Types.ObjectId();
+  const tenantId = fixtureId();
   const { ciphertext, iv, tag } = encrypt(`script-token-${suffix}`);
 
   await EbaySettings.create({
@@ -38,12 +30,7 @@ test("migrateEbaySettingsToChannelConnection: --dry-run writes nothing, a real r
     refresh_token_tag: tag,
     connection_status: "connected",
     marketplace_id: "EBAY_AU",
-    // EbaySettings.webhook_token is unique+sparse — sparse only excludes a
-    // field that's entirely ABSENT, not one present with value null, so two
-    // rows both defaulting to null (any tenant that's never called
-    // ensureWebhookToken) collide. Explicit here so this test never depends
-    // on being the only such row in a shared dev database (confirmed live
-    // while writing this test).
+    // Unique+sparse index still indexes null, so null-default rows would collide.
     webhook_token: `wt-${suffix}`,
   });
 

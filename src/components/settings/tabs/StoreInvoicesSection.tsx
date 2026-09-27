@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -90,14 +92,14 @@ export function StoreInvoicesSection({ settings, loading }: { settings?: TenantS
         title="Remittance & Bank Details"
         description="Printed in the Payment Details block on every tax invoice and docket."
         footer={
-          <>
+          <Can permission={PERMISSIONS.settings.update}>
             <Button variant="ghost" disabled={!settings || mutation.isPending} onClick={() => settings && setForm(toState(settings))}>
               Reset
             </Button>
             <Button variant="primary" disabled={mutation.isPending} onClick={() => mutation.mutate(form)}>
               {mutation.isPending ? "Saving…" : "Save Invoice Settings"}
             </Button>
-          </>
+          </Can>
         }
       >
         <SettingsFieldGrid>

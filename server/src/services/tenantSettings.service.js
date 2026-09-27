@@ -10,10 +10,8 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-// Lets the settings UI show "your links will look like ..." for both modes
-// without hardcoding PAYMENT_LINK_DOMAIN client-side — same builder the
-// actual payment link uses (stripe.payment.service.js#buildPaymentBaseUrl),
-// just called once per mode instead of against the tenant's saved choice.
+// Lets the settings UI preview both modes without hardcoding PAYMENT_LINK_DOMAIN client-side,
+// using the same builder the actual payment link uses.
 function getPaymentLinkPreview(tenant) {
   return {
     default: `${buildPaymentBaseUrl({ payment_domain_mode: PAYMENT_DOMAIN_MODE.DEFAULT })}/pay/:orderId`,
@@ -62,9 +60,7 @@ async function updateTenantProfile(
   if (brand_colour !== undefined) tenant.brand_colour = brand_colour;
   if (accent_colour !== undefined) tenant.accent_colour = accent_colour;
   if (payment_domain_mode !== undefined) tenant.payment_domain_mode = payment_domain_mode;
-  // Only ever affects orders created AFTER this save — see Order.js's
-  // order_number_prefix/invoice_number_prefix comment. Never reformats an
-  // existing order.
+  // Only ever affects orders created after this save; never reformats an existing order.
   if (order_number_prefix !== undefined) tenant.order_number_prefix = order_number_prefix || "ORD";
   if (invoice_number_prefix !== undefined) tenant.invoice_number_prefix = invoice_number_prefix || "INV";
 
@@ -72,11 +68,8 @@ async function updateTenantProfile(
   return tenant;
 }
 
-// Shared branding shape consumed by invoicePdf.js and email.service.js —
-// the single source of truth for "what does this tenant's business look like
-// on a document/email a customer receives," replacing the old hardcoded
-// company.constants.js. Never throws on a missing tenant (falls back to
-// nulls) since callers use this for best-effort branding, not access control.
+// Shared branding shape for invoicePdf.js/email.service.js. Never throws on a missing tenant
+// (falls back to nulls) since callers use this for best-effort branding, not access control.
 async function getCompanyProfile(tenantId) {
   const tenant = await Tenant.findById(tenantId);
   return {
@@ -92,9 +85,7 @@ async function getCompanyProfile(tenantId) {
   };
 }
 
-// BYOK — thin pass-throughs to stripe.keys.service.js, kept here so the
-// controller only ever imports one tenant-settings service, matching every
-// other settings section (company profile, branding).
+// BYOK: thin pass-throughs to stripe.keys.service.js so the controller only imports one service.
 async function updateStripeKeys(tenantId, payload, webhookUrl) {
   return stripeKeysService.updateStripeKeys(tenantId, payload, webhookUrl);
 }
@@ -112,8 +103,7 @@ async function ensureStripeWebhookToken(tenantId) {
   return stripeKeysService.ensureWebhookToken(tenantId);
 }
 
-// BYOK — thin pass-throughs to smtp.keys.service.js, same reasoning as the
-// Stripe ones above.
+// BYOK: thin pass-throughs to smtp.keys.service.js, same reasoning as the Stripe ones above.
 async function updateSmtpCredentials(tenantId, payload) {
   return smtpKeysService.updateSmtpCredentials(tenantId, payload);
 }

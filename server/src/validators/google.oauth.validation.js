@@ -1,10 +1,6 @@
 // validators/google.oauth.validation.js
-//
-// TASK 4: validates POST /google/oauth/complete's body. feedLabel/
-// contentLanguage are deliberately optional here — google.controller.js#
-// completeConnect defaults them server-side (targetCountry / "en") per the
-// review's "not required free text" instruction; only merchantId and
-// targetCountry are actually required to finish connecting.
+// Validates POST /google/oauth/complete's body. feedLabel/contentLanguage are optional since
+// completeConnect defaults them server-side; only merchantId and targetCountry are required.
 
 const Joi = require("joi");
 

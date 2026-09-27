@@ -2,7 +2,7 @@
 
 const listingService = require("../services/ebay/ebay.listing.service");
 const settingsService = require("../services/ebay/ebay.settings.service");
-const { enqueueEbayJob } = require("../queues/ebay.queue");
+const { enqueueChannelJob } = require("../queues/channel.queue");
 const { endListing } = require("../services/marketplace/sync.service");
 const { logger } = require("../loaders/logging");
 const {
@@ -14,6 +14,8 @@ const {
   validationError,
 } = require("../utils/http/response");
 const { validateListingForPush } = require("../validators/ebay.listing.validation");
+const { resolveEffectiveCategoryId } = require("../services/categoryMapping.service");
+const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
 exports.createListing = async (req, res) => {
   try {
@@ -112,10 +114,14 @@ exports.pushListing = async (req, res) => {
     if (!listing) return notFound(res, "Listing not found");
 
     const product = listing.product && typeof listing.product === "object" ? listing.product : null;
-    const errs = validateListingForPush(listing, product);
+    const [categoryId, settings] = await Promise.all([
+      resolveEffectiveCategoryId(req.tenantId, MARKETPLACE_PLATFORM.EBAY, listing.ebay_category_id, product),
+      settingsService.getSettings(req.tenantId),
+    ]);
+    const errs = validateListingForPush(listing, product, { categoryId, settings });
     if (errs.length > 0) return validationError(res, errs);
 
-    await enqueueEbayJob("sync_listing", { listingId: listing._id.toString() });
+    await enqueueChannelJob(MARKETPLACE_PLATFORM.EBAY, "sync_listing", { listingId: listing._id.toString() });
     return success(res, { queued: true }, "Listing queued for eBay sync");
   } catch (err) {
     return systemfailure(res, err);

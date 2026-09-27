@@ -5,9 +5,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { getLocations } from "@/lib/api/locations";
 
-// Read-only for now: /location has full CRUD server-side, but the add/edit
-// flow (and reassigning inventory when a hub closes) is its own piece of work
-// — listing the real hubs beats a Coming Soon panel over data that exists.
+// Read-only for now: /location has full CRUD server-side, but the add/edit flow is its own piece of work — listing real hubs beats a Coming Soon panel over data that exists.
 export function StoreWarehousesSection() {
   const { data, isLoading } = useQuery({ queryKey: ["locations"], queryFn: getLocations });
   const locations = data?.data ?? [];

@@ -1,6 +1,4 @@
-// Response shapes for the team surface — members, roles, invitations.
-// Mirrors server/src/models/{Membership,Role,Invitation}.js and
-// server/src/config/permissions.js.
+// Team response shapes; mirror the server Membership/Role/Invitation models.
 
 export type MembershipStatus = "active" | "suspended";
 export type InvitationStatus = "pending" | "accepted" | "declined" | "revoked";
@@ -79,9 +77,23 @@ export interface InvitationPreview {
   invited_by: { name: string } | null;
   /** Lets the page go straight to sign-in or sign-up. */
   has_account: boolean;
+  // A pending account waiting for its first password (the current flow).
+  needs_password: boolean;
+  first_name: string | null;
 }
 
-/** One organisation the signed-in user belongs to — the org switcher's row. */
+// Existing accounts join directly; new emails get a set-password link.
+export type InviteResult = { mode: "added"; email: string } | ({ mode: "invited" } & Invitation);
+
+/** The caller's standing in the current organisation. */
+export interface MyAccess {
+  is_tenant_admin: boolean;
+  role: string | null;
+  /** `group.action` keys; the Admin is sent every one. */
+  permissions: string[];
+}
+
+/** One organisation the signed-in user belongs to (org switcher row). */
 export interface MyOrganisation {
   _id: string;
   tenant_id: { _id: string; name: string; company_name: string | null; slug: string; logo_url: string | null };

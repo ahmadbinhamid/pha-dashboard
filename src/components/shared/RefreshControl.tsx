@@ -41,7 +41,7 @@ export function RefreshControl({
   className,
   label = "Updated",
 }: {
-  /** Key prefixes covering the page's queries, e.g. [["reports"], ["dashboard", "stats"]]. */
+  /** Key prefixes covering the page's queries, e.g. [["reports"], ["dashboa... */
   queryKeys: QueryKey[];
   className?: string;
   /** Leading word of the tooltip, before the age. */

@@ -22,11 +22,7 @@ export function OrderConfirmationStep({ order, paymentMethod, onStartNewOrder }:
   const { toast } = useToast();
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
 
-  // Only shown when staff explicitly chose "Payment Link (Stripe)" at
-  // checkout for a still-unpaid manual order — ties the button to the actual
-  // method chosen, not just any unpaid manual order (see
-  // order.service.js#createManualOrder — no other signal on the order itself
-  // records which method was picked when nothing was collected).
+  // Only shown when staff explicitly chose "Payment Link (Stripe)" at checkout — ties the button to the actual method picked, not just any unpaid manual order (order.service.js#createManualOrder).
   const canSendPaymentLink =
     order.channel === "manual" && order.payment_status === "pending_payment" && paymentMethod === "payment_link";
   const hasCustomerEmail = !!order.customer.email;

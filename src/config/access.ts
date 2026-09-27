@@ -1,16 +1,18 @@
-// Shared constants for the team surface. The role NAME is meaningful to the
-// UI (Super Admin is protected server-side, so its actions are hidden rather
-// than offered and refused) — mirrored here rather than string-literalled at
-// each call site.
+// Team surface constants, mirroring the server's role names.
 
 import type { InvitationStatus, MembershipStatus } from "@/types/access";
 import type { AuthUser } from "@/types/auth";
 
-export const SYSTEM_ROLE_SUPER_ADMIN = "Super Admin";
+// The tenant owner role; "Super Admin" until migrateTenantAdminRoles runs.
+export const TENANT_ADMIN_ROLE_NAMES = ["Admin", "Super Admin"];
 
-// The signed-in user's PLATFORM role (AuthUser.role), as opposed to the
-// per-tenant Role records the team surface manages. Shown in the account menu
-// and on the Profile page, so the wording lives here rather than in each.
+// Default role for new teammates; fixed name, editable permissions.
+export const STAFF_ROLE_NAME = "Staff";
+
+// Mirrors the server's activateInvitation rule (NIST minimum).
+export const INVITE_PASSWORD_MIN_LENGTH = 8;
+
+// Account-level role (AuthUser.role), not the per-tenant roles managed here.
 export const ACCOUNT_ROLE_LABEL: Record<AuthUser["role"], string> = {
   superadmin: "Super Admin",
   admin: "Admin",

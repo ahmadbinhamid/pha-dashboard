@@ -83,9 +83,7 @@ export function GeneratePaymentLink({
     );
   }
 
-  // One primary action (send if we can, otherwise just generate) plus a
-  // "···" menu for the alternate path — two full buttons side by side here
-  // used to wrap/crowd in the narrow sidebar column this renders in.
+  // One primary action plus a "···" menu for the alternate path — two full buttons side by side used to wrap/crowd in this narrow sidebar column.
   return (
     <div className="flex items-center gap-1.5">
       <Button

@@ -26,16 +26,14 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-// The one shared webhook URL every tenant's own Stripe account delivers to,
-// their real identity carried only in the opaque ?wt= token — mirrors
-// ebay.controller.js's webhook URL construction.
+// The one shared webhook URL every tenant's Stripe account delivers to, identity carried only
+// in the opaque ?wt= token, mirroring ebay.controller.js's webhook URL construction.
 function buildWebhookUrl(req, webhookToken) {
   return `${req.protocol}://${req.get("host")}/api/v1/payment/webhook?wt=${webhookToken}`;
 }
 
-// BYOK — saves this tenant's own Stripe secret/publishable key (validated
-// against Stripe itself) and, best-effort, auto-registers our webhook
-// endpoint on their account so they never have to do it by hand.
+// BYOK: saves the tenant's Stripe keys (validated against Stripe) and best-effort auto-registers
+// the webhook endpoint on their account.
 exports.updateStripeKeys = async (req, res) => {
   try {
     const webhookToken = await tenantSettingsService.ensureStripeWebhookToken(req.tenantId);
@@ -60,10 +58,8 @@ exports.getStripeStatus = async (req, res) => {
   }
 };
 
-// Manual fallback for when automatic webhook registration failed (e.g. a
-// restricted API key without webhook_endpoints:write) — the tenant creates
-// the endpoint themselves in their Stripe Dashboard (using the webhook_url
-// from GET .../stripe/status) and pastes back the signing secret Stripe gives them.
+// Manual fallback for when automatic webhook registration failed; the tenant creates the
+// endpoint themselves and pastes back the signing secret.
 exports.updateStripeWebhookSecret = async (req, res) => {
   try {
     const status = await tenantSettingsService.updateStripeWebhookSecret(req.tenantId, req.body.webhook_secret);
@@ -75,10 +71,8 @@ exports.updateStripeWebhookSecret = async (req, res) => {
   }
 };
 
-// BYOK — saves this tenant's own SMTP host/port/username/password (a real
-// connection + auth handshake is attempted before persisting, no message
-// sent) so their customer-facing order email sends from their own mailbox
-// instead of the platform's shared one.
+// BYOK: saves the tenant's own SMTP credentials (a real connection+auth handshake is attempted
+// before persisting) so order email sends from their own mailbox.
 exports.updateSmtpCredentials = async (req, res) => {
   try {
     const status = await tenantSettingsService.updateSmtpCredentials(req.tenantId, req.body);

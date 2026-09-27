@@ -1,15 +1,5 @@
 // config/permissions.js
-//
-// The permission catalogue: every action a role can be granted, as a
-// `group.action` string (e.g. "orders.refund"). This file is the single
-// source of truth — roles store the strings they were granted and are
-// validated against this list, so a permission that isn't here cannot be
-// saved, and removing one here retires it everywhere.
-//
-// Modelled on flowpos-backend's config/permissions.php, over this product's
-// own feature set. `label`/`description` live here too (rather than only in
-// the dashboard) so the permission matrix in Settings → Roles renders from
-// the same list the server enforces, and the two can't drift.
+// Every grantable `group.action`; roles validate against it, the UI reads it.
 
 const PERMISSION_GROUPS = [
   {
@@ -40,6 +30,12 @@ const PERMISSION_GROUPS = [
     label: "Inventory",
     description: "Stock on hand, adjustments and stock history.",
     actions: { view: "View stock levels", update: "Adjust stock", export: "Export inventory" },
+  },
+  {
+    key: "tags",
+    label: "Tags",
+    description: "Printed shelf tags: the print queue, history and tag style.",
+    actions: { view: "View the tag queue and history", print: "Print tags", update: "Manage the queue and tag style" },
   },
   {
     key: "orders",
@@ -85,6 +81,12 @@ const PERMISSION_GROUPS = [
     actions: { view: "View locations", create: "Add locations", update: "Edit locations", delete: "Remove locations" },
   },
   {
+    key: "shipping",
+    label: "Shipping",
+    description: "Storefront shipping setup, including calculated (Transdirect) rates.",
+    actions: { view: "View shipping settings", update: "Configure shipping" },
+  },
+  {
     key: "settings",
     label: "Store Settings",
     description: "Trading identity, invoice setup, policies and branding.",
@@ -93,7 +95,7 @@ const PERMISSION_GROUPS = [
   {
     key: "integrations",
     label: "Integrations",
-    description: "eBay, Google, Stripe, email and domains — including their credentials.",
+    description: "eBay, Google, Stripe, email and custom domains, with their credentials.",
     actions: { view: "View integrations", update: "Connect and configure integrations" },
   },
   {
@@ -121,7 +123,7 @@ const PERMISSION_GROUPS = [
   },
 ];
 
-/** Every valid permission string, e.g. ["dashboard.view", "orders.refund", ...]. */
+/** Every valid permission string, e.g. "orders.refund". */
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) =>
   Object.keys(group.actions).map((action) => `${group.key}.${action}`),
 );
@@ -132,7 +134,7 @@ function isValidPermission(permission) {
   return PERMISSION_SET.has(permission);
 }
 
-/** The subset of `permissions` that isn't in the catalogue — [] when all are valid. */
+/** Entries of `permissions` missing from the catalogue; [] when all valid. */
 function unknownPermissions(permissions = []) {
   return permissions.filter((p) => !PERMISSION_SET.has(p));
 }

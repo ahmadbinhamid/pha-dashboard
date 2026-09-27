@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserPlus, Loader2, ChevronDown, Check } from "lucide-react";
+import { Input } from "@/components/ui/Input";
 import { cn } from "@/utils/cn";
 import { getCustomers } from "@/lib/api/customers";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -14,12 +15,7 @@ interface CustomerSearchComboboxProps {
   className?: string;
 }
 
-// Unlike the generic Combobox (which filters a fixed local list), this
-// re-queries the customers API on every keystroke — so a customer who
-// wouldn't appear on the listing page's first page (pagination) is still
-// found as soon as their name/email/phone matches the search term. With no
-// search text yet, it shows the same first page (default 15) the Customers
-// list page would show, so staff can browse recent customers without typing.
+// Queries the API per keystroke (unlike Combobox) so paged-out rows match.
 export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className }: CustomerSearchComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -84,12 +80,13 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
           <div className="p-2">
             <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-2.5 transition-shadow duration-150 focus-within:ring-2 focus-within:ring-accent/45">
               <Search className="h-3.5 w-3.5 shrink-0 text-fg/40" />
-              <input
+              <Input
                 ref={inputRef}
+                variant="ghost"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search name, email, phone…"
-                className="flex-1 bg-transparent text-sm text-fg outline-none! placeholder:text-fg/40"
+                className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none placeholder:text-fg/40 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
               />
               {isFetching && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-fg/40" />}
             </div>
@@ -97,7 +94,7 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
 
           <div className="max-h-60 overflow-y-auto p-1">
             {!debouncedQuery && results.length > 0 && (
-              <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg/40">
+              <div className="px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-fg/40">
                 Recent customers
               </div>
             )}

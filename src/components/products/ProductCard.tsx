@@ -127,7 +127,7 @@ export function ProductCard({
 
       {/* Body */}
       <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-3">
-        <p className="text-[11px] text-fg/40">{createdAt}</p>
+        <p className="text-2xs text-fg/40">{createdAt}</p>
 
         <div className="mt-1 flex items-start justify-between gap-2">
           <p className="line-clamp-2 text-sm font-bold uppercase leading-snug tracking-tight text-fg">
@@ -144,7 +144,7 @@ export function ProductCard({
 
         <div className="mt-auto pt-2.5">
           <div className="border-t border-border pt-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-fg/40">Price</p>
+            <p className="text-3xs font-medium uppercase tracking-wide text-fg/40">Price</p>
             <p className="mt-0.5 text-lg font-bold text-fg">{formatCurrency(product.price)}</p>
           </div>
         </div>

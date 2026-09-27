@@ -33,8 +33,7 @@ export function InventoryRow({
 }: InventoryRowProps) {
   const status = computeInventoryStockStatus(record.stock_count, lowStockThreshold);
   const statusConfig = STOCK_STATUS_CONFIG[status];
-  // Variant SKU is the more specific identifier when this row is a variant —
-  // falls back to the product's own SKU otherwise.
+  // Variant SKU is more specific when this row is a variant, else falls back to the product's SKU.
   const sku = record.variant?.sku ?? record.product?.sku ?? null;
 
   return (

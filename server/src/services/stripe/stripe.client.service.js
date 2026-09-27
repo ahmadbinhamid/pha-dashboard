@@ -1,19 +1,11 @@
 // services/stripe/stripe.client.service.js
-//
-// BYOK — every tenant supplies their own Stripe secret key (server/src/
-// services/stripe/stripe.keys.service.js), so there is no single platform
-// client anymore. This module only knows how to turn a secret key into a
-// pinned-API-version Stripe SDK instance; it has no DB access itself so
-// stripe.keys.service.js can depend on it (for key validation) without a
-// circular require.
+// BYOK: turns a secret key into a pinned-API-version Stripe SDK instance. No DB access, so
+// stripe.keys.service.js can depend on it for key validation without a circular require.
 
 const Stripe = require("stripe");
 const { STRIPE_API_VERSION } = require("../../constants/stripe.constants");
 
-// Keyed by tenantId — avoids re-constructing a Stripe instance on every
-// call. Cleared whenever a tenant saves a new secret key (see
-// stripe.keys.service.js#updateStripeKeys) so a revoked/rotated key can
-// never keep being served from cache.
+// Keyed by tenantId. Cleared on a new secret key save so a revoked/rotated key is never cached.
 const _clientCache = new Map(); // tenantId -> { client, secretKey }
 
 function buildStripeClient(secretKey) {
@@ -25,9 +17,7 @@ function buildStripeClient(secretKey) {
   return new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
 }
 
-// Reuses a cached instance only if the secret key hasn't changed since it
-// was built — cheap to compare, and correct even if clearClientCache was
-// missed somewhere.
+// Reuses a cached instance only if the secret key hasn't changed since it was built.
 function getStripeClientForTenant(tenantId, secretKey) {
   const key = String(tenantId);
   const cached = _clientCache.get(key);

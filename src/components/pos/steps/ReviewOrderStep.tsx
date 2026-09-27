@@ -5,7 +5,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
-import { NativeSelect } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
 import { useToast } from "@/context";
@@ -33,8 +33,7 @@ interface ReviewOrderStepProps {
   shippingCostInput: string;
   onShippingCostInputChange: (value: string) => void;
   onOrderCreated: (order: Order) => void;
-  // Bubbles the create-order mutation's pending state up to the page header,
-  // which owns the Create button now (and needs to show "Creating…"/disable it).
+  // Pending state goes up to the page header, which owns the Create button.
   onPendingChange?: (pending: boolean) => void;
 }
 
@@ -82,23 +81,17 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 
   const rawSubtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0);
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
-  // Nothing to ship for pickup — matches order.service.js#createManualOrder,
-  // which only charges freight when delivery_method is "delivery".
+  // Pickup has no freight, matching order.service.js#createManualOrder.
   const computedShipping =
     deliveryMethod === "delivery" ? items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) : 0;
-  // The staff member can override the computed freight (e.g. a flat-rate
-  // quote for an oversized item) — an empty input falls back to the sum
-  // above, same convention order.service.js#createManualOrder uses server-side.
+  // Staff may override freight; empty input falls back to the computed sum.
   const shippingTotal =
     deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
       ? Math.max(Number(shippingCostInput) || 0, 0)
       : computedShipping;
   const total = rawSubtotal - totalDiscount + shippingTotal;
 
-  // Pre-fill the field with the computed freight so it reads as "here's the
-  // shipping cost, edit if needed" rather than starting blank — only when
-  // still empty, so it never clobbers a value the staff member (or a
-  // restored draft) already set.
+  // Prefill computed freight only while empty, so it never clobbers input.
   useEffect(() => {
     if (deliveryMethod === "delivery" && shippingCostInput.trim() === "" && computedShipping > 0) {
       onShippingCostInputChange(computedShipping.toFixed(2));
@@ -151,8 +144,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       items: payloadItems,
       delivery_method: deliveryMethod,
       shipping_address: deliveryMethod === "delivery" ? shippingAddress : undefined,
-      // Joi's `forbidden()` for pickup orders rejects an explicit `null`,
-      // not just a truthy value — must be omitted entirely, not nulled.
+      // Joi forbids billing_address for pickup, even null, so omit the key.
       billing_address: deliveryMethod === "delivery" && useDifferentBilling ? billingAddress : undefined,
       note: orderNote.trim() || null,
       payment_method: paymentCheck.data,
@@ -237,22 +229,17 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
               <div className="flex items-center justify-between gap-3 pt-1">
                 <span className="text-fg/60">Payment Method</span>
                 <FormField error={paymentMethodError} className="w-48">
-                  <NativeSelect
+                  <SingleSelect
+                    options={(Object.entries(ORDER_PAYMENT_CHOICE_LABEL) as [OrderPaymentChoice, string][]).map(
+                      ([value, label]) => ({ value, label }),
+                    )}
                     value={paymentChoice}
-                    onChange={(e) => {
-                      onPaymentChoiceChange(e.target.value as OrderPaymentChoice | "");
+                    onChange={(v) => {
+                      onPaymentChoiceChange(v as OrderPaymentChoice | "");
                       setPaymentMethodError(undefined);
                     }}
-                  >
-                    <option value="">Select method…</option>
-                    {(Object.entries(ORDER_PAYMENT_CHOICE_LABEL) as [OrderPaymentChoice, string][]).map(
-                      ([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ),
-                    )}
-                  </NativeSelect>
+                    placeholder="Select method…"
+                  />
                 </FormField>
               </div>
 
@@ -286,8 +273,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
           </Card>
         </div>
 
-        {/* Reference only — who and where. Sticks under the wizard header
-            so it stays readable while the editable column scrolls. */}
+        {/* Read-only; sticky so it stays visible while the edit column scrolls. */}
         <div className="space-y-6 lg:sticky lg:top-44 lg:self-start">
           <Card>
             <CardHeader title="Customer" />

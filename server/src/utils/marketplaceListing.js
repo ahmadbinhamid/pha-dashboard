@@ -1,13 +1,8 @@
 // utils/marketplaceListing.js
-//
-// Shapes a MarketplaceListing document into the curated, public-safe subset
-// exposed on the storefront's product detail response. Internal/operational
-// fields (sync_status, fulfillment/payment/return policy ids, external ids,
-// package dimensions, etc.) are deliberately excluded — those are inputs to
-// the platform adapter, not storefront content.
-//
-// Only the eBay discriminator is implemented today, so this mapper is
-// eBay-shaped; branch on `listing.platform` here once Amazon/Shopify land.
+// Shapes a MarketplaceListing into the curated, public-safe subset for the storefront's
+// product detail response; internal/operational fields are deliberately excluded.
+// Only eBay is implemented today, so this mapper is eBay-shaped; branch on `listing.platform`
+// once Amazon/Shopify land.
 function toPublicListing(listing) {
   const aspects =
     listing.item_specifics?.aspects instanceof Map
@@ -35,16 +30,10 @@ function fitmentKey(f) {
   return `${f.make || ""}|${f.model || ""}|${f.model_code || ""}|${f.year_from ?? ""}|${f.year_to ?? ""}`;
 }
 
-// Resolves the "which value wins" business logic for a product's storefront
-// display: a listing's override wins when present, else the product's own
-// value — and merges/dedupes vehicle fitment across the product and its
-// listing(s). This is domain/precedence logic, not presentation (no English
-// labels or formatted strings here — that stays in the frontend).
-//
-// `primaryListing` is the first active listing for the product (there's
-// realistically 0-1 non-variant listing today; revisit this "first wins"
-// assumption if/when a product can carry multiple concurrently-relevant
-// listings, e.g. one per marketplace, that should all inform display).
+// Resolves "which value wins" for storefront display: a listing's override wins when present,
+// else the product's own value, plus merged/deduped vehicle fitment. Domain/precedence logic
+// only, no presentation. `primaryListing` is the first active listing (0-1 today; revisit if a
+// product can carry multiple concurrently-relevant listings).
 function buildProductDisplay(product, listings) {
   const primaryListing = listings[0] ?? null;
 

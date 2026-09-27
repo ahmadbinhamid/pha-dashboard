@@ -1,4 +1,5 @@
 import type { StockStatus } from "./inventory";
+import type { ShippingMethod } from "./shipping";
 
 export type ProductType = "physical" | "digital";
 export type ProductStatus = "draft" | "active";
@@ -28,8 +29,7 @@ export interface Category {
   sort_order: number;
 }
 
-// The /category endpoint now returns a paginated payload (matching
-// ProductListData) instead of a bare Category[] array.
+// /category returns a paginated payload like ProductListData, not Category[].
 export interface CategoryListData {
   items: Category[];
   total: number;
@@ -51,8 +51,7 @@ export interface Choice {
   items: string[];
 }
 
-// Internal staff comment thread — never shown to customers. Mirrors
-// OrderInternalNote in @/types/orders.
+// Staff-only note thread, never shown to customers; mirrors OrderInternalNote.
 export interface ProductInternalNote {
   _id: string;
   text: string;
@@ -89,6 +88,22 @@ export interface ProductVehicle {
   year_to: number | null;
 }
 
+// Packed size in cm, weight in kg; null = not set.
+export interface PackageDimensions {
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  weight: number | null;
+}
+
+// Same fields as typed into a form; "" = not set.
+export interface PackageFormState {
+  length: string;
+  width: string;
+  height: string;
+  weight: string;
+}
+
 export interface VehicleFormState {
   vehicle_make: string;
   vehicle_model: string;
@@ -110,6 +125,8 @@ export interface Product {
   compare_price: number | null;
   cost_price: number | null;
   shipping_cost: number | null;
+  // Absent on documents saved before shipping methods existed = standard.
+  shipping_method?: ShippingMethod;
   is_taxable: boolean;
   sku: string | null;
   barcode: string | null;
@@ -120,6 +137,10 @@ export interface Product {
   condition: ProductCondition;
   authenticity: ProductAuthenticity | null;
   vehicle: ProductVehicle;
+  // Absent on documents saved before products had one.
+  package?: PackageDimensions;
+  // Shelf/bin location, e.g. "A3-02"; printed on the product tag.
+  bay?: string | null;
   attachments: Attachment[];
   categories: Category[];
   tags: string[];
@@ -134,7 +155,8 @@ export interface Product {
 }
 
 export interface StockEntry {
-  location_id: string;
+  // null = the server's default, Main Warehouse (no locations.view needed).
+  location_id: string | null;
   location_name: string;
   qty: number;
 }
@@ -164,8 +186,7 @@ export interface ProductCreateFormState {
   categories: string[];
   tags: string[];
   images: Attachment[];
-  // Drafted before the product exists — posted as real notes right after
-  // creation succeeds (addProductNote needs a productId, which doesn't exist yet).
+  // Posted as real notes after create; addProductNote needs a productId.
   notes: string[];
 }
 
@@ -200,3 +221,19 @@ export interface ProductEditFormState {
 }
 
 export type { EbaySettings, EbayStatus } from "./ebaySettings";
+
+export interface ProductListData {
+  items: Product[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ProductStats {
+  totalSkus: number;
+  totalStockUnits: number;
+  outOfStockCount: number;
+  avgPrice: number;
+  avgMarginPct: number | null;
+}

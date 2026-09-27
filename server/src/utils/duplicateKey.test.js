@@ -1,9 +1,6 @@
 // utils/duplicateKey.test.js
 //
-// Guards the mapping that turned a live prod incident into a wild goose
-// chase: a duplicate SKU was reported to the user as "Product slug already
-// exists", because the controller mapped every E11000 to a slug message.
-// No DB needed — these are the error shapes Mongo actually hands back.
+// Regression test: a prod bug once reported every duplicate SKU as a slug conflict.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -36,8 +33,7 @@ test("a slug collision still names the slug", () => {
 });
 
 test("the tenant scope is never reported as the colliding field", () => {
-  // Every unique index here leads with tenant_id, so naive Object.keys()[0]
-  // would blame the tenant on every single conflict.
+  // Every index leads with tenant_id; naive Object.keys()[0] would wrongly blame it.
   const err = dupKeyError({ tenant_id: 1, sku: 1 }, { tenant_id: "t1", sku: "PHA-000001" });
   assert.notEqual(duplicateKeyField(err), "tenant_id");
 });

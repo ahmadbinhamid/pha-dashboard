@@ -1,10 +1,6 @@
 // services/pendingReconciliation.service.js
-//
-// CRUD + resolution for PendingReconciliation rows — the human-review queue
-// the eBay inventory-sync poller writes to instead of ever auto-adjusting
-// stock from an observed eBay-side quantity drift. See
-// services/ebay/ebay.inventory-sync.service.js for what creates these, and
-// models/PendingReconciliation.js for why auto-apply was removed.
+// CRUD + resolution for PendingReconciliation rows, the human-review queue the eBay inventory-sync
+// poller writes to instead of auto-adjusting stock. See models/PendingReconciliation.js for why.
 
 const PendingReconciliation = require("../models/PendingReconciliation");
 const MarketplaceListing = require("../models/MarketplaceListing");
@@ -12,10 +8,8 @@ const { adjustStockForSku, fanOutMarketplaceInventory } = require("./inventory.s
 const { logger } = require("../loaders/logging");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
-// Upserts the single open ("pending") row for this listing — a second poll
-// seeing the SAME drift just refreshes last_seen_at instead of creating a
-// duplicate (the model's partial unique index enforces this at the DB level
-// too; this upsert is the normal-path way of respecting it).
+// Upserts the single open "pending" row for this listing; a second poll seeing the same drift
+// just refreshes last_seen_at (the model's partial unique index also enforces this).
 async function upsertPending({ tenantId, listingId, sku, localQty, ebayQty }) {
   const delta = ebayQty - localQty;
   return PendingReconciliation.findOneAndUpdate(
@@ -38,11 +32,8 @@ async function findPendingById(id, tenantId) {
   return PendingReconciliation.findOne({ _id: id, tenant_id: tenantId, status: "pending" });
 }
 
-// Applies eBay's reported quantity to local stock — the merchant confirming
-// "yes, someone really did change this on eBay, my local number was wrong."
-// skipMarketplaceFanOut: true because there's nothing to push back — eBay is
-// the side that changed, and pushing here would just re-announce eBay's own
-// number back to itself.
+// Applies eBay's reported quantity to local stock. skipMarketplaceFanOut: true since eBay is
+// the side that changed — pushing here would just re-announce eBay's own number back to itself.
 async function acceptReconciliation(id, tenantId, userId) {
   const row = await findPendingById(id, tenantId);
   if (!row) return null;
@@ -59,8 +50,7 @@ async function acceptReconciliation(id, tenantId, userId) {
     { _id: row.listing, tenant_id: tenantId },
     {
       $set: {
-        // TODO(dual-write): remove ebay_synced_quantity after backfill — see
-        // MarketplaceListing.js. synced_quantity is the generic replacement.
+        // TODO(dual-write): remove ebay_synced_quantity after backfill; synced_quantity replaces it.
         ebay_synced_quantity: row.ebay_qty,
         ebay_synced_at: new Date(),
         ebay_pending_reconcile_qty: null,
@@ -68,10 +58,7 @@ async function acceptReconciliation(id, tenantId, userId) {
         synced_at: new Date(),
       },
     },
-    // ebay_synced_quantity/ebay_synced_at/ebay_pending_reconcile_qty are
-    // still eBay-discriminator-only fields — see
-    // ebay.adapter.js#updateSyncBaseline's comment for why a base-model
-    // updateOne needs strict: false to write those.
+    // strict: false, since these are eBay-discriminator-only fields a base-model update would drop.
     { strict: false },
   );
 
@@ -82,8 +69,7 @@ async function acceptReconciliation(id, tenantId, userId) {
   return row;
 }
 
-// Merchant says eBay's number is wrong (or already stale) — push local
-// stock back to eBay to overwrite it, rather than accepting eBay's figure.
+// Merchant says eBay's number is wrong — push local stock back to eBay to overwrite it.
 async function rejectReconciliation(id, tenantId, userId) {
   const row = await findPendingById(id, tenantId);
   if (!row) return null;
@@ -94,11 +80,7 @@ async function rejectReconciliation(id, tenantId, userId) {
   await row.save();
 
   try {
-    // Goes through fanOutMarketplaceInventory — the ONE place that claims a
-    // push_seq fencing token and enqueues sync_listing (see its own comment
-    // in inventory.service.js) — rather than enqueueing directly, so this
-    // re-push is fenced exactly like every other quantity push instead of
-    // reopening a second, unfenced writer path.
+    // Goes through fanOutMarketplaceInventory so this re-push is fenced like every other push.
     const listing = await MarketplaceListing.findOne({ _id: row.listing, tenant_id: tenantId }).select("product variant");
     if (listing) {
       await fanOutMarketplaceInventory(listing.product, listing.variant, tenantId);

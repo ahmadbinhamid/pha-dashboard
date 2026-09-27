@@ -1,30 +1,8 @@
 // services/refund.reconciliation.service.js
-//
-// Corrections round — refund.service.js#getReservingRefunds stops counting a
-// PENDING/PROCESSING refund as an admission-time reservation once it's older
-// than RESERVATION_STALE_AFTER_MS (necessary so a dropped webhook or a
-// crashed request can't lock out further refunds on an order forever), but
-// that bound only stops it silently reserving quantity/money — it does
-// nothing to actually resolve the stuck refund itself. This sweep is what
-// does that: run periodically (hourly, via the stripe worker's repeatable
-// job — see src/workers/stripe.worker.js) rather than waiting for someone to
-// notice getRefundableSummary's `stuck_refunds` list.
-//
-// Two distinct stuck states, two different fixes:
-//   - status: pending — never made it into/through settleRefund (crashed
-//     between Refund.create() and the Stripe calls, or partway through a
-//     multi-allocation loop). Resumed by calling settleRefund again, which
-//     is safe to call more than once: it skips any allocation that already
-//     has a stripe_refund_id, so a crash mid-loop can't double-refund.
-//   - status: processing — every Stripe allocation already has a
-//     stripe_refund_id (settleRefund only reaches "processing" once every
-//     allocation's Stripe call succeeded); the charge.refunded/
-//     charge.refund.updated webhook confirming it just never arrived. Ask
-//     Stripe directly for the real state instead of waiting indefinitely,
-//     and run it through the exact same handlers a webhook delivery would
-//     have used — reconcileStripeRefund for succeeded/still-pending,
-//     handleChargeRefundUpdated for failed/canceled — rather than
-//     duplicating either's logic here.
+// refund.service.js#getReservingRefunds stops counting a stale PENDING/PROCESSING refund as a
+// reservation, but doesn't resolve it — this hourly sweep does. Two stuck states: "pending" is
+// resumed via settleRefund again (safe to call twice); "processing" asks Stripe for the real
+// state and runs it through the same handlers a webhook delivery would use.
 
 const Order = require("../models/Order");
 const Payment = require("../models/Payment");
@@ -36,21 +14,9 @@ const { REFUND_STATUS } = require("../constants/refund.constants");
 const { PAYMENT_PROVIDER } = require("../constants/payment.constants");
 const { logger } = require("../loaders/logging");
 
-// NOTE: a status: succeeded + effects_applied_at: null sweep was tried here
-// and reverted. In principle that combination means "money moved but the
-// restock/eBay side effects threw before completing" (status intentionally
-// advances to SUCCEEDED before applyRefundEffects runs — recomputeLedger's
-// accounting depends on it, see settleRefund's comment — so this can't be
-// caught by re-checking status the way pending/processing are). In
-// practice, tested against real historical data, this combination is
-// indistinguishable from a perfectly fine OLD refund that simply predates
-// effects_applied_at being consistently set (empty `lines`, nothing to
-// restock — the field was always cosmetic for those). Re-running
-// applyRefundEffects on one repeated the ledger-invariant check against
-// stale historical state and auto-voided an otherwise-settled real refund.
-// Accepted as a residual gap instead: rarer and narrower than that risk —
-// see stripe.webhook.service.js#reconcileStripeRefund and
-// refund.service.js#settleRefund's own comments on the exact scenario.
+// A status: succeeded + effects_applied_at: null sweep was tried and reverted — indistinguishable
+// from an old refund that predates effects_applied_at, and re-running applyRefundEffects on one
+// auto-voided an otherwise-settled real refund in testing. Accepted as a residual gap.
 async function reconcileStuckRefunds() {
   const cutoff = new Date(Date.now() - refundService.RESERVATION_STALE_AFTER_MS);
   const stuck = await Refund.find({
@@ -89,22 +55,12 @@ async function reconcileStuckRefunds() {
           } else if (sr.status === "failed" || sr.status === "canceled") {
             await handleChargeRefundUpdated(sr);
           } else {
-            // Still genuinely pending at Stripe's end — nothing to do yet,
-            // this allocation stays unsettled and will be checked again
-            // next sweep. Not an error, just not resolved this round.
+            // Still genuinely pending at Stripe's end — checked again next sweep, not an error.
             unresolved = true;
           }
         } catch (err) {
-          // Only "the refund genuinely doesn't exist at Stripe" is a real
-          // answer that legitimately releases the reservation — everything
-          // else (a transient 500, a timeout, a rate limit) is Stripe being
-          // temporarily unreachable, NOT proof the refund didn't happen.
-          // PROCESSING has no age bound (see getReservingRefunds) precisely
-          // because "we couldn't confirm it" must never be treated the same
-          // as "it didn't happen" — misreading a transient error as
-          // resource_missing would release a reservation for money that's
-          // actually still moving at Stripe. Leave it PROCESSING and retry
-          // next sweep for anything but a confirmed resource_missing.
+          // Only "resource_missing" legitimately releases the reservation — a transient error
+          // (500, timeout, rate limit) is not proof the refund didn't happen, so leave it PROCESSING.
           if (err.code === "resource_missing") {
             await handleChargeRefundUpdated({ status: "canceled", id: alloc.stripe_refund_id });
           } else {

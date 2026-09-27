@@ -1,9 +1,7 @@
 import { FormField } from "@/components/ui/FormField";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
-// FormField + RichTextEditor, so a rich-text field is declared the same way as
-// an Input or Textarea one (label, hint, error, value/onChange) instead of each
-// form wiring the editor up itself.
+// FormField + RichTextEditor, so a rich-text field is declared the same way as an Input/Textarea instead of each form wiring the editor up itself.
 export function RichTextField({
   label,
   hint,

@@ -1,7 +1,5 @@
 // routes/member.routes.js
-//
-// The current organisation's people, plus the signed-in user's own list of
-// organisations (which needs no permission — it's their own membership).
+// Current org's people, plus the caller's own org list (no permission needed).
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -12,8 +10,9 @@ const ctrl = require("../controllers/member.controller");
 
 router.use(auth());
 
-// Every organisation the caller belongs to — the org switcher's source.
+// Feeds the org switcher, so it has no tenant gate.
 router.get("/me/organisations", asyncHandler(ctrl.listMyOrganisations));
+router.get("/me/access", asyncHandler(ctrl.getMyAccess));
 router.put("/me/organisations/:tenantId/default", validate(V.tenantIdParam), asyncHandler(ctrl.setDefaultOrganisation));
 
 router.get("/", requirePermission("users.view"), asyncHandler(ctrl.listMembers));

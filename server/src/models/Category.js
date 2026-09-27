@@ -4,8 +4,7 @@ const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
 
 const categorySchema = buildSchema({
-  // Backfilled onto every existing Category by scripts/backfillTenantId.js —
-  // slug's unique index below is compound with this.
+  // tenant_id backfilled via scripts/backfillTenantId.js; slug's unique index below is compound with it.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   name: { type: String, required: true, trim: true },
   slug: { type: String },

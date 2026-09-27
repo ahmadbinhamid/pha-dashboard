@@ -12,15 +12,9 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
+import { PERMISSIONS, type Permission } from "@/config/permissions";
 
-// The Settings page's top-level tabs, and the sub-sections inside Store
-// Settings. Split out of the page itself (matching config/nav.tsx's role for
-// the app sidebar) so the tab bar, the router's redirects and the page body
-// all read from one list instead of three hand-kept copies.
-//
-// `available: false` marks an area the product doesn't have a backend for
-// yet — the tab still renders and is still navigable, it just shows
-// <ComingSoonPanel> instead of controls that would save nowhere.
+// Settings tabs; `available: false` shows ComingSoonPanel instead of controls.
 
 export type SettingsTabId =
   | "appearance"
@@ -37,6 +31,8 @@ export type SettingsTab = {
   label: string;
   icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
   available: boolean;
+  // Needed to see the tab at all; omitted means everyone sees it.
+  permission?: Permission;
   /** Shown by <ComingSoonPanel> — what this tab will do once it's built. */
   summary?: string;
   planned?: string[];
@@ -44,39 +40,37 @@ export type SettingsTab = {
 
 export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
-  { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
-  { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  // Both fully built end-to-end (Membership/Role/Invitation models, invite
-  // email flow, permission matrix) but pulled behind Coming Soon for now —
-  // see SettingsPage.tsx for the matching fallback. The backend routes,
-  // services and UsersTab/RolesTab components are untouched and still work;
-  // this only stops the UI from being reachable.
+  {
+    id: "store",
+    label: "Store Settings",
+    icon: (p) => <Store {...p} />,
+    available: true,
+    permission: PERMISSIONS.settings.view,
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    icon: (p) => <Blocks {...p} />,
+    available: true,
+    permission: PERMISSIONS.integrations.view,
+  },
   {
     id: "users",
     label: "User Management",
     icon: (p) => <Users {...p} />,
-    available: false,
-    summary: "Invite teammates to your store and manage who has access.",
-    planned: [
-      "Invite people by email, with a role assigned on acceptance",
-      "See everyone's status — active, pending invite, suspended",
-      "Move someone to a different role, or remove their access",
-    ],
+    available: true,
+    permission: PERMISSIONS.users.view,
   },
   {
     id: "roles",
     label: "Roles & Permissions",
     icon: (p) => <Shield {...p} />,
-    available: false,
-    summary: "Define what each role on your team can see and do.",
-    planned: [
-      "Built-in roles (Admin, Staff) plus custom roles you define",
-      "Per-permission toggles across orders, inventory, reports and settings",
-      "See which teammates hold each role before changing it",
-    ],
+    available: true,
+    permission: PERMISSIONS.roles.view,
   },
   {
     id: "taxes",
+    permission: PERMISSIONS.settings.view,
     label: "Taxes & Shipping",
     icon: (p) => <Truck {...p} />,
     available: false,
@@ -89,6 +83,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   },
   {
     id: "notifications",
+    permission: PERMISSIONS.settings.view,
     label: "Notifications",
     icon: (p) => <Bell {...p} />,
     available: false,
@@ -102,6 +97,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   },
   {
     id: "billing",
+    permission: PERMISSIONS.settings.view,
     label: "Billing & Plan",
     icon: (p) => <CreditCard {...p} />,
     available: false,
@@ -112,11 +108,16 @@ export const SETTINGS_TABS: SettingsTab[] = [
 
 export const DEFAULT_SETTINGS_TAB: SettingsTabId = "store";
 
+/** Tabs the user may open, given useMyAccess().can. */
+export function visibleSettingsTabs(can: (permission: Permission) => boolean): SettingsTab[] {
+  return SETTINGS_TABS.filter((tab) => !tab.permission || can(tab.permission));
+}
+
 export function findSettingsTab(id: string | undefined): SettingsTab | undefined {
   return SETTINGS_TABS.find((t) => t.id === id);
 }
 
-// ── Store Settings sub-sections ─────────────────────────────────────────────
+// ── Store Settings sub-sections ──
 
 export type StoreSectionId = "general" | "warehouses" | "regional" | "invoices" | "policies";
 

@@ -23,10 +23,7 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (res) => res,
   async (err) => {
-    // A request made with responseType: "blob" (e.g. downloading a PDF) still
-    // gets its ERROR body parsed as a Blob, not JSON — recover the real
-    // message so a failed download doesn't just say "Request failed with
-    // status code 404" instead of the backend's actual error message.
+    // A responseType: "blob" request (e.g. PDF download) still gets its error body parsed as a Blob — recover the real message instead of a generic status-code string.
     if (err.response?.data instanceof Blob && err.response.data.type?.includes("json")) {
       try {
         err.response.data = JSON.parse(await err.response.data.text());
@@ -57,10 +54,7 @@ apiClient.interceptors.response.use(
     if (status === 422 && Array.isArray(err.response?.data?.errors)) {
       error.errors = err.response.data.errors;
     }
-    // Some 400s carry a machine-readable `reason` alongside `message` (e.g.
-    // google.controller.js#completeConnect's GCP_REGISTRATION_PENDING/
-    // CONFLICT/MERCHANT_NOT_ACCESSIBLE cases) so a caller can show a
-    // specific friendly message instead of just the raw error text.
+    // Some 400s carry a machine-readable `reason` alongside `message` (e.g. google.controller.js#completeConnect) so a caller can show a specific friendly message.
     if (typeof err.response?.data?.reason === "string") {
       error.reason = err.response.data.reason;
     }

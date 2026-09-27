@@ -10,12 +10,7 @@ import {
 } from "@/components/profile/ProfileSectionNav";
 import { useAuth } from "@/context/auth";
 
-// Side nav + the active section's body, the same two-level shape as Settings.
-// The section lives in the URL (?section=password) rather than in component
-// state, so it survives a refresh and can be linked to — and each card keeps
-// its own Save, instead of one header button that means something different
-// per section.
-//
+// Side nav + active section's body, the same two-level shape as Settings. Section lives in the URL (?section=password), not component state, so it's linkable and survives a refresh; each card keeps its own Save.
 // Signing out lives in the Topbar account menu (UserMenu), not here.
 export default function ProfilePage() {
   const { user } = useAuth();

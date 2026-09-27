@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { getChannels } from "@/lib/api/channels";
 import { getGoogleConnectUrl, getGoogleAccounts, completeGoogleConnect } from "@/lib/api/google";
@@ -18,6 +18,7 @@ import {
   type GoogleCompleteConnectFormValues,
 } from "@/lib/validation/googleConnectForm";
 import type { ChannelConnectionStatus } from "@/types/channel";
+import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
 
 const STATUS_VARIANT: Record<ChannelConnectionStatus, "ok" | "warn" | "danger" | "muted"> = {
   connected: "ok",
@@ -42,14 +43,7 @@ const DEFAULT_VALUES: GoogleCompleteConnectFormValues = {
   contentLanguage: "en",
 };
 
-// Maps the specific `reason` codes this flow can fail with — either from
-// oauthCallback's redirect query string (OAuth-layer failures: bad/expired
-// code, bad state) or from completeConnect's JSON error response
-// (Merchant-Center-layer failures, surfaced via the axios interceptor's
-// `error.reason` — see lib/api/client.ts) — onto a friendlier message.
-// Falls back to the raw reason for anything not explicitly handled here, so
-// a new/unmapped backend reason still shows *something* actionable rather
-// than silently disappearing.
+// Maps oauth redirect / completeConnect `reason` codes; unknown ones show raw.
 function connectErrorMessage(reason: string | null | undefined): string {
   switch (reason) {
     case "registration_pending":
@@ -73,11 +67,7 @@ export function GoogleConnectCard() {
   const callbackReason = searchParams.get("reason");
   const choosingAccount = callbackResult === "choose_account";
 
-  // Clear the one-time error banner's query params so a page refresh
-  // doesn't re-show a stale one — mirrors EbayConnectCard. `choose_account`
-  // is deliberately NOT auto-cleared here — it needs to survive a refresh
-  // while the tenant is filling in step 2, and is cleared explicitly once
-  // completeConnect succeeds (see completeMutation.onSuccess below).
+  // Only error params auto-clear; choose_account must survive a step-2 refresh.
   useEffect(() => {
     if (callbackResult !== "error") return;
     queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -88,24 +78,18 @@ export function GoogleConnectCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callbackResult]);
 
-  // No dedicated GET /google/settings exists yet (see types/googleSettings.ts's
-  // own comment) — the generic channels list is the only source of this
-  // tenant's Google connection status/health today.
+  // No GET /google/settings yet; the channels list is the only status source.
   const { data: channelsData, isLoading: channelsLoading } = useQuery({
     queryKey: ["channels"],
     queryFn: getChannels,
   });
   const googleChannel = channelsData?.data.find((c) => c.key === "google");
   const connectionStatus = googleChannel?.connection.status ?? "disconnected";
-  // TASK 5: googleChannel.available is only false while channelsData is
-  // still loading its first result (undefined) — default true so the card
-  // doesn't flash a false "unavailable" state before the real value loads.
+  // Treat as available while loading so the card doesn't flash unavailable.
   const unavailable = googleChannel ? !googleChannel.available : false;
   const unavailableReason = googleChannel?.unavailable_reason ?? null;
 
-  // Step 1: no form at all any more — consent happens before any Merchant
-  // Center account is chosen (see lib/api/google.ts#getGoogleConnectUrl's
-  // own comment).
+  // Step 1: no form; consent comes before a Merchant Center account is chosen.
   const connectMutation = useMutation({
     mutationFn: getGoogleConnectUrl,
     onSuccess: (res) => {
@@ -113,7 +97,7 @@ export function GoogleConnectCard() {
     },
   });
 
-  // Step 2: only fetched once we've landed back with ?google_connect=choose_account.
+  // Step 2: fetched only after returning with ?google_connect=choose_account.
   const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ["google-accounts"],
     queryFn: getGoogleAccounts,
@@ -127,10 +111,7 @@ export function GoogleConnectCard() {
     defaultValues: DEFAULT_VALUES,
   });
 
-  // feedLabel defaults to the chosen target country (e.g. "AU") — the
-  // review's own "default sensibly... with an override" instruction —
-  // pre-filled here rather than just shown as placeholder text, but only
-  // while the tenant hasn't actually typed their own value in yet.
+  // Prefill feedLabel from the target country until the user edits it.
   const targetCountry = watch("targetCountry");
   useEffect(() => {
     if (!formState.dirtyFields.feedLabel) setValue("feedLabel", targetCountry);
@@ -164,7 +145,9 @@ export function GoogleConnectCard() {
           unavailable ? (
             <Badge variant="muted">Unavailable</Badge>
           ) : (
-            <Badge variant={STATUS_VARIANT[connectionStatus]}>{STATUS_LABEL[connectionStatus]}</Badge>
+            <Badge variant={STATUS_VARIANT[connectionStatus]}>
+              {googleChannel?.connection.status_reason ? "Needs attention" : STATUS_LABEL[connectionStatus]}
+            </Badge>
           )
         }
       />
@@ -190,8 +173,13 @@ export function GoogleConnectCard() {
               </p>
             )}
 
-            {googleChannel?.connection.last_error && connectionStatus !== "connected" && (
-              <p className="text-xs font-medium text-danger">{googleChannel.connection.last_error}</p>
+            {googleChannel?.connection.status_reason ? (
+              <ChannelAttentionNotice channel={googleChannel} />
+            ) : (
+              googleChannel?.connection.last_error &&
+              connectionStatus !== "connected" && (
+                <p className="text-xs font-medium text-danger">{googleChannel.connection.last_error}</p>
+              )
             )}
 
             {unavailable ? (
@@ -216,18 +204,17 @@ export function GoogleConnectCard() {
                           control={control}
                           name="merchantId"
                           render={({ field }) => (
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger id="google-merchant-account">
-                                <SelectValue placeholder="Choose an account" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accounts.map((a) => (
-                                  <SelectItem key={a.accountId} value={a.accountId}>
-                                    {a.accountName ? `${a.accountName} (${a.accountId})` : a.accountId}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <SingleSelect
+                              id="google-merchant-account"
+                              options={accounts.map((a) => ({
+                                value: a.accountId,
+                                label: a.accountName ? `${a.accountName} (${a.accountId})` : a.accountId,
+                              }))}
+                              value={field.value}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              placeholder="Choose an account"
+                            />
                           )}
                         />
                       </FormField>
@@ -252,18 +239,12 @@ export function GoogleConnectCard() {
                         control={control}
                         name="targetCountry"
                         render={({ field }) => (
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {GOOGLE_TARGET_COUNTRIES.map((c) => (
-                                <SelectItem key={c.value} value={c.value}>
-                                  {c.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SingleSelect
+                            options={[...GOOGLE_TARGET_COUNTRIES]}
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                          />
                         )}
                       />
                     </FormField>

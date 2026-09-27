@@ -4,39 +4,39 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { downloadPdf } from "@/utils/pdf";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 
-// Real-data replacement for the reference mockup's "Recent Reports" panel
-// (a list of pre-generated PDFs with fixed timestamps) — this app has no
-// report-generation/storage feature, so instead of faking that history,
-// each row downloads a real PDF of data already loaded on the page.
+// No report storage, so each row builds a real PDF from on-page data.
 export interface ExportDataset {
   id: string;
   title: string;
   rows: Record<string, unknown>[];
-  // What the rows actually cover. Defaults to the page's date range, which
-  // is wrong for a dataset built from current stock levels rather than
-  // orders in the window — that one passes its own wording.
+  // Coverage label; defaults to date range, stock datasets pass their own.
   scopeLabel?: string;
 }
 
 export function ReportsExportPanel({ datasets, loading }: { datasets: ExportDataset[]; loading?: boolean }) {
+  const canExport = useMyAccess().can(PERMISSIONS.reports.export);
   return (
     <Card className="flex h-full flex-col p-5 shadow-card transition-shadow duration-300 hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
         <DashboardSectionLabel>Export Reports</DashboardSectionLabel>
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          disabled={datasets.every((d) => d.rows.length === 0)}
-          onClick={() =>
-            datasets.forEach(
-              (d) => d.rows.length > 0 && downloadPdf(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows, { title: d.title }),
-            )
-          }
-        >
-          Export All
-        </Button>
+        {canExport && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            disabled={datasets.every((d) => d.rows.length === 0)}
+            onClick={() =>
+              datasets.forEach(
+                (d) => d.rows.length > 0 && downloadPdf(d.title.toLowerCase().replace(/\s+/g, "_"), d.rows, { title: d.title }),
+              )
+            }
+          >
+            Export All
+          </Button>
+        )}
       </div>
 
       <CardContent className="flex-1 space-y-2 divide-y divide-border px-0 pt-4">
@@ -50,22 +50,26 @@ export function ReportsExportPanel({ datasets, loading }: { datasets: ExportData
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-fg">{dataset.title}</p>
-                    <p className="truncate text-[10px] text-fg/40">
+                    <p className="truncate text-3xs text-fg/40">
                       {dataset.rows.length} {dataset.rows.length === 1 ? "row" : "rows"}{" "}
                       {dataset.scopeLabel ?? "for the selected range"}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={dataset.rows.length === 0}
-                  onClick={() => downloadPdf(dataset.title.toLowerCase().replace(/\s+/g, "_"), dataset.rows, { title: dataset.title })}
-                  className="flex shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-fg transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <span>PDF</span>
-                  <Download className="h-3 w-3 text-fg/50" />
-                </button>
+                {canExport && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-auto shrink-0 gap-1 px-2.5 py-1 text-2xs"
+                    disabled={dataset.rows.length === 0}
+                    onClick={() => downloadPdf(dataset.title.toLowerCase().replace(/\s+/g, "_"), dataset.rows, { title: dataset.title })}
+                  >
+                    PDF
+                    <Download className="h-3 w-3 text-fg/50" />
+                  </Button>
+                )}
               </div>
             ))}
       </CardContent>

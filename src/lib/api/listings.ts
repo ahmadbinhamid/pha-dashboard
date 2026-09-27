@@ -7,9 +7,6 @@ import type {
   MarketplacePlatform,
   ProductListingGroup,
 } from "@/types/marketplace";
-import type { ProductVehicle } from "@/types/product";
-import { generateListingHtml } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
-import { getTenantSettings } from "@/lib/api/tenantSettings";
 
 export interface ListingListParams {
   page?: number;
@@ -19,38 +16,24 @@ export interface ListingListParams {
   platform?: MarketplacePlatform;
   state?: string;
   sync_status?: string;
-  // Catalogue redesign — Listings tab's "Needs attention" segmented tab.
-  // Expands server-side to sync_status in [error, price_locked]; takes
-  // precedence over a plain sync_status if both are passed. See
-  // listing.query.service.js#NEEDS_ATTENTION_STATUSES.
+  // Server expands to sync_status in [error, price_locked]; beats sync_status.
   needs_attention?: boolean;
   search?: string;
 }
 
-async function formStateToPayload(
-  form: EbayListingFormState,
-  vehicle: ProductVehicle | null | undefined,
-  // Product/variant photo to embed when this listing has no photo_overrides
-  // of its own — mirrors the fallback the backend already applies for the
-  // real eBay photo gallery (listing.resolver.js#resolvePhotos). Without
-  // this, a listing with no override snapshot would save/push with no image
-  // in its description even though the product itself has real photos.
-  fallbackImageUrl?: string | null,
-) {
-  const { data: tenant } = await getTenantSettings();
+// Empty override => null (use product value); eBay description renders on BE.
+function formStateToPayload(form: EbayListingFormState) {
   return {
     product: form.product_id,
     variant: form.variant_id || null,
-    title_override: form.title_override || null,
-    description_override: generateListingHtml(form, vehicle, tenant.company_name, tenant.logo_url, {
-      embedImages: true,
-      fallbackImageUrl: fallbackImageUrl || undefined,
-    }),
+    title_override: form.title_override.trim() || null,
+    description_override: form.description_override.trim() || null,
     price_override: form.price_override !== "" ? Number(form.price_override) : null,
     ebay_category_id: form.ebay_category_id || null,
     store_category_id: form.store_category_id || null,
     store_sku: form.store_sku || null,
-    condition: form.condition,
+    // Empty = use the product's condition.
+    condition: form.condition || null,
     condition_notes: form.condition_notes,
     item_specifics: {
       brand: form.item_specifics.brand || null,
@@ -88,41 +71,24 @@ async function formStateToPayload(
   };
 }
 
-// eBay's own rich-form CREATE/UPDATE — stays on /ebay/listings since the
-// fields (category, fitment, business policies, ...) are eBay-specific. See
-// lib/api/googleListings.ts for Google's much smaller create/update.
-export const createListing = async (
-  form: EbayListingFormState,
-  vehicle?: ProductVehicle | null,
-  fallbackImageUrl?: string | null,
-) => {
-  const payload = await formStateToPayload(form, vehicle, fallbackImageUrl);
-  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", payload);
+// eBay-specific fields (category, fitment, policies) keep /ebay/listings.
+export const createListing = async (form: EbayListingFormState) => {
+  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", formStateToPayload(form));
   return data;
 };
 
-export const updateListing = async (
-  id: string,
-  form: Partial<EbayListingFormState>,
-  vehicle?: ProductVehicle | null,
-  fallbackImageUrl?: string | null,
-) => {
-  const payload = await formStateToPayload(form as EbayListingFormState, vehicle, fallbackImageUrl);
-  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, payload);
+export const updateListing = async (id: string, form: EbayListingFormState) => {
+  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, formStateToPayload(form));
   return data;
 };
 
-// Browse/read/delete/push are platform-agnostic — /listings mixes every
-// platform's rows together (see server/src/services/marketplace/listing.query.service.js's
-// own module header for why only create/update stay per-platform).
+// Browse/read/delete/push are platform-agnostic; /listings mixes platforms.
 export const getListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<AnyMarketplaceListing>>>("/listings", { params });
   return data;
 };
 
-// TASK 6: same endpoint, `?group_by=product` — one row per product instead
-// of one per listing (listing.query.service.js#listListingsGroupedByProduct).
-// Same query params otherwise (pagination/filters/search all still apply).
+// Same endpoint grouped by product: one row per product, same query params.
 export const getGroupedListings = async (params: ListingListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<ProductListingGroup>>>("/listings", {
     params: { ...params, group_by: "product" },

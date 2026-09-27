@@ -15,6 +15,11 @@ async function getPublicUserById(id) {
   return User.findById(id).select(PUBLIC_SELECT);
 }
 
+/** Everything but the password; auth middleware attaches it as req.user. */
+async function findUserForAuth(id) {
+  return User.findById(id).select("-password");
+}
+
 async function updateUserProfile(id, { first_name, last_name }) {
   return User.findByIdAndUpdate(
     id,
@@ -38,13 +43,9 @@ async function deleteUser(id, tenantId) {
   return user;
 }
 
-// ── Auth-related lookups ──────────────────────────────────────────────────
+// ── Auth-related lookups ──
 
-// tenantId is required at registration (a new user always belongs to exactly
-// one tenant) but optional for login/password-reset lookups, which are
-// email-only today — see auth.controller.js's login/verifyOTP/forgotPassword
-// for the known ambiguity risk if the same email is ever registered against
-// more than one tenant.
+// tenantId is set at registration; login/reset look up by email alone.
 async function findUserByEmail(email, tenantId = null) {
   const filter = { email };
   if (tenantId) filter.tenant_id = tenantId;
@@ -59,21 +60,12 @@ async function findUserByEmailWithPassword(email) {
   return User.findOne({ email }).select("+password");
 }
 
-// email is unique per-tenant, not globally (see User.js's compound index) —
-// the same person can legitimately hold a separate account under more than
-// one tenant (staff at more than one client business). Returns EVERY
-// matching account rather than picking one arbitrarily, so the caller can
-// verify credentials against each and disambiguate properly instead of
-// risking authenticating into the wrong tenant. See
-// auth.controller.js#login's multi-organization handling.
+// Email is unique per tenant only, so one person may have several accounts.
 async function findAllUsersByEmailWithPassword(email) {
   return User.find({ email }).select("+password");
 }
 
-// Same reasoning as findAllUsersByEmailWithPassword — used by forgotPassword,
-// which (unlike login) doesn't need to disambiguate up front: it just sends
-// a separate reset link per matching account, letting the person reset
-// whichever org's password they meant.
+// Every account for the email; forgotPassword sends one reset link each.
 async function findAllUsersByEmail(email) {
   return User.find({ email });
 }
@@ -82,10 +74,7 @@ async function findUserByEmailWithOtp(email) {
   return User.findOne({ email }).select("+otp +otp_expiry");
 }
 
-// Used by auth.controller.js#selectOrganization — `userIds` is the
-// already-password-verified candidate set from login()'s pending_token, so
-// this only needs to confirm the chosen tenantId matches one of them, never
-// re-checks a password.
+// `userIds` are password-verified; confirms the chosen tenant matches one.
 async function findUserAmongIdsForTenant(userIds, tenantId) {
   return User.findOne({ _id: { $in: userIds }, tenant_id: tenantId });
 }
@@ -105,6 +94,7 @@ async function saveUser(user) {
 }
 
 module.exports = {
+  findUserForAuth,
   listUsers,
   getPublicUserById,
   updateUserProfile,

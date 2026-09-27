@@ -1,25 +1,9 @@
 // workers/channel.worker.midflight.test.js
-//
-// Regression guard for the mid-flight debounce swallow: while a
-// sync_listing job for listing L is ACTIVE, a stock change's fan-out call
-// (same debounced jobId `sync:<platform>:L` — see channel.queue.js) is
-// silently swallowed by Bull's own "same jobId already exists" behavior —
-// the active job's eventual push reflects a now-stale quantity, and
-// nothing ever corrects it. recoverMidFlightChange (channel.worker.js)
-// fixes this: after a job COMPLETES (successfully applied a sync), it
-// re-reads the listing's current push_seq and re-enqueues if it's moved
-// past the seq that job applied.
-//
-// Uses a REAL Bull queue (Redis) — this is fundamentally testing Bull's
-// own same-jobId/event-ordering semantics (see channel.worker.js's own
-// comment on the verified bull@4.16.5 ordering), which can't be faithfully
-// stubbed. marketplace/sync.service's syncListing and getListingPushSeq are
-// mocked directly (module properties, both accessed via property access at
-// call time in channel.worker.js — not destructured — so mock timing
-// relative to require order doesn't matter here). No Mongo connection is
-// ever opened.
-//
-// Run with: node --test src/workers/channel.worker.midflight.test.js
+// Regression guard: while a sync_listing job is ACTIVE, a stock-change fan-out under the same
+// debounced jobId is silently swallowed by Bull, so the active job's push reflects a stale
+// quantity. recoverMidFlightChange fixes this by re-enqueuing after completion if push_seq moved.
+// Uses a real Bull queue (Redis) since this tests Bull's own same-jobId/event-ordering semantics.
+// Run: node --test src/workers/channel.worker.midflight.test.js
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -30,9 +14,7 @@ const marketplaceSync = require("../services/marketplace/sync.service");
 const { enqueueChannelJob } = require("../queues/channel.queue");
 const { attachSyncListingProcessor } = require("./channel.worker");
 
-// Waits `ms` beyond whatever's already happened, to give a WRONGFUL async
-// side effect (a re-enqueue that shouldn't happen) a fair chance to show up
-// before asserting it didn't.
+// Waits `ms` to give a wrongful async side effect a fair chance to show up before asserting it didn't.
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -52,10 +34,8 @@ test("a stock change arriving while a job is active results in a second job that
   mock.method(marketplaceSync, "syncListing", async (id, seq) => {
     appliedSeqs.push(seq);
     if (seq === 1) {
-      // Simulate the race directly: while job 1 is "active" (i.e. right
-      // here, mid-processor), a fan-out call bumps push_seq and tries to
-      // enqueue under the SAME debounced jobId — confirm it's swallowed
-      // (no new/second job appears) before this job goes on to complete.
+      // Simulate the race: while job 1 is active, a fan-out call bumps push_seq and enqueues
+      // under the same debounced jobId — confirm it's swallowed before this job completes.
       pushSeq = 2;
       const before = await queue.getJobCounts();
       await enqueueChannelJob(platform, "sync_listing", { listingId, seq: 2 });
@@ -108,8 +88,7 @@ test("no re-enqueue when push_seq equals the applied seq", async (t) => {
   await enqueueChannelJob(platform, "sync_listing", { listingId, seq: 7 }, { delay: 0 });
   await firstCompleted;
 
-  // Nothing SHOULD happen after this — give a would-be wrongful
-  // re-enqueue a fair chance to show up before asserting it didn't.
+  // Nothing should happen after this; give a wrongful re-enqueue a chance to show up first.
   await wait(300);
 
   assert.deepEqual(appliedSeqs, [7], "an unchanged push_seq must never trigger a recovery re-enqueue");
@@ -118,9 +97,8 @@ test("no re-enqueue when push_seq equals the applied seq", async (t) => {
 test("a failed job does not trigger a re-enqueue", async (t) => {
   const platform = `test-midflight-failed-${crypto.randomUUID()}`;
   const listingId = `listing-${crypto.randomUUID()}`;
-  // Even though push_seq HAS moved past what this (failed) job would have
-  // applied, a failure must never trigger recovery — retries/the circuit
-  // breaker own that, not this path.
+  // Even though push_seq moved past what this failed job would have applied, a failure must
+  // never trigger recovery — retries/circuit breaker own that instead.
   mockListingPushSeq(() => 99);
 
   const appliedSeqs = [];

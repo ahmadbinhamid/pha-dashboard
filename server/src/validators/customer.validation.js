@@ -2,8 +2,7 @@
 
 const Joi = require("joi");
 
-// Digits plus common phone punctuation (space, dash, parens, leading +) —
-// no letters. Not a full number-format check, just keeps out non-numeric junk.
+// Digits plus common phone punctuation, no letters — not a full format check, just keeps out junk.
 const PHONE_PATTERN = /^[\d\s\-()+]*$/;
 const phoneMessages = { "string.pattern.base": "Phone number cannot contain letters" };
 

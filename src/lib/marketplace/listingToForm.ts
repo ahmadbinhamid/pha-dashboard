@@ -1,4 +1,6 @@
-import type { EbayListing, EbayListingFormState } from "@/types/marketplace";
+import type { EbayListing, EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
+import { packageToForm } from "@/lib/products/packageDimensions";
+import { isGeneratedEbayDescription } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 function normaliseSpn(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -9,11 +11,7 @@ function normaliseSpn(raw: unknown): string[] {
   return [""];
 }
 
-// Shared by every place that needs to resave a listing before pushing it to
-// eBay (ListingEditPage's own form, and ListingsPage's row-level "Push to
-// eBay" action) — description_override is generated client-side from this
-// form state, so any push path that skips regenerating it will resend
-// whatever HTML happens to already be stored (see ebayDescriptionGenerator.ts).
+// Listing -> form for re-saves; overrides are never prefilled from the product.
 export function listingToForm(listing: EbayListing): EbayListingFormState {
   const productId =
     typeof listing.product === "object" ? listing.product._id : listing.product;
@@ -27,25 +25,23 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
   const rawFitment = (listing as unknown as Record<string, unknown>).fitment;
   const fitmentRows = Array.isArray(rawFitment) ? (rawFitment as Array<Record<string, unknown>>) : [];
 
-  const pExt = p as unknown as Record<string, unknown>;
 
   return {
     product_id: productId,
     variant_id: variantId,
-    title_override: listing.title_override || p?.title || "",
-    description_override: listing.description_override || "",
-    price_override: listing.price_override != null
-      ? String(listing.price_override)
-      : p?.price != null ? String(p.price) : "",
+    title_override: listing.title_override || "",
+    // Blank a stored generated template so the server re-renders it.
+    description_override: isGeneratedEbayDescription(listing.description_override) ? "" : listing.description_override || "",
+    price_override: listing.price_override != null ? String(listing.price_override) : "",
     photo_overrides: (listing.photo_overrides as unknown as import("@/types/product").Attachment[]) || [],
     ebay_category_id: listing.ebay_category_id || "",
     store_category_id: listing.store_category_id || "",
     store_sku: listing.store_sku || p?.sku || "",
-    condition: listing.condition || "NEW",
+    condition: listing.condition || "",
     condition_notes: listing.condition_notes || "",
     item_specifics: {
       brand: listing.item_specifics?.brand || "",
-      mpn: listing.item_specifics?.mpn || (typeof pExt?.mpn === "string" ? pExt.mpn : "") || "",
+      mpn: listing.item_specifics?.mpn || "",
       superseded_part_number: normaliseSpn(
         (listing.item_specifics as unknown as Record<string, unknown>)?.superseded_part_number
       ),
@@ -71,22 +67,24 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
     return_policy_id: listing.return_policy_id || "",
     require_immediate_payment: listing.require_immediate_payment ?? true,
     item_location_zip: listing.item_location_zip || "",
-    package: {
-      length: listing.package?.length != null ? String(listing.package.length) : "",
-      width: listing.package?.width != null ? String(listing.package.width) : "",
-      height: listing.package?.height != null ? String(listing.package.height) : "",
-      weight: listing.package?.weight != null ? String(listing.package.weight) : "",
-    },
+    package: packageToForm(listing.package),
   };
 }
 
-// Product/variant photo to send to the server as the description-image
-// fallback when the listing has no photo_overrides of its own — same
-// variant -> product precedence as the backend's own
-// listing.resolver.js#resolvePhotos, kept in sync here so the description
-// HTML embeds a real photo under the same conditions the eBay photo gallery
-// already does. Requires the listing's `product`/`variant` to be populated
-// with `attachments` (see ebay.listing.service.js#getListingById).
+// Values an empty override inherits (variant, then product) from the listing.
+export function getListingProductDefaults(listing: EbayListing): ListingProductDefaults {
+  const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
+  const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;
+  const variantPrice = (variant as { price?: number | null } | null)?.price;
+  const variantPhotos = variant?.attachments ?? [];
+  return {
+    title: product?.title ?? "",
+    price: variantPrice ?? product?.price ?? null,
+    photos: variantPhotos.length > 0 ? variantPhotos : (product?.attachments ?? []),
+  };
+}
+
+// Photos fall back to variant then product (as resolvePhotos); needs populate.
 export function getListingFallbackImageUrl(listing: EbayListing): string | undefined {
   const variant = listing.variant && typeof listing.variant === "object" ? listing.variant : null;
   const product = listing.product !== null && typeof listing.product === "object" ? listing.product : null;

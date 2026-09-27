@@ -1,10 +1,4 @@
-// types/refund.ts
-//
-// refund-redesign-spec.md §1.3/§1.4/§2 — order-scoped refunds with three
-// scopes (whole invoice, specific line items, bare amount) and a settlement
-// adapter chosen by each allocation's own provider. Split out of
-// types/payment.ts since this is now a substantial, distinct domain, not
-// just "the refund a Payment has."
+// refund-redesign-spec.md §1.3/§1.4/§2: order-scoped refunds with three scopes (whole invoice, line items, bare amount) and a settlement adapter per allocation's provider. Split out of types/payment.ts as its own domain.
 
 import type { PaymentProvider } from "@/types/payment";
 
@@ -13,8 +7,7 @@ export type RefundScope = "full_order" | "line_items" | "amount";
 export type RefundStatus = "pending" | "processing" | "succeeded" | "failed" | "canceled" | "voided";
 
 export type RefundReason =
-  // Goods physically returned — restock defaults ON in the UI (see
-  // config/refundReasons.ts's RESTOCK_DEFAULT_REASONS).
+  // Goods physically returned — restock defaults ON (config/refundReasons.ts's RESTOCK_DEFAULT_REASONS).
   | "customer_return"
   | "order_cancelled"
   | "wrong_item_sent"
@@ -74,19 +67,13 @@ export interface Refund {
   status: RefundStatus;
   failure_reason: string | null;
 
-  // Set once the restock/eBay leg has been attempted — NOT a correctness
-  // guard on money (that's always derived/idempotent server-side).
+  // Set once the restock/eBay leg has been attempted — not a correctness guard on money (that's always derived/idempotent server-side).
   effects_applied_at: string | null;
 
-  // True for a refund reconciled from a Stripe-dashboard-issued refund we
-  // didn't create ourselves — no line data, no restock option was ever
-  // presented, badge it as needing manual reconciliation.
+  // True for a refund reconciled from a Stripe-dashboard-issued refund we didn't create — no line data or restock option was ever presented; badge as needing manual reconciliation.
   needs_reconciliation: boolean;
 
-  // §5 — set true when this refund touches an eBay payment allocation; the
-  // admin explicitly confirmed (via RefundEbayConfirmation) the refund was
-  // already issued in eBay Seller Hub. Always false for a refund with no
-  // eBay allocation.
+  // §5: true when this refund touches an eBay allocation and the admin confirmed (via RefundEbayConfirmation) it was already issued in Seller Hub. Always false with no eBay allocation.
   ebay_refund_confirmed: boolean;
 
   initiated_via: "admin_api" | "stripe_dashboard" | "manual";
@@ -129,11 +116,7 @@ export interface RefundablePayment {
   settlement: "stripe" | "manual";
 }
 
-// A refund whose reservation is stuck long enough to be worth an admin's
-// attention — see getRefundableSummary's own comment server-side for why a
-// PENDING one has already stopped counting toward max_refundable above
-// while a PROCESSING one is still fully counted (Stripe already accepted
-// it — see `still_reserved`).
+// A refund stuck reserving long enough to be worth an admin's attention (getRefundableSummary server-side): a PENDING one has already stopped counting toward max_refundable, a PROCESSING one is still fully counted (see `still_reserved`).
 export interface StuckRefund {
   refund_number: string;
   status: RefundStatus;
@@ -153,10 +136,7 @@ export interface RefundableSummary {
   stuck_refunds: StuckRefund[];
 }
 
-// ── POST /order/:orderId/refunds request body (§2.2) — the client NEVER
-// sends money amounts for item or full-invoice refunds; it sends
-// order_item_id + quantity + restock, and the server derives every cent.
-// `amount` only applies to scope: "amount". ───────────────────────────────
+// ── POST /order/:orderId/refunds request body (§2.2): the client never sends money amounts for item/full-invoice refunds, only order_item_id + quantity + restock; `amount` only applies to scope: "amount". ──
 
 export interface CreateRefundLineInput {
   order_item_id: string;
@@ -175,7 +155,6 @@ export interface CreateRefundPayload {
   reason: RefundReason;
   internal_note?: string | null;
   payment_allocations?: { payment_id: string; amount: number }[]; // optional — server auto-allocates
-  // §5 — required true whenever this refund resolves to an eBay payment
-  // allocation; the server rejects otherwise (see RefundEbayConfirmation).
+  // §5: required true whenever this resolves to an eBay payment allocation; the server rejects otherwise (RefundEbayConfirmation).
   ebay_refund_confirmed?: boolean;
 }

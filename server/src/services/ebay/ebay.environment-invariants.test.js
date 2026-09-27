@@ -34,8 +34,7 @@ const FILES = [
 // taxonomy tree does not work at all, not because settings.sandbox was
 // forgotten. Any name added here must carry that same kind of
 // justification (a genuinely fixed-environment token paired with a
-// genuinely fixed-environment host), not just "inconvenient to fix right
-// now".
+// genuinely fixed-environment host), not just "inconvenient to fix right now".
 const ALLOWLIST = new Set([
   "getCategorySuggestions", // early-returns a sandbox sentinel before ever building the production URL for real data — see its own "Sandbox caveat" comment
   "getCategoryTreeId",

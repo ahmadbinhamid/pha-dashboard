@@ -1,13 +1,6 @@
 // middlewares/pagination.js
 
-/**
- * Simple pagination middleware.
- * Reads page/limit from query, bounds them, and attaches to req.pagination
- *
- * Options:
- * - defaultLimit: number (default 20)
- * - maxLimit: number (default 100)
- */
+/** Pagination middleware: reads page/limit from query, bounds them, attaches req.pagination. */
 module.exports = function pagination(options = {}) {
   const defaultLimit = Number.isInteger(options.defaultLimit)
     ? options.defaultLimit

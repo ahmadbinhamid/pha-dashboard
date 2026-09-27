@@ -18,8 +18,7 @@ interface EditableOrderTextProps {
   errorMessage: string;
 }
 
-// Inline click-to-edit text field — same interaction as EditableOrderAmount,
-// generalized for optional order-level string fields (e.g. reference_number).
+// Inline click-to-edit text field, same interaction as EditableOrderAmount, generalized for optional order-level string fields.
 export function EditableOrderText({
   orderId,
   label,

@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-// Tracking fields are only required when the modal is actually asking for
-// them (a delivery order with no tracking on file yet) — a schema factory
-// since that's a caller-supplied condition, not something derivable from
-// the form's own field values.
+// Tracking fields are only required when the modal is asking for them — a factory since that's caller-supplied, not derivable from the form's own values.
 export function sendOrderEmailFormSchema(needsTrackingInput: boolean) {
   return z.object({
     tracking_number: needsTrackingInput

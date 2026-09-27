@@ -1,23 +1,11 @@
 // services/inventory.service.fanout.test.js
-//
-// Regression guard for Task 5: fanOutMarketplaceInventory must skip a
-// listing whose platform has no registered adapter (never throw), and one
-// platform's enqueue failure must never block another platform's enqueue —
-// each is wrapped individually.
-//
-// Mocks queues/channel.queue.js's enqueueChannelJob directly (module
-// property, patched BEFORE inventory.service.js is first required in this
-// process — same pattern the existing oversell/inventory-sync suites use
-// for ebay.queue.js's enqueueEbayJob) so this never touches a real Redis
-// connection at all.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/inventory.service.fanout.test.js
+// Fan-out skips adapterless listings; isolates platform failures. Needs Mongo.
 
 const test = require("node:test");
 const { mock } = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { fixtureId } = require("../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../config");
 
@@ -37,23 +25,14 @@ const { fanOutMarketplaceInventory } = require("./inventory.service");
 test("fan-out: skips a listing whose platform has no adapter, and one platform's enqueue failure does not block others", async (t) => {
   await mongoose.connect(config.mongoUri);
 
-  // NOTE (Task 4 audit finding): the assertions below are real — verified
-  // by temporarily making the underlying enqueueChannelJob call throw,
-  // which correctly turned "eBay's own enqueue must succeed independently
-  // of amazon's failure" red. But that same run surfaced a separate bug:
-  // `mongoose.disconnect()` (previously the last line of this test, with no
-  // try/finally) never ran once an assertion above it threw, leaving the
-  // process hanging on an open Mongo connection instead of failing cleanly
-  // — exactly the class of hang this session already fixed at the queue
-  // layer elsewhere. try/finally here ensures a future regression in this
-  // test fails fast instead of hanging the suite behind it.
+  // try/finally so a failed assertion still disconnects instead of hanging.
   try {
     const Product = require("../models/Product");
     const MarketplaceListing = require("../models/MarketplaceListing");
     const { LISTING_STATE } = require("../constants/marketplace.constants");
 
     const suffix = crypto.randomUUID();
-    const tenantId = new mongoose.Types.ObjectId();
+    const tenantId = fixtureId();
 
     const product = await Product.create({
       tenant_id: tenantId,
@@ -71,15 +50,7 @@ test("fan-out: skips a listing whose platform has no adapter, and one platform's
       state: LISTING_STATE.ACTIVE,
       condition: "NEW",
     });
-    // "amazon"/"shopify" have no Mongoose discriminator registered on
-    // MarketplaceListing yet (only "ebay" does — see MarketplaceListing.js) —
-    // Mongoose's own discriminatorKey validation rejects `.create()` with a
-    // platform value that isn't an actually-registered discriminator, even
-    // though both are listed in MARKETPLACE_PLATFORM as future platforms.
-    // Inserted directly via the raw collection instead, which is also a
-    // closer match for what this test is actually exercising: a
-    // base-schema-only listing for a platform with no fields (or adapter) of
-    // its own yet.
+    // No discriminator for "amazon"/"shopify", so insert via the raw collection.
     await mongoose.connection.db.collection("marketplacelistings").insertMany([
       {
         tenant_id: tenantId,
@@ -114,9 +85,7 @@ test("fan-out: skips a listing whose platform has no adapter, and one platform's
     assert.equal(byPlatform.amazon.queued, false, "amazon's simulated queue outage must be reported, not thrown");
     assert.match(byPlatform.amazon.error, /simulated amazon queue outage/);
 
-    // Confirm the failure really was isolated per platform: eBay's enqueue
-    // must have actually been attempted (not skipped because amazon threw
-    // first in the same loop).
+    // Failure is isolated per platform: eBay's enqueue was still attempted.
     const ebayCalls = enqueueSpy.mock.calls.filter((c) => c.arguments[0] === "ebay");
     assert.equal(ebayCalls.length, 1);
   } finally {

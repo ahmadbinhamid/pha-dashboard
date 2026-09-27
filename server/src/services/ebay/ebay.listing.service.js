@@ -8,9 +8,9 @@ const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketp
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
 const { buildWordSearchOr } = require("../../utils/regex");
+const { toPackage } = require("../../utils/packageDimensions");
 
-// Production eBay item URLs are marketplace-specific; sandbox uses one shared
-// domain regardless of marketplace. Extend this map as new marketplaces are enabled.
+// Prod item URLs are per-marketplace; sandbox shares one domain.
 const EBAY_SITE_DOMAINS = {
   EBAY_US: "ebay.com",
   EBAY_AU: "ebay.com.au",
@@ -26,11 +26,7 @@ function buildEbayItemUrl(externalListingId, settings) {
   return `https://www.${domain}/itm/${externalListingId}`;
 }
 
-// Best-effort: adds each fitment row's make/model/model_code/year combo to
-// this tenant's OWN vehicle catalog (covers custom values typed into the
-// fitment row Combobox) without letting a catalog write failure block the
-// listing save. Never writes to the shared/global catalog — see
-// vehicle-model.service.js.
+// Best-effort sync to the tenant's own vehicle catalog; never blocks the save.
 async function syncFitmentCatalog(fitment, tenantId) {
   if (!Array.isArray(fitment) || fitment.length === 0) return;
   try {
@@ -40,7 +36,7 @@ async function syncFitmentCatalog(fitment, tenantId) {
   }
 }
 
-// ── Create ────────────────────────────────────────────────────────────────────
+// ── Create ──
 
 async function createListing(payload, tenantId) {
   const {
@@ -54,7 +50,7 @@ async function createListing(payload, tenantId) {
     ebay_category_id = null,
     store_category_id = null,
     store_sku = null,
-    condition = "NEW",
+    condition = null,
     condition_notes = "",
     item_specifics = {},
     fitment = [],
@@ -74,16 +70,7 @@ async function createListing(payload, tenantId) {
   const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
   if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
 
-  // Idempotency — a double-click or retried "Create Listing" request must
-  // not create a second listing for the same product/variant. This used to
-  // silently succeed twice (the Aug 2026 duplicate-listing incident — two
-  // local records ended up sharing one real eBay offer and corrupted stock
-  // via the reconciliation job). Now that MarketplaceListing.js enforces one
-  // listing per (product, variant, platform) at the DB level, a second
-  // attempt would instead fail loudly with a raw duplicate-key error — safer
-  // than silent corruption, but still a bad UX for the common "just
-  // double-clicked" case. Check first so that case returns the existing
-  // listing cleanly, no error, no new record.
+  // Idempotency: a double-click must not create a second listing.
   const existing = await MarketplaceListing.findOne({
     tenant_id: tenantId,
     product,
@@ -107,9 +94,10 @@ async function createListing(payload, tenantId) {
       ebay_category_id,
       store_category_id,
       store_sku,
-      condition,
+      // NOTE: "" and null both mean "inherit from product"; stored as null.
+      condition: condition || null,
       condition_notes,
-      item_specifics,
+      item_specifics: { ...item_specifics, authenticity: item_specifics.authenticity || null },
       fitment,
       format,
       quantity_available: quantity_available != null ? Number(quantity_available) : null,
@@ -121,23 +109,14 @@ async function createListing(payload, tenantId) {
       return_policy_id,
       require_immediate_payment,
       item_location_zip,
-      package: {
-        length: pkg.length != null ? Number(pkg.length) : null,
-        width: pkg.width != null ? Number(pkg.width) : null,
-        height: pkg.height != null ? Number(pkg.height) : null,
-        weight: pkg.weight != null ? Number(pkg.weight) : null,
-      },
+      package: toPackage(pkg),
     });
 
     await syncFitmentCatalog(fitment, tenantId);
 
     return listing;
   } catch (err) {
-    // The check-then-create above isn't atomic — two truly simultaneous
-    // requests can both pass the check before either one's insert commits.
-    // The unique index still catches that at the DB level; recover the same
-    // way, by returning whichever request actually won, instead of
-    // surfacing a raw E11000 to the client.
+    // check-then-create isn't atomic; on E11000 return the race winner.
     if (err.code === 11000 && err.keyPattern?.product) {
       const winner = await MarketplaceListing.findOne({
         tenant_id: tenantId,
@@ -151,13 +130,13 @@ async function createListing(payload, tenantId) {
   }
 }
 
-// ── Read ──────────────────────────────────────────────────────────────────────
+// ── Read ──
 
 async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate({
       path: "product",
-      select: "title slug sku price brand mpn attachments vehicle",
+      select: "title slug sku price brand mpn condition attachments vehicle categories",
       populate: { path: "attachments" },
     })
     .populate({
@@ -168,21 +147,11 @@ async function getListingById(id, tenantId) {
     .populate("photo_overrides");
 }
 
-// Aggregation (not .find()) because `search` must match against the
-// populated product's title/sku, which Mongoose .populate() can't filter on
-// — mirrors inventory.service.js's listInventory pattern.
+// Aggregation so `search` can match the populated product's title/sku.
 async function listListings({ skip, limit, product, product_in, state, sync_status, search } = {}, tenantId, settings) {
   const match = { platform: MARKETPLACE_PLATFORM.EBAY, tenant_id: tenantId };
   if (product) match.product = mongoose.Types.ObjectId.createFromHexString(product);
-  // Batch lookup for "which of these specific products have an eBay listing"
-  // (e.g. the Products list page rendering a Channels column for its current
-  // page of products) — deliberately bypasses skip/limit below, since the
-  // caller already bounded the input to a known-small set of product ids
-  // (one page's worth), not "give me some page of the whole listings table".
-  // Passing that same small set through the normal paginated path silently
-  // truncated to the newest 100 listings tenant-wide, which is why some
-  // products that were genuinely synced still showed no Channel badge —
-  // their listing just wasn't among the 100 most recently created.
+  // Batch "which products have a listing" lookup; input is page-bounded.
   if (product_in?.length) {
     match.product = { $in: product_in.map((id) => mongoose.Types.ObjectId.createFromHexString(id)) };
   }
@@ -226,9 +195,7 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
 
   const countPipeline = [...pipeline, { $count: "total" }];
   pipeline.push({ $sort: { created_at: -1 } });
-  // product_in already bounds the result set to a known-small number of
-  // products (see above) — no pagination needed, and applying it would
-  // reintroduce the exact truncation this parameter exists to avoid.
+  // product_in already bounds results; paginating would truncate them.
   if (!product_in?.length) pipeline.push({ $skip: skip }, { $limit: limit });
 
   const [items, countResult] = await Promise.all([
@@ -244,7 +211,7 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
   return { items: shapedItems, total: countResult[0]?.total || 0 };
 }
 
-// ── Update ────────────────────────────────────────────────────────────────────
+// ── Update ──
 
 async function updateListing(id, payload, tenantId) {
   const allowed = [
@@ -264,22 +231,15 @@ async function updateListing(id, payload, tenantId) {
     if (payload[key] !== undefined) update[key] = payload[key];
   }
 
+  if (update.condition !== undefined) update.condition = update.condition || null;
+
   // Coerce numeric strings
   if (update.price_override != null) update.price_override = Number(update.price_override);
   if (update.quantity_available != null) update.quantity_available = Number(update.quantity_available);
   if (update.min_best_offer != null) update.min_best_offer = Number(update.min_best_offer);
-  if (update.package) {
-    const p = update.package;
-    update.package = {
-      length: p.length != null ? Number(p.length) : null,
-      width: p.width != null ? Number(p.width) : null,
-      height: p.height != null ? Number(p.height) : null,
-      weight: p.weight != null ? Number(p.weight) : null,
-    };
-  }
+  if (update.package) update.package = toPackage(update.package);
 
-  // Expand item_specifics into dot-notation keys so Mongoose doesn't
-  // try to cast the whole subdoc through the old in-memory schema path
+  // Dot-notation keys skip Mongoose's whole-subdoc cast path.
   if (update.item_specifics) {
     const specs = update.item_specifics;
     update["item_specifics.brand"] = specs.brand ?? null;
@@ -300,7 +260,7 @@ async function updateListing(id, payload, tenantId) {
     .populate("photo_overrides");
 }
 
-// ── Delete ────────────────────────────────────────────────────────────────────
+// ── Delete ──
 
 async function deleteListing(id, tenantId) {
   const filter = tenantId ? { _id: id, tenant_id: tenantId } : { _id: id };

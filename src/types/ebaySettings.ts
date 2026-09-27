@@ -19,8 +19,7 @@ export interface EbaySettings {
   last_error: string | null;
 }
 
-// refresh_token is intentionally excluded — it's only ever set via the OAuth
-// consent flow, never sent from the frontend directly.
+// refresh_token excluded — only set via the OAuth consent flow, never sent from the frontend.
 export type UpdateEbaySettingsPayload = Partial<
   Omit<EbaySettings, "connection_status" | "connected_at" | "last_error">
 >;

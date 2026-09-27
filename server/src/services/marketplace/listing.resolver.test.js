@@ -1,21 +1,10 @@
 // services/marketplace/listing.resolver.test.js
-//
-// resolveProductUrl: host resolution order (default verified Domain first,
-// then the <tenant.slug>.<linkDomain> fallback shared with payment links —
-// see buildPaymentBaseUrl), the /product/<slug> (singular) path, the
-// fail-loudly behavior for a missing slug or a fully unresolvable host, and
-// — TASK 2 (this run) — that the linkDomain fallback is refused entirely
-// for any platform whose manifest declares requiresStorefront (Google
-// today), matching the same requirement channel.service.js#checkStorefrontRequirement
-// already enforces at connect time (see server/docs/channel-architecture.md
-// §9/§12). `platform` is now a required 4th argument to resolveProductUrl.
-//
-// Needs a live Mongo connection — run with:
-//   node --test src/services/marketplace/listing.resolver.test.js
+// resolveProductUrl host order, fail-loud, storefront refusal. Needs Mongo.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const { trackFixtureTenant } = require("../../testUtils/fixtureTenants");
 const crypto = require("node:crypto");
 const config = require("../../config");
 
@@ -26,15 +15,9 @@ const { DOMAIN_STATUS } = require("../../constants/domain.constants");
 const { resolveProductUrl } = require("./listing.resolver");
 
 const registry = require("./registry");
-// Real google.adapter.js — its manifest.requiresStorefront is the actual
-// contract this test needs to verify against, not a hand-rolled stand-in.
+// Real google.adapter.js: its manifest.requiresStorefront is the contract.
 registry.register(require("./adapters/google.adapter"));
-// eBay never calls resolveProductUrl for real, but this registers a
-// minimal stand-in (no requiresStorefront — same as the real adapter,
-// which never sets it) so tests below can prove the generic
-// fallback-for-a-non-storefront-platform path is completely unaffected by
-// TASK 2's change, without pulling in the real eBay adapter's much heavier
-// dependency chain for that one fact.
+// Minimal eBay stand-in (no requiresStorefront) avoids the real adapter's deps.
 registry.register({ key: "ebay", manifest: { key: "ebay", name: "eBay" }, capabilities: {}, publish: async () => {}, update: async () => {}, end: async () => {} });
 
 async function makeTenant(suffix) {
@@ -42,7 +25,7 @@ async function makeTenant(suffix) {
     name: `Resolver Test ${suffix}`,
     slug: `resolver-test-${suffix}`,
     code: `RT${suffix.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
-  });
+  }).then(trackFixtureTenant);
 }
 
 test("resolveProductUrl: a verified default Domain wins over the linkDomain fallback", async (t) => {
@@ -65,9 +48,7 @@ test("resolveProductUrl: a verified default Domain wins over the linkDomain fall
     verification_token: crypto.randomUUID(),
   });
 
-  // Platform is "google" (requiresStorefront: true) deliberately — a
-  // verified Domain being present means that requirement is irrelevant
-  // here, and this proves it: the domain branch wins regardless.
+  // google (requiresStorefront) on purpose: the domain branch wins regardless.
   const url = await resolveProductUrl(tenant._id, `widget-${suffix}`, `SKU-${suffix}`, "google");
   assert.equal(url, `https://store-${suffix}.example.com/product/widget-${suffix}`);
 });

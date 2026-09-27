@@ -26,8 +26,7 @@ exports.createListing = async (req, res) => {
     } catch (err) {
       // Never turn a successfully created listing into an error response
       // over a queue hiccup — it exists and can be pushed again manually
-      // (the generic /listings/:id/push route) even if this particular
-      // enqueue failed.
+      // (the generic /listings/:id/push route) even if this particular enqueue failed.
       logger.warn("[google.listing.controller] failed to enqueue initial sync_listing after create", {
         listingId: listing._id.toString(),
         error: err.message,

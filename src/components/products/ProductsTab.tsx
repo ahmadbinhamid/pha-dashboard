@@ -16,7 +16,7 @@ import {
   ModalDescription,
 } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
-import { FilterSelect } from "@/components/ui/FilterSelect";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
 import type { ViewMode } from "@/components/ui/ViewToggle";
@@ -24,6 +24,7 @@ import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
 import { createGoogleListing } from "@/lib/api/googleListings";
+import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
 import type { AnyMarketplaceListing } from "@/types/marketplace";
@@ -32,6 +33,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
 import { GOOGLE_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import { Plus, Search, Package, Trash2, AlertTriangle, Info } from "lucide-react";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 
 const STATUS_FILTERS = [
   { label: "All Status", value: "" },
@@ -46,12 +49,7 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
-// ProductsPage's main content — product CRUD (grid/list, status/stock/
-// category filters, publish toggle, delete) merged with the per-channel
-// status view that used to be ListingsPage.tsx's default grouped-by-product
-// table. Channel SET comes from `channels` (GET /channels), never a
-// hardcoded platform list, so a newly-registered adapter appears here with
-// no changes to this file.
+// Channel set comes from GET /channels, never hardcoded, so new adapters show
 export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -177,10 +175,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
 
   const pageProductIds = (data?.data?.items ?? []).map((p) => p._id);
 
-  // Full listing objects (not just platform names) so the expandable
-  // channel row can show real sync_status/synced_at, not just "is it on
-  // this channel at all" — same query ProductsPage.tsx always made, just no
-  // longer stripping the fields the new detail view needs.
+  // Full listings, not names: the channel row shows real sync_status/synced_at
   const { data: listingsData } = useQuery({
     queryKey: ["listings-for-products", pageProductIds],
     queryFn: () => getListings({ product_in: pageProductIds.join(",") }),
@@ -225,9 +220,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, tone: "danger" }),
   });
 
-  // Products tab's per-channel "List" action — Google is a one-click toggle
-  // (mirrors ListingsPage.tsx's own listOnGoogleMutation); eBay needs its
-  // full create form, so that one navigates instead.
+  // Google is a one-click toggle; eBay needs its full create form, so navigate
   const listOnGoogleMutation = useMutation({
     mutationFn: (productId: string) => createGoogleListing(productId, null, GOOGLE_LISTING_FORM_INITIAL),
     onSuccess: () => {
@@ -237,21 +230,16 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     onError: (err: Error) => toast({ title: err.message, tone: "danger" }),
   });
 
+  // Channels are managed in the product form's Sales Channels section.
   function handleOpenChannel(product: Product, platform: string) {
-    const listing = listingsByProduct.get(product._id)?.find((l) => l.platform === platform);
-    if (!listing) return;
-    if (listing.platform === "google") {
-      navigate(`/products/${product.slug}/edit`);
-      return;
-    }
-    navigate(`/listings/${listing._id}/edit`);
+    navigate(productChannelsPath(product.slug, platform));
   }
 
   function handleListChannel(product: Product, platform: string) {
     if (platform === "google") {
       listOnGoogleMutation.mutate(product._id);
     } else {
-      navigate(`/listings/new?product=${product._id}&productSlug=${product.slug}`);
+      navigate(productChannelsPath(product.slug, platform));
     }
   }
 
@@ -278,8 +266,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
             {isFetching && !isLoading && (
               <span className="text-xs text-fg/40">Updating…</span>
             )}
-            <FilterSelect options={STATUS_FILTERS} value={status} onChange={setStatus} />
-            <FilterSelect options={STOCK_FILTERS} value={stock} onChange={setStock} />
+            <SingleSelect size="sm" options={STATUS_FILTERS} value={status} onChange={setStatus} />
+            <SingleSelect size="sm" options={STOCK_FILTERS} value={stock} onChange={setStock} />
             <MultiSelect
               options={categoryOptions}
               value={selectedCategories}
@@ -318,11 +306,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                     Product
                   </StickyTableHead>
                   <TableHead>Status</TableHead>
-                  {/* "Storefront", not "Online" — a product being published
-                      here (your own shop) is a different question from
-                      whether it's LISTED anywhere, which is what the
-                      Channels column answers. The two used to share the
-                      word "online" and were easy to conflate. */}
+                  {/* "Storefront": published on own shop differs from listed on channels */}
                   <TableHead>Storefront</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>
@@ -486,15 +470,12 @@ function ProductsEmptyState({ search, onNew }: { search: string; onNew: () => vo
         </p>
       </div>
       {!search && (
-        <Button
-          variant="primary"
-          size="sm"
-          className="mt-1 gap-1.5"
-          onClick={onNew}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New Product
-        </Button>
+        <Can permission={PERMISSIONS.products.create}>
+          <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
+            <Plus className="h-3.5 w-3.5" />
+            New Product
+          </Button>
+        </Can>
       )}
     </div>
   );
