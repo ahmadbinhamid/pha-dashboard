@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { escapeRegex, buildWordSearchOr } = require("./regex");
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 
-// Shared Mongo filter for product listing and category-count aggregation; public callers get published+active only.
+// Product list and category-count filter; public sees published+active only.
 function buildProductFilter(query = {}, { authenticated = false, tenantId = null } = {}) {
   const filter = {};
   const and = [];
@@ -38,6 +38,11 @@ function buildProductFilter(query = {}, { authenticated = false, tenantId = null
   }
   if (query.sku) {
     filter.sku = new RegExp(escapeRegex(query.sku.trim()), "i");
+  }
+  // Comma-separated ids, e.g. a storefront cart refreshing its lines.
+  if (query.ids) {
+    const ids = query.ids.split(",").map((id) => id.trim()).filter((id) => mongoose.Types.ObjectId.isValid(id));
+    filter._id = { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) };
   }
   if (query.categories) {
     const cats = Array.isArray(query.categories)

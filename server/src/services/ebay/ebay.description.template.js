@@ -295,7 +295,7 @@ function renderEbayDescription(input, { businessName, logoUrl } = {}) {
           <div style="font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:4px;margin-bottom:8px;">VIN VERIFICATION SERVICE</div>
           <div style="font-family:Georgia,serif;font-size:14px;color:#d1c5b4;line-height:1.7;">
             Please confirm the compatibility table above matches your vehicle before purchasing.
-            <strong style="color:#f8e19b;">Unsure?</strong> Message us with your VIN or registration and we will verify fitment for you, free of charge.
+            <strong style="color:#f8e19b;">Unsure?</strong> Message us with your VIN or registration and we will verify fitment for you.
           </div>
         </td>
       </tr>

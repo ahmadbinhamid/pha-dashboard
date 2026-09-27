@@ -136,6 +136,7 @@ const listProducts = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().allow("").default(""),
+    ids: Joi.string().max(2600).allow(""),
     status: Joi.string()
       .valid(...Object.values(PRODUCT_STATUS), "")
       .default(""),
