@@ -27,10 +27,13 @@ const {
 } = require("../services/product.service");
 const searchService = require("../services/search/product.search.service");
 const vehicleModelService = require("../services/vehicle-model.service");
+const tagService = require("../services/tag.service");
 const { fanOutMarketplaceInventory } = require("../services/inventory.service");
 const { enqueueSearchJob } = require("../queues/search.queue");
 const { logger } = require("../loaders/logging");
 const { generateSlug } = require("../utils/slug");
+const { toPackage } = require("../utils/packageDimensions");
+const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 const { duplicateKeyMessage } = require("../utils/duplicateKey");
 const { buildProductFilter } = require("../utils/productFilter");
 const {
@@ -91,6 +94,8 @@ const vehicleValue = (v) => ({
   year_to: scalar(v?.year_to),
 });
 
+const packageValue = (v) => toPackage(v);
+
 // NOTE: sku excluded; it's the channel identity, a new one would duplicate.
 const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
   title: scalar,
@@ -106,6 +111,7 @@ const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
   // Untracked stock sends no eBay quantity and drops the item from Google.
   stock_control: scalar,
   shipping_cost: scalar,
+  package: packageValue,
   attachments: idList,
   // Categories pick the mapped eBay/Google category; order decides which wins.
   categories: idList,
@@ -167,6 +173,46 @@ function sortByFields(items, sortSpec) {
 // Caps Typesense hits hydrated/stock-filtered in JS per page; raise if needed.
 const SEARCH_CANDIDATE_LIMIT = 250;
 
+// Mobile create's "Add to Tag Queue"; a queue hiccup never fails the create.
+async function queueNewProductTags(productId, req) {
+  try {
+    await tagService.addToQueue(req.tenantId, req.user?._id, { product_id: productId });
+  } catch (err) {
+    logger.warn(`[product.controller] failed to queue tags for new product ${productId}: ${err.message}`);
+  }
+}
+
+// Typesense-ranked page for a search query (throws if Typesense is down).
+async function typesenseProductPage(req, { page, limit, skip, stockFilter, channelFilter }) {
+  const categories = req.query.categories
+    ? (Array.isArray(req.query.categories) ? req.query.categories : req.query.categories.split(","))
+        .map((c) => c.trim())
+        .filter(Boolean)
+    : [];
+
+  const { ids } = await searchService.searchProducts({
+    q: req.query.search,
+    tenantId: req.tenantId,
+    publishedOnly: !req.user,
+    categories,
+    condition: req.query.condition || undefined,
+    authenticity: req.query.authenticity || undefined,
+    priceMin: req.query.price_min,
+    priceMax: req.query.price_max,
+    make: req.query.make || undefined,
+    model: req.query.model || undefined,
+    page: 1,
+    perPage: SEARCH_CANDIDATE_LIMIT,
+  });
+
+  const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
+  // Only override Typesense's relevance order if the caller asked for a sort.
+  const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
+  const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
+  const total = ordered.length;
+  return { items: ordered.slice(skip, skip + limit), total, page, pageSize: limit, totalPages: Math.ceil(total / limit) };
+}
+
 exports.getProducts = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
@@ -174,41 +220,12 @@ exports.getProducts = async (req, res) => {
     const channelFilter = req.query.channel || undefined;
 
     if (req.query.search) {
-      const categories = req.query.categories
-        ? (Array.isArray(req.query.categories) ? req.query.categories : req.query.categories.split(","))
-            .map((c) => c.trim())
-            .filter(Boolean)
-        : [];
-
-      const { ids } = await searchService.searchProducts({
-        q: req.query.search,
-        tenantId: req.tenantId,
-        publishedOnly: !req.user,
-        categories,
-        condition: req.query.condition || undefined,
-        authenticity: req.query.authenticity || undefined,
-        priceMin: req.query.price_min,
-        priceMax: req.query.price_max,
-        make: req.query.make || undefined,
-        model: req.query.model || undefined,
-        page: 1,
-        perPage: SEARCH_CANDIDATE_LIMIT,
+      // NOTE: Typesense down degrades to the Mongo regex search, never a 500.
+      const result = await typesenseProductPage(req, { page, limit, skip, stockFilter, channelFilter }).catch((err) => {
+        logger.warn(`[product.controller] Typesense search failed, using Mongo fallback: ${err.message}`);
+        return null;
       });
-
-      const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
-
-      // Only override Typesense's relevance order if the caller asked for a sort.
-      const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
-      const ordered = sortSpec ? sortByFields(items, sortSpec) : items;
-
-      const total = ordered.length;
-      return success(res, {
-        items: ordered.slice(skip, skip + limit),
-        total,
-        page,
-        pageSize: limit,
-        totalPages: Math.ceil(total / limit),
-      });
+      if (result) return success(res, result);
     }
 
     const filter = buildProductFilter(req.query, { authenticated: !!req.user, tenantId: req.tenantId });
@@ -294,6 +311,9 @@ exports.createProduct = async (req, res) => {
       stock_entries,
       vehicle,
       shipping_cost,
+      package: pkg,
+      bay,
+      shipping_method,
     } = body;
 
     if (!title) return badRequest(res, "Title is required");
@@ -314,6 +334,9 @@ exports.createProduct = async (req, res) => {
       compare_price: compare_price ? Number(compare_price) : null,
       cost_price: cost_price ? Number(cost_price) : null,
       shipping_cost: shipping_cost ? Number(shipping_cost) : null,
+      package: toPackage(pkg),
+      bay: bay || null,
+      shipping_method: shipping_method || SHIPPING_METHOD.STANDARD,
       is_taxable: toBool(is_taxable),
       sku: autoSku,
       barcode: barcode || null,
@@ -355,6 +378,8 @@ exports.createProduct = async (req, res) => {
       }
     }
 
+    if (toBool(body.add_to_tag_queue)) await queueNewProductTags(product._id, req);
+
     return created(res, await getPopulatedProduct(product._id, req.tenantId), "Product created");
   } catch (err) {
     // Name the index that rejected the write; slug and sku are both unique.
@@ -394,6 +419,9 @@ exports.updateProduct = async (req, res) => {
       digital_file,
       vehicle,
       shipping_cost,
+      package: pkg,
+      bay,
+      shipping_method,
     } = body;
 
     let pendingSlugBase = null;
@@ -431,6 +459,9 @@ exports.updateProduct = async (req, res) => {
     if (authenticity !== undefined) product.authenticity = authenticity || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
     if (vehicle !== undefined) product.vehicle = parseField(vehicle, null);
+    if (pkg !== undefined) product.package = toPackage(pkg);
+    if (bay !== undefined) product.bay = bay || null;
+    if (shipping_method) product.shipping_method = shipping_method;
 
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);

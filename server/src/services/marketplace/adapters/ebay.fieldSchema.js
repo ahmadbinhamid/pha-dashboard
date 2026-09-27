@@ -81,7 +81,14 @@ const fieldSchema = Object.freeze([
     optionsSource: "ebay.businessPolicies.return",
     group: "policies",
   },
-  { key: "package", label: "Package size & weight", type: FIELD_TYPE.CUSTOM, required: false, group: "shipping" },
+  {
+    key: "package",
+    label: "Package size & weight",
+    type: FIELD_TYPE.CUSTOM,
+    required: false,
+    group: "shipping",
+    inheritsFrom: "package",
+  },
   { key: "format", label: "Format", type: FIELD_TYPE.SELECT, required: false, optionsSource: "ebay.formats", group: "format" },
   { key: "accept_best_offer", label: "Accept best offers", type: FIELD_TYPE.BOOLEAN, required: false, group: "format" },
   {

@@ -52,10 +52,10 @@ export function InheritedChannelField({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <Label>{label}</Label>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md bg-bg-2 px-3 py-2">
-        <span className={cn("text-sm font-medium", productValue ? "text-fg" : "text-fg/50")}>
+      <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-bg-2 py-1 pl-3 pr-1">
+        <span className={cn("text-compact font-medium", productValue ? "text-fg" : "text-fg/50")}>
           {productValue ?? "Not set on the product"}
         </span>
         <span className="text-xs text-fg/55">
@@ -64,10 +64,10 @@ export function InheritedChannelField({
             Edit in Details
           </Link>
         </span>
+        <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 px-2 text-xs" onClick={() => setEditing(true)}>
+          Override for {channelName}
+        </Button>
       </div>
-      <Button type="button" variant="ghost" size="sm" className="h-7 self-start px-2 text-xs" onClick={() => setEditing(true)}>
-        Override for {channelName}
-      </Button>
       {error && (
         <p className="text-xs font-medium text-danger" role="alert">
           {error}

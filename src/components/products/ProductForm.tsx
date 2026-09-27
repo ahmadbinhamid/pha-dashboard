@@ -18,6 +18,7 @@ import { ProductNotesSection } from "@/components/products/ProductNotesSection";
 import { ProductSalesChannelsSection } from "@/components/products/ProductSalesChannelsSection";
 import { ProductStockCard } from "@/components/products/ProductStockCard";
 import { SendProductEmailModal } from "@/components/products/SendProductEmailModal";
+import { PrintProductTagModal } from "@/components/products/PrintProductTagModal";
 import { PRODUCT_EDIT_TABS, SALES_CHANNELS_ANCHOR, type ProductEditTab } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import { useElementHeight } from "@/hooks/useElementHeight";
@@ -65,6 +66,20 @@ export function ProductForm(props: ProductFormProps) {
         ? "channels"
         : "details";
   const focusChannel = searchParams.get("channel");
+  // Set by the create flow so the new product's page offers its tag once.
+  const [tagOpen, setTagOpen] = useState(() => searchParams.get("printTag") === "1");
+  const justCreated = searchParams.get("printTag") === "1";
+
+  function setTagModal(open: boolean) {
+    setTagOpen(open);
+    if (!open && justCreated) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("printTag");
+        return next;
+      }, { replace: true });
+    }
+  }
 
   function setTab(next: string) {
     setSearchParams(
@@ -161,7 +176,7 @@ export function ProductForm(props: ProductFormProps) {
     reset(values);
     toast({ title: status === "draft" ? "Draft saved" : "Product created", tone: "success" });
     void queryClient.invalidateQueries({ queryKey: ["products"] });
-    navigate(created?.slug ? `/products/${created.slug}/edit` : "/products");
+    navigate(created?.slug ? `/products/${created.slug}/edit?printTag=1` : "/products");
   }
 
   const onCreate = (status: ProductStatus) => (values: ProductFormValues) => {
@@ -271,6 +286,7 @@ export function ProductForm(props: ProductFormProps) {
           saving={saveMutation.isPending}
           uploading={imagesUploading}
           onSendEmail={() => setSendEmailOpen(true)}
+          onPrintTag={() => setTagModal(true)}
         >
           <TabsList className="gap-5 border-b-0">
             <TabsTrigger value="details">Details</TabsTrigger>
@@ -300,6 +316,7 @@ export function ProductForm(props: ProductFormProps) {
         )}
 
         <SendProductEmailModal product={product} open={sendEmailOpen} onOpenChange={setSendEmailOpen} />
+        <PrintProductTagModal product={product} open={tagOpen} onOpenChange={setTagModal} justCreated={justCreated} />
       </div>
     </Tabs>
   );

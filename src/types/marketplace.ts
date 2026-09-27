@@ -1,3 +1,5 @@
+import type { PackageDimensions, PackageFormState } from "./product";
+
 export type MarketplacePlatform = "ebay" | "google" | "amazon" | "shopify";
 export type ListingState = "draft" | "active" | "ended";
 export type ListingSyncStatus = "not_listed" | "pending" | "synced" | "out_of_stock" | "price_locked" | "error";
@@ -26,12 +28,6 @@ export interface FitmentRowFormState {
   year_to: string;
 }
 
-export interface PackageDimensions {
-  length: number | null;
-  width: number | null;
-  height: number | null;
-  weight: number | null;
-}
 
 export interface MarketplaceListingProduct {
   _id: string;
@@ -206,12 +202,7 @@ export interface EbayListingFormState {
   return_policy_id: string;
   require_immediate_payment: boolean;
   item_location_zip: string;
-  package: {
-    length: string;
-    width: string;
-    height: string;
-    weight: string;
-  };
+  package: PackageFormState;
 }
 
 export const EBAY_LISTING_FORM_INITIAL: EbayListingFormState = {

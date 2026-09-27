@@ -1,5 +1,6 @@
 import { cn } from "@/utils/cn";
 import { Label } from "@/components/ui/Label";
+import { useFieldDensity } from "@/components/ui/FieldDensity";
 
 type FormFieldProps = {
   label?: string;
@@ -23,8 +24,9 @@ export function FormField({
   className,
   children,
 }: FormFieldProps) {
+  const compact = useFieldDensity() === "compact";
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div className={cn("flex flex-col", compact ? "gap-1" : "gap-1.5", className)}>
       {label && aside ? (
         <div className="flex items-center gap-2">
           <Label htmlFor={htmlFor} required={required}>

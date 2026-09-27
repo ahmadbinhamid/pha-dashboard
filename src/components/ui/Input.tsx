@@ -1,6 +1,7 @@
 
 import * as React from "react";
 import { cn } from "@/utils/cn";
+import { useFieldDensity } from "@/components/ui/FieldDensity";
 
 export type InputSize = "sm" | "md" | "lg";
 export type InputVariant = "default" | "ghost" | "filled";
@@ -16,6 +17,9 @@ const inputSizes: Record<InputSize, string> = {
   lg: "h-12 px-4 text-base",
 };
 
+// Replaces md inside a compact FieldDensityProvider.
+const COMPACT_MD = "h-9 px-3 text-compact";
+
 const inputVariants: Record<InputVariant, string> = {
   default: "border border-border bg-card text-fg shadow-(--shadow-input)",
   ghost: "border border-transparent bg-transparent text-fg hover:bg-field-hover/50",
@@ -26,6 +30,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
   { className, size = "md", variant = "default", ...props },
   ref,
 ) {
+  const compact = useFieldDensity() === "compact" && size === "md";
   return (
     <input
       ref={ref}
@@ -34,7 +39,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
         "placeholder:text-fg/45",
         "focus-visible:border-accent focus-visible:shadow-(--shadow-input-focus)",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        inputSizes[size],
+        compact ? COMPACT_MD : inputSizes[size],
         inputVariants[variant],
         className,
       )}

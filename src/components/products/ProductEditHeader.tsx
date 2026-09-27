@@ -1,4 +1,4 @@
-import { ChevronDown, Circle, Mail } from "lucide-react";
+import { ChevronDown, Circle, Mail, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +29,7 @@ interface ProductEditHeaderProps {
   saving: boolean;
   uploading: boolean;
   onSendEmail: () => void;
+  onPrintTag: () => void;
   // Tab bar, kept sticky together with the header.
   children: React.ReactNode;
   // Lets the page measure the header to place sticky content below it.
@@ -47,6 +48,7 @@ export function ProductEditHeader({
   saving,
   uploading,
   onSendEmail,
+  onPrintTag,
   children,
   ref,
 }: ProductEditHeaderProps) {
@@ -92,6 +94,10 @@ export function ProductEditHeader({
               </Button>
             </>
           )}
+          <Button type="button" variant="secondary" size="sm" className="gap-1.5" onClick={onPrintTag}>
+            <Printer className="h-3.5 w-3.5" />
+            Print tag
+          </Button>
           <div className="flex items-center">
             <AddToCartButton product={product} display="labeled" className="rounded-r-none" />
             <DropdownMenu>

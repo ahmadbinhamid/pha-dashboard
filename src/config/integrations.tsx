@@ -1,15 +1,15 @@
-import { CreditCard, FolderTree, Globe, Link2, Mail } from "lucide-react";
+import { CreditCard, FolderTree, Globe, Link2, Mail, Truck } from "lucide-react";
 import { EbayLogo, GoogleLogo } from "@/components/channels/channelLogos";
 
-// The integrations Settings can configure, in catalogue order. Lives in config/ rather than the rendering tab because the id is also the URL segment SettingsPage routes on — two files need this list.
-export type IntegrationId = "ebay" | "google" | "channel-categories" | "stripe" | "email" | "domains" | "payment-links";
+// In config/ because the id is also the URL segment SettingsPage routes on.
+export type IntegrationId = "ebay" | "google" | "channel-categories" | "stripe" | "email" | "transdirect" | "domains" | "payment-links";
 
 export type IntegrationDefinition = {
   id: IntegrationId;
   name: string;
   description: string;
   icon: (props: { className?: string }) => React.ReactNode;
-  // eBay/Google get their own brand mark; "Custom Domains" gets the tenant's uploaded logo (IntegrationsTab.tsx). All three share the neutral logo-chip treatment instead of the accent-tinted circle other icons use.
+  // These three use the neutral logo chip, not the accent-tinted circle.
   logoTile?: boolean;
 };
 
@@ -47,9 +47,15 @@ export const INTEGRATION_CATALOGUE: IntegrationDefinition[] = [
     icon: (p) => <Mail {...p} />,
   },
   {
+    id: "transdirect",
+    name: "Transdirect Shipping",
+    description: "Live courier rates by postcode for products set to calculated shipping.",
+    icon: (p) => <Truck {...p} />,
+  },
+  {
     id: "domains",
     name: "Custom Domains",
-    // Fallback icon until the tenant uploads a logo — IntegrationsTab.tsx swaps this for <img src={settings.logo_url}> once they have.
+    // Fallback until the tenant uploads a logo (swapped in IntegrationsTab).
     description: "Point your own domain at the storefront, and verify it for customer-facing links.",
     icon: (p) => <Globe {...p} />,
     logoTile: true,

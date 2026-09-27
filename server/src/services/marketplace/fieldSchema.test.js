@@ -33,7 +33,10 @@ for (const adapter of [ebayAdapter, googleAdapter]) {
       assert.equal(typeof d.label, "string");
       assert.equal(typeof d.required, "boolean");
       assert.ok(discriminator.path(d.key) || discriminator.pathType(d.key) === "nested", `${d.key} must be a real ${adapter.key} listing field`);
-      if (d.inheritsFrom) assert.ok(Product.schema.path(d.inheritsFrom), `${d.key}: inheritsFrom must name a real Product field`);
+      if (d.inheritsFrom) {
+        const real = Product.schema.path(d.inheritsFrom) || Product.schema.pathType(d.inheritsFrom) === "nested";
+        assert.ok(real, `${d.key}: inheritsFrom must name a real Product field`);
+      }
     }
   });
 }

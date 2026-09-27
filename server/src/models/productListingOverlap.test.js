@@ -19,6 +19,10 @@ const ALLOWED_OVERLAPS = Object.freeze({
     "fitment.model_code": "productFallbacks#resolveFitment",
     "fitment.year_from": "productFallbacks#resolveFitment",
     "fitment.year_to": "productFallbacks#resolveFitment",
+    "package.length": "productFallbacks#resolvePackage; empty = product's",
+    "package.width": "productFallbacks#resolvePackage",
+    "package.height": "productFallbacks#resolvePackage",
+    "package.weight": "productFallbacks#resolvePackage",
   },
   google: {
     condition: "productFallbacks#resolveCondition, mapped by toGoogleCondition",

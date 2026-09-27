@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { SingleSelect } from "@/components/ui/SingleSelect";
@@ -141,9 +142,7 @@ export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) 
 
       {/* Superseded Part Numbers — dynamic array */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-fg">
-          Superseded Part Number(s)
-        </label>
+        <Label>Superseded Part Number(s)</Label>
 
         <div className="space-y-2">
           {spnList.map((val, i) => (
@@ -161,15 +160,17 @@ export function EbayItemSpecificsSection({ form, onChange, productMpn }: Props) 
                   className="h-auto w-full rounded-none border-0 bg-transparent px-3 py-2 text-sm text-fg shadow-none placeholder:text-fg/35 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
                 />
               </div>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
                 onClick={() => removeSpn(i)}
                 disabled={spnList.length === 1 && val === ""}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs border border-border text-fg/40 transition-colors hover:border-danger/50 hover:bg-danger/5 hover:text-danger disabled:cursor-not-allowed disabled:opacity-30"
-                title="Remove"
+                className="h-8 w-8 shrink-0 rounded-md text-fg/40 hover:border-danger/50 hover:bg-danger/5 hover:text-danger"
+                aria-label="Remove part number"
               >
                 <X className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>

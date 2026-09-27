@@ -7,3 +7,6 @@ export * from "./useChannelFieldSources";
 export * from "./useProductStockRecord";
 export * from "./useProductChannelListings";
 export * from "./useElementHeight";
+export * from "./useTagStyle";
+export * from "./useTagQueueActions";
+export * from "./useElementSize";

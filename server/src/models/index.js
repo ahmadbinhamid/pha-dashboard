@@ -18,4 +18,8 @@ module.exports = {
   ChannelSyncLog: require("./ChannelSyncLog"),
   CategoryMapping: require("./CategoryMapping"),
   VehicleModel: require("./VehicleModel"),
+  TagQueueItem: require("./TagQueueItem"),
+  TagPrintLog: require("./TagPrintLog"),
+  TagSettings: require("./TagSettings"),
+  ShippingSettings: require("./ShippingSettings"),
 };

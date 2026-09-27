@@ -29,6 +29,7 @@ import PaymentsPage from "@/pages/erp/PaymentsPage";
 import ReportsPage from "@/pages/erp/ReportsPage";
 import ListingCreatePage from "@/pages/erp/ListingCreatePage";
 import ListingEditPage from "@/pages/erp/ListingEditPage";
+import TagManagerPage from "@/pages/erp/TagManagerPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import ProfilePage from "@/pages/erp/ProfilePage";
 import SettingsPage from "@/pages/erp/SettingsPage";
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="/listings" element={<Navigate to="/channel-sync" replace />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/tags" element={<TagManagerPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/create-order" element={<CreateOrderPage />} />

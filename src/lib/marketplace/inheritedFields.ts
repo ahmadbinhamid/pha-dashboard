@@ -1,4 +1,5 @@
 import { AUTHENTICITY_OPTIONS, CONDITIONS } from "@/config/productOptions";
+import { EMPTY_PACKAGE_FORM, formatPackage, hasPackageValue } from "@/lib/products/packageDimensions";
 import type { Product, ProductVehicle } from "@/types/product";
 
 // Listing fields that inherit a product field (fieldSchema `inheritsFrom`).
@@ -22,6 +23,7 @@ export function productValueLabel(field: string, product: Product): string | nul
   if (field === "condition") return product.condition ? labelOf(CONDITIONS, product.condition) : null;
   if (field === "authenticity") return product.authenticity ? labelOf(AUTHENTICITY_OPTIONS, product.authenticity) : null;
   if (field === "vehicle") return formatVehicle(product.vehicle);
+  if (field === "package") return formatPackage(product.package);
   const value = (product as unknown as Record<string, unknown>)[field];
   return value == null || value === "" ? null : String(value);
 }
@@ -31,10 +33,12 @@ export function hasOverride(value: unknown): boolean {
   if (Array.isArray(value)) {
     return value.some((row: Record<string, unknown> | null) => !!(String(row?.make ?? "").trim() || String(row?.model ?? "").trim()));
   }
+  if (value != null && typeof value === "object") return hasPackageValue(value);
   return value != null && String(value).trim() !== "";
 }
 
 /** The listing value meaning "use the product's". */
-export function clearedValue(value: unknown): "" | [] {
-  return Array.isArray(value) ? [] : "";
+export function clearedValue(value: unknown): "" | [] | typeof EMPTY_PACKAGE_FORM {
+  if (Array.isArray(value)) return [];
+  return value != null && typeof value === "object" ? { ...EMPTY_PACKAGE_FORM } : "";
 }

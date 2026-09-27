@@ -35,5 +35,7 @@ router.use("/notification", require("./notification.routes"));
 router.use("/members", require("./member.routes"));
 router.use("/roles", require("./role.routes"));
 router.use("/invitations", require("./invitation.routes"));
+router.use("/tags", require("./tag.routes"));
+router.use("/shipping", require("./shipping.routes"));
 
 module.exports = router;

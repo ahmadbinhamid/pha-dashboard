@@ -8,6 +8,7 @@ import type { MappedCategory } from "@/types/categoryMapping";
 import type { ListingProductDefaults } from "@/types/marketplace";
 import type { Product } from "@/types/product";
 import type { ChannelFormState } from "@/lib/marketplace/channelForms";
+import { cn } from "@/utils/cn";
 import { InheritedChannelField } from "@/components/channels/InheritedChannelField";
 import { clearedValue, hasOverride, productValueLabel } from "@/lib/marketplace/inheritedFields";
 
@@ -134,13 +135,17 @@ export function ChannelFieldsPanel({
 
   return (
     <div className="divide-y divide-border">
-      {schema.length === 0 && <p className="p-5 text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
+      {schema.length === 0 && <p className="px-6 py-5 text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
       {groupSchema(schema).map(([group, fields]) => (
-        <section key={group} id={channelSectionId(channel.key, group)} className="scroll-mt-4 space-y-4 p-5">
+        <section key={group} id={channelSectionId(channel.key, group)} className="scroll-mt-4 space-y-3 px-6 py-5">
           <p className="text-2xs font-semibold uppercase tracking-wider text-fg/55">{GROUP_LABELS[group] ?? group}</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
             {fields.map((d) => (
-              <div key={d.key} className={FULL_WIDTH_TYPES.includes(d.type) ? "sm:col-span-2" : undefined}>
+              <div
+                key={d.key}
+                // Label-less switches sit on the input line, not the label line.
+                className={cn(FULL_WIDTH_TYPES.includes(d.type) && "sm:col-span-2", d.type === "boolean" && "self-end")}
+              >
                 {renderField(d)}
               </div>
             ))}
@@ -148,7 +153,7 @@ export function ChannelFieldsPanel({
         </section>
       ))}
 
-      <section id={channelSectionId(channel.key, OVERRIDES_SECTION.key)} className="scroll-mt-4 p-5">
+      <section id={channelSectionId(channel.key, OVERRIDES_SECTION.key)} className="scroll-mt-4 px-6 py-5">
         <ChannelOverridesSection
           values={form as unknown as OverrideValues}
           onChange={(patch) => onChange(patch as Partial<ChannelFormState>)}

@@ -1,6 +1,8 @@
 // services/marketplace/productFallbacks.js
 // Listing-override-else-product rules shared by resolver, schemas and backfill.
 
+const { toPackage, hasPackage } = require("../../utils/packageDimensions");
+
 // NOTE: "" counts as unset; older forms saved empty strings for "not chosen".
 function present(value) {
   return value == null || value === "" ? null : value;
@@ -38,8 +40,15 @@ function resolveFitment(listing, product) {
   return rows.length ? rows.map(toFitmentRow) : fitmentFromVehicle(product?.vehicle);
 }
 
+// Listing package if any value is set, else the product's; never mixed.
+function resolvePackage(listing, product) {
+  if (hasPackage(listing?.package)) return toPackage(listing.package);
+  return hasPackage(product?.package) ? toPackage(product.package) : null;
+}
+
 module.exports = {
   present,
+  resolvePackage,
   resolveCondition,
   resolveAuthenticity,
   resolveFitment,

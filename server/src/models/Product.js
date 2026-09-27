@@ -8,6 +8,7 @@ const {
   PRODUCT_CONDITION,
   PRODUCT_AUTHENTICITY,
 } = require("../constants/product.constants");
+const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 
 const choiceSchema = new Schema(
   {
@@ -28,7 +29,7 @@ const vehicleSchema = new Schema(
   { _id: false },
 );
 
-// Internal staff comment thread, never shown to customers. Mirrors Order.js's internalNoteSchema.
+// Staff-only note thread, never shown to customers; mirrors Order.js.
 const internalNoteSchema = new Schema(
   {
     text: { type: String, required: true, trim: true },
@@ -39,7 +40,7 @@ const internalNoteSchema = new Schema(
 );
 
 const productSchema = buildSchema({
-  // Backfilled via scripts/backfillTenantId.js; slug's unique index below is compound with this.
+  // Slug's unique index below is compound with this.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   title: { type: String, required: true, trim: true },
   slug: { type: String },
@@ -59,6 +60,17 @@ const productSchema = buildSchema({
   compare_price: { type: Number, default: null },
   cost_price: { type: Number, default: null },
   shipping_cost: { type: Number, default: null },
+  // standard: shipping_cost per unit; calculated: Transdirect by postcode.
+  shipping_method: { type: String, enum: Object.values(SHIPPING_METHOD), default: SHIPPING_METHOD.STANDARD },
+  // Shelf/bin where the item sits, e.g. "A3-02"; printed on its tag.
+  bay: { type: String, default: null, trim: true, maxlength: 40 },
+  // Packed size (cm) and weight (kg); channels use it unless overridden.
+  package: {
+    length: { type: Number, default: null },
+    width: { type: Number, default: null },
+    height: { type: Number, default: null },
+    weight: { type: Number, default: null },
+  },
   is_taxable: { type: Boolean, default: false },
   sku: { type: String, default: null },
   barcode: { type: String, default: null },
@@ -94,7 +106,7 @@ const productSchema = buildSchema({
 
 productSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });
 productSchema.index({ sku: 1 }, { sparse: true });
-// partialFilterExpression, not sparse — sku is stored as literal null, and sparse only excludes an unset field.
+// Partial, not sparse: sku is stored as null, which sparse still indexes.
 productSchema.index(
   { tenant_id: 1, sku: 1 },
   { unique: true, partialFilterExpression: { sku: { $type: "string" } } },
@@ -102,8 +114,7 @@ productSchema.index(
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });
-// Supports getProductCountsByCategory's per-page-load $match; autoIndex is off in production, so
-// this index only takes effect once built manually.
+// getProductCountsByCategory; autoIndex is off in prod, so build it manually.
 productSchema.index({ tenant_id: 1, categories: 1, is_published_online: 1, status: 1 });
 
 module.exports = model("Product", productSchema);

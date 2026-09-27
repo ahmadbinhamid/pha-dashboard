@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Switch } from "@/components/ui/Switch";
+import { DIGEST_FREQUENCY_OPTIONS, DIGEST_MONTH_DAY_OPTIONS, DIGEST_WEEKDAY_OPTIONS } from "@/config/inventoryDigest";
 import {
   Modal,
   ModalContent,
@@ -29,6 +31,15 @@ const DEFAULT_FORM: InventorySettingsFormValues = {
   emailEnabled: false,
   email: "",
   sendTime: "22:00",
+  frequency: "daily",
+  weekday: "1",
+  monthDay: "1",
+};
+
+const SCHEDULE_HINT: Record<InventorySettingsFormValues["frequency"], string> = {
+  daily: "Sent every day at this time (Sydney).",
+  weekly: "Sent once a week on this day and time (Sydney).",
+  monthly: "Sent once a month on this day and time (Sydney).",
 };
 
 export function InventorySettingsModal({ open, onOpenChange }: InventorySettingsModalProps) {
@@ -47,6 +58,7 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
     control,
     handleSubmit,
     reset,
+    watch,
   } = useForm<InventorySettingsFormValues>({
     resolver: zodResolver(inventorySettingsFormSchema),
     defaultValues: DEFAULT_FORM,
@@ -58,8 +70,11 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
         threshold: String(settings.low_stock_threshold),
         emailEnabled: settings.email_notifications,
         email: settings.notification_email ?? "",
-        // Stored in the DB as UTC, displayed/edited here in Sydney local time (see src/utils/timezone.ts for why Sydney is hardcoded).
+        // Stored as UTC; edited here in Sydney time (see utils/timezone.ts).
         sendTime: utcTimeToSydney(settings.notification_send_time || "22:00"),
+        frequency: settings.notification_frequency ?? "daily",
+        weekday: String(settings.notification_weekday ?? 1),
+        monthDay: String(settings.notification_month_day ?? 1),
       });
     }
   }, [settings, reset]);
@@ -70,8 +85,10 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
         low_stock_threshold: Number(values.threshold) || 0,
         email_notifications: values.emailEnabled,
         notification_email: values.email || null,
-        // Convert back to UTC before it hits the API — the form field is always Sydney local time.
         notification_send_time: sydneyTimeToUtc(values.sendTime),
+        notification_frequency: values.frequency,
+        notification_weekday: Number(values.weekday),
+        notification_month_day: Number(values.monthDay),
       }),
     onSuccess: () => {
       toast({ title: "Inventory settings saved", tone: "success" });
@@ -84,6 +101,7 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
   });
 
   const onSubmit = (values: InventorySettingsFormValues) => mutation.mutate(values);
+  const frequency = watch("frequency");
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -122,9 +140,37 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
               <Input type="email" placeholder="you@example.com" {...register("email")} />
             </FormField>
 
-            <FormField label="Send Time" hint="Daily time to send the low stock digest.">
-              <Input type="time" className="max-w-40" {...register("sendTime")} />
-            </FormField>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FormField label="Frequency">
+                <Controller
+                  control={control}
+                  name="frequency"
+                  render={({ field }) => <SingleSelect options={DIGEST_FREQUENCY_OPTIONS} value={field.value} onChange={field.onChange} />}
+                />
+              </FormField>
+              {frequency === "weekly" && (
+                <FormField label="Day">
+                  <Controller
+                    control={control}
+                    name="weekday"
+                    render={({ field }) => <SingleSelect options={DIGEST_WEEKDAY_OPTIONS} value={field.value} onChange={field.onChange} />}
+                  />
+                </FormField>
+              )}
+              {frequency === "monthly" && (
+                <FormField label="Day of month">
+                  <Controller
+                    control={control}
+                    name="monthDay"
+                    render={({ field }) => <SingleSelect options={DIGEST_MONTH_DAY_OPTIONS} value={field.value} onChange={field.onChange} />}
+                  />
+                </FormField>
+              )}
+              <FormField label="Send time">
+                <Input type="time" {...register("sendTime")} />
+              </FormField>
+            </div>
+            <p className="-mt-2 text-xs text-fg/55">{SCHEDULE_HINT[frequency]}</p>
           </div>
 
           <ModalFooter>

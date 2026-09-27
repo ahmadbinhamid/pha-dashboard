@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { FieldDensityProvider } from "@/components/ui/FieldDensity";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/Sheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { ChannelFieldsPanel, channelFieldSections, channelSectionId } from "@/components/channels/ChannelFieldsPanel";
@@ -70,11 +71,11 @@ export function ChannelSettingsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onCancel()}>
-      <SheetContent className="max-w-[600px] bg-card">
-        <div className="flex items-center gap-3 border-b border-border py-4 pl-5 pr-12">
+      <SheetContent className="max-w-none bg-card sm:w-17/20">
+        <div className="flex items-center gap-3 border-b border-border py-3 pl-5 pr-12">
           <ChannelAvatar name={channel.name} index={index} channelKey={channel.key} size="md" />
           <div className="min-w-0 flex-1">
-            <SheetTitle className="text-base font-semibold text-fg">{channel.name} listing</SheetTitle>
+            <SheetTitle className="text-sm font-semibold text-fg">{channel.name} listing</SheetTitle>
             <SheetDescription className="text-xs text-fg/55">
               Only what {channel.name} needs beyond the product. Empty fields use the product&apos;s values.
             </SheetDescription>
@@ -82,23 +83,34 @@ export function ChannelSettingsDrawer({
           {status && <SyncBadge status={status} />}
         </div>
 
-        <nav className="flex gap-1.5 overflow-x-auto border-b border-border px-5 py-2.5" aria-label="Sections">
-          {sections.map((s) => (
-            <Button
-              key={s.key}
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => jumpTo(s.key)}
-              className={cn("h-7 shrink-0 rounded-full px-3 text-xs", active === s.key ? "bg-accent/15 text-accent" : "text-fg/60")}
-            >
-              {s.label}
-            </Button>
-          ))}
-        </nav>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          {/* Chips on phones, a vertical rail once there's room beside the form. */}
+          <nav
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-5 py-2 md:w-44 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:px-3 md:py-4"
+            aria-label="Sections"
+          >
+            {sections.map((s) => (
+              <Button
+                key={s.key}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => jumpTo(s.key)}
+                className={cn(
+                  "h-7 shrink-0 justify-start rounded-md px-2.5 text-xs font-medium",
+                  active === s.key ? "bg-accent/15 text-accent" : "text-fg/60",
+                )}
+              >
+                {s.label}
+              </Button>
+            ))}
+          </nav>
 
-        <div ref={bodyRef} className="flex-1 overflow-y-auto">
-          <ChannelFieldsPanel channel={channel} {...panelProps} />
+          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto">
+            <FieldDensityProvider density="compact">
+              <ChannelFieldsPanel channel={channel} {...panelProps} />
+            </FieldDensityProvider>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 border-t border-border px-5 py-3">

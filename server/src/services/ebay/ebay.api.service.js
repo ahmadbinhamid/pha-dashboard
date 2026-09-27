@@ -377,10 +377,10 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
     if (value && !aspects[name]) aspects[name] = [String(value)];
   }
 
-  // packageWeightAndSize only when a dimension/weight is set
-  const pkg = listing.package || {};
+  // Resolved package: the listing's, else the product's (null when neither).
+  const pkg = resolved.package || {};
   const hasAnyDimension = pkg.length || pkg.width || pkg.height;
-  const hasWeight = pkg.weight != null && String(pkg.weight).trim() !== "";
+  const hasWeight = pkg.weight != null;
   const packageWeightAndSize =
     hasAnyDimension || hasWeight
       ? {

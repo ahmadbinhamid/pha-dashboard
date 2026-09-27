@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { priceSchema, optionalNonNegativePriceSchema } from "@/lib/validation/commonFields";
 import { vehicleYearRangeSchema } from "@/lib/validation/commonFields";
-import type { StockEntry } from "@/types/product";
+import type { PackageFormState, StockEntry } from "@/types/product";
+import { missingPackageFields } from "@/lib/products/packageDimensions";
 import type { Attachment } from "@/types/product";
 
-// Only price and year are checked; other fields stay as permissive as before.
+// Price, package and year are checked; the rest stay permissive.
 const productFormShape = {
   title: z.string().trim().min(1, "Title is required"),
   description: z.string(),
@@ -22,6 +23,14 @@ const productFormShape = {
   vehicle_model_code: z.string(),
   vehicle_year: z.string(),
   vehicle_year_to: z.string(),
+  package: z.object({
+    length: optionalNonNegativePriceSchema("Length"),
+    width: optionalNonNegativePriceSchema("Width"),
+    height: optionalNonNegativePriceSchema("Height"),
+    weight: optionalNonNegativePriceSchema("Weight"),
+  }),
+  bay: z.string().trim().max(40, "Bay must be 40 characters or fewer"),
+  shipping_method: z.enum(["standard", "calculated"]),
   type: z.string(),
   status: z.string(),
   is_published_online: z.boolean(),
@@ -51,6 +60,14 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
         message: shipping.error.issues[0]?.message ?? "Invalid shipping cost",
         path: ["shipping_cost"],
       });
+    }
+
+    // Transdirect can't quote without every dimension and the weight.
+    const pkg = (values as { package: PackageFormState }).package;
+    if ((values as { shipping_method: string }).shipping_method === "calculated") {
+      for (const key of missingPackageFields(pkg)) {
+        ctx.addIssue({ code: "custom", message: "Calculated shipping needs every package field", path: ["package", key] });
+      }
     }
 
     const v = values as { vehicle_year: string; vehicle_year_to: string };

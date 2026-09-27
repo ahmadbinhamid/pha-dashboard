@@ -8,6 +8,7 @@ const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketp
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
 const { buildWordSearchOr } = require("../../utils/regex");
+const { toPackage } = require("../../utils/packageDimensions");
 
 // Prod item URLs are per-marketplace; sandbox shares one domain.
 const EBAY_SITE_DOMAINS = {
@@ -108,12 +109,7 @@ async function createListing(payload, tenantId) {
       return_policy_id,
       require_immediate_payment,
       item_location_zip,
-      package: {
-        length: pkg.length != null ? Number(pkg.length) : null,
-        width: pkg.width != null ? Number(pkg.width) : null,
-        height: pkg.height != null ? Number(pkg.height) : null,
-        weight: pkg.weight != null ? Number(pkg.weight) : null,
-      },
+      package: toPackage(pkg),
     });
 
     await syncFitmentCatalog(fitment, tenantId);
@@ -241,15 +237,7 @@ async function updateListing(id, payload, tenantId) {
   if (update.price_override != null) update.price_override = Number(update.price_override);
   if (update.quantity_available != null) update.quantity_available = Number(update.quantity_available);
   if (update.min_best_offer != null) update.min_best_offer = Number(update.min_best_offer);
-  if (update.package) {
-    const p = update.package;
-    update.package = {
-      length: p.length != null ? Number(p.length) : null,
-      width: p.width != null ? Number(p.width) : null,
-      height: p.height != null ? Number(p.height) : null,
-      weight: p.weight != null ? Number(p.weight) : null,
-    };
-  }
+  if (update.package) update.package = toPackage(update.package);
 
   // Dot-notation keys skip Mongoose's whole-subdoc cast path.
   if (update.item_specifics) {

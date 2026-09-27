@@ -10,6 +10,7 @@ import {
   History,
   Settings,
   BarChart2,
+  Tags,
 } from "lucide-react";
 
 export type NavItem = {
@@ -25,6 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Products", href: "/products", icon: (p) => <Package {...p} /> },
   { label: "Categories", href: "/categories", icon: (p) => <Layers {...p} /> },
   { label: "Inventory", href: "/inventory", icon: (p) => <Boxes {...p} /> },
+  { label: "Tag manager", href: "/tags", icon: (p) => <Tags {...p} /> },
   { label: "Customers", href: "/customers", icon: (p) => <Users {...p} /> },
   { label: "Orders", href: "/orders", icon: (p) => <ShoppingCart {...p} /> },
   { label: "Payments", href: "/payments", icon: (p) => <CreditCard {...p} /> },

@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { EbayItemSpecificsSection } from "@/components/listings/platforms/ebay/EbayItemSpecificsSection";
 import { EbayVehicleFitmentSection } from "@/components/listings/platforms/ebay/EbayVehicleFitmentSection";
-import { EbayPackageFields } from "@/components/listings/platforms/ebay/EbayPackageFields";
+import { PackageDimensionsFields } from "@/components/shared/PackageDimensionsFields";
 import { ChannelFieldInput } from "@/components/channels/ChannelFieldInput";
 import { InheritedChannelField } from "@/components/channels/InheritedChannelField";
 import { SingleSelect } from "@/components/ui/SingleSelect";
@@ -67,8 +67,9 @@ export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCusto
   "ebay.fitment": ({ form, onChange, product }) => (
     <EbayVehicleFitmentSection form={form as EbayListingFormState} onChange={onChange} productVehicle={product.vehicle} />
   ),
-  "ebay.package": ({ form, onChange, error }) => (
-    <EbayPackageFields value={(form as EbayListingFormState).package} onChange={(pkg) => onChange({ package: pkg })} error={error} />
+  // Inherited field: the wrapper shows the error, so it isn't passed here.
+  "ebay.package": ({ form, onChange }) => (
+    <PackageDimensionsFields value={(form as EbayListingFormState).package} onChange={(pkg) => onChange({ package: pkg })} />
   ),
   // Only meaningful when best offers are accepted.
   "ebay.min_best_offer": ({ descriptor, form, onChange, error }) => {

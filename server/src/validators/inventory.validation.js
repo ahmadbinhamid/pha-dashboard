@@ -1,6 +1,7 @@
 // validators/inventory.validation.js
 
 const Joi = require("joi");
+const { DIGEST_FREQUENCY, DIGEST_MONTH_DAY_MAX } = require("../constants/inventory.constants");
 const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 const listInventory = {
@@ -55,6 +56,9 @@ const updateSettings = {
     notification_send_time: Joi.string()
       .pattern(/^\d{2}:\d{2}$/)
       .allow(null),
+    notification_frequency: Joi.string().valid(...Object.values(DIGEST_FREQUENCY)),
+    notification_weekday: Joi.number().integer().min(0).max(6),
+    notification_month_day: Joi.number().integer().min(1).max(DIGEST_MONTH_DAY_MAX),
   }),
 };
 

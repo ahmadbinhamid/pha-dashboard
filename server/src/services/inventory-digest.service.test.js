@@ -289,3 +289,28 @@ test("inventory-digest.service: full sweep — one tenant's failure does not blo
   assert.ok((await InventorySettings.findById(settingsGood._id)).last_digest_sent_at, "good tenant stamped");
   assert.equal((await InventorySettings.findById(settingsOutside._id)).last_digest_sent_at, null, "tenant outside the sweep untouched");
 });
+
+test("inventory-digest.service: weekly/monthly days are Sydney days, not UTC days", () => {
+  const { isScheduledDay } = require("./inventory-digest.service");
+  // 2026-06-14T23:00Z is Sunday in UTC but Monday 09:00 in Sydney (AEST).
+  const mondayMorningSydney = new Date("2026-06-14T23:00:00Z");
+  assert.equal(isScheduledDay({ notification_frequency: "weekly", notification_weekday: 1 }, mondayMorningSydney), true);
+  assert.equal(isScheduledDay({ notification_frequency: "weekly", notification_weekday: 0 }, mondayMorningSydney), false);
+
+  // 2026-06-30T23:00Z is 1 July 09:00 in Sydney.
+  const firstOfJulySydney = new Date("2026-06-30T23:00:00Z");
+  assert.equal(isScheduledDay({ notification_frequency: "monthly", notification_month_day: 1 }, firstOfJulySydney), true);
+  assert.equal(isScheduledDay({ notification_frequency: "monthly", notification_month_day: 30 }, firstOfJulySydney), false);
+
+  // Daily, and legacy settings with no frequency, are due every day.
+  assert.equal(isScheduledDay({ notification_frequency: "daily" }, mondayMorningSydney), true);
+  assert.equal(isScheduledDay({}, mondayMorningSydney), true);
+});
+
+test("inventory-digest.service: DST: a Sydney date is right in AEDT too", () => {
+  const { isScheduledDay } = require("./inventory-digest.service");
+  // 2026-12-06T22:00Z is Monday 7 Dec 09:00 in Sydney (AEDT, UTC+11).
+  const mondayAedt = new Date("2026-12-06T22:00:00Z");
+  assert.equal(isScheduledDay({ notification_frequency: "weekly", notification_weekday: 1 }, mondayAedt), true);
+  assert.equal(isScheduledDay({ notification_frequency: "monthly", notification_month_day: 7 }, mondayAedt), true);
+});

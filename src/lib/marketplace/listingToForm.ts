@@ -1,4 +1,5 @@
 import type { EbayListing, EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
+import { packageToForm } from "@/lib/products/packageDimensions";
 import { isGeneratedEbayDescription } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 function normaliseSpn(raw: unknown): string[] {
@@ -66,12 +67,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
     return_policy_id: listing.return_policy_id || "",
     require_immediate_payment: listing.require_immediate_payment ?? true,
     item_location_zip: listing.item_location_zip || "",
-    package: {
-      length: listing.package?.length != null ? String(listing.package.length) : "",
-      width: listing.package?.width != null ? String(listing.package.width) : "",
-      height: listing.package?.height != null ? String(listing.package.height) : "",
-      weight: listing.package?.weight != null ? String(listing.package.weight) : "",
-    },
+    package: packageToForm(listing.package),
   };
 }
 

@@ -1,6 +1,7 @@
 // validators/product.validation.js
 
 const Joi = require("joi");
+const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
@@ -41,8 +42,14 @@ const createProduct = {
       .valid(...Object.values(PRODUCT_AUTHENTICITY))
       .allow("", null)
       .default(null),
-    // Sent as a JSON-stringified object: { make, model, model_code, year_from, year_to }
+    // JSON string: { make, model, model_code, year_from, year_to }
     vehicle: Joi.string().allow("", null).default(null),
+    // JSON string: { length, width, height, weight }
+    package: Joi.string().allow("", null).default(null),
+    bay: Joi.string().trim().max(40).allow("", null).default(null),
+    shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)).default(SHIPPING_METHOD.STANDARD),
+    // Queue one tag per unit on create (mobile's "Add to Tag Queue").
+    add_to_tag_queue: Joi.boolean().truthy("true").falsy("false").default(false),
     attachments: Joi.array().items(Joi.string()).default([]),
     categories: Joi.array().items(Joi.string()).default([]),
     tags: Joi.array().items(Joi.string()).default([]),
@@ -81,6 +88,9 @@ const updateProduct = {
       .valid(...Object.values(PRODUCT_AUTHENTICITY))
       .allow("", null),
     vehicle: Joi.string().allow("", null),
+    package: Joi.string().allow("", null),
+    bay: Joi.string().trim().max(40).allow("", null),
+    shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)),
     attachments: Joi.array().items(Joi.string()),
     categories: Joi.array().items(Joi.string()),
     tags: Joi.array().items(Joi.string()),

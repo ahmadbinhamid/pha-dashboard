@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/Switch";
 import { ProductImages } from "@/components/media/ProductImages";
 import { FormSection } from "@/components/products/FormSection";
 import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { PackageDimensionsFields } from "@/components/shared/PackageDimensionsFields";
+import { ProductShippingSection } from "@/components/products/ProductShippingSection";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 import type { ProductFormValues } from "@/lib/validation/product";
 import { cn } from "@/utils/cn";
@@ -85,15 +87,12 @@ export function ProductFormSections({
       </FormSection>
 
       <FormSection number={2} title="Pricing" tag={<span className="text-xs text-fg/40">All amounts in A$</span>}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Retail price" required error={errors.price?.message}>
             <Input type="number" min="0" step="0.01" {...register("price")} placeholder="0.00" />
           </FormField>
           <FormField label="Cost price" error={errors.cost_price?.message}>
             <Input type="number" min="0" step="0.01" {...register("cost_price")} placeholder="0.00" />
-          </FormField>
-          <FormField label="Shipping cost" error={errors.shipping_cost?.message}>
-            <Input type="number" min="0" step="0.01" {...register("shipping_cost")} placeholder="0.00" />
           </FormField>
         </div>
       </FormSection>
@@ -164,11 +163,37 @@ export function ProductFormSections({
       </FormSection>
 
       <FormSection number={4} title="Stock" description={stock.description}>
+        <FormField label="Bay / bin location" error={errors.bay?.message} hint="Where it sits on the shelf; printed on the product tag.">
+          <Input {...register("bay")} placeholder="e.g. A3-02" maxLength={40} className="sm:max-w-xs" />
+        </FormField>
         {stock.content}
       </FormSection>
 
+      <FormSection number={5} title="Package details" description="Packed size and weight. Sales channels use these unless overridden.">
+        <Controller
+          control={control}
+          name="package"
+          render={({ field }) => (
+            <PackageDimensionsFields
+              value={field.value}
+              onChange={field.onChange}
+              error={
+                errors.package?.length?.message ??
+                errors.package?.width?.message ??
+                errors.package?.height?.message ??
+                errors.package?.weight?.message
+              }
+            />
+          )}
+        />
+      </FormSection>
+
+      <FormSection number={6} title="Shipping" description="How storefront orders are charged for delivery.">
+        <ProductShippingSection methods={methods} />
+      </FormSection>
+
       <FormSection
-        number={5}
+        number={7}
         title="Media"
         tag={<Badge variant="outline">{form.images.length} {form.images.length === 1 ? "Image" : "Images"}</Badge>}
       >
@@ -180,7 +205,7 @@ export function ProductFormSections({
       </FormSection>
 
       {notes && (
-        <FormSection number={6} title="Internal notes">
+        <FormSection number={8} title="Internal notes">
           {notes}
         </FormSection>
       )}

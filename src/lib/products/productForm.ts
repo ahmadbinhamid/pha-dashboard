@@ -1,5 +1,6 @@
 import type { ProductFormValues } from "@/lib/validation/product";
 import type { Product } from "@/types/product";
+import { EMPTY_PACKAGE_FORM, packageFromForm, packageToForm } from "@/lib/products/packageDimensions";
 
 export type ProductFormMode = "create" | "edit";
 
@@ -23,6 +24,9 @@ export const EMPTY_PRODUCT_FORM: ProductFormValues = {
   vehicle_model_code: "",
   vehicle_year: "",
   vehicle_year_to: "",
+  package: EMPTY_PACKAGE_FORM,
+  bay: "",
+  shipping_method: "standard",
   type: "physical",
   status: "active",
   is_published_online: true,
@@ -56,6 +60,9 @@ export function productToForm(p: Product): ProductFormValues {
     vehicle_model_code: p.vehicle?.model_code ?? "",
     vehicle_year: p.vehicle?.year_from != null ? String(p.vehicle.year_from) : "",
     vehicle_year_to: p.vehicle?.year_to != null ? String(p.vehicle.year_to) : "",
+    package: packageToForm(p.package),
+    bay: p.bay ?? "",
+    shipping_method: p.shipping_method ?? "standard",
     type: p.type,
     status: p.status,
     is_published_online: p.is_published_online,
@@ -97,6 +104,9 @@ export function productFormToFormData(form: ProductFormValues, mode: ProductForm
       year_to: form.vehicle_year_to ? Number(form.vehicle_year_to) : null,
     }),
   );
+  fd.append("package", JSON.stringify(packageFromForm(form.package)));
+  optional("bay", form.bay.trim());
+  fd.append("shipping_method", form.shipping_method);
   fd.append("type", form.type);
   fd.append("status", status);
   fd.append("is_published_online", String(form.is_published_online));

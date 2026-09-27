@@ -23,7 +23,7 @@ export function CategoryMappingsPanel() {
     <Card>
       <CardHeader
         title="Default channel categories"
-        description="eBay and Google use unrelated category systems, so map each of your product categories once. New listings pick these up automatically; a category set on an individual listing still wins. eBay ids must come from eBay's live category search."
+        description="eBay and Google use unrelated category systems, so map each of your product categories once. New listings pick these up automatically, a category set on an individual listing still wins. eBay ids must come from eBay's live category search."
       />
       <CardContent className="divide-y divide-border/60 py-0 sm:py-0">
         {overview.categories.length === 0 ? (

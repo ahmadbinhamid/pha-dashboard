@@ -8,6 +8,25 @@ const inventoryService = require("./inventory.service");
 const { getCompanyProfile } = require("./tenantSettings.service");
 const { buildLowStockReportPdfBuffer } = require("../utils/pdf/lowStockReportPdf");
 const emailService = require("./email/email.service");
+const { DIGEST_FREQUENCY, DIGEST_TIMEZONE } = require("../constants/inventory.constants");
+
+const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const localDayFormat = new Intl.DateTimeFormat("en-US", { timeZone: DIGEST_TIMEZONE, weekday: "short", day: "numeric" });
+
+// Sydney weekday and day of month of an instant (DST-correct via Intl).
+function localDay(instant) {
+  const parts = Object.fromEntries(localDayFormat.formatToParts(instant).map((p) => [p.type, p.value]));
+  return { weekday: WEEKDAY_INDEX[parts.weekday], monthDay: Number(parts.day) };
+}
+
+// Weekly/monthly: today's scheduled send falls on the chosen Sydney day.
+function isScheduledDay(settings, scheduledAt) {
+  const frequency = settings.notification_frequency ?? DIGEST_FREQUENCY.DAILY;
+  if (frequency === DIGEST_FREQUENCY.DAILY) return true;
+  const { weekday, monthDay } = localDay(scheduledAt);
+  if (frequency === DIGEST_FREQUENCY.WEEKLY) return weekday === (settings.notification_weekday ?? 1);
+  return monthDay === (settings.notification_month_day ?? 1);
+}
 
 function startOfUtcDay(d) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -68,6 +87,10 @@ async function maybeSendDigest(settings, nowMinutes, today) {
   if (nowMinutes < sendMinutes) {
     return "not_due";
   }
+  // NOTE: a worker down all of the chosen day skips to the next period.
+  if (!isScheduledDay(settings, new Date(today.getTime() + sendMinutes * 60_000))) {
+    return "not_scheduled_today";
+  }
 
   if (!settings.notification_email) {
     logger.warn(
@@ -103,4 +126,4 @@ async function maybeSendDigest(settings, nowMinutes, today) {
   return "sent";
 }
 
-module.exports = { sweepLowStockDigests, maybeSendDigest };
+module.exports = { sweepLowStockDigests, maybeSendDigest, isScheduledDay };

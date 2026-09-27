@@ -34,17 +34,16 @@ const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
 const { getCompanyProfile } = require("./tenantSettings.service");
 const notificationService = require("./notification.service");
+const { quoteCart, hasCalculatedShipping } = require("./shipping/shippingQuote.service");
 
-// GST-inclusive AU retail pricing: GST component = price / 11, never added on top.
+// AU prices are GST-inclusive: GST = price / 11, never added on top.
 const GST_DIVISOR = 11;
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-// Counter._id is namespaced per tenant so two tenants' sequences never collide. Stores just the
-// zero-padded number, no prefix baked in, applied at render time only — avoids an order number
-// looking identical to a SKU the way borrowing tenant.code as the prefix used to.
+// Bare number, prefix applied at render, so it never mimics a SKU.
 async function nextOrderNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
     { _id: tenantCounterKey(tenantId, "order_number") },
@@ -54,7 +53,7 @@ async function nextOrderNumber(tenantId) {
   return String(counter.seq).padStart(5, "0");
 }
 
-// Own sequence, kept separate from order_number so invoice numbering never assumes one order = one invoice.
+// Own sequence: invoice numbering must not assume one order = one invoice.
 async function nextInvoiceNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
     { _id: tenantCounterKey(tenantId, "invoice_number") },
@@ -68,7 +67,7 @@ function generateGuestAccessToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// Re-derives price/availability from the DB for every line item; the cart's totals are never trusted.
+// Re-derives price/availability from the DB; cart totals are never trusted.
 async function resolveOrderItem({ product: productId, variant: variantId, quantity }, tenantId) {
   if (!Number.isInteger(quantity) || quantity < 1) {
     throw httpError("Invalid quantity", 400);
@@ -112,8 +111,7 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
   };
 }
 
-// Resolves one line for a manual/in-store sale. Unlike resolveOrderItem, doesn't require
-// is_published_online, and accepts a per-line discount.
+// Manual sale line: skips is_published_online check; allows line discount.
 async function resolveManualOrderItem(
   { product: productId, variant: variantId, quantity, discount_amount = 0, note = null },
   tenantId,
@@ -122,7 +120,7 @@ async function resolveManualOrderItem(
     throw httpError("Invalid quantity", 400);
   }
 
-  // Product/variant lookups are independent — run them concurrently.
+  // Lookups are independent, so run them concurrently.
   const [product, variant] = await Promise.all([
     Product.findOne({ _id: productId, tenant_id: tenantId }),
     variantId
@@ -173,9 +171,7 @@ async function resolveManualOrderItem(
   };
 }
 
-// Admin-created in-person/counter sale, always channel MANUAL, settled with whatever staff
-// collected at the register. Stock is decremented immediately (unlike storefront), since the
-// goods leave with the customer now regardless of how much is actually paid.
+// Stock drops now: goods leave with the customer whatever is paid.
 async function createManualOrder(
   {
     customer_id,
@@ -198,7 +194,7 @@ async function createManualOrder(
     throw httpError("Order must contain at least one item", 400);
   }
 
-  // Each line's lookups are independent — resolving concurrently avoids slow multi-item sales.
+  // Resolve lines concurrently to keep multi-item sales fast.
   const resolvedItems = await Promise.all(items.map((item) => resolveManualOrderItem(item, tenant._id)));
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
@@ -206,8 +202,7 @@ async function createManualOrder(
     (sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount),
     0,
   );
-  // Nothing to ship for pickup — skip shipping cost entirely, mirroring createOrder.
-  // shippingCostOverride wins over the per-item sum when the staff member overrides it.
+  // Pickup ships nothing; shippingCostOverride beats the per-item sum.
   const shipping_cost = isPickup
     ? 0
     : shippingCostOverride != null
@@ -218,7 +213,7 @@ async function createManualOrder(
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
   const total = subtotal + shipping_cost;
 
-  // "payment_link" means nothing is collected now, so any amount_paid sent alongside it is ignored.
+  // "payment_link" collects nothing now, so any amount_paid is ignored.
   const isPaymentLink = payment_method === ORDER_PAYMENT_CHOICE.PAYMENT_LINK;
   const amountPaidCents = isPaymentLink ? 0 : Math.round(amount_paid * 100);
   if (amountPaidCents < 0 || amountPaidCents > total) {
@@ -248,7 +243,7 @@ async function createManualOrder(
     tax_amount,
     total,
     currency: "aud",
-    // payment_status alongside legacy status — createRefund's admission check gates on payment_status.
+    // createRefund's admission check gates on payment_status.
     status: derivePaymentStatus(amountPaidCents, total),
     payment_status: derivePaymentStatus(amountPaidCents, total),
     channel: ORDER_CHANNEL.MANUAL,
@@ -264,7 +259,7 @@ async function createManualOrder(
     order.stock_issue_note = stockIssueNote;
   }
 
-  // No Payment record when nothing was collected yet — a Payment doc represents money received, not a balance.
+  // No Payment when nothing was collected; a Payment means money received.
   if (amountPaidCents > 0) {
     const payment = await Payment.create({
       tenant_id: tenant._id,
@@ -281,7 +276,7 @@ async function createManualOrder(
 
   await order.save();
 
-  // Best-effort — a broken notification pipeline must never fail order creation.
+  // Best-effort: notification failures must never fail order creation.
   try {
     await notificationService.notifyNewOrder(tenant._id, order);
   } catch (err) {
@@ -291,15 +286,13 @@ async function createManualOrder(
   return order;
 }
 
-// Records a follow-up cash/transfer payment against an order with an outstanding balance.
-// Never touches stock — manual orders already deducted it in full at createManualOrder().
+// Never touches stock; createManualOrder already deducted it in full.
 async function recordOrderPayment(orderId, { payment_method, amount }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  // A staff-recorded cash/transfer payment only makes sense for a manual sale; storefront/eBay
-  // orders are only ever settled through Stripe.
+  // Only manual sales take staff payments; storefront/eBay settle via Stripe.
   if (order.channel !== ORDER_CHANNEL.MANUAL) {
     throw httpError("Only manual orders can have a payment recorded against them", 400);
   }
@@ -326,7 +319,7 @@ async function recordOrderPayment(orderId, { payment_method, amount }, tenantId)
   });
 
   order.payment = payment._id;
-  // payment_status alongside the legacy status, not instead of it.
+  // Set payment_status alongside legacy status, not instead of it.
   const derivedStatus = derivePaymentStatus(totalPaidCents + amountCents, order.total);
   order.status = derivedStatus;
   order.payment_status = derivedStatus;
@@ -335,8 +328,7 @@ async function recordOrderPayment(orderId, { payment_method, amount }, tenantId)
   return order;
 }
 
-// Corrects the order's own customer/address snapshot; never touches the linked Customer record
-// even when customer_id is set, since orders are a historical record independent of it.
+// Never updates the linked Customer; orders are a historical snapshot.
 async function updateOrderCustomerDetails(orderId, { customer, shipping_address, billing_address }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -349,7 +341,7 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
     if (customer.phone !== undefined) order.customer.phone = customer.phone || null;
   }
 
-  // Pickup orders carry no address — silently ignore address fields rather than erroring.
+  // Pickup orders carry no address, so address fields are silently ignored.
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   if (!isPickup) {
     if (shipping_address !== undefined) order.shipping_address = shipping_address;
@@ -360,7 +352,7 @@ async function updateOrderCustomerDetails(orderId, { customer, shipping_address,
   return order;
 }
 
-// Optional staff-supplied reference (e.g. a PO number), distinct from the system-generated numbers.
+// Staff reference (e.g. PO number), distinct from system-generated numbers.
 async function updateOrderReferenceNumber(orderId, { reference_number }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -373,13 +365,10 @@ async function updateOrderReferenceNumber(orderId, { reference_number }, tenantI
   return order;
 }
 
-// Channels whose line items/shipping can be corrected after the fact; storefront is excluded
-// since editing it here would desync from what the customer saw at checkout.
+// Storefront excluded: editing would desync from what checkout showed.
 const EDITABLE_CHANNELS = [ORDER_CHANNEL.EBAY, ORDER_CHANNEL.MANUAL];
 
-// Corrects a single line item's price on an eBay or manual order, recomputing totals the same
-// way order creation does. If already paid, the divergence surfaces via Balance Outstanding
-// for manual reconciliation — no refund/extra-charge is triggered automatically.
+// If already paid, no auto refund/charge; Balance Outstanding shows it.
 async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -412,7 +401,7 @@ async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }, 
   return order;
 }
 
-// Corrects the order's freight charge after the fact, same reasoning and caveats as updateOrderItemPrice.
+// Freight correction; same caveats as updateOrderItemPrice.
 async function updateOrderShippingCost(orderId, { shipping_cost }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -435,8 +424,7 @@ async function updateOrderShippingCost(orderId, { shipping_cost }, tenantId) {
   return order;
 }
 
-// Corrects a single line item's discount (applied per line, not as one order-level lump),
-// same reasoning and caveats as updateOrderItemPrice.
+// Per-line discount, not an order-level lump; see updateOrderItemPrice.
 async function updateOrderItemDiscount(orderId, itemIndex, { discount_amount }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -469,7 +457,7 @@ async function updateOrderItemDiscount(orderId, itemIndex, { discount_amount }, 
   return order;
 }
 
-// Adds a staff comment to internal notes, distinct from the customer-facing `note` at creation.
+// Internal staff note, distinct from the customer-facing `note`.
 async function addOrderNote(orderId, { text, userId }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -480,7 +468,15 @@ async function addOrderNote(orderId, { text, userId }, tenantId) {
   return order;
 }
 
-// `tenant` is resolved from the storefront's own tenant identifier, not a JWT — no staff user here.
+// Flat per-unit rates, or a Transdirect quote when any product needs one.
+async function orderShippingCents(tenantId, items, resolvedItems, shippingAddress) {
+  const flatCents = Math.round(resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100);
+  if (!(await hasCalculatedShipping(tenantId, items))) return flatCents;
+  const quote = await quoteCart(tenantId, { items, receiver: shippingAddress });
+  return quote.shipping_cost;
+}
+
+// `tenant` comes from the storefront identifier, not a JWT; no staff user.
 async function createOrder(
   { items, customer, shipping_address, billing_address, delivery_method = ORDER_DELIVERY_METHOD.DELIVERY },
   tenant,
@@ -496,12 +492,8 @@ async function createOrder(
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const subtotal = resolvedItems.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
-  // Nothing to ship for pickup — skip the per-item shipping cost entirely.
-  const shipping_cost = isPickup
-    ? 0
-    : Math.round(
-        resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
-      );
+  // Pickup ships nothing; otherwise flat rates plus any calculated quote.
+  const shipping_cost = isPickup ? 0 : await orderShippingCents(tenant._id, items, resolvedItems, shipping_address);
   const total = subtotal + shipping_cost;
   const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
 
@@ -528,14 +520,11 @@ async function createOrder(
   return order;
 }
 
-// Resolves one mapped eBay line item; trusts eBay's own price/title snapshot rather than
-// re-deriving from the current Product, since that's what the buyer actually paid. Returns null
-// if the SKU doesn't match a known product, so the caller skips just that line.
+// Trusts eBay's price/title (what buyer paid); null for an unknown SKU.
 async function resolveEbayLineItem(lineItem, tenantId) {
   if (!lineItem.sku) return null;
 
-  // The Product/ProductVariant re-fetch below with tenant_id is redundant defense-in-depth,
-  // kept anyway since it's cheap and guards against resolveSkuToIds regressing independently.
+  // Tenant-scoped re-fetch: cheap defense-in-depth vs resolveSkuToIds bugs.
   const ids = await resolveSkuToIds(lineItem.sku, tenantId);
   if (!ids) {
     logger.warn(`[order.service] eBay order line SKU not found locally: ${lineItem.sku}`);
@@ -558,8 +547,7 @@ async function resolveEbayLineItem(lineItem, tenantId) {
   };
 }
 
-// Imports a paid eBay order into the same Order collection. Idempotent on external_order_id.
-// Returns null (not an error) when already imported or no line items match a known product.
+// Idempotent on external_order_id; null if imported or no SKU matches.
 async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
   const mapped = mapEbayOrder(rawEbayOrder, { ORDER_STATUS });
   if (!mapped.externalOrderId) {
@@ -601,12 +589,10 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     shipping_cost: mapped.shippingCents,
     tax_amount: mapped.taxCents,
     total: mapped.totalCents,
-    // Previously hardcoded "aud"; prefer eBay's own reported currency, falling back to the
-    // tenant's marketplace currency only if genuinely absent. Found live.
+    // Prefer eBay's currency; tenant marketplace currency only if absent.
     currency: (mapped.currency || currencyForMarketplace(settings?.marketplace_id)).toLowerCase(),
     status: mapped.status,
-    // eBay orders arrive already paid (Managed Payments settles before reaching us), so
-    // payment_status is unconditionally PAID and fulfillment_status follows mapped.status.
+    // eBay Managed Payments settles before import, so payment is always PAID.
     payment_status: ORDER_PAYMENT_STATUS.PAID,
     fulfillment_status:
       mapped.status === ORDER_STATUS.FULFILLED ? ORDER_FULFILLMENT_STATUS.COMPLETED : ORDER_FULFILLMENT_STATUS.PENDING,
@@ -617,8 +603,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     guest_access_token: generateGuestAccessToken(),
   });
 
-  // Without this, every eBay order would look unpaid elsewhere in the app (balance-due
-  // banners, invoice totals) since nothing else creates a Payment for this channel.
+  // Else eBay orders look unpaid in balance-due banners and invoice totals.
   const payment = await Payment.create({
     tenant_id: tenant._id,
     order: order._id,
@@ -633,7 +618,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
 
   logger.info(`[order.service] imported eBay order ${mapped.externalOrderId} as ${order.order_number}`);
 
-  // Best-effort — see the identical comment in createManualOrder above.
+  // Best-effort: notification failures must never fail the import.
   try {
     await notificationService.notifyNewOrder(tenant._id, order);
   } catch (err) {
@@ -643,11 +628,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
   return order;
 }
 
-// Reflects an eBay cancellation/return onto the matching local Order. No-op if never imported.
-// Doesn't create a Refund automatically — eBay-side refunds settle on eBay's own payments;
-// staff can record a manual refund if they want it reflected locally.
-// eBay sends one event per SKU, so only flip the order's status when the notification covers
-// every item on it; otherwise it's a partial cancellation left for manual reconciliation.
+// eBay events are per-SKU: flip status only once every item is covered.
 async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status }, tenantId) {
   const order = await Order.findOne({
     tenant_id: tenantId,
@@ -666,8 +647,7 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
   }
 
   order.status = status;
-  // Only for an actual cancellation — a RETURNED status means it already shipped and came
-  // back, not "cancelled" in the fulfillment sense, so fulfillment_status is left as-is.
+  // RETURNED means shipped and came back, so fulfillment_status stays.
   if (status === ORDER_STATUS.CANCELLED) {
     order.fulfillment_status = ORDER_FULFILLMENT_STATUS.CANCELLED;
   }
@@ -675,14 +655,12 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
   return order;
 }
 
-// Admin-triggered status change; unconditional, no payment-state gating. Writes only
-// fulfillment_status; payment_status is always derived from actual payments, never settable by
-// hand. Legacy `status` is kept in sync as a pure derivation for readers not yet migrated off it.
+// payment_status derives from payments; legacy status is derived too.
 async function updateOrderStatus(orderId, { status }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) throw httpError("Order not found", 404);
 
-  // Restock only fires on the transition into cancelled, to avoid double-restocking.
+  // Restock only on the transition into cancelled, to avoid double-restocking.
   if (status === ORDER_FULFILLMENT_STATUS.CANCELLED && order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.CANCELLED) {
     await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
   }
@@ -702,8 +680,7 @@ function safeTokenMatch(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-// Public/guest lookup requiring the creation-time token. Returns a generic 404 (not 401/403)
-// on a bad token so a guessed order ID doesn't confirm the order exists.
+// Bad token gives 404, not 401/403, so guessed IDs don't confirm existence.
 async function getOrderForGuest(orderId, token, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId })
     .select("+guest_access_token")
@@ -714,12 +691,12 @@ async function getOrderForGuest(orderId, token, tenantId) {
   return order;
 }
 
-// guest_access_token is select:false by default; needed here to build an admin-generated payment link.
+// guest_access_token is select:false; needed to build the payment link.
 async function getOrderForPaymentLink(orderId, tenantId) {
   return Order.findOne({ _id: orderId, tenant_id: tenantId }).select("+guest_access_token");
 }
 
-// ── Admin ────────────────────────────────────────────────────────────────
+// ── Admin ──
 
 async function listOrders(
   { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, search } = {},
@@ -755,7 +732,7 @@ async function listOrders(
   };
 }
 
-// Summary tiles for the admin orders list page. One $facet round-trip; revenue excludes cancelled orders.
+// One $facet round-trip; revenue excludes cancelled orders.
 async function getOrderStats(tenantId) {
   const [result] = await Order.aggregate([
     { $match: { tenant_id: tenantId } },
@@ -788,8 +765,7 @@ async function getOrderStats(tenantId) {
   };
 }
 
-// Full order record for the admin view; unlike getOrderForGuest, includes full payment+refund
-// history rather than just the single most-recent Payment `order.payment` points at.
+// Unlike getOrderForGuest, includes full payment and refund history.
 async function getOrderDetailForAdmin(orderId, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) throw httpError("Order not found", 404);
@@ -803,21 +779,19 @@ async function getOrderDetailForAdmin(orderId, tenantId) {
   return { ...orderFields, payments, refunds };
 }
 
-// Triggered by "Send Email" on the order detail page. Tracking is optional for DELIVERY orders;
-// marking the order FULFILLED happens either way. Re-sending reuses on-file tracking unless
-// new values are passed. Both paths attach the same invoice PDF; only the email differs.
+// Marks FULFILLED either way; re-send reuses on-file tracking by default.
 async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  // Sums every succeeded Payment, not just order.payment — a manual sale can have a deposit plus a follow-up.
+  // Sums all succeeded Payments; a manual sale may have deposit + follow-up.
   const [totalPaidCents, totalRefundedCents, companyProfile] = await Promise.all([
     getTotalPaidForOrder(order._id),
     getTotalRefundedForOrder(order._id),
     getCompanyProfile(order.tenant_id),
   ]);
 
-  // In-person sales are already complete — no shipped/pickup framing, just an invoice/receipt email.
+  // In-person sales are complete: invoice/receipt only, no shipping framing.
   if (order.channel === ORDER_CHANNEL.MANUAL) {
     if (!order.customer.email) {
       throw httpError("This customer has no email on file — add one before sending an invoice", 400);
@@ -852,8 +826,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
 
     if (order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.COMPLETED) {
       order.fulfillment_status = ORDER_FULFILLMENT_STATUS.COMPLETED;
-      // Legacy `status` derived, not set directly — refund.service.js's recomputeLedger reads
-      // fulfillment_status to decide whether a refund may overwrite the legacy status field.
+      // refund recomputeLedger reads fulfillment_status before touching status.
       order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
     }
     await order.save();
@@ -891,8 +864,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   return order;
 }
 
-// Triggered by "Send Payment Link"; emails the customer the same URL createPaymentLinkForOrder
-// builds for staff. Owns the order lookup itself so the controller never touches Mongoose directly.
+// Emails the same URL createPaymentLinkForOrder builds for staff.
 async function sendPaymentLinkEmail(orderId, tenant) {
   // +guest_access_token: select:false by default; needed to build the link.
   const order = await Order.findOne({ _id: orderId, tenant_id: tenant._id }).select("+guest_access_token");
@@ -923,8 +895,7 @@ async function sendPaymentLinkEmail(orderId, tenant) {
   return { url };
 }
 
-// Triggered by "Download PDF" — same invoice as sendOrderNotification's attachment, handed
-// straight to the browser. Its own read-only fetch since downloading skips the fulfilment side effect.
+// Separate read-only fetch: downloading skips the fulfilment side effect.
 async function getInvoicePdfForOrder(orderId, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);

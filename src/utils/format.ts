@@ -14,22 +14,22 @@ export function formatCompactNumber(n: number) {
   return _compactFmt.format(n);
 }
 
-// Payment/Refund amounts are integer cents on the backend, unlike Product.price (dollars) — keep the boundary explicit rather than dividing by 100 ad hoc.
+// Payment/refund amounts are integer cents; Product.price is dollars.
 export function formatCurrencyFromCents(cents: number, currency: string = "AUD") {
   return formatCurrency(cents / 100, currency);
 }
 
-// GST-inclusive AU pricing: GST is extracted as total/11, never added on top — same convention as order.service.js#GST_DIVISOR, applied per-line since order.tax_amount is order-level only.
+// GST-inclusive AU pricing: GST is total/11, never added on top.
 export function getLineGst(lineTotalCents: number) {
   return Math.round(lineTotalCents / 11);
 }
 
-// Same GST-inclusive convention as getLineGst, applied to a unit's inclusive price to get its GST-exclusive counterpart for display.
+// GST-exclusive unit price, same inclusive convention as getLineGst.
 export function getExclusiveUnitPrice(unitPriceCents: number) {
   return unitPriceCents - getLineGst(unitPriceCents);
 }
 
-// order_number/invoice_number store just the zero-padded sequence ("00001") — the prefix comes from the order's own snapshotted prefix (types/orders.ts), never a live tenant-setting lookup that would retroactively relabel past orders. Backend outputs use the equivalent server/src/utils/orderNumberFormat.js.
+// Prefix comes from the order's own snapshot, so past orders never relabel.
 export function formatOrderNumber(prefix: string, raw: string) {
   return `${prefix}-${raw}`;
 }
@@ -38,7 +38,7 @@ export function formatInvoiceNumber(prefix: string, raw: string) {
   return `${prefix}-${raw}`;
 }
 
-// eBay orders store the buyer's masked identifier as an "ebay:<code>, " prefix on address line 1 — meaningless on a customer-facing invoice. Strips it when present, a no-op otherwise, so it's safe unconditionally. Backend PDFs use server/src/utils/addressFormat.js.
+// Drops eBay's masked-buyer "ebay:<code>, " prefix from address line 1.
 export function stripEbayAddressPrefix(address: string) {
   return address.replace(/^ebay:[^,]*,\s*/i, "");
 }
@@ -55,4 +55,16 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   const days = Math.round(hours / 24);
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString("en-AU");
+}
+
+/** "1 tag" / "3 tags"; for regular plurals only. */
+export function pluralize(count: number, word: string) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/** 1 -> "1st", 22 -> "22nd", 13 -> "13th". */
+export function formatOrdinal(n: number) {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
 }

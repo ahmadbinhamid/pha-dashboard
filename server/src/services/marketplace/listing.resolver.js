@@ -2,7 +2,7 @@
 // Merges Product/Variant content with listing overrides; adapters read this.
 
 const { httpError } = require("../../utils/http/httpError");
-const { resolveCondition, resolveAuthenticity, resolveFitment, fitmentFromVehicle } = require("./productFallbacks");
+const { resolveCondition, resolveAuthenticity, resolveFitment, resolvePackage, fitmentFromVehicle } = require("./productFallbacks");
 const { CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
 
 function resolveSku(listing, product, variant) {
@@ -51,6 +51,8 @@ function resolveListing(listing, product, variant = null) {
     condition: resolveCondition(listing, product),
     authenticity: resolveAuthenticity(listing, product),
     fitment: resolveFitment(listing, product),
+    // { length, width, height, weight } | null
+    package: resolvePackage(listing, product),
     photos: resolvePhotos(listing, product, variant),
     identifiers: resolveIdentifiers(listing, product),
     // { id, name, source: "listing" | "mapping" } | null
