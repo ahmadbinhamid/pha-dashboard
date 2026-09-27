@@ -17,18 +17,15 @@ import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders, getOrderStats } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { ORDER_STATUSES, ORDER_STATUS_LABEL } from "@/config/orderStatus";
 import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart, Banknote, Clock, CreditCard } from "lucide-react";
 
-// Order lifecycle, independent of payment status
+// Order lifecycle, independent of payment status.
 const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = [
   { label: "All Status", value: "" },
-  { label: "Pending", value: "pending" },
-  { label: "Processing", value: "processing" },
-  { label: "On Hold", value: "on_hold" },
-  { label: "Completed", value: "completed" },
-  { label: "Cancelled", value: "cancelled" },
+  ...ORDER_STATUSES.map((value) => ({ label: ORDER_STATUS_LABEL[value], value })),
 ];
 
 // Always derived from actual payments/refunds, never admin-editable.
@@ -53,7 +50,7 @@ const MODE_FILTERS: { label: string; value: OrderDeliveryMethod | "" }[] = [
   { label: "Pickup", value: "pickup" },
 ];
 
-// Order ID and Actions are structural; the rest are hideable, per browser
+// Order ID and Actions are structural; the rest are hideable, per browser.
 const ORDER_COLUMNS: ColumnDef[] = [
   { key: "customer", label: "Customer", alwaysVisible: true },
   { key: "channel", label: "Channel" },

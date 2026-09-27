@@ -1,12 +1,10 @@
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { SingleSelect } from "@/components/ui/SingleSelect";
-import { ORDER_STATUS_LABEL } from "@/components/orders/OrderStatusBadge";
+import { ORDER_STATUSES, ORDER_STATUS_LABEL } from "@/config/orderStatus";
 import { useToast } from "@/context";
 import { updateOrderStatus } from "@/lib/api/orders";
 import { cn } from "@/utils/cn";
 import type { OrderFulfillmentStatus } from "@/types/orders";
-
-const STATUSES: OrderFulfillmentStatus[] = ["pending", "processing", "on_hold", "completed", "cancelled"];
 
 const DOT_COLOR: Record<OrderFulfillmentStatus, string> = {
   pending: "bg-tag-warn-fg",
@@ -17,7 +15,7 @@ const DOT_COLOR: Record<OrderFulfillmentStatus, string> = {
 };
 
 // Dot + label per status; the trigger mirrors the selected item.
-const STATUS_OPTIONS = STATUSES.map((status) => ({
+const STATUS_OPTIONS = ORDER_STATUSES.map((status) => ({
   value: status,
   label: (
     <span className="flex items-center gap-2">
@@ -35,8 +33,8 @@ export function OrderStatusSelect({ order }: { order: { _id: string; fulfillment
   const mutation = useMutation({
     mutationFn: (status: OrderFulfillmentStatus) => updateOrderStatus(order._id, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["order", order._id] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["order", order._id] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast({ title: "Order status updated", tone: "success" });
     },
     onError: (err: Error) => {

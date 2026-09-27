@@ -4,7 +4,7 @@
 const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
 const Role = require("../models/Role");
-const { MEMBERSHIP_STATUS, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
+const { MEMBERSHIP_STATUS, TENANT_ADMIN_ROLE_NAMES, LAST_ACTIVE_THROTTLE_MS } = require("../constants/access.constants");
 const { ALL_PERMISSIONS } = require("../config/permissions");
 
 // Admin, or the pre-migration Super Admin name for the same owner role.
@@ -136,38 +136,21 @@ async function setDefaultMembership(userId, tenantId) {
   return target.toObject();
 }
 
-/** The permissions a user holds; [] when not a member or suspended. */
-async function getPermissions(userId, tenantId) {
-  const membership = await Membership.findOne({
-    user_id: userId,
-    tenant_id: tenantId,
-    status: MEMBERSHIP_STATUS.ACTIVE,
-  })
+/** The user's active membership in a tenant, with role name and permissions. */
+function findActiveMembership(userId, tenantId) {
+  return Membership.findOne({ user_id: userId, tenant_id: tenantId, status: MEMBERSHIP_STATUS.ACTIVE })
     .populate("role_id", "name permissions")
     .lean();
-
-  return membership?.role_id?.permissions ?? [];
 }
 
-/** Checks an already-loaded membership, avoiding a second query. */
-function membershipHasPermission(membership, permission) {
-  if (!membership) return false;
-  // Admin short-circuits, so it keeps full access as the catalogue grows.
-  if (isAdminRole(membership.role_id)) return true;
-  return (membership.role_id?.permissions ?? []).includes(permission);
+/** Permissions a user holds in a tenant; same rules as a live request. */
+async function getPermissions(userId, tenantId) {
+  return requestPermissions({ membership: await findActiveMembership(userId, tenantId) });
 }
 
 /** Does this user hold `permission` in this organisation right now? */
 async function hasPermission(userId, tenantId, permission) {
-  const membership = await Membership.findOne({
-    user_id: userId,
-    tenant_id: tenantId,
-    status: MEMBERSHIP_STATUS.ACTIVE,
-  })
-    .populate("role_id", "name permissions")
-    .lean();
-
-  return membershipHasPermission(membership, permission);
+  return (await getPermissions(userId, tenantId)).includes(permission);
 }
 
 // Legacy account roles that owned a tenant before memberships existed.
@@ -186,17 +169,15 @@ function requestPermissions({ membership, user }) {
 
 /** Whether the user is an active Admin (owner) of this tenant. */
 async function isTenantAdmin(userId, tenantId) {
-  const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId, status: MEMBERSHIP_STATUS.ACTIVE })
-    .populate("role_id", "name")
-    .lean();
-  return isAdminRole(membership?.role_id);
+  return isAdminRole((await findActiveMembership(userId, tenantId))?.role_id);
 }
 
-/** Stamped by the auth layer, so "last active" on the members table is real. */
-async function touchLastActive(userId, tenantId) {
-  await Membership.updateOne(
-    { user_id: userId, tenant_id: tenantId },
-    { $set: { last_active_at: new Date() } },
+/** Stamps "last active" off the request path, at most once per window. */
+function touchLastActive(membership) {
+  const last = membership.last_active_at ? new Date(membership.last_active_at).getTime() : 0;
+  if (Date.now() - last < LAST_ACTIVE_THROTTLE_MS) return;
+  Membership.updateOne({ _id: membership._id }, { $set: { last_active_at: new Date() } }).catch((err) =>
+    console.error("touchLastActive failed:", err.message),
   );
 }
 
@@ -220,7 +201,6 @@ module.exports = {
   setDefaultMembership,
   getPermissions,
   hasPermission,
-  membershipHasPermission,
   isAdminRole,
   isTenantAdmin,
   isRequestTenantAdmin,

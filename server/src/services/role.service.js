@@ -1,18 +1,13 @@
 // services/role.service.js
 // Owns every Role query; each tenant is seeded with protected Admin and Staff.
 
-const { Types } = require("mongoose");
 const Role = require("../models/Role");
 const Membership = require("../models/Membership");
 const Invitation = require("../models/Invitation");
 const inviteService = require("./invite.service");
+const membershipService = require("./membership.service");
 const { SYSTEM_ROLE, LEGACY_OWNER_ROLE, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
 const { ALL_PERMISSIONS, unknownPermissions, groupPermissions } = require("../config/permissions");
-
-// Aggregations don't cast, so ids must be ObjectIds before $match.
-function toObjectId(id) {
-  return typeof id === "string" ? new Types.ObjectId(id) : id;
-}
 
 const ADMIN_DESCRIPTION = "Owner of this organisation, with full access. Cannot be edited or removed.";
 
@@ -80,24 +75,16 @@ async function seedSystemRoles(tenantId) {
 
 /** Roles for a tenant, each with how many members currently hold it. */
 async function listRoles(tenantId) {
-  const roles = await Role.find({ tenant_id: tenantId }).sort({ is_system: -1, name: 1 }).lean();
-
-  // One grouped count rather than a query per role.
-  const counts = await Membership.aggregate([
-    { $match: { tenant_id: toObjectId(tenantId), deleted_at: null } },
-    { $group: { _id: "$role_id", count: { $sum: 1 } } },
+  const [roles, countByRole] = await Promise.all([
+    Role.find({ tenant_id: tenantId }).sort({ is_system: -1, name: 1 }).lean(),
+    membershipService.countMembersByRole(tenantId),
   ]);
-  const countByRole = new Map(counts.map((c) => [String(c._id), c.count]));
 
   return roles.map((role) => ({ ...role, members_count: countByRole.get(String(role._id)) || 0 }));
 }
 
 async function getRoleById(roleId, tenantId) {
   return Role.findOne({ _id: roleId, tenant_id: tenantId }).lean();
-}
-
-async function getRoleByName(tenantId, name) {
-  return Role.findOne({ tenant_id: tenantId, name }).lean();
 }
 
 async function createRole(tenantId, { name, description = null, permissions = [] }) {
@@ -216,7 +203,6 @@ module.exports = {
   migrateTenantAdminRoles,
   listRoles,
   getRoleById,
-  getRoleByName,
   createRole,
   updateRole,
   deleteRole,

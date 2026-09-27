@@ -16,6 +16,9 @@ const MEMBERSHIP_STATUS = Object.freeze({
   SUSPENDED: "suspended",
 });
 
+// "Last active" is stamped at most this often, so auth rarely writes.
+const LAST_ACTIVE_THROTTLE_MS = 5 * 60 * 1000;
+
 const INVITE_STATUS = Object.freeze({
   PENDING: "pending",
   ACCEPTED: "accepted",
@@ -23,4 +26,11 @@ const INVITE_STATUS = Object.freeze({
   REVOKED: "revoked",
 });
 
-module.exports = { SYSTEM_ROLE, LEGACY_OWNER_ROLE, TENANT_ADMIN_ROLE_NAMES, MEMBERSHIP_STATUS, INVITE_STATUS };
+module.exports = {
+  SYSTEM_ROLE,
+  LEGACY_OWNER_ROLE,
+  TENANT_ADMIN_ROLE_NAMES,
+  MEMBERSHIP_STATUS,
+  LAST_ACTIVE_THROTTLE_MS,
+  INVITE_STATUS,
+};

@@ -54,6 +54,7 @@ const auth =
 
       if (active) {
         req.membership = active;
+        membershipService.touchLastActive(active);
         req.tenantId = active.tenant_id;
         // Full Mongoose doc; SKU/prefix code needs every field.
         req.tenant = await tenantService.findTenantById(req.tenantId);
