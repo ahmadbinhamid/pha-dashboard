@@ -21,6 +21,8 @@ router.put(
   asyncHandler(ctrl.updateSettings),
 );
 
+router.get("/stats", requirePermission("inventory.view"), asyncHandler(ctrl.getStats));
+
 // Inventory list
 router.get(
   "/", requirePermission("inventory.view"),

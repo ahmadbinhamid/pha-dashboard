@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadge";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { CustomerDeleteModal } from "@/components/customers/CustomerDeleteModal";
+import { CustomerStatCards } from "@/components/customers/CustomerStatCards";
 import { getCustomers } from "@/lib/api/customers";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { Customer } from "@/types/customer";
@@ -94,6 +95,8 @@ export default function CustomersPage() {
           </Button>
         </Can>
       </PageHeader>
+
+      <CustomerStatCards />
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

@@ -16,7 +16,7 @@ import { ListingSyncLogSheet } from "@/components/listings/ListingSyncLogSheet";
 import { ListingRetryResultCard } from "@/components/listings/ListingRetryResultCard";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
-import { LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
+import { LISTING_FAILURES_STATUS, LISTING_STATUS_FILTER_ALL, LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
 import { productChannelsPath } from "@/config/salesChannels";
 import { getChannelLogo } from "@/components/channels/channelLogos";
 import { getListings, pushListing } from "@/lib/api/listings";
@@ -27,14 +27,10 @@ import type { ChannelSummary } from "@/types/channel";
 import type { AnyMarketplaceListing, ListingSyncStatus } from "@/types/marketplace";
 import { Search, CheckCircle2, RefreshCw } from "lucide-react";
 
-// No status param means failures; "all" is the explicit opt-out.
-const DEFAULT_STATUS: ListingSyncStatus = "error";
-const ALL_STATUSES = "all";
-
 const STATUS_FILTERS = [
   { label: "All statuses", value: "" },
   ...(Object.entries(LISTING_SYNC_STATUS_CONFIG) as [ListingSyncStatus, { label: string }][]).map(([value, cfg]) => ({
-    label: value === DEFAULT_STATUS ? "Failures" : cfg.label,
+    label: value === LISTING_FAILURES_STATUS ? "Failures" : cfg.label,
     value,
   })),
 ];
@@ -52,8 +48,8 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
 
   const search = searchParams.get("search") ?? "";
   const platform = searchParams.get("platform") ?? "";
-  const statusParam = searchParams.get("status") ?? DEFAULT_STATUS;
-  const syncStatus = statusParam === ALL_STATUSES ? "" : statusParam;
+  const statusParam = searchParams.get("status") ?? LISTING_FAILURES_STATUS;
+  const syncStatus = statusParam === LISTING_STATUS_FILTER_ALL ? "" : statusParam;
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
 
@@ -164,7 +160,7 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
               size="sm"
               options={STATUS_FILTERS}
               value={syncStatus}
-              onChange={(v) => updateParams({ status: v === DEFAULT_STATUS ? null : v || ALL_STATUSES })}
+              onChange={(v) => updateParams({ status: v === LISTING_FAILURES_STATUS ? null : v || LISTING_STATUS_FILTER_ALL })}
             />
           </div>
         </div>
@@ -172,7 +168,7 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
         {isLoading ? (
           <SyncTableSkeleton />
         ) : listings.length === 0 ? (
-          <SyncTableEmptyState failuresOnly={syncStatus === DEFAULT_STATUS} onShowAll={() => updateParams({ status: ALL_STATUSES })} />
+          <SyncTableEmptyState failuresOnly={syncStatus === LISTING_FAILURES_STATUS} onShowAll={() => updateParams({ status: LISTING_STATUS_FILTER_ALL })} />
         ) : (
           <div className="overflow-x-auto">
             <Table className="min-w-220">

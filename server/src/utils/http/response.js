@@ -22,11 +22,16 @@ const systemfailure = (response, err) => {
   if (typeof err === "object" && err.status) status = err.status;
   if (typeof err === "object" && err.message) message = err.message;
 
-  logger.error({
-    message: err?.message || "System failure",
-    type: "systemfailure",
-    stack: err?.stack || null,
-  });
+  // A deliberate httpError (has .status) is handled, so no stack or error level.
+  if (Number.isInteger(err?.status)) {
+    logger.warn({ message: err.message, type: "systemfailure", status: err.status });
+  } else {
+    logger.error({
+      message: err?.message || "System failure",
+      type: "systemfailure",
+      stack: err?.stack || null,
+    });
+  }
 
   if (
     [
@@ -36,7 +41,7 @@ const systemfailure = (response, err) => {
     ].includes(err?.name) &&
     process.env.APP_ENV === "production"
   ) {
-    // sendErrorAlert never actually rejects; `void` documents this fire-and-forget as deliberate.
+    // sendErrorAlert never rejects; `void` marks fire-and-forget as deliberate.
     void sendErrorAlert(
       "🚨 MongoDB Connection Error",
       `${err?.name}\n\n${err?.stack || ""}`,

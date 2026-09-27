@@ -3,6 +3,14 @@
 const customerService = require("../services/customer.service");
 const { success, created, notFound, requestConflict, systemfailure } = require("../utils/http/response");
 
+exports.getStats = async (req, res) => {
+  try {
+    return success(res, await customerService.getCustomerStats(req.tenantId));
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
 exports.getCustomers = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;

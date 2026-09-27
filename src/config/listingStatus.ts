@@ -20,3 +20,8 @@ export const LISTING_SYNC_STATUS_SEVERITY: ListingSyncStatus[] = [
   "synced",
   "not_listed",
 ];
+
+// Channel sync ?status= values: no param means failures, "all" opts out.
+export const LISTING_FAILURES_STATUS: ListingSyncStatus = "error";
+export const LISTING_STATUS_FILTER_ALL = "all";
+export type ListingStatusFilter = ListingSyncStatus | typeof LISTING_STATUS_FILTER_ALL;

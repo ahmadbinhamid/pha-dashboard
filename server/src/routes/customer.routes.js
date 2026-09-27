@@ -12,6 +12,8 @@ const ctrl = require("../controllers/customer.controller");
 router.use(auth());
 
 router.get("/", requirePermission("customers.view"), pagination(), validate(v.listCustomers), asyncHandler(ctrl.getCustomers));
+// Before "/:id", which would otherwise read "stats" as a customer id.
+router.get("/stats", requirePermission("customers.view"), asyncHandler(ctrl.getStats));
 router.get("/:id", requirePermission("customers.view"), validate(v.byIdParam), asyncHandler(ctrl.getCustomer));
 router.post("/", requirePermission("customers.create"), validate(v.createCustomer), asyncHandler(ctrl.createCustomer));
 router.put("/:id", requirePermission("customers.update"), validate({ ...v.byIdParam, ...v.updateCustomer }), asyncHandler(ctrl.updateCustomer));

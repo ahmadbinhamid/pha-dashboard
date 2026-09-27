@@ -2,7 +2,7 @@
 
 const ORDER_STATUS = Object.freeze({
   PENDING_PAYMENT: "pending_payment",
-  // Some, not all, of the order total collected — e.g. a deposit with the remainder still due.
+  // Part of the total collected, e.g. a deposit with the rest still due.
   PARTIALLY_PAID: "partially_paid",
   PAID: "paid",
   FULFILLED: "fulfilled",
@@ -11,23 +11,21 @@ const ORDER_STATUS = Object.freeze({
   PARTIALLY_REFUNDED: "partially_refunded",
 });
 
-// Where an order originated; orders are one unified collection regardless of channel.
+// Where an order came from; every channel shares one collection.
 const ORDER_CHANNEL = Object.freeze({
   STOREFRONT: "storefront",
   EBAY: "ebay",
-  // In-person/counter sale created by staff from the admin dashboard.
+  // Counter sale created by staff in the dashboard.
   MANUAL: "manual",
 });
 
-// How a storefront order reaches the customer; pickup carries no shipping_address/cost.
+// How the order reaches the customer; pickup has no address or shipping.
 const ORDER_DELIVERY_METHOD = Object.freeze({
   DELIVERY: "delivery",
   PICKUP: "pickup",
 });
 
-// Splits ORDER_STATUS's mixed payment/fulfilment concerns apart, since overwriting FULFILLED
-// with REFUNDED was exactly the bug that motivated this. Distinct from payment.constants.js's
-// PAYMENT_STATUS (a single Payment's lifecycle vs. an Order's aggregate position) — do not conflate.
+// Order-level payment position; PAYMENT_STATUS is one Payment's lifecycle.
 const ORDER_PAYMENT_STATUS = Object.freeze({
   PENDING_PAYMENT: "pending_payment",
   PARTIALLY_PAID: "partially_paid",
@@ -36,7 +34,7 @@ const ORDER_PAYMENT_STATUS = Object.freeze({
   REFUNDED: "refunded",
 });
 
-// Admin-editable order lifecycle, deliberately independent of ORDER_PAYMENT_STATUS.
+// Staff-editable lifecycle, independent of ORDER_PAYMENT_STATUS.
 const ORDER_FULFILLMENT_STATUS = Object.freeze({
   PENDING: "pending",
   PROCESSING: "processing",
@@ -45,8 +43,12 @@ const ORDER_FULFILLMENT_STATUS = Object.freeze({
   CANCELLED: "cancelled",
 });
 
+// Orders with money still owing: an outstanding invoice.
+const UNPAID_ORDER_STATUSES = Object.freeze([ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID]);
+
 module.exports = {
   ORDER_STATUS,
+  UNPAID_ORDER_STATUSES,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
   ORDER_PAYMENT_STATUS,

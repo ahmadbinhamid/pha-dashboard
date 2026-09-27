@@ -17,7 +17,7 @@ import {
   ModalDescription,
 } from "@/components/ui/Modal";
 import { useToast } from "@/context";
-import { getInventorySettings, updateInventorySettings } from "@/lib/api/inventory";
+import { INVENTORY_STATS_QUERY_KEY, getInventorySettings, updateInventorySettings } from "@/lib/api/inventory";
 import { inventorySettingsFormSchema, type InventorySettingsFormValues } from "@/lib/validation/inventorySettings";
 import { utcTimeToSydney, sydneyTimeToUtc } from "@/utils/timezone";
 
@@ -92,7 +92,9 @@ export function InventorySettingsModal({ open, onOpenChange }: InventorySettings
       }),
     onSuccess: () => {
       toast({ title: "Inventory settings saved", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["inventory-settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["inventory-settings"] });
+      // The low-stock card counts against the threshold just saved.
+      void queryClient.invalidateQueries({ queryKey: INVENTORY_STATS_QUERY_KEY });
       onOpenChange(false);
     },
     onError: (err: Error) => {

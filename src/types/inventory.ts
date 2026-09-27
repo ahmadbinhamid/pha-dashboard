@@ -72,3 +72,12 @@ export interface InventoryListData {
   pageSize: number;
   totalPages: number;
 }
+
+// GET /inventory/stats; counts are per product/variant across locations.
+export interface InventoryStats {
+  trackedItems: number;
+  unitsInStock: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  lowStockThreshold: number;
+}

@@ -9,6 +9,7 @@ const { buildWordSearchOr } = require("../../utils/regex");
 const ebaySettingsService = require("../ebay/ebay.settings.service");
 const { buildEbayItemUrl } = require("../ebay/ebay.listing.service");
 const { MARKETPLACE_PLATFORM, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
+const { readableSyncError } = require("../../utils/syncErrorMessage");
 
 // Same needs_attention definition as channel.service#listChannelsForTenant.
 const NEEDS_ATTENTION_STATUSES = [LISTING_SYNC_STATUS.ERROR, LISTING_SYNC_STATUS.PRICE_LOCKED];
@@ -77,9 +78,14 @@ async function listListings(
   // eBay item URLs for eBay rows only; settings fetched only if one is present.
   const hasEbayRows = items.some((item) => item.platform === MARKETPLACE_PLATFORM.EBAY);
   const ebaySettings = hasEbayRows ? await ebaySettingsService.getSettings(tenantId) : null;
-  const shapedItems = items.map((item) => withExternalUrl(item, ebaySettings));
+  const shapedItems = items.map((item) => toListingRow(item, ebaySettings));
 
   return { items: shapedItems, total: countResult[0]?.total || 0 };
+}
+
+// Stored errors stay raw for debugging; readers get a plain sentence.
+function toListingRow(item, ebaySettings) {
+  return withExternalUrl({ ...item, sync_error: readableSyncError(item.sync_error) }, ebaySettings);
 }
 
 // Live listing URL, platform-neutral; null for Google (no public URL).
@@ -197,7 +203,7 @@ async function listListingsGroupedByProduct(
 
   const items = orderedGroups.map((g) => ({
     product: g.product,
-    listings: g.listings.map((l) => withExternalUrl(l, ebaySettings)),
+    listings: g.listings.map((l) => toListingRow(l, ebaySettings)),
   }));
 
   return { items, total };

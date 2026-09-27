@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
-import type { Customer, CustomerDetail } from "@/types/customer";
+import type { Customer, CustomerDetail, CustomerStats } from "@/types/customer";
 import type { OrderAddress } from "@/types/orders";
 
 export interface CustomerListParams {
@@ -40,5 +40,12 @@ export const updateCustomer = async (id: string, payload: CustomerPayload) => {
 
 export const deleteCustomer = async (id: string) => {
   const { data } = await apiClient.delete<BeResponse>(`/customer/${id}`);
+  return data;
+};
+
+export const CUSTOMER_STATS_QUERY_KEY = ["customers", "stats"] as const;
+
+export const getCustomerStats = async () => {
+  const { data } = await apiClient.get<BeResponse<CustomerStats>>("/customer/stats");
   return data;
 };

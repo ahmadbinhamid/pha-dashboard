@@ -17,6 +17,7 @@ const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
 const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
 const {
+  UNPAID_ORDER_STATUSES,
   ORDER_STATUS,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
@@ -296,7 +297,7 @@ async function recordOrderPayment(orderId, { payment_method, amount }, tenantId)
   if (order.channel !== ORDER_CHANNEL.MANUAL) {
     throw httpError("Only manual orders can have a payment recorded against them", 400);
   }
-  if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
+  if (!UNPAID_ORDER_STATUSES.includes(order.status)) {
     throw httpError("This order has no outstanding balance to collect", 409);
   }
 

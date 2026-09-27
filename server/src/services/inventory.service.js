@@ -345,12 +345,23 @@ async function getTotalStockForProduct(productId) {
   return records.reduce((sum, r) => sum + (r.stock_count || 0), 0);
 }
 
-// Total stock > 0 and <= threshold; same shape as the dashboard tile.
-async function getLowStockItems(tenantId, lowStockThreshold) {
-  const rows = await Inventory.aggregate([
-    { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
+// Stock summed across locations per product/variant, for live products only.
+function stockPerItemStages(tenantId) {
+  return [
+    {
+      // Tenant filter and projection inside the join, so no full product docs.
+      $lookup: {
+        from: "products",
+        localField: "product",
+        foreignField: "_id",
+        pipeline: [
+          { $match: { tenant_id: tenantId, deleted_at: null } },
+          { $project: { title: 1, sku: 1 } },
+        ],
+        as: "product",
+      },
+    },
     { $unwind: "$product" },
-    { $match: { "product.deleted_at": null, "product.tenant_id": tenantId } },
     {
       $group: {
         _id: { product: "$product._id", variant: "$variant" },
@@ -359,6 +370,38 @@ async function getLowStockItems(tenantId, lowStockThreshold) {
         productSku: { $first: "$product.sku" },
       },
     },
+  ];
+}
+
+/** Tracked items, units on hand, and low / out-of-stock counts in one pass. */
+async function getInventoryStats(tenantId, lowStockThreshold) {
+  const [totals] = await Inventory.aggregate([
+    ...stockPerItemStages(tenantId),
+    {
+      $group: {
+        _id: null,
+        trackedItems: { $sum: 1 },
+        unitsInStock: { $sum: { $max: ["$totalStock", 0] } },
+        lowStock: {
+          $sum: { $cond: [{ $and: [{ $gt: ["$totalStock", 0] }, { $lte: ["$totalStock", lowStockThreshold] }] }, 1, 0] },
+        },
+        outOfStock: { $sum: { $cond: [{ $lte: ["$totalStock", 0] }, 1, 0] } },
+      },
+    },
+  ]);
+  return {
+    trackedItems: totals?.trackedItems ?? 0,
+    unitsInStock: totals?.unitsInStock ?? 0,
+    lowStockCount: totals?.lowStock ?? 0,
+    outOfStockCount: totals?.outOfStock ?? 0,
+    lowStockThreshold,
+  };
+}
+
+// Total stock > 0 and <= threshold; same shape as the dashboard tile.
+async function getLowStockItems(tenantId, lowStockThreshold) {
+  const rows = await Inventory.aggregate([
+    ...stockPerItemStages(tenantId),
     { $match: { totalStock: { $gt: 0, $lte: lowStockThreshold } } },
     {
       $lookup: {
@@ -551,6 +594,7 @@ module.exports = {
   stockKey,
   getTotalStockForProduct,
   getLowStockItems,
+  getInventoryStats,
   resolveSkuToIds,
   adjustStockForSku,
   adjustStockBySku,

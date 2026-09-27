@@ -2,10 +2,10 @@
 
 const Customer = require("../models/Customer");
 const Order = require("../models/Order");
-const { ORDER_STATUS } = require("../constants/order.constants");
+const { UNPAID_ORDER_STATUSES } = require("../constants/order.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 
-// Pulled on demand (not denormalized) so counts always reflect the current Order collection.
+// Computed on demand, not denormalized, so counts track the Order collection.
 async function getOrderStatsByCustomer(customerIds) {
   if (!customerIds.length) return new Map();
 
@@ -18,7 +18,7 @@ async function getOrderStatsByCustomer(customerIds) {
         outstanding_invoices_count: {
           $sum: {
             $cond: [
-              { $in: ["$status", [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID]] },
+              { $in: ["$status", UNPAID_ORDER_STATUSES] },
               1,
               0,
             ],
@@ -29,6 +29,37 @@ async function getOrderStatsByCustomer(customerIds) {
   ]);
 
   return new Map(stats.map((s) => [s._id.toString(), s]));
+}
+
+/** Headline counts for the customers page; unpaid matches the list's rule. */
+async function getCustomerStats(tenantId) {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const [[totals], [unpaid]] = await Promise.all([
+    Customer.aggregate([
+      { $match: { tenant_id: tenantId, deleted_at: null } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          online: { $sum: { $cond: ["$has_online_account", 1, 0] } },
+          newThisMonth: { $sum: { $cond: [{ $gte: ["$created_at", monthStart] }, 1, 0] } },
+        },
+      },
+    ]),
+    Order.aggregate([
+      { $match: { tenant_id: tenantId, customer_id: { $ne: null }, status: { $in: UNPAID_ORDER_STATUSES } } },
+      { $group: { _id: "$customer_id" } },
+      { $count: "customers" },
+    ]),
+  ]);
+  return {
+    totalCustomers: totals?.total ?? 0,
+    onlineAccounts: totals?.online ?? 0,
+    newThisMonth: totals?.newThisMonth ?? 0,
+    withUnpaidInvoices: unpaid?.customers ?? 0,
+  };
 }
 
 async function listCustomers({ skip = 0, limit = 20, search = "" } = {}, tenantId) {
@@ -67,10 +98,8 @@ async function getCustomerById(id, tenantId) {
   ]);
 
   const stats = statsMap.get(customer._id.toString());
-  // Outstanding invoices = unpaid/partially-paid orders — there's no separate Invoice entity.
-  const outstandingInvoices = orders.filter((order) =>
-    [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status),
-  );
+  // Outstanding invoices = unpaid or part-paid orders; no Invoice model exists.
+  const outstandingInvoices = orders.filter((order) => UNPAID_ORDER_STATUSES.includes(order.status));
 
   return {
     ...customer.toObject(),
@@ -123,4 +152,11 @@ async function deleteCustomer(id, tenantId) {
   return customer;
 }
 
-module.exports = { listCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer };
+module.exports = {
+  getCustomerStats,
+  listCustomers,
+  getCustomerById,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+};

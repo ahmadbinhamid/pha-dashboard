@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ChannelSyncTable } from "@/components/listings/ChannelSyncTable";
 import { NoChannelsConnectedCard } from "@/components/channels/NoChannelsConnectedCard";
+import { ChannelSyncStatCards } from "@/components/listings/ChannelSyncStatCards";
 import { getChannels } from "@/lib/api/channels";
 
 // Channel sync health; listings are created/edited on the product page.
@@ -22,6 +23,8 @@ export default function ChannelSyncPage() {
       ) : channels.length === 0 ? (
         <NoChannelsConnectedCard />
       ) : null}
+
+      {channels.length > 0 && <ChannelSyncStatCards channels={channels} loading={isLoading} />}
 
       <ChannelSyncTable channels={channels} />
     </div>

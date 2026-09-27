@@ -1,6 +1,7 @@
 // controllers/inventory.controller.js
 
 const {
+  getInventoryStats,
   listInventory,
   fetchPopulatedRecord,
   findRecord,
@@ -17,6 +18,15 @@ const {
   badRequest,
   systemfailure,
 } = require("../utils/http/response");
+
+exports.getStats = async (req, res) => {
+  try {
+    const settings = await getSettings(req.tenantId);
+    return success(res, await getInventoryStats(req.tenantId, settings.low_stock_threshold));
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
 
 exports.getInventory = async (req, res) => {
   try {

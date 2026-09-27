@@ -22,3 +22,11 @@ export interface CustomerDetail extends Customer {
   orders: Order[];
   outstanding_invoices: Order[];
 }
+
+// GET /customer/stats.
+export interface CustomerStats {
+  totalCustomers: number;
+  onlineAccounts: number;
+  newThisMonth: number;
+  withUnpaidInvoices: number;
+}

@@ -5,6 +5,7 @@ import type {
   InventoryHistoryRecord,
   InventorySettings,
   InventoryListData,
+  InventoryStats,
 } from "@/types/inventory";
 
 export interface InventoryListParams {
@@ -79,5 +80,12 @@ export const ensureInventoryRecord = async (payload: {
     "/inventory/ensure",
     payload,
   );
+  return data;
+};
+
+export const INVENTORY_STATS_QUERY_KEY = ["inventory", "stats"] as const;
+
+export const getInventoryStats = async () => {
+  const { data } = await apiClient.get<BeResponse<InventoryStats>>("/inventory/stats");
   return data;
 };

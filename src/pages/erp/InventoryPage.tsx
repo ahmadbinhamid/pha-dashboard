@@ -15,6 +15,7 @@ import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
 import { InventoryHistorySheet } from "@/components/inventory/InventoryHistorySheet";
 import { InventorySettingsModal } from "@/components/inventory/InventorySettingsModal";
+import { InventoryStatCards } from "@/components/inventory/InventoryStatCards";
 import { getInventory, getInventorySettings } from "@/lib/api/inventory";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -113,6 +114,8 @@ export default function InventoryPage() {
         </Can>
       </div>
 
+      <InventoryStatCards />
+
       <Card>
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -197,7 +200,7 @@ export default function InventoryPage() {
         onOpenChange={(open) => {
           if (!open) {
             setSetStockTarget(null);
-            refetch();
+            void refetch();
           }
         }}
       />
