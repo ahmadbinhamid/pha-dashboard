@@ -1,6 +1,7 @@
 // services/location.service.js
 
 const Location = require("../models/Location");
+const { MAIN_WAREHOUSE_NAME } = require("../constants/inventory.constants");
 
 async function listLocations(tenantId) {
   return Location.find({ tenant_id: tenantId }).sort({ name: 1 });
@@ -38,4 +39,16 @@ async function deleteLocation(id, tenantId) {
   return location;
 }
 
-module.exports = { listLocations, getLocationById, createLocation, updateLocation, deleteLocation };
+/** The tenant's active Main Warehouse, or null if it has none. */
+async function findMainWarehouse(tenantId) {
+  return Location.findOne({ tenant_id: tenantId, name: MAIN_WAREHOUSE_NAME, is_active: true }).lean();
+}
+
+module.exports = {
+  listLocations,
+  getLocationById,
+  createLocation,
+  updateLocation,
+  deleteLocation,
+  findMainWarehouse,
+};

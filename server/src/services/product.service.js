@@ -12,6 +12,7 @@ const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
 const { withAttachmentUrls, buildAttachmentFilePath } = require("../utils/attachment");
 const inventoryService = require("./inventory.service");
+const locationService = require("./location.service");
 const { getTotalStockForProduct } = inventoryService;
 const { getCompanyProfile } = require("./tenantSettings.service");
 const emailService = require("./email/email.service");
@@ -464,23 +465,31 @@ async function saveVariant(variant) {
 
 // Via adjustStock so opening stock shows in the stock history.
 async function applyStockEntries(productId, stockEntries, { tenantId, userId } = {}) {
-  for (const entry of stockEntries) {
-    if (entry.qty > 0) {
-      const record = await Inventory.findOne({
-        product: productId,
-        variant: null,
-        location: entry.location_id,
-      });
-      if (!record) continue;
-
-      await inventoryService.adjustStock(record, {
-        adjustment: entry.qty,
-        reason: "Opening stock on product creation",
-        type: ADJUSTMENT_TYPE.RESTOCK,
-        userId,
-        tenantId,
-      });
+  // Looked up once, only if an entry arrives without a location.
+  let mainWarehouseId;
+  const locationFor = async (entry) => {
+    if (entry.location_id) return entry.location_id;
+    if (mainWarehouseId === undefined) {
+      mainWarehouseId = (await locationService.findMainWarehouse(tenantId))?._id ?? null;
     }
+    return mainWarehouseId;
+  };
+
+  for (const entry of stockEntries) {
+    if (!(entry.qty > 0)) continue;
+    const location = await locationFor(entry);
+    if (!location) continue;
+
+    const record = await Inventory.findOne({ product: productId, variant: null, location });
+    if (!record) continue;
+
+    await inventoryService.adjustStock(record, {
+      adjustment: entry.qty,
+      reason: "Opening stock on product creation",
+      type: ADJUSTMENT_TYPE.RESTOCK,
+      userId,
+      tenantId,
+    });
   }
 }
 

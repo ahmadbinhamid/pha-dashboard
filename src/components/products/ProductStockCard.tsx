@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SetStockDialogFull } from "@/components/inventory/SetStockDialog";
+import { MAIN_WAREHOUSE_NAME } from "@/config/locations";
 import { useProductStockRecord } from "@/hooks/useProductStockRecord";
 import type { InventoryRecord } from "@/types/inventory";
 
@@ -20,7 +21,7 @@ export function ProductStockCard({ productId }: { productId: string }) {
             MW
           </span>
           <div>
-            <p className="text-sm font-medium text-fg">{record.location?.name ?? "Main Warehouse"}</p>
+            <p className="text-sm font-medium text-fg">{record.location?.name ?? MAIN_WAREHOUSE_NAME}</p>
             <p className="text-xs text-fg/50">Your only stock location</p>
           </div>
         </div>

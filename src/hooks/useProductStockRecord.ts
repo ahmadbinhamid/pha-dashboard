@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/context";
+import { MAIN_WAREHOUSE_NAME } from "@/config/locations";
 import { getInventory, ensureInventoryRecord } from "@/lib/api/inventory";
 import { getLocations } from "@/lib/api/products";
 import type { InventoryRecord } from "@/types/inventory";
@@ -18,7 +19,7 @@ export function useProductStockRecord(productId: string, variantId?: string) {
   const record: InventoryRecord | undefined = invData?.data?.items?.[0];
 
   const { data: locData } = useQuery({ queryKey: ["locations"], queryFn: getLocations, enabled: !record });
-  const mainWarehouse = (locData?.data ?? []).find((l) => l.is_active && l.name === "Main Warehouse");
+  const mainWarehouse = (locData?.data ?? []).find((l) => l.is_active && l.name === MAIN_WAREHOUSE_NAME);
 
   const ensureMutation = useMutation({
     mutationFn: () => ensureInventoryRecord({ product: productId, variant: variantId ?? null, location: mainWarehouse!._id }),

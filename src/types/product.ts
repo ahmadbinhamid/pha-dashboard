@@ -155,7 +155,8 @@ export interface Product {
 }
 
 export interface StockEntry {
-  location_id: string;
+  // null = the server's default, Main Warehouse (no locations.view needed).
+  location_id: string | null;
   location_name: string;
   qty: number;
 }
