@@ -51,7 +51,11 @@ export function SingleSelect({
   return (
     <Select
       value={radixValue}
-      onValueChange={(v) => onChange(v === EMPTY ? "" : v)}
+      onValueChange={(v) => {
+        // Radix's hidden form <select> can emit "" after a form reset; never a pick.
+        if (v === "") return;
+        onChange(v === EMPTY ? "" : v);
+      }}
       disabled={disabled}
       name={name}
       onOpenChange={(open) => !open && onBlur?.()}

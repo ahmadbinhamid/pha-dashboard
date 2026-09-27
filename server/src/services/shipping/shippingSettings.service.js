@@ -45,7 +45,7 @@ async function updateSettings(tenantId, { api_key, ...sender }) {
 
 // The store's own website, else the platform-wide STOREFRONT_URL.
 function requestingSite(host) {
-  return host ? `https://${host}/` : config.smtp.storefrontUrl;
+  return host ? `https://${host}/` : config.emailBrand.storefrontUrl;
 }
 
 /** Decrypted key plus ship-from address, or null if either is missing. */
@@ -103,4 +103,4 @@ async function testConnection(tenantId) {
   return { ok: true, sample: { courier: best.courier, total: best.total } };
 }
 
-module.exports = { getSettings, updateSettings, getTransdirectConfig, testConnection };
+module.exports = { getSettings, updateSettings, getTransdirectConfig, testConnection, requestingSite };
