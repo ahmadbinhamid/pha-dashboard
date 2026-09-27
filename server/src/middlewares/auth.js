@@ -2,8 +2,8 @@
 
 const { unauthorized, forbidden } = require("../utils/http/response");
 const { verifyJwt } = require("../utils/auth/jwt");
-const User = require("../models/User");
-const Tenant = require("../models/Tenant");
+const userService = require("../services/user.service");
+const tenantService = require("../services/tenant.service");
 const membershipService = require("../services/membership.service");
 const { MEMBERSHIP_STATUS } = require("../constants/access.constants");
 
@@ -34,8 +34,8 @@ const auth =
 
       // Parallel: both depend only on decoded.sub.
       const [user, memberships] = await Promise.all([
-        User.findById(decoded.sub).select("-password"),
-        membershipService.listUserMemberships(decoded.sub),
+        userService.findUserForAuth(decoded.sub),
+        membershipService.listMembershipsForAuth(decoded.sub),
       ]);
       if (!user) return forbidden(res, "Account not found or disabled");
 
@@ -45,7 +45,7 @@ const auth =
       // Per request, not from the JWT, so org switches/joins apply immediately.
       const requestedTenantId = req.header("x-tenant-id");
       const active = requestedTenantId
-        ? memberships.find((m) => String(m.tenant_id?._id ?? m.tenant_id) === String(requestedTenantId))
+        ? memberships.find((m) => String(m.tenant_id) === String(requestedTenantId))
         : memberships.find((m) => m.is_default) || memberships[0];
 
       if (requestedTenantId && !active) {
@@ -54,15 +54,13 @@ const auth =
 
       if (active) {
         req.membership = active;
-        req.tenantId = active.tenant_id?._id ?? active.tenant_id;
-        // Full doc, not the populated lean copy; SKU/prefix code needs every field.
-        req.tenant = await Tenant.findById(req.tenantId);
-        req.permissions = active.role_id?.permissions ?? [];
+        req.tenantId = active.tenant_id;
+        // Full Mongoose doc; SKU/prefix code needs every field.
+        req.tenant = await tenantService.findTenantById(req.tenantId);
       } else {
         // No membership yet: fall back to User.tenant_id and legacy User.role.
         req.tenantId = user.tenant_id;
-        req.permissions = [];
-        if (user.tenant_id) req.tenant = await Tenant.findById(user.tenant_id);
+        if (user.tenant_id) req.tenant = await tenantService.findTenantById(user.tenant_id);
       }
 
       if (req.tenantId && !req.tenant) return forbidden(res, "Tenant not found or disabled");
@@ -85,29 +83,17 @@ const requireRoles =
     return next();
   };
 
-/** Queried live, not off req.membership, so role changes apply at once. */
+/** Passes when the caller holds any of `permissions` in the current tenant. */
+// auth() reloads the membership each request, so role edits apply at once.
 const requirePermission =
   (...permissions) =>
-  async (req, res, next) => {
-    try {
-      if (!req.user) return unauthorized(res, "Unauthorized");
-
-      if (!req.membership) {
-        // Pre-membership account: admins keep the access they had.
-        const legacyRole = req.user.role;
-        if (legacyRole === ROLES.superadmin || legacyRole === ROLES.admin) return next();
-        return forbidden(res, "Forbidden");
-      }
-
-      const granted = await Promise.all(
-        permissions.map((permission) => membershipService.hasPermission(req.user._id, req.tenantId, permission)),
-      );
-      if (granted.some(Boolean)) return next();
-
-      return forbidden(res, `Missing permission: ${permissions.join(" or ")}`);
-    } catch (err) {
-      return next(err);
-    }
+  (req, res, next) => {
+    if (!req.user) return unauthorized(res, "Unauthorized");
+    // The platform superadmin belongs to no tenant, so has no tenant data here.
+    if (!req.tenantId) return forbidden(res, "Select an organisation to continue");
+    const granted = membershipService.requestPermissions(req);
+    if (permissions.some((p) => granted.includes(p))) return next();
+    return forbidden(res, `Missing permission: ${permissions.join(" or ")}`);
   };
 
 const superadmin = requireRoles(ROLES.superadmin);

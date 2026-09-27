@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { SaveStatusText } from "@/components/shared/SaveStatusText";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SettingsHeaderActions } from "@/context/settingsHeaderActions";
@@ -53,9 +55,11 @@ function EbayPanel() {
     <div className="space-y-6">
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={EBAY_SETTINGS_FORM_ID} disabled={!settings || state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={EBAY_SETTINGS_FORM_ID} disabled={!settings || state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
 
       <EbayConnectCard />
@@ -70,9 +74,11 @@ function StripePanel() {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={STRIPE_KEYS_FORM_ID} disabled={state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={STRIPE_KEYS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       <StripeKeysCard onMutationStateChange={setState} />
     </>
@@ -85,9 +91,11 @@ function PaymentLinksPanel({ settings }: { settings?: TenantSettings }) {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={PAYMENT_DOMAIN_FORM_ID} disabled={!settings || state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={PAYMENT_DOMAIN_FORM_ID} disabled={!settings || state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       {settings ? <PaymentDomainForm settings={settings} onMutationStateChange={setState} /> : <SkeletonCard />}
     </>
@@ -100,9 +108,11 @@ function EmailPanel() {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={SMTP_SETTINGS_FORM_ID} disabled={state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.integrations.update}>
+          <Button type="submit" form={SMTP_SETTINGS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       <SmtpSettingsCard onMutationStateChange={setState} />
     </>
@@ -115,9 +125,11 @@ function TransdirectPanel() {
     <>
       <SettingsHeaderActions>
         <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Button type="submit" form={TRANSDIRECT_SETTINGS_FORM_ID} disabled={state.isPending}>
-          {state.isPending ? "Saving…" : "Save changes"}
-        </Button>
+        <Can permission={PERMISSIONS.shipping.update}>
+          <Button type="submit" form={TRANSDIRECT_SETTINGS_FORM_ID} disabled={state.isPending}>
+            {state.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </Can>
       </SettingsHeaderActions>
       <TransdirectSettingsCard onMutationStateChange={setState} />
     </>

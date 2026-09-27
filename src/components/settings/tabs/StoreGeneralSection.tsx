@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -12,7 +14,7 @@ import { useToast } from "@/context";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings } from "@/types/tenantSettings";
 
-// Identity and contact details in two cards; both PATCH the same tenant-settings endpoint but send only their own fields, so saving trading hours can't clobber a just-edited ABN.
+// Each card PATCHes only its own fields, so saves can't clobber each other.
 type GeneralState = {
   company_name: string;
   abn: string;
@@ -60,14 +62,14 @@ export function StoreGeneralSection({ settings, loading }: { settings?: TenantSe
     setForm((f) => (f ? { ...f, pickup_location: { ...f.pickup_location, ...patch } } : f));
 
   const actions = (
-    <>
+    <Can permission={PERMISSIONS.settings.update}>
       <Button variant="ghost" disabled={!settings || mutation.isPending} onClick={() => settings && setForm(toState(settings))}>
         Reset
       </Button>
       <Button variant="primary" disabled={!form || mutation.isPending} onClick={() => form && mutation.mutate(form)}>
         {mutation.isPending ? "Saving…" : "Save Store Profile"}
       </Button>
-    </>
+    </Can>
   );
 
   if (loading || !form) {

@@ -3,12 +3,12 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth, tenantMember } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
 const v = require("../validators/refund.validation");
 const ctrl = require("../controllers/refund.controller");
 
-router.post("/:id/void", auth(), tenantMember, validate(v.voidRefund), asyncHandler(ctrl.voidRefund));
-router.post("/:id/retry-restock", auth(), tenantMember, validate(v.retryRestock), asyncHandler(ctrl.retryRestock));
+router.post("/:id/void", auth(), requirePermission("orders.refund"), validate(v.voidRefund), asyncHandler(ctrl.voidRefund));
+router.post("/:id/retry-restock", auth(), requirePermission("orders.refund"), validate(v.retryRestock), asyncHandler(ctrl.retryRestock));
 
 module.exports = router;

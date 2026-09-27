@@ -11,7 +11,7 @@ const {
   findProductById,
   addProductNote,
   sendProductInfoEmail,
-  getProductBySlug,
+  getProductBySlugOrId,
   getPopulatedProduct,
   createProductRecordWithSlug,
   getVariantsByProduct,
@@ -270,7 +270,7 @@ exports.suggestProducts = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   try {
-    const product = await getProductBySlug(req.params.slug, req.tenantId);
+    const product = await getProductBySlugOrId(req.params.slug, req.tenantId);
     if (!product) return notFound(res, "Product not found");
     // Unauthenticated callers can't see unpublished/draft products by slug either
     if (

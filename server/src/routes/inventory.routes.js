@@ -2,7 +2,7 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/inventory.validation");
@@ -14,16 +14,16 @@ const reconciliationCtrl = require("../controllers/pendingReconciliation.control
 router.use(auth());
 
 // Settings routes — must come BEFORE /:inventoryId to avoid route conflict
-router.get("/settings", asyncHandler(ctrl.getSettings));
+router.get("/settings", requirePermission("inventory.view"), asyncHandler(ctrl.getSettings));
 router.put(
-  "/settings",
+  "/settings", requirePermission("inventory.update"),
   validate(v.updateSettings),
   asyncHandler(ctrl.updateSettings),
 );
 
 // Inventory list
 router.get(
-  "/",
+  "/", requirePermission("inventory.view"),
   pagination(),
   validate(v.listInventory),
   asyncHandler(ctrl.getInventory),
@@ -31,35 +31,35 @@ router.get(
 
 // Ensure (upsert) an inventory record for a product+location
 router.post(
-  "/ensure",
+  "/ensure", requirePermission("inventory.update"),
   validate(v.ensureRecord),
   asyncHandler(ctrl.ensureRecord),
 );
 
 // Stock adjustments
 router.post(
-  "/:inventoryId/adjust",
+  "/:inventoryId/adjust", requirePermission("inventory.update"),
   validate(v.adjustStock),
   asyncHandler(ctrl.adjustStock),
 );
 router.post(
-  "/:inventoryId/set",
+  "/:inventoryId/set", requirePermission("inventory.update"),
   validate(v.setStock),
   asyncHandler(ctrl.setStock),
 );
 
 // History
-router.get("/:inventoryId/history", asyncHandler(ctrl.getHistory));
+router.get("/:inventoryId/history", requirePermission("inventory.view"), asyncHandler(ctrl.getHistory));
 
-// eBay-side quantity drift flagged by the reconciliation poller; never auto-applied.
-router.get("/reconciliations", asyncHandler(reconciliationCtrl.getReconciliations));
+// eBay quantity drift found by the poller; never auto-applied.
+router.get("/reconciliations", requirePermission("inventory.view"), asyncHandler(reconciliationCtrl.getReconciliations));
 router.post(
-  "/reconciliations/:id/accept",
+  "/reconciliations/:id/accept", requirePermission("inventory.update"),
   validate(reconciliationValidation.resolveReconciliation),
   asyncHandler(reconciliationCtrl.acceptReconciliation),
 );
 router.post(
-  "/reconciliations/:id/reject",
+  "/reconciliations/:id/reject", requirePermission("inventory.update"),
   validate(reconciliationValidation.resolveReconciliation),
   asyncHandler(reconciliationCtrl.rejectReconciliation),
 );

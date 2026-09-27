@@ -86,8 +86,8 @@ export const getInvitations = async () => {
   return data;
 };
 
-/** Adds someone as Staff; the result says if they were invited or added. */
-export const sendInvitation = async (payload: { first_name: string; last_name: string; email: string }) => {
+/** Adds someone with a role; the result says if they were invited or added. */
+export const sendInvitation = async (payload: { first_name: string; last_name: string; email: string; role_id?: string }) => {
   const { data } = await apiClient.post<BeResponse<InviteResult>>("/invitations", payload);
   return data;
 };

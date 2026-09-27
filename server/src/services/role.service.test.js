@@ -41,7 +41,8 @@ test("roles: seeding is idempotent, and the seeded set is what it claims", async
 
     assert.deepEqual([...first[SYSTEM_ROLE.ADMIN].permissions].sort(), [...ALL_PERMISSIONS].sort(), "Admin is the owner: everything");
     assert.ok(!first[SYSTEM_ROLE.STAFF].permissions.includes("users.create"), "Staff can't invite");
-    assert.ok(first[SYSTEM_ROLE.STAFF].permissions.includes("orders.create"), "Staff can sell");
+    assert.ok(!first[SYSTEM_ROLE.STAFF].permissions.includes("roles.update"), "or edit roles");
+    assert.ok(first[SYSTEM_ROLE.STAFF].permissions.includes("products.update"), "but runs the store");
   } finally {
     await Role.deleteMany({ tenant_id: tenant._id });
     await Tenant.deleteOne({ _id: tenant._id });
@@ -49,7 +50,7 @@ test("roles: seeding is idempotent, and the seeded set is what it claims", async
   }
 });
 
-test("roles: system roles resist edits and deletion", async () => {
+test("roles: Admin is locked; Staff's permissions are editable but not its name", async () => {
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
   const tenant = await makeTenant(suffix);
@@ -57,10 +58,16 @@ test("roles: system roles resist edits and deletion", async () => {
   try {
     const roles = await roleService.seedSystemRoles(tenant._id);
     const adminId = roles[SYSTEM_ROLE.ADMIN]._id;
+    const staffId = roles[SYSTEM_ROLE.STAFF]._id;
 
-    await assert.rejects(() => roleService.updateRole(adminId, tenant._id, { name: "Renamed" }), /System roles/);
+    await assert.rejects(() => roleService.updateRole(adminId, tenant._id, { permissions: ["orders.view"] }), /Admin role/);
     await assert.rejects(() => roleService.deleteRole(adminId, tenant._id), /System roles/);
     assert.equal((await roleService.getRoleById(adminId, tenant._id)).name, SYSTEM_ROLE.ADMIN, "untouched");
+
+    const edited = await roleService.updateRole(staffId, tenant._id, { name: SYSTEM_ROLE.STAFF, permissions: ["orders.view"] });
+    assert.deepEqual(edited.permissions, ["orders.view"], "Staff narrowed");
+    await assert.rejects(() => roleService.updateRole(staffId, tenant._id, { name: "Crew" }), /name can't be changed/);
+    await assert.rejects(() => roleService.deleteRole(staffId, tenant._id), /System roles/);
   } finally {
     await Role.deleteMany({ tenant_id: tenant._id });
     await Tenant.deleteOne({ _id: tenant._id });
@@ -170,6 +177,15 @@ test("roles: migration folds old Super Admin + Admin into one Admin; dry run wri
     assert.equal(await membershipService.isTenantAdmin(owner._id, tenant._id), true);
     assert.equal(await membershipService.isTenantAdmin(manager._id, tenant._id), true, "old Admins stay admins");
     assert.equal((await roleService.migrateTenantAdminRoles({ dryRun: false, tenantId: tenant._id })).tenants, 0, "idempotent");
+
+    // An untouched legacy Staff role moves to the new default; edited ones stay.
+    const legacyStaff = await Role.create({ tenant_id: tenant._id, name: SYSTEM_ROLE.STAFF, is_system: true, permissions: [
+      "dashboard.view", "products.view", "categories.view", "inventory.view", "inventory.update", "orders.view",
+      "orders.create", "payments.view", "payments.create", "customers.view", "customers.create", "listings.view", "locations.view",
+    ] });
+    const staffResult = (await roleService.migrateTenantAdminRoles({ dryRun: false, tenantId: tenant._id })).staff;
+    assert.equal(staffResult.updated, 1);
+    assert.deepEqual((await Role.findById(legacyStaff._id)).permissions.sort(), [...roleService.STAFF_DEFAULT_PERMISSIONS].sort());
   } finally {
     await Membership.deleteMany({ tenant_id: tenant._id });
     await Role.deleteMany({ tenant_id: tenant._id });

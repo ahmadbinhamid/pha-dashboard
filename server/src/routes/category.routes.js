@@ -2,7 +2,7 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth, tenantMember } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const { resolveGuestTenant } = require("../middlewares/tenant");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
@@ -30,21 +30,21 @@ router.get(
 router.post(
   "/",
   auth(),
-  tenantMember,
+  requirePermission("categories.create"),
   validate(v.createCategory),
   asyncHandler(ctrl.createCategory),
 );
 router.put(
   "/:id",
   auth(),
-  tenantMember,
+  requirePermission("categories.update"),
   validate({ ...v.byIdParam, ...v.updateCategory }),
   asyncHandler(ctrl.updateCategory),
 );
 router.delete(
   "/:id",
   auth(),
-  tenantMember,
+  requirePermission("categories.delete"),
   validate(v.byIdParam),
   asyncHandler(ctrl.deleteCategory),
 );

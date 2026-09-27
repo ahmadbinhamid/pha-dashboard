@@ -12,6 +12,7 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
+import { PERMISSIONS, type Permission } from "@/config/permissions";
 
 // Settings tabs; `available: false` shows ComingSoonPanel instead of controls.
 
@@ -30,6 +31,8 @@ export type SettingsTab = {
   label: string;
   icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
   available: boolean;
+  // Needed to see the tab at all; omitted means everyone sees it.
+  permission?: Permission;
   /** Shown by <ComingSoonPanel> — what this tab will do once it's built. */
   summary?: string;
   planned?: string[];
@@ -37,24 +40,37 @@ export type SettingsTab = {
 
 export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
-  { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
-  { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  { id: "users", label: "User Management", icon: (p) => <Users {...p} />, available: true },
-  // Built, but hidden until role-based permissions are switched on.
+  {
+    id: "store",
+    label: "Store Settings",
+    icon: (p) => <Store {...p} />,
+    available: true,
+    permission: PERMISSIONS.settings.view,
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    icon: (p) => <Blocks {...p} />,
+    available: true,
+    permission: PERMISSIONS.integrations.view,
+  },
+  {
+    id: "users",
+    label: "User Management",
+    icon: (p) => <Users {...p} />,
+    available: true,
+    permission: PERMISSIONS.users.view,
+  },
   {
     id: "roles",
     label: "Roles & Permissions",
     icon: (p) => <Shield {...p} />,
-    available: false,
-    summary: "Define what each role on your team can see and do.",
-    planned: [
-      "Built-in roles (Admin, Staff) plus custom roles you define",
-      "Per-permission toggles across orders, inventory, reports and settings",
-      "See which teammates hold each role before changing it",
-    ],
+    available: true,
+    permission: PERMISSIONS.roles.view,
   },
   {
     id: "taxes",
+    permission: PERMISSIONS.settings.view,
     label: "Taxes & Shipping",
     icon: (p) => <Truck {...p} />,
     available: false,
@@ -67,6 +83,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   },
   {
     id: "notifications",
+    permission: PERMISSIONS.settings.view,
     label: "Notifications",
     icon: (p) => <Bell {...p} />,
     available: false,
@@ -80,6 +97,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   },
   {
     id: "billing",
+    permission: PERMISSIONS.settings.view,
     label: "Billing & Plan",
     icon: (p) => <CreditCard {...p} />,
     available: false,
@@ -89,6 +107,11 @@ export const SETTINGS_TABS: SettingsTab[] = [
 ];
 
 export const DEFAULT_SETTINGS_TAB: SettingsTabId = "store";
+
+/** Tabs the user may open, given useMyAccess().can. */
+export function visibleSettingsTabs(can: (permission: Permission) => boolean): SettingsTab[] {
+  return SETTINGS_TABS.filter((tab) => !tab.permission || can(tab.permission));
+}
 
 export function findSettingsTab(id: string | undefined): SettingsTab | undefined {
   return SETTINGS_TABS.find((t) => t.id === id);

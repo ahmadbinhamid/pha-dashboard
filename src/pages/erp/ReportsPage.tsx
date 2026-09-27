@@ -6,6 +6,8 @@ import { RefreshControl } from "@/components/shared/RefreshControl";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
 import { ReportsMetricCard } from "@/components/reports/ReportsMetricCard";
@@ -110,28 +112,30 @@ export default function ReportsPage() {
         description="Track performance, inventory turnover velocity, and cross-channel profitability."
       >
         <DateRangePicker value={range} onChange={setRange} />
-        <Button
-          variant="primary"
-          size="sm"
-          className="gap-1.5"
-          disabled={!summary}
-          onClick={() =>
-            summary &&
-            downloadPdf("reports_summary", [
-              {
-                range: `${summary.range.from} – ${summary.range.to}`,
-                revenue: (summary.revenueCents / 100).toFixed(2),
-                orders: summary.orders,
-                itemsSold: summary.itemsSold,
-                avgOrderValue: (summary.avgOrderValueCents / 100).toFixed(2),
-                grossProfit: (summary.grossProfitCents / 100).toFixed(2),
-              },
-            ])
-          }
-        >
-          <Download className="h-4 w-4" />
-          Export PDF
-        </Button>
+        <Can permission={PERMISSIONS.reports.export}>
+          <Button
+            variant="primary"
+            size="sm"
+            className="gap-1.5"
+            disabled={!summary}
+            onClick={() =>
+              summary &&
+              downloadPdf("reports_summary", [
+                {
+                  range: `${summary.range.from} – ${summary.range.to}`,
+                  revenue: (summary.revenueCents / 100).toFixed(2),
+                  orders: summary.orders,
+                  itemsSold: summary.itemsSold,
+                  avgOrderValue: (summary.avgOrderValueCents / 100).toFixed(2),
+                  grossProfit: (summary.grossProfitCents / 100).toFixed(2),
+                },
+              ])
+            }
+          >
+            <Download className="h-4 w-4" />
+            Export PDF
+          </Button>
+        </Can>
         {/* /reports queries plus dashboard stats (insights, valuation export). */}
         <RefreshControl queryKeys={[["reports"], ["dashboard", "stats"]]} />
       </PageHeader>

@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { ManageColumns } from "@/components/ui/ManageColumns";
@@ -19,7 +21,7 @@ import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { InventoryRecord } from "@/types/inventory";
 import { Search, Boxes, Settings } from "lucide-react";
 
-// Product (sticky) and Actions are structural, not part of this list; every other column can be hidden via "Manage Columns", persisted per browser.
+// Product and Actions always show; the rest toggle per browser.
 const INVENTORY_COLUMNS: ColumnDef[] = [
   { key: "sku", label: "SKU" },
   { key: "location", label: "Location", alwaysVisible: true },
@@ -103,10 +105,12 @@ export default function InventoryPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-tight">Inventory ({total})</h1>
-        <Button variant="secondary" size="md" className="gap-2" onClick={() => setSettingsOpen(true)}>
-          <Settings className="h-4 w-4" />
-          Settings
-        </Button>
+        <Can permission={PERMISSIONS.inventory.update}>
+          <Button variant="secondary" size="md" className="gap-2" onClick={() => setSettingsOpen(true)}>
+            <Settings className="h-4 w-4" />
+            Settings
+          </Button>
+        </Can>
       </div>
 
       <Card>

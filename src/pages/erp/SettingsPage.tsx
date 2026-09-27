@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -9,12 +9,15 @@ import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
 import { UsersTab } from "@/components/settings/tabs/UsersTab";
+import { RolesTab } from "@/components/settings/tabs/RolesTab";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
   DEFAULT_SETTINGS_TAB,
   DEFAULT_STORE_SECTION,
   findSettingsTab,
   findStoreSection,
+  visibleSettingsTabs,
   type SettingsTabId,
   type StoreSectionId,
 } from "@/config/settingsTabs";
@@ -33,10 +36,18 @@ export default function SettingsPage() {
   const activeTab = findSettingsTab(tab) ?? findSettingsTab(DEFAULT_SETTINGS_TAB)!;
   const storeSection: StoreSectionId = findStoreSection(section)?.id ?? DEFAULT_STORE_SECTION;
 
+  const { can, isLoading: accessLoading } = useMyAccess();
+  const tabs = visibleSettingsTabs(can);
+  const allowed = tabs.some((t) => t.id === activeTab.id);
+
   const { data, isLoading } = useQuery({ queryKey: ["tenant-settings"], queryFn: getTenantSettings });
   const settings = data?.data;
 
   const goToTab = (id: SettingsTabId) => navigate(`/settings/${id}`);
+
+  if (accessLoading) return null;
+  // Appearance has no permission, so there's always a tab to land on.
+  if (!allowed) return <Navigate to={`/settings/${tabs[0].id}`} replace />;
 
   return (
     <div className="space-y-6">
@@ -49,7 +60,7 @@ export default function SettingsPage() {
           <div ref={setHeaderActionsEl} className="flex items-center gap-3" />
         </PageHeader>
 
-        <SettingsTabBar activeId={activeTab.id} onSelect={goToTab} />
+        <SettingsTabBar tabs={tabs} activeId={activeTab.id} onSelect={goToTab} />
       </StickyPageHeader>
 
       <SettingsHeaderActionsProvider value={headerActionsEl}>
@@ -70,6 +81,8 @@ export default function SettingsPage() {
           />
         ) : activeTab.id === "users" ? (
           <UsersTab />
+        ) : activeTab.id === "roles" ? (
+          <RolesTab />
         ) : (
           <ComingSoonPanel title={activeTab.label} summary={activeTab.summary} planned={activeTab.planned} />
         )}

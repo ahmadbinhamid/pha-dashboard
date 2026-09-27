@@ -6,7 +6,7 @@ const Role = require("../models/Role");
 const Membership = require("../models/Membership");
 const Invitation = require("../models/Invitation");
 const inviteService = require("./invite.service");
-const { SYSTEM_ROLE, LEGACY_OWNER_ROLE } = require("../constants/access.constants");
+const { SYSTEM_ROLE, LEGACY_OWNER_ROLE, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
 const { ALL_PERMISSIONS, unknownPermissions, groupPermissions } = require("../config/permissions");
 
 // Aggregations don't cast, so ids must be ObjectIds before $match.
@@ -16,33 +16,36 @@ function toObjectId(id) {
 
 const ADMIN_DESCRIPTION = "Owner of this organisation, with full access. Cannot be edited or removed.";
 
-// NOTE: permissions aren't enforced yet; Staff's list is kept for when it is.
+// Staff: everything except managing the team; an Admin can narrow it.
+const STAFF_DEFAULT_PERMISSIONS = ALL_PERMISSIONS.filter((p) => !p.startsWith("users.") && !p.startsWith("roles."));
+
+// Staff's pre-permissions seed; roles still exactly this were never edited.
+const LEGACY_STAFF_PERMISSIONS = [
+  "dashboard.view",
+  ...groupPermissions("products").filter((p) => p.endsWith(".view")),
+  ...groupPermissions("categories").filter((p) => p.endsWith(".view")),
+  "inventory.view",
+  "inventory.update",
+  "orders.view",
+  "orders.create",
+  "payments.view",
+  "payments.create",
+  "customers.view",
+  "customers.create",
+  "listings.view",
+  "locations.view",
+];
+
 const SYSTEM_ROLE_DEFINITIONS = [
-  {
-    name: SYSTEM_ROLE.ADMIN,
-    description: ADMIN_DESCRIPTION,
-    permissions: () => ALL_PERMISSIONS,
-  },
+  { name: SYSTEM_ROLE.ADMIN, description: ADMIN_DESCRIPTION, permissions: () => ALL_PERMISSIONS },
   {
     name: SYSTEM_ROLE.STAFF,
-    description: "Uses the whole store; only an Admin can manage the team.",
-    permissions: () => [
-      "dashboard.view",
-      ...groupPermissions("products").filter((p) => p.endsWith(".view")),
-      ...groupPermissions("categories").filter((p) => p.endsWith(".view")),
-      "inventory.view",
-      "inventory.update",
-      "orders.view",
-      "orders.create",
-      "payments.view",
-      "payments.create",
-      "customers.view",
-      "customers.create",
-      "listings.view",
-      "locations.view",
-    ],
+    description: "Day-to-day work across the store. The Admin can change what Staff can do.",
+    permissions: () => STAFF_DEFAULT_PERMISSIONS,
   },
 ];
+
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 
 function assertPermissionsAreKnown(permissions = []) {
   const unknown = unknownPermissions(permissions);
@@ -106,8 +109,14 @@ async function createRole(tenantId, { name, description = null, permissions = []
 async function updateRole(roleId, tenantId, { name, description, permissions }) {
   const role = await Role.findOne({ _id: roleId, tenant_id: tenantId });
   if (!role) return null;
-  if (role.is_system) {
-    const err = new Error("System roles cannot be edited.");
+  if (TENANT_ADMIN_ROLE_NAMES.includes(role.name)) {
+    const err = new Error("The Admin role always has full access and can't be edited.");
+    err.status = 403;
+    throw err;
+  }
+  // System roles (Staff) keep their name; only permissions are editable.
+  if (role.is_system && name !== undefined && name !== role.name) {
+    const err = new Error("A built-in role's name can't be changed; edit its permissions instead.");
     err.status = 403;
     throw err;
   }
@@ -117,7 +126,7 @@ async function updateRole(roleId, tenantId, { name, description, permissions }) 
     role.permissions = permissions;
   }
   if (name !== undefined) role.name = name;
-  if (description !== undefined) role.description = description;
+  if (description !== undefined && !role.is_system) role.description = description;
 
   await role.save();
   return role.toObject();
@@ -185,11 +194,24 @@ async function migrateTenantAdminRoles({ dryRun = true, tenantId = null } = {}) 
     const result = await mergeTenantOwnerRoles(id, dryRun);
     if (result) results.push(result);
   }
-  return { dryRun, tenants: results.length, results };
+  return { dryRun, tenants: results.length, results, staff: await refreshStaffDefaults({ dryRun, tenantId }) };
+}
+
+// Untouched Staff roles move to the new default; edited ones are left alone.
+async function refreshStaffDefaults({ dryRun, tenantId }) {
+  const staffRoles = await Role.find({ is_system: true, name: SYSTEM_ROLE.STAFF, ...(tenantId ? { tenant_id: tenantId } : {}) })
+    .select("_id permissions")
+    .lean();
+  const stale = staffRoles.filter((r) => sameSet(r.permissions, LEGACY_STAFF_PERMISSIONS));
+  if (!dryRun && stale.length) {
+    await Role.updateMany({ _id: { $in: stale.map((r) => r._id) } }, { $set: { permissions: STAFF_DEFAULT_PERMISSIONS } });
+  }
+  return { updated: stale.length, customised: staffRoles.length - stale.length };
 }
 
 module.exports = {
   SYSTEM_ROLE_DEFINITIONS,
+  STAFF_DEFAULT_PERMISSIONS,
   seedSystemRoles,
   migrateTenantAdminRoles,
   listRoles,

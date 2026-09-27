@@ -6,6 +6,7 @@ export const inviteMemberSchema = z.object({
   first_name: z.string().trim().min(1, "First name is required").max(60),
   last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().min(1, "An email address is required").email("Enter a valid email address"),
+  role_id: z.string().min(1, "Choose a role"),
 });
 export type InviteMemberFormValues = z.infer<typeof inviteMemberSchema>;
 

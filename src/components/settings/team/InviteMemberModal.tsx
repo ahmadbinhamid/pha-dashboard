@@ -1,34 +1,46 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
+import { SingleSelect } from "@/components/ui/SingleSelect";
+import { STAFF_ROLE_NAME, TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { sendInvitation } from "@/lib/api/access";
 import { inviteMemberSchema, type InviteMemberFormValues } from "@/lib/validation/access";
+import type { Role } from "@/types/access";
 
-const EMPTY_FORM: InviteMemberFormValues = { first_name: "", last_name: "", email: "" };
+interface InviteMemberModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  roles: Role[];
+}
 
-// Adds a teammate as Staff; new emails get a link to set their password.
-export function InviteMemberModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+// Adds a teammate with a role (Staff by default); new emails set a password.
+export function InviteMemberModal({ open, onOpenChange, roles }: InviteMemberModalProps) {
+  // The Admin (owner) role is never granted to someone else.
+  const assignable = roles.filter((r) => !TENANT_ADMIN_ROLE_NAMES.includes(r.name));
+  const staffId = assignable.find((r) => r.name === STAFF_ROLE_NAME)?._id ?? "";
+  const emptyForm: InviteMemberFormValues = { first_name: "", last_name: "", email: "", role_id: staffId };
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<InviteMemberFormValues>({ resolver: zodResolver(inviteMemberSchema), defaultValues: EMPTY_FORM });
+  } = useForm<InviteMemberFormValues>({ resolver: zodResolver(inviteMemberSchema), defaultValues: emptyForm });
 
-  // Stays mounted between opens, so reset on close for a clean reopen.
+  // Stays mounted, so each open starts clean with Staff preselected.
   useEffect(() => {
-    if (!open) reset(EMPTY_FORM);
-  }, [open, reset]);
+    if (open) reset({ first_name: "", last_name: "", email: "", role_id: staffId });
+  }, [open, reset, staffId]);
 
   const mutation = useMutation({
     mutationFn: sendInvitation,
@@ -56,7 +68,7 @@ export function InviteMemberModal({ open, onOpenChange }: { open: boolean; onOpe
           <ModalHeader>
             <ModalTitle>Add a team member</ModalTitle>
             <ModalDescription>
-              They join as Staff. A new email gets a link to set a password; an existing account is added straight away.
+              A new email gets a link to set a password; an existing account is added straight away.
             </ModalDescription>
           </ModalHeader>
 
@@ -71,6 +83,21 @@ export function InviteMemberModal({ open, onOpenChange }: { open: boolean; onOpe
             </div>
             <FormField label="Email address" required error={errors.email?.message}>
               <Input {...register("email")} type="email" placeholder="name@example.com" autoComplete="off" />
+            </FormField>
+            <FormField label="Role" required error={errors.role_id?.message} hint="What they'll be able to do here.">
+              <Controller
+                control={control}
+                name="role_id"
+                render={({ field }) => (
+                  <SingleSelect
+                    options={assignable.map((r) => ({ value: r._id, label: r.name }))}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="Choose a role…"
+                  />
+                )}
+              />
             </FormField>
           </div>
 

@@ -11,3 +11,4 @@ export * from "./useTagStyle";
 export * from "./useTagQueueActions";
 export * from "./useElementSize";
 export * from "./useMyAccess";
+export * from "./useBarcodeScanner";

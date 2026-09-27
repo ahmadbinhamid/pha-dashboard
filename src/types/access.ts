@@ -89,6 +89,8 @@ export type InviteResult = { mode: "added"; email: string } | ({ mode: "invited"
 export interface MyAccess {
   is_tenant_admin: boolean;
   role: string | null;
+  /** `group.action` keys; the Admin is sent every one. */
+  permissions: string[];
 }
 
 /** One organisation the signed-in user belongs to (org switcher row). */

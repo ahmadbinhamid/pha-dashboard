@@ -6,6 +6,8 @@ import { FormField } from "@/components/ui/FormField";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { TagFieldStyleRow } from "@/components/tags/TagFieldStyleRow";
 import { TagPreview } from "@/components/tags/TagPreview";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import {
   DEFAULT_TAG_STYLE,
   PRODUCT_TAG_SIZE_MM,
@@ -73,14 +75,16 @@ export function TagStyleEditor({ style, sample }: TagStyleEditorProps) {
           title="Tag style"
           description={`Applies to every tag. Size stays ${PRODUCT_TAG_SIZE_MM.width} × ${PRODUCT_TAG_SIZE_MM.height} mm for your printer.`}
           right={
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" disabled={saveMutation.isPending} onClick={() => setDraft(DEFAULT_TAG_STYLE)}>
-                Reset
-              </Button>
-              <Button type="button" variant="primary" size="sm" disabled={!dirty || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-                {saveMutation.isPending ? "Saving…" : "Save style"}
-              </Button>
-            </div>
+            <Can permission={PERMISSIONS.tags.update}>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" size="sm" disabled={saveMutation.isPending} onClick={() => setDraft(DEFAULT_TAG_STYLE)}>
+                  Reset
+                </Button>
+                <Button type="button" variant="primary" size="sm" disabled={!dirty || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+                  {saveMutation.isPending ? "Saving…" : "Save style"}
+                </Button>
+              </div>
+            </Can>
           }
         />
         <CardContent className="space-y-6">

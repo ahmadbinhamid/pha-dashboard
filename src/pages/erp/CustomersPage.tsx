@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
@@ -45,12 +47,11 @@ export default function CustomersPage() {
     }, { replace: true });
   };
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchParams((prev) => {
         const current = prev.get("search") ?? "";
-        if (inputValue === current) return prev; // no change — don't reset page
+        if (inputValue === current) return prev;
         const next = new URLSearchParams(prev);
         if (inputValue) next.set("search", inputValue);
         else next.delete("search");
@@ -86,10 +87,12 @@ export default function CustomersPage() {
         title="Customers"
         description={total > 0 ? `${total} customer${total !== 1 ? "s" : ""} on file` : "Manage your customer records"}
       >
-        <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          New Customer
-        </Button>
+        <Can permission={PERMISSIONS.customers.create}>
+          <Button variant="primary" size="md" className="gap-2" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            New Customer
+          </Button>
+        </Can>
       </PageHeader>
 
       <Card>
@@ -154,12 +157,16 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(customer)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)}>
-                          <Trash2 className="h-3.5 w-3.5 text-danger" />
-                        </Button>
+                        <Can permission={PERMISSIONS.customers.update}>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(customer)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </Can>
+                        <Can permission={PERMISSIONS.customers.delete}>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)}>
+                            <Trash2 className="h-3.5 w-3.5 text-danger" />
+                          </Button>
+                        </Can>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -213,10 +220,12 @@ function EmptyState({ search, onNew }: { search: string; onNew: () => void }) {
         </p>
       </div>
       {!search && (
-        <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
-          <Plus className="h-3.5 w-3.5" />
-          New Customer
-        </Button>
+        <Can permission={PERMISSIONS.customers.create}>
+          <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
+            <Plus className="h-3.5 w-3.5" />
+            New Customer
+          </Button>
+        </Can>
       )}
     </div>
   );

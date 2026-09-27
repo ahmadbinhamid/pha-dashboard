@@ -1,7 +1,8 @@
 
 import Link from "@/components/ui/Link";
 import { usePathname } from "@/hooks";
-import { NAV_ITEMS, isNavItemActive } from "@/config/nav";
+import { isNavItemActive, visibleNavItems } from "@/config/nav";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { erpNavIconClass, erpNavRowClass } from "@/config/navStyles";
 
 export function NavItemsList({
@@ -12,10 +13,11 @@ export function NavItemsList({
   onItemClick?: () => void;
 }) {
   const pathname = usePathname();
+  const { can } = useMyAccess();
 
   return (
     <ul className="space-y-0.5">
-      {NAV_ITEMS.map((item) => {
+      {visibleNavItems(can).map((item) => {
         const active = isNavItemActive(item, pathname);
         return (
           <li key={item.href}>

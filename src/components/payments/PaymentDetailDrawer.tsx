@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/Sheet";
 import { PaymentStatusBadge } from "@/components/payments/PaymentStatusBadge";
 import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { RefundHistoryList } from "@/components/refunds/RefundHistoryList";
 import { getPayment } from "@/lib/api/payments";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 import { getPaymentSourceLabel, getPaymentMethodDisplay } from "@/utils/paymentDisplay";
 
@@ -26,8 +29,9 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   const payment = data?.data;
   const order = payment && typeof payment.order === "object" ? payment.order : null;
   const remaining = payment ? payment.amount - payment.amount_refunded : 0;
-  // refund-redesign-spec.md §7: one refund action regardless of settlement method (dialog auto-detects Stripe vs manual, can span more than this payment).
-  const canRefund = payment?.status === "succeeded" && remaining > 0;
+  const { can } = useMyAccess();
+  // One refund action for any method; the dialog may span other payments.
+  const canRefund = payment?.status === "succeeded" && remaining > 0 && can(PERMISSIONS.orders.refund);
 
   function handleRefunded() {
     queryClient.invalidateQueries({ queryKey: ["payment", paymentId] });
@@ -36,20 +40,14 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
   }
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="absolute right-0 top-0 flex h-dvh w-[min(100vw,520px)] flex-col border-l border-border bg-bg shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <div className="text-sm font-semibold">Payment Details</div>
-            <div className="mt-0.5 text-xs text-fg/50">{order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}</div>
-          </div>
-          <button type="button" onClick={onClose} className="text-fg/40 hover:text-fg">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="max-w-130">
+        <SheetHeader>
+          <SheetTitle>Payment Details</SheetTitle>
+          <SheetDescription>{order ? formatOrderNumber(order.order_number_prefix, order.order_number) : "—"}</SheetDescription>
+        </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <SheetBody>
           {isLoading || !payment ? (
             <div className="py-8 text-center text-sm text-fg/50">Loading payment…</div>
           ) : (
@@ -101,17 +99,17 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
 
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg/45">Refund History</div>
-                {/* This payment's own refund attributions; a multi-payment refund shows fully on the order-scoped Refund History instead. */}
+                {/* Only this payment's share; the order page shows whole refunds. */}
                 <RefundHistoryList orderId={order?._id ?? ""} refunds={payment.refunds} />
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </SheetBody>
+      </SheetContent>
 
       {order && (
         <RefundDialog orderId={order._id} open={refunding} onOpenChange={setRefunding} onSuccess={handleRefunded} />
       )}
-    </div>
+    </Sheet>
   );
 }

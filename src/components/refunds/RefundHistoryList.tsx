@@ -7,6 +7,8 @@ import { useToast } from "@/context";
 import { voidRefund as voidRefundApi } from "@/lib/api/refunds";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { REFUND_REASON_LABEL } from "@/config/refundReasons";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { Refund, RefundStatus } from "@/types/refund";
 
 const REFUND_STATUS_VARIANT: Record<RefundStatus, "ok" | "warn" | "danger" | "muted"> = {
@@ -23,6 +25,7 @@ export function RefundHistoryList({ orderId, refunds }: { orderId: string; refun
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  const canVoid = useMyAccess().can(PERMISSIONS.orders.refund);
 
   const voidMutation = useMutation({
     mutationFn: (refundId: string) => voidRefundApi(refundId, "Voided from order detail page"),
@@ -83,7 +86,7 @@ export function RefundHistoryList({ orderId, refunds }: { orderId: string; refun
           {refund.void_reason && <div className="mt-1 text-xs text-fg/50">Voided: {refund.void_reason}</div>}
           <div className="mt-1.5 flex items-center justify-between">
             <span className="text-3xs text-fg/40">{new Date(refund.created_at).toLocaleString()}</span>
-            {refund.status === "succeeded" && (
+            {canVoid && refund.status === "succeeded" && (
               <Button
                 type="button"
                 variant="ghost"

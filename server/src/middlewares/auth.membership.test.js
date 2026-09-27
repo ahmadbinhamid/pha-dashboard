@@ -79,7 +79,7 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
     let out = await runMiddleware(auth(), req, res);
     assert.equal(out.nextCalled, true, "authenticated");
     assert.equal(String(req.tenantId), String(orgA._id), "defaults to the first organisation joined");
-    assert.ok(req.permissions.includes("settings.update"), "carries the Admin permissions of that org");
+    assert.ok(membershipService.requestPermissions(req).includes("users.create"), "carries the Admin permissions of that org");
 
     // Header → that organisation, with the role held THERE.
     req = makeReq(token, { "X-Tenant-Id": String(orgB._id) });
@@ -87,7 +87,7 @@ test("auth: resolves the default organisation, and X-Tenant-Id switches between 
     out = await runMiddleware(auth(), req, res);
     assert.equal(out.nextCalled, true);
     assert.equal(String(req.tenantId), String(orgB._id), "switches organisation");
-    assert.ok(!req.permissions.includes("settings.update"), "and switches to the Staff permissions held there");
+    assert.ok(!membershipService.requestPermissions(req).includes("users.create"), "and switches to the Staff permissions held there");
 
     // Header naming an organisation they don't belong to → refused.
     req = makeReq(token, { "X-Tenant-Id": String(outsider._id) });
@@ -145,9 +145,12 @@ test("requirePermission: gates on the role held in the ACTIVE organisation", asy
     assert.equal(out.nextCalled, false, "refused what it doesn't");
     assert.equal(denied.statusCode, 403);
 
-    // Promote, and the same request-level check now passes.
-    await membershipService.updateMember(user._id, org._id, { roleId: roles[SYSTEM_ROLE.ADMIN]._id });
-    out = await runMiddleware(requirePermission("users.create"), req, makeRes());
+    // Move to a role that can invite: the next request, same token, passes.
+    const hiring = await roleService.createRole(org._id, { name: "Hiring", permissions: ["users.create"] });
+    await membershipService.updateMember(user._id, org._id, { roleId: hiring._id });
+    const next = makeReq(token);
+    await runMiddleware(auth(), next, makeRes());
+    out = await runMiddleware(requirePermission("users.create"), next, makeRes());
     assert.equal(out.nextCalled, true, "a role change takes effect without re-issuing the token");
   } finally {
     await Membership.deleteMany({ user_id: user._id });

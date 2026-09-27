@@ -4,25 +4,25 @@
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
-const { auth, tenantAdmin } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const { loginLimiter } = require("../middlewares/rateLimit");
 const V = require("../validators/access.validation");
 const ctrl = require("../controllers/invitation.controller");
 
 // ── Organisation ──
-router.get("/", auth(), tenantAdmin, validate(V.listInvitations), asyncHandler(ctrl.listInvitations));
-router.post("/", auth(), tenantAdmin, validate(V.sendInvitation), asyncHandler(ctrl.sendInvitation));
+router.get("/", auth(), requirePermission("users.view"), validate(V.listInvitations), asyncHandler(ctrl.listInvitations));
+router.post("/", auth(), requirePermission("users.create"), validate(V.sendInvitation), asyncHandler(ctrl.sendInvitation));
 router.post(
   "/:id/resend",
   auth(),
-  tenantAdmin,
+  requirePermission("users.create"),
   validate(V.invitationIdParam),
   asyncHandler(ctrl.resendInvitation),
 );
 router.delete(
   "/:id",
   auth(),
-  tenantAdmin,
+  requirePermission("users.create"),
   validate(V.invitationIdParam),
   asyncHandler(ctrl.revokeInvitation),
 );

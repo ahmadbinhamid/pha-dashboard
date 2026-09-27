@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
 import { useToast } from "@/context";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { OrderChannel, OrderItem } from "@/types/orders";
 import {
   editableUnitPriceFormSchema,
@@ -190,8 +192,9 @@ export function OrderItemsTable({
   orderId: string;
   channel: OrderChannel;
 }) {
+  const { can } = useMyAccess();
   // Storefront order edits are rejected by the backend, so only offer for others.
-  const editable = channel === "ebay" || channel === "manual";
+  const editable = (channel === "ebay" || channel === "manual") && can(PERMISSIONS.orders.update);
   const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 
   return (

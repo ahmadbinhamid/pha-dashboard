@@ -5,6 +5,7 @@ const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
 const Role = require("../models/Role");
 const { MEMBERSHIP_STATUS, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
+const { ALL_PERMISSIONS } = require("../config/permissions");
 
 // Admin, or the pre-migration Super Admin name for the same owner role.
 function isAdminRole(role) {
@@ -33,13 +34,20 @@ async function getMembership(userId, tenantId) {
 }
 
 /** A user's active orgs; feeds the org switcher and auth's tenant pick. */
-async function listUserMemberships(userId) {
+function activeMembershipsQuery(userId) {
   return Membership.find({ user_id: userId, status: MEMBERSHIP_STATUS.ACTIVE })
-    .populate("tenant_id", "name company_name slug logo_url status")
-    // auth.js resolves the active org from this call, so it needs permissions.
     .populate("role_id", "name is_system permissions")
     .sort({ is_default: -1, joined_at: 1 })
     .lean();
+}
+
+async function listUserMemberships(userId) {
+  return activeMembershipsQuery(userId).populate("tenant_id", "name company_name slug logo_url status");
+}
+
+/** Per-request lookup; skips the tenant populate auth loads itself. */
+async function listMembershipsForAuth(userId) {
+  return activeMembershipsQuery(userId);
 }
 
 /** Idempotent; a user's first organisation becomes their default. */
@@ -76,6 +84,11 @@ async function updateMember(userId, tenantId, { roleId, status }) {
     const role = await Role.findOne({ _id: roleId, tenant_id: tenantId }).lean();
     if (!role) {
       const err = new Error("That role doesn't belong to this organisation.");
+      err.status = 422;
+      throw err;
+    }
+    if (isAdminRole(role)) {
+      const err = new Error("The Admin role can't be given to someone else.");
       err.status = 422;
       throw err;
     }
@@ -165,6 +178,12 @@ function isRequestTenantAdmin({ membership, user }) {
   return membership ? isAdminRole(membership.role_id) : LEGACY_OWNER_ACCOUNT_ROLES.includes(user?.role);
 }
 
+/** Permissions in the request's tenant; the Admin holds them all. */
+function requestPermissions({ membership, user }) {
+  if (isRequestTenantAdmin({ membership, user })) return ALL_PERMISSIONS;
+  return membership?.status === MEMBERSHIP_STATUS.ACTIVE ? membership.role_id?.permissions ?? [] : [];
+}
+
 /** Whether the user is an active Admin (owner) of this tenant. */
 async function isTenantAdmin(userId, tenantId) {
   const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId, status: MEMBERSHIP_STATUS.ACTIVE })
@@ -194,6 +213,7 @@ module.exports = {
   listMembers,
   getMembership,
   listUserMemberships,
+  listMembershipsForAuth,
   addMember,
   updateMember,
   removeMember,
@@ -204,6 +224,7 @@ module.exports = {
   isAdminRole,
   isTenantAdmin,
   isRequestTenantAdmin,
+  requestPermissions,
   touchLastActive,
   countMembersByRole,
 };

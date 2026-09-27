@@ -36,7 +36,7 @@ import {
   revokeInvitation,
   updateMember,
 } from "@/lib/api/access";
-import { PERMISSIONS_ENABLED } from "@/config/access";
+import { PERMISSIONS } from "@/config/permissions";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import type { Invitation, Member } from "@/types/access";
 
@@ -44,8 +44,10 @@ export function UsersTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  // Team management is the tenant Admin's; Staff get a read-only list.
-  const { isTenantAdmin, isLoading: accessLoading } = useMyAccess();
+  const { can, isLoading: accessLoading } = useMyAccess();
+  const canView = can(PERMISSIONS.users.view);
+  const canInvite = can(PERMISSIONS.users.create);
+  const canUpdate = can(PERMISSIONS.users.update);
 
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -54,18 +56,18 @@ export function UsersTab() {
   const { data: membersRes, isLoading: membersLoading } = useQuery({
     queryKey: ["members"],
     queryFn: getMembers,
-    enabled: isTenantAdmin,
+    enabled: canView,
   });
   const { data: invitesRes, isLoading: invitesLoading } = useQuery({
     queryKey: ["invitations"],
     queryFn: getInvitations,
-    enabled: isTenantAdmin,
+    enabled: canView,
   });
-  // Roles only matter for changing a role, which waits on permissions.
+  // Roles feed the invite and change-role pickers.
   const { data: rolesRes } = useQuery({
     queryKey: ["roles"],
     queryFn: getRoles,
-    enabled: isTenantAdmin && PERMISSIONS_ENABLED,
+    enabled: canInvite || canUpdate,
   });
 
   const members = membersRes?.data ?? [];
@@ -173,7 +175,7 @@ export function UsersTab() {
       }),
   });
 
-  if (!accessLoading && !isTenantAdmin) {
+  if (!accessLoading && !canView) {
     return (
       <SettingsSection
         title="Members"
@@ -181,8 +183,8 @@ export function UsersTab() {
       >
         <EmptyState
           icon={Lock}
-          title="Only your organisation's Admin manages the team"
-          description="Ask them to add or remove people."
+          title="You don't have access to the team list"
+          description="Ask your organisation's Admin if you need it."
         />
       </SettingsSection>
     );
@@ -192,17 +194,14 @@ export function UsersTab() {
     <div className="space-y-6">
       <SettingsSection
         title="Members"
-        description="People who can sign in to this organisation. New members join as Staff."
+        description="People who can sign in to this organisation, each with one role here."
         right={
-          <Button
-            variant="primary"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setInviteOpen(true)}
-          >
-            <UserPlus className="h-4 w-4" />
-            Add Team Member
-          </Button>
+          canInvite ? (
+            <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setInviteOpen(true)}>
+              <UserPlus className="h-4 w-4" />
+              Add Team Member
+            </Button>
+          ) : undefined
         }
       >
         <div className="space-y-4">
@@ -250,7 +249,8 @@ export function UsersTab() {
                       key={member._id}
                       member={member}
                       isSelf={String(member.user_id?._id) === String(user?._id)}
-                      canManage={isTenantAdmin}
+                      canUpdate={canUpdate}
+                      canRemove={can(PERMISSIONS.users.delete)}
                       onChangeRole={setRoleTarget}
                       onToggleSuspended={(m) => suspendMutation.mutate(m)}
                       onRemove={setRemoveTarget}
@@ -296,7 +296,7 @@ export function UsersTab() {
                   <InvitationRow
                     key={invitation._id}
                     invitation={invitation}
-                    canManage={isTenantAdmin}
+                    canManage={canInvite}
                     onResend={(i) => resendMutation.mutate(i)}
                     onRevoke={(i) => revokeMutation.mutate(i)}
                   />
@@ -307,14 +307,8 @@ export function UsersTab() {
         )}
       </SettingsSection>
 
-      <InviteMemberModal open={inviteOpen} onOpenChange={setInviteOpen} />
-      {PERMISSIONS_ENABLED && (
-        <ChangeRoleModal
-          member={roleTarget}
-          roles={roles}
-          onOpenChange={(open) => !open && setRoleTarget(null)}
-        />
-      )}
+      <InviteMemberModal open={inviteOpen} onOpenChange={setInviteOpen} roles={roles} />
+      <ChangeRoleModal member={roleTarget} roles={roles} onOpenChange={(open) => !open && setRoleTarget(null)} />
 
       <Modal
         open={Boolean(removeTarget)}

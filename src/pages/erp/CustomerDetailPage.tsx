@@ -7,6 +7,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
@@ -87,14 +89,18 @@ export default function CustomerDetailPage() {
           </p>
         </div>
         <div className="flex gap-2 self-start">
-          <Button variant="secondary" size="md" className="gap-2" onClick={() => setFormOpen(true)}>
-            <Pencil className="h-4 w-4" />
-            Edit
-          </Button>
-          <Button variant="danger" size="md" className="gap-2" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
+          <Can permission={PERMISSIONS.customers.update}>
+            <Button variant="secondary" size="md" className="gap-2" onClick={() => setFormOpen(true)}>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+          </Can>
+          <Can permission={PERMISSIONS.customers.delete}>
+            <Button variant="danger" size="md" className="gap-2" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </Can>
         </div>
       </div>
 

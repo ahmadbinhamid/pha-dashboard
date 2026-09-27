@@ -1,11 +1,13 @@
 import { cn } from "@/utils/cn";
-import { SETTINGS_TABS, type SettingsTabId } from "@/config/settingsTabs";
+import type { SettingsTab, SettingsTabId } from "@/config/settingsTabs";
 
-// Underlined horizontal tab bar across the top of Settings. Scrolls sideways rather than wrapping, since nine tabs don't fit a laptop width and wrapping would make the page jump as the active tab changes lines.
+// Scrolls sideways, not wrapping, so the page never jumps between tabs.
 export function SettingsTabBar({
+  tabs,
   activeId,
   onSelect,
 }: {
+  tabs: SettingsTab[];
   activeId: SettingsTabId;
   onSelect: (id: SettingsTabId) => void;
 }) {
@@ -15,7 +17,7 @@ export function SettingsTabBar({
       aria-label="Settings sections"
       className="no-scrollbar flex items-center gap-5 overflow-x-auto border-b border-border"
     >
-      {SETTINGS_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.id === activeId;
         return (
           <button

@@ -11,6 +11,8 @@ import {
   ModalTitle,
 } from "@/components/ui/Modal";
 import { TagPreview } from "@/components/tags/TagPreview";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
 import { useToast } from "@/context";
 import { useTagStyle } from "@/hooks/useTagStyle";
@@ -91,27 +93,25 @@ export function PrintProductTagModal({
           )}
 
           <ModalFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="gap-1.5"
-              disabled={queueMutation.isPending}
-              onClick={() => queueMutation.mutate()}
-            >
-              <ListPlus className="h-3.5 w-3.5" />
-              {queueMutation.isPending ? "Adding…" : "Add to tag queue"}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              className="gap-1.5"
-              onClick={printNow}
-            >
-              <Printer className="h-3.5 w-3.5" />
-              Print tag
-            </Button>
+            <Can permission={PERMISSIONS.tags.update}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                disabled={queueMutation.isPending}
+                onClick={() => queueMutation.mutate()}
+              >
+                <ListPlus className="h-3.5 w-3.5" />
+                {queueMutation.isPending ? "Adding…" : "Add to tag queue"}
+              </Button>
+            </Can>
+            <Can permission={PERMISSIONS.tags.print}>
+              <Button type="button" variant="primary" size="sm" className="gap-1.5" onClick={printNow}>
+                <Printer className="h-3.5 w-3.5" />
+                Print tag
+              </Button>
+            </Can>
           </ModalFooter>
         </ModalContent>
       </Modal>

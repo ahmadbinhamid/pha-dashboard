@@ -54,12 +54,14 @@ const roleIdParam = {
 
 // ── Invitations ──
 
-// Everyone joins as Staff for now, so no role is chosen.
+// role_id is optional; the service defaults it to Staff.
 const sendInvitation = {
   body: Joi.object({
     first_name: Joi.string().trim().min(1).max(60).required(),
     last_name: Joi.string().trim().min(1).max(60).required(),
     email: Joi.string().trim().lowercase().email().required(),
+    // Defaults to the tenant's Staff role.
+    role_id: objectId.allow(null, ""),
   }),
 };
 

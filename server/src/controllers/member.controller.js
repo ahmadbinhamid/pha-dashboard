@@ -42,6 +42,7 @@ exports.getMyAccess = async (req, res) => {
     return success(res, {
       is_tenant_admin: membershipService.isRequestTenantAdmin(req),
       role: req.membership?.role_id?.name ?? null,
+      permissions: membershipService.requestPermissions(req),
     });
   } catch (err) {
     return systemfailure(res, err);

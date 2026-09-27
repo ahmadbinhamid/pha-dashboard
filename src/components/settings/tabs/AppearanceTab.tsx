@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { LogoUploadField } from "@/components/tenant-settings/LogoUploadField";
 import { SettingsSection } from "@/components/settings/SettingsSection";
@@ -16,7 +18,7 @@ import { useToast } from "@/context";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
 import type { TenantSettings } from "@/types/tenantSettings";
 
-// Brand fields live in their own small form so this card's Save only PATCHes what it shows — the tenant-settings endpoint takes partial bodies, letting each card own its save instead of one giant submit.
+// Own form: Save PATCHes only the brand fields, not the whole settings.
 type BrandState = {
   logo_url: string | null;
   favicon_url: string | null;
@@ -94,7 +96,7 @@ export function AppearanceTab({ settings, loading }: { settings?: TenantSettings
         title="Brand Identity"
         description="Your logo, used across invoices, the storefront header and customer emails."
         footer={
-          <>
+          <Can permission={PERMISSIONS.settings.update}>
             <Button variant="ghost" disabled={!settings || mutation.isPending} onClick={() => settings && setBrand(toBrandState(settings))}>
               Reset
             </Button>
@@ -105,7 +107,7 @@ export function AppearanceTab({ settings, loading }: { settings?: TenantSettings
             >
               {mutation.isPending ? "Saving…" : "Save Branding"}
             </Button>
-          </>
+          </Can>
         }
       >
         {loading || !brand ? (

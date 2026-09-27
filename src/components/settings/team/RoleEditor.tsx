@@ -11,17 +11,21 @@ import { PermissionMatrix } from "@/components/settings/team/PermissionMatrix";
 import { useToast } from "@/context";
 import { createRole, updateRole } from "@/lib/api/access";
 import { roleFormSchema } from "@/lib/validation/access";
+import { TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
 import type { PermissionGroup, Role } from "@/types/access";
 
-/** Create or edit one role. A system role opens read-only since the server refuses to edit it (role.service.js), so the form shows what it grants, not that it can change. */
+/** Create or edit a role; Admin is view-only, built-in Staff keeps its name. */
 export function RoleEditor({
   role,
   groups,
+  canSave,
   onDone,
 }: {
   /** null = creating a new role. */
   role: Role | null;
   groups: PermissionGroup[];
+  // roles.create for a new role, roles.update for an existing one.
+  canSave: boolean;
   onDone: () => void;
 }) {
   const { toast } = useToast();
@@ -39,10 +43,15 @@ export function RoleEditor({
     setError(null);
   }, [role]);
 
-  const readOnly = Boolean(role?.is_system);
+  // The owner role always holds everything, so it's never edited.
+  const isAdminRole = TENANT_ADMIN_ROLE_NAMES.includes(role?.name ?? "");
+  const readOnly = isAdminRole || !canSave;
+  const nameLocked = readOnly || Boolean(role?.is_system);
 
   const mutation = useMutation({
     mutationFn: () => {
+      // Built-in roles only change permissions; their name is fixed.
+      if (role?.is_system) return updateRole(role._id, { permissions });
       const payload = { name, description: description || null, permissions };
       return role ? updateRole(role._id, payload) : createRole(payload);
     },
@@ -74,11 +83,13 @@ export function RoleEditor({
       <SettingsSection
         title={role ? role.name : "New role"}
         description={
-          readOnly
-            ? "A built-in role. Its permissions are fixed so an organisation can't lock itself out."
-            : "Name the role, then choose exactly what it can do."
+          isAdminRole
+            ? "The owner role always has full access, so it can't be changed."
+            : role?.is_system
+              ? "A built-in role: choose what it can do; its name stays fixed."
+              : "Name the role, then choose exactly what it can do."
         }
-        right={readOnly ? <Badge variant="muted" className="gap-1.5"><Lock className="h-3 w-3" />Built in</Badge> : null}
+        right={role?.is_system ? <Badge variant="muted" className="gap-1.5"><Lock className="h-3 w-3" />Built in</Badge> : null}
         footer={
           readOnly ? null : (
             <>
@@ -96,14 +107,14 @@ export function RoleEditor({
         <div className="space-y-5">
           <SettingsFieldGrid>
             <FormField label="Role name" required>
-              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} placeholder="e.g. Warehouse Lead" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={nameLocked} placeholder="e.g. Warehouse Lead" />
             </FormField>
             <FormField label="Description" hint="What this role is for — shown when assigning it.">
               <Textarea
                 rows={2}
                 value={description ?? ""}
                 onChange={(e) => setDescription(e.target.value)}
-                disabled={readOnly}
+                disabled={nameLocked}
                 placeholder="Counts stock and picks orders, no pricing access."
               />
             </FormField>

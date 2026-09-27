@@ -2,7 +2,7 @@
 
 const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
-const { auth, tenantMember } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const { resolveGuestTenant } = require("../middlewares/tenant");
 const { paymentLimiter } = require("../middlewares/rateLimit");
 const validate = require("../middlewares/validate");
@@ -23,7 +23,7 @@ router.post(
 router.post("/webhook", asyncHandler(ctrl.handleWebhook));
 
 // ── Organisation members ──
-router.get("/", auth(), tenantMember, pagination(), validate(v.listPayments), asyncHandler(ctrl.listPayments));
-router.get("/:id", auth(), tenantMember, validate(v.byIdParam), asyncHandler(ctrl.getPayment));
+router.get("/", auth(), requirePermission("payments.view"), pagination(), validate(v.listPayments), asyncHandler(ctrl.listPayments));
+router.get("/:id", auth(), requirePermission("payments.view"), validate(v.byIdParam), asyncHandler(ctrl.getPayment));
 
 module.exports = router;

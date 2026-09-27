@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/ActionsMenu";
 import { cn } from "@/utils/cn";
-import { PERMISSIONS_ENABLED, TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
+import { TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
 import type { Member } from "@/types/access";
 
 // Initials avatar, same fallback shape as TenantLogo's no-logo state.
@@ -47,7 +47,8 @@ function relativeTime(iso: string | null) {
 export function MemberRow({
   member,
   isSelf,
-  canManage,
+  canUpdate,
+  canRemove,
   onChangeRole,
   onToggleSuspended,
   onRemove,
@@ -55,8 +56,9 @@ export function MemberRow({
   member: Member;
   /** Nobody edits their own access from this screen. */
   isSelf: boolean;
-  // Only the tenant Admin manages members; others see a read-only list.
-  canManage: boolean;
+  // users.update: change role and suspend; users.delete: remove.
+  canUpdate: boolean;
+  canRemove: boolean;
   onChangeRole: (member: Member) => void;
   onToggleSuspended: (member: Member) => void;
   onRemove: (member: Member) => void;
@@ -124,13 +126,13 @@ export function MemberRow({
       </TableCell>
 
       <TableCell className="text-right">
-        {canManage && (
+        {(canUpdate || canRemove) && (
           <DropdownMenu>
             <DropdownMenuTrigger aria-label={`Actions for ${user?.email}`}>
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {PERMISSIONS_ENABLED && (
+              {canUpdate && (
                 <DropdownMenuItem
                   disabled={locked}
                   onSelect={() => onChangeRole(member)}
@@ -140,7 +142,7 @@ export function MemberRow({
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
-                disabled={locked}
+                disabled={locked || !canUpdate}
                 onSelect={() => onToggleSuspended(member)}
               >
                 {suspended ? (
@@ -153,7 +155,7 @@ export function MemberRow({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 destructive
-                disabled={locked}
+                disabled={locked || !canRemove}
                 onSelect={() => onRemove(member)}
               >
                 <UserMinus className="h-3.5 w-3.5" />

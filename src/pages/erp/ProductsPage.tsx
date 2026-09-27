@@ -12,6 +12,8 @@ import { getChannels } from "@/lib/api/channels";
 import { getProductStats } from "@/lib/api/products";
 import { formatCurrency } from "@/utils/format";
 import { Blocks, Layers, Plus, Tag, TriangleAlert } from "lucide-react";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 
 // Shared ["channels"] query key, so stat cards and filter bar share one source.
 export default function ProductsPage() {
@@ -75,12 +77,14 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Products"
-        description="Auto parts inventory, multi-channel feeds, and specifications."
+        description="Auto parts inventory, multi channel feeds, and specifications."
       >
-        <Button variant="primary" size="md" className="gap-2" onClick={() => navigate("/products/new")}>
-          <Plus className="h-4 w-4" />
-          New Product
-        </Button>
+        <Can permission={PERMISSIONS.products.create}>
+          <Button variant="primary" size="md" className="gap-2" onClick={() => navigate("/products/new")}>
+            <Plus className="h-4 w-4" />
+            New Product
+          </Button>
+        </Can>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

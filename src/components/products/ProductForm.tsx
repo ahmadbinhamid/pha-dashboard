@@ -22,6 +22,8 @@ import { PrintProductTagModal } from "@/components/products/PrintProductTagModal
 import { PRODUCT_EDIT_TABS, SALES_CHANNELS_ANCHOR, type ProductEditTab } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import { useElementHeight } from "@/hooks/useElementHeight";
+import { useMyAccess } from "@/hooks/useMyAccess";
+import { PERMISSIONS } from "@/config/permissions";
 import { useProductChannelListings } from "@/hooks/useProductChannelListings";
 import { addProductNote, createProduct, updateProduct } from "@/lib/api/products";
 import { EMPTY_PRODUCT_FORM, productFormToFormData, productToForm } from "@/lib/products/productForm";
@@ -67,6 +69,9 @@ export function ProductForm(props: ProductFormProps) {
         : "details";
   const focusChannel = searchParams.get("channel");
   // Set by the create flow so the new product's page offers its tag once.
+  const { can } = useMyAccess();
+  // No tag permission: skip the post-create prompt entirely.
+  const canTag = can(PERMISSIONS.tags.print) || can(PERMISSIONS.tags.update);
   const [tagOpen, setTagOpen] = useState(() => searchParams.get("printTag") === "1");
   const justCreated = searchParams.get("printTag") === "1";
 
@@ -316,7 +321,7 @@ export function ProductForm(props: ProductFormProps) {
         )}
 
         <SendProductEmailModal product={product} open={sendEmailOpen} onOpenChange={setSendEmailOpen} />
-        <PrintProductTagModal product={product} open={tagOpen} onOpenChange={setTagModal} justCreated={justCreated} />
+        <PrintProductTagModal product={product} open={tagOpen && canTag} onOpenChange={setTagModal} justCreated={justCreated} />
       </div>
     </Tabs>
   );

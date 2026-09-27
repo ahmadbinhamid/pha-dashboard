@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { TagPreview } from "@/components/tags/TagPreview";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
 import type { TagContent, TagQueueItem, TagStyle } from "@/types/tags";
 
@@ -52,27 +54,18 @@ export function TagPrintSummaryCard({
           </StatCard>
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          size="md"
-          className="w-full gap-2"
-          disabled={busy || !items.length}
-          onClick={onPrintAll}
-        >
-          <Printer className="h-4 w-4" />
-          Print all tags{totalTags ? ` (${totalTags})` : ""}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full gap-1.5 text-fg/60"
-          onClick={onEditStyle}
-        >
-          <Palette className="h-3.5 w-3.5" />
-          Customise tag style
-        </Button>
+        <Can permission={PERMISSIONS.tags.print}>
+          <Button type="button" variant="primary" size="md" className="w-full gap-2" disabled={busy || !items.length} onClick={onPrintAll}>
+            <Printer className="h-4 w-4" />
+            Print all tags{totalTags ? ` (${totalTags})` : ""}
+          </Button>
+        </Can>
+        <Can permission={PERMISSIONS.tags.update}>
+          <Button type="button" variant="ghost" size="sm" className="w-full gap-1.5 text-fg/60" onClick={onEditStyle}>
+            <Palette className="h-3.5 w-3.5" />
+            Customise tag style
+          </Button>
+        </Can>
       </CardContent>
     </Card>
   );

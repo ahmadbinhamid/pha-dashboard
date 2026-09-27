@@ -6,7 +6,7 @@ const upload = multer(); // parses multipart/form-data (no files) into req.body
 
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
-const { auth } = require("../middlewares/auth");
+const { auth, requirePermission } = require("../middlewares/auth");
 const pagination = require("../middlewares/pagination");
 const V = require("../validators/user.validation");
 const ctrl = require("../controllers/user.controller");
@@ -16,7 +16,7 @@ router.use(auth());
 
 // get all users
 router.get(
-  "/",
+  "/", requirePermission("users.view"),
   validate(V.listUsers),
   pagination({ defaultLimit: 15, maxLimit: 100 }),
   asyncHandler(ctrl.getUsers)
@@ -32,6 +32,6 @@ router.patch("/two-factor", upload.none(), validate(V.setTwoFactor), asyncHandle
 router.get("/profile", asyncHandler(ctrl.getProfile));
 
 // delete user (soft)
-router.delete("/:id", validate(V.byIdParam), asyncHandler(ctrl.deleteUser));
+router.delete("/:id", requirePermission("users.delete"), validate(V.byIdParam), asyncHandler(ctrl.deleteUser));
 
 module.exports = router;

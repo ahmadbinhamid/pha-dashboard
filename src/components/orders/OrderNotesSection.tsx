@@ -4,6 +4,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/context";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { addOrderNote } from "@/lib/api/orders";
 import type { OrderInternalNote } from "@/types/orders";
 
@@ -12,6 +14,7 @@ export function OrderNotesSection({ orderId, notes }: { orderId: string; notes: 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
+  const canWrite = useMyAccess().can(PERMISSIONS.orders.update);
 
   const mutation = useMutation({
     mutationFn: () => addOrderNote(orderId, text.trim()),
@@ -28,25 +31,27 @@ export function OrderNotesSection({ orderId, notes }: { orderId: string; notes: 
     <Card>
       <CardHeader title="Notes" description={`${notes.length} note${notes.length !== 1 ? "s" : ""}`} />
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Write a note about this order…"
-            size="sm"
-          />
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="primary"
+        {canWrite && (
+          <div className="space-y-2">
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Write a note about this order…"
               size="sm"
-              disabled={!text.trim() || mutation.isPending}
-              onClick={() => mutation.mutate()}
-            >
-              {mutation.isPending ? "Saving…" : "Save Note"}
-            </Button>
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={!text.trim() || mutation.isPending}
+                onClick={() => mutation.mutate()}
+              >
+                {mutation.isPending ? "Saving…" : "Save Note"}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         {notes.length === 0 ? (
           <p className="py-4 text-center text-sm text-fg/45">No notes yet.</p>

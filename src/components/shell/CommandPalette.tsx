@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/Input";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { PaletteRow } from "@/components/shell/CommandPaletteRow";
 import { CommandPaletteSection } from "@/components/shell/CommandPaletteSection";
-import { NAV_ITEMS } from "@/config/nav";
+import { visibleNavItems } from "@/config/nav";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
 import { getProducts } from "@/lib/api/products";
 import { getOrders } from "@/lib/api/orders";
@@ -46,6 +48,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { can } = useMyAccess();
   const trimmed = query.trim();
   const hasQuery = debouncedQuery.length > 0;
 
@@ -74,12 +77,12 @@ export function CommandPalette({
   const pageResults = useMemo(
     () =>
       trimmed
-        ? NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(trimmed.toLowerCase())).slice(
+        ? visibleNavItems(can).filter((item) => item.label.toLowerCase().includes(trimmed.toLowerCase())).slice(
             0,
             RESULT_LIMIT.pages,
           )
         : [],
-    [trimmed],
+    [trimmed, can],
   );
 
   const {
@@ -89,7 +92,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "products", debouncedQuery],
     queryFn: () => getProducts({ search: debouncedQuery, limit: RESULT_LIMIT.products }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.products.view),
     retry: false,
   });
   const products = productsRes?.data?.items ?? [];
@@ -101,7 +104,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "orders", debouncedQuery],
     queryFn: () => getOrders({ search: debouncedQuery, limit: RESULT_LIMIT.orders }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.orders.view),
     retry: false,
   });
   const orders = ordersRes?.data?.items ?? [];
@@ -113,7 +116,7 @@ export function CommandPalette({
   } = useQuery({
     queryKey: ["command-palette", "customers", debouncedQuery],
     queryFn: () => getCustomers({ search: debouncedQuery, limit: RESULT_LIMIT.customers }),
-    enabled: open && hasQuery,
+    enabled: open && hasQuery && can(PERMISSIONS.customers.view),
     retry: false,
   });
   const customers = customersRes?.data?.items ?? [];

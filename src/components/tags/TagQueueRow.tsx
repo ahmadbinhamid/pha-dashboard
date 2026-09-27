@@ -16,10 +16,13 @@ interface TagQueueRowProps {
   onPrint: () => void;
   onRemove: () => void;
   disabled?: boolean;
+  // tags.update changes the count or removes; tags.print prints.
+  canUpdate: boolean;
+  canPrint: boolean;
 }
 
 // One queued product; click to preview, stepper capped at its stock.
-export function TagQueueRow({ item, selected, onSelect, onCopiesChange, onPrint, onRemove, disabled }: TagQueueRowProps) {
+export function TagQueueRow({ item, selected, onSelect, onCopiesChange, onPrint, onRemove, disabled, canUpdate, canPrint }: TagQueueRowProps) {
   const max = Math.min(Math.max(item.stock_count, 1), MAX_TAG_COPIES);
 
   return (
@@ -43,16 +46,20 @@ export function TagQueueRow({ item, selected, onSelect, onCopiesChange, onPrint,
       </TableCell>
       <TableCell className="whitespace-nowrap text-sm tabular-nums text-fg/70">{item.stock_count}</TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
-        <QuantityStepper value={item.copies} onChange={onCopiesChange} max={max} editable disabled={disabled} />
+        <QuantityStepper value={item.copies} onChange={onCopiesChange} max={max} editable disabled={disabled || !canUpdate} />
       </TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-fg/60" disabled={disabled} onClick={onPrint} aria-label="Print these tags">
-            <Printer className="h-4 w-4" />
-          </Button>
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-fg/50 hover:text-danger" disabled={disabled} onClick={onRemove} aria-label="Remove from queue">
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canPrint && (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-fg/60" disabled={disabled} onClick={onPrint} aria-label="Print these tags">
+              <Printer className="h-4 w-4" />
+            </Button>
+          )}
+          {canUpdate && (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-fg/50 hover:text-danger" disabled={disabled} onClick={onRemove} aria-label="Remove from queue">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>

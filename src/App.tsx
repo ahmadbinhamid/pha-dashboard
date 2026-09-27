@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProviders } from "@/components/providers/AppProviders";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { GuestRoute } from "@/components/auth/GuestRoute";
+import { RequirePermission } from "@/components/auth/RequirePermission";
+import { PERMISSIONS } from "@/config/permissions";
 import { ErpLayout } from "@/components/layouts/ErpLayout";
 import { useAuth } from "@/context/auth";
 
@@ -102,27 +104,27 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/dashboard" element={<RequirePermission permission={PERMISSIONS.dashboard.view}><DashboardPage /></RequirePermission>} />
+            <Route path="/products" element={<RequirePermission permission={PERMISSIONS.products.view}><ProductsPage /></RequirePermission>} />
             {/* Old /catalogue URL, redirected for existing bookmarks. */}
             <Route path="/catalogue" element={<Navigate to="/products" replace />} />
-            <Route path="/products/new" element={<ProductCreatePage />} />
-            <Route path="/products/:slug/edit" element={<ProductEditPage />} />
-            <Route path="/channel-sync" element={<ChannelSyncPage />} />
+            <Route path="/products/new" element={<RequirePermission permission={PERMISSIONS.products.create}><ProductCreatePage /></RequirePermission>} />
+            <Route path="/products/:slug/edit" element={<RequirePermission permission={PERMISSIONS.products.view}><ProductEditPage /></RequirePermission>} />
+            <Route path="/channel-sync" element={<RequirePermission permission={PERMISSIONS.listings.view}><ChannelSyncPage /></RequirePermission>} />
             <Route path="/listings" element={<Navigate to="/channel-sync" replace />} />
-            <Route path="/categories" element={<CategoriesPage />} />
-            <Route path="/inventory" element={<InventoryPage />} />
-            <Route path="/tags" element={<TagManagerPage />} />
-            <Route path="/customers" element={<CustomersPage />} />
-            <Route path="/customers/:id" element={<CustomerDetailPage />} />
-            <Route path="/create-order" element={<CreateOrderPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/:id" element={<OrderDetailPage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/listings/new" element={<ListingCreatePage />} />
-            <Route path="/listings/:id/edit" element={<ListingEditPage />} />
-            <Route path="/activity-log" element={<ActivityLogPage />} />
+            <Route path="/categories" element={<RequirePermission permission={PERMISSIONS.categories.view}><CategoriesPage /></RequirePermission>} />
+            <Route path="/inventory" element={<RequirePermission permission={PERMISSIONS.inventory.view}><InventoryPage /></RequirePermission>} />
+            <Route path="/tags" element={<RequirePermission permission={PERMISSIONS.tags.view}><TagManagerPage /></RequirePermission>} />
+            <Route path="/customers" element={<RequirePermission permission={PERMISSIONS.customers.view}><CustomersPage /></RequirePermission>} />
+            <Route path="/customers/:id" element={<RequirePermission permission={PERMISSIONS.customers.view}><CustomerDetailPage /></RequirePermission>} />
+            <Route path="/create-order" element={<RequirePermission permission={PERMISSIONS.orders.create}><CreateOrderPage /></RequirePermission>} />
+            <Route path="/orders" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrdersPage /></RequirePermission>} />
+            <Route path="/orders/:id" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrderDetailPage /></RequirePermission>} />
+            <Route path="/payments" element={<RequirePermission permission={PERMISSIONS.payments.view}><PaymentsPage /></RequirePermission>} />
+            <Route path="/reports" element={<RequirePermission permission={PERMISSIONS.reports.view}><ReportsPage /></RequirePermission>} />
+            <Route path="/listings/new" element={<RequirePermission permission={PERMISSIONS.listings.create}><ListingCreatePage /></RequirePermission>} />
+            <Route path="/listings/:id/edit" element={<RequirePermission permission={PERMISSIONS.listings.update}><ListingEditPage /></RequirePermission>} />
+            <Route path="/activity-log" element={<RequirePermission permission={PERMISSIONS.activity.view}><ActivityLogPage /></RequirePermission>} />
             <Route path="/profile" element={<ProfilePage />} />
 
             {/* URL-driven settings tabs; pre-redesign URLs redirect to their new tab. */}

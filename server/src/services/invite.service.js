@@ -84,6 +84,14 @@ async function staffRole(tenantId) {
   return roles[SYSTEM_ROLE.STAFF];
 }
 
+// A tenant role an invite may grant; the Admin (owner) role never is.
+async function assignableRole(tenantId, roleId) {
+  const role = await Role.findOne({ _id: roleId, tenant_id: tenantId }).lean();
+  if (!role) throw httpError("That role doesn't belong to this organisation.", 422);
+  if (membershipService.isAdminRole(role)) throw httpError("The Admin role can't be given to someone else.", 422);
+  return role;
+}
+
 // Account for an email: an activated one if any, else a still-pending one.
 async function findAccountByEmail(email) {
   const accounts = await User.find({ email }).select("_id status first_name last_name").lean();
@@ -98,10 +106,10 @@ function resendWaitSeconds(invite) {
 }
 
 /** Adds Staff: existing accounts join directly, new ones get a pending one. */
-async function inviteUser({ tenantId, firstName, lastName, email, invitedBy = null }) {
+async function inviteUser({ tenantId, firstName, lastName, email, roleId = null, invitedBy = null }) {
   const address = normaliseEmail(email);
   if (!address) throw httpError("An email address is required.", 422);
-  const role = await staffRole(tenantId);
+  const role = roleId ? await assignableRole(tenantId, roleId) : await staffRole(tenantId);
   const account = await findAccountByEmail(address);
 
   if (account && (await Membership.exists({ tenant_id: tenantId, user_id: account._id }))) {

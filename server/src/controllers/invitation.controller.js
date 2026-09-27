@@ -54,12 +54,13 @@ exports.listInvitations = async (req, res) => {
 
 exports.sendInvitation = async (req, res) => {
   try {
-    const { first_name, last_name, email } = req.body;
+    const { first_name, last_name, email, role_id } = req.body;
     const result = await inviteService.inviteUser({
       tenantId: req.tenantId,
       firstName: first_name,
       lastName: last_name,
       email,
+      roleId: role_id || null,
       invitedBy: req.user._id,
     });
 

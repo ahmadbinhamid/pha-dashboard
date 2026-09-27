@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
@@ -144,17 +146,19 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              className="gap-1.5"
-              disabled={selectedListings.length === 0 || retryMutation.isPending}
-              onClick={() => retryMutation.mutate(selectedListings)}
-            >
-              <RefreshCw className={retryMutation.isPending ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
-              {retryMutation.isPending ? "Retrying…" : `Retry selected${selectedListings.length ? ` (${selectedListings.length})` : ""}`}
-            </Button>
+            <Can permission={PERMISSIONS.listings.update}>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                className="gap-1.5"
+                disabled={selectedListings.length === 0 || retryMutation.isPending}
+                onClick={() => retryMutation.mutate(selectedListings)}
+              >
+                <RefreshCw className={retryMutation.isPending ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+                {retryMutation.isPending ? "Retrying…" : `Retry selected${selectedListings.length ? ` (${selectedListings.length})` : ""}`}
+              </Button>
+            </Can>
             <SingleSelect size="sm" options={platformFilters} value={platform} onChange={(v) => updateParams({ platform: v || null })} />
             <SingleSelect
               size="sm"

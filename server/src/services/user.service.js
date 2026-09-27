@@ -15,6 +15,11 @@ async function getPublicUserById(id) {
   return User.findById(id).select(PUBLIC_SELECT);
 }
 
+/** Everything but the password; auth middleware attaches it as req.user. */
+async function findUserForAuth(id) {
+  return User.findById(id).select("-password");
+}
+
 async function updateUserProfile(id, { first_name, last_name }) {
   return User.findByIdAndUpdate(
     id,
@@ -38,9 +43,9 @@ async function deleteUser(id, tenantId) {
   return user;
 }
 
-// ── Auth-related lookups ──────────────────────────────────────────────────
+// ── Auth-related lookups ──
 
-// tenantId is required at registration but optional for login/reset lookups, which are email-only.
+// tenantId is set at registration; login/reset look up by email alone.
 async function findUserByEmail(email, tenantId = null) {
   const filter = { email };
   if (tenantId) filter.tenant_id = tenantId;
@@ -55,13 +60,12 @@ async function findUserByEmailWithPassword(email) {
   return User.findOne({ email }).select("+password");
 }
 
-// email is unique per-tenant, not globally, so the same person can hold accounts under multiple
-// tenants. Returns every matching account so the caller can verify and disambiguate properly.
+// Email is unique per tenant only, so one person may have several accounts.
 async function findAllUsersByEmailWithPassword(email) {
   return User.find({ email }).select("+password");
 }
 
-// Same reasoning as findAllUsersByEmailWithPassword; forgotPassword sends a separate reset link per account.
+// Every account for the email; forgotPassword sends one reset link each.
 async function findAllUsersByEmail(email) {
   return User.find({ email });
 }
@@ -70,7 +74,7 @@ async function findUserByEmailWithOtp(email) {
   return User.findOne({ email }).select("+otp +otp_expiry");
 }
 
-// `userIds` is the already-password-verified candidate set; this only confirms the chosen tenantId matches one.
+// `userIds` are password-verified; confirms the chosen tenant matches one.
 async function findUserAmongIdsForTenant(userIds, tenantId) {
   return User.findOne({ _id: { $in: userIds }, tenant_id: tenantId });
 }
@@ -90,6 +94,7 @@ async function saveUser(user) {
 }
 
 module.exports = {
+  findUserForAuth,
   listUsers,
   getPublicUserById,
   updateUserProfile,

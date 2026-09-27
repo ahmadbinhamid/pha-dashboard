@@ -8,6 +8,8 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { TagProductSearch } from "@/components/tags/TagProductSearch";
 import { TagQueueActionsMenu } from "@/components/tags/TagQueueActionsMenu";
 import { TagQueueRow } from "@/components/tags/TagQueueRow";
+import { PERMISSIONS } from "@/config/permissions";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { useTagQueueActions } from "@/hooks/useTagQueueActions";
 import type { TagQueueItem } from "@/types/tags";
 import { pluralize } from "@/utils/format";
@@ -26,23 +28,28 @@ export function TagQueuePanel({ items, isLoading, actions, selectedId, onSelect,
   const [confirmClear, setConfirmClear] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<TagQueueItem | null>(null);
   const { busy } = actions;
+  const { can } = useMyAccess();
+  const canUpdate = can(PERMISSIONS.tags.update);
+  const canPrint = can(PERMISSIONS.tags.print);
 
   return (
     <Card>
       <CardHeader title="Tag queue" description="Find a product to queue its tags, or import everything never printed." className="border-b-0 pb-0" />
-      <CardContent className="border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <TagProductSearch queue={items} />
+      {canUpdate && (
+        <CardContent className="border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <TagProductSearch queue={items} />
+            </div>
+            <TagQueueActionsMenu
+              onImportUnprinted={() => actions.importUnprinted.mutate()}
+              onClear={() => setConfirmClear(true)}
+              canClear={items.length > 0}
+              disabled={busy}
+            />
           </div>
-          <TagQueueActionsMenu
-            onImportUnprinted={() => actions.importUnprinted.mutate()}
-            onClear={() => setConfirmClear(true)}
-            canClear={items.length > 0}
-            disabled={busy}
-          />
-        </div>
-      </CardContent>
+        </CardContent>
+      )}
 
       {isLoading ? (
         <div className="space-y-2 p-5">
@@ -77,6 +84,8 @@ export function TagQueuePanel({ items, isLoading, actions, selectedId, onSelect,
                   selected={item._id === selectedId}
                   onSelect={() => onSelect(item._id)}
                   disabled={busy}
+                  canUpdate={canUpdate}
+                  canPrint={canPrint}
                   onCopiesChange={(copies) => actions.updateCopies.mutate({ id: item._id, copies })}
                   onPrint={() => onPrint(item)}
                   onRemove={() => setPendingRemove(item)}

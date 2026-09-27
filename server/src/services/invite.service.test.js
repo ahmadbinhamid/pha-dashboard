@@ -142,6 +142,31 @@ test("invite: resend waits out the cooldown, kills the old link; revoke removes 
   }
 });
 
+test("invite: the Admin picks a role; the Admin role itself can't be granted", async () => {
+  await mongoose.connect(config.mongoUri);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const org = await makeTenant(suffix, "role");
+  const email = `picked-${suffix}@example.test`;
+
+  try {
+    const roles = await roleService.seedSystemRoles(org._id);
+    const lead = await roleService.createRole(org._id, { name: "Warehouse Lead", permissions: ["inventory.view"] });
+    await assert.rejects(
+      () => inviteService.inviteUser({ tenantId: org._id, firstName: "A", lastName: "B", email, roleId: roles[SYSTEM_ROLE.ADMIN]._id }),
+      /Admin role/,
+    );
+    const result = await inviteService.inviteUser({ tenantId: org._id, firstName: "A", lastName: "B", email, roleId: lead._id });
+    assert.equal((await membershipService.getMembership(result.user._id, org._id)).role_id.name, "Warehouse Lead");
+    await assert.rejects(
+      () => membershipService.updateMember(result.user._id, org._id, { roleId: roles[SYSTEM_ROLE.ADMIN]._id }),
+      /Admin role/,
+      "can't be promoted to Admin either",
+    );
+  } finally {
+    await cleanup({ tenants: [org], emails: [email] });
+  }
+});
+
 test("invite: old-style links sent before this change still register", async () => {
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);

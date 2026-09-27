@@ -33,6 +33,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
 import { GOOGLE_LISTING_FORM_INITIAL } from "@/types/marketplace";
 import { Plus, Search, Package, Trash2, AlertTriangle, Info } from "lucide-react";
+import { Can } from "@/components/auth/Can";
+import { PERMISSIONS } from "@/config/permissions";
 
 const STATUS_FILTERS = [
   { label: "All Status", value: "" },
@@ -468,15 +470,12 @@ function ProductsEmptyState({ search, onNew }: { search: string; onNew: () => vo
         </p>
       </div>
       {!search && (
-        <Button
-          variant="primary"
-          size="sm"
-          className="mt-1 gap-1.5"
-          onClick={onNew}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New Product
-        </Button>
+        <Can permission={PERMISSIONS.products.create}>
+          <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
+            <Plus className="h-3.5 w-3.5" />
+            New Product
+          </Button>
+        </Can>
       )}
     </div>
   );

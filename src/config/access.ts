@@ -6,8 +6,8 @@ import type { AuthUser } from "@/types/auth";
 // The tenant owner role; "Super Admin" until migrateTenantAdminRoles runs.
 export const TENANT_ADMIN_ROLE_NAMES = ["Admin", "Super Admin"];
 
-// NOTE: role-based permissions are off; everyone joins as Staff for now.
-export const PERMISSIONS_ENABLED = false;
+// Default role for new teammates; fixed name, editable permissions.
+export const STAFF_ROLE_NAME = "Staff";
 
 // Mirrors the server's activateInvitation rule (NIST minimum).
 export const INVITE_PASSWORD_MIN_LENGTH = 8;
