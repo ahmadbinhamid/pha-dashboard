@@ -1,6 +1,5 @@
 // controllers/member.controller.js
-// The people in the current organisation. Everything here acts on the membership, never the
-// user account, so it affects this organisation only.
+// Acts on the membership, never the user account, so only this org changes.
 
 const membershipService = require("../services/membership.service");
 const { success, notFound, systemfailure } = require("../utils/http/response");
@@ -37,7 +36,19 @@ exports.removeMember = async (req, res) => {
   }
 };
 
-/** Every organisation the signed-in user belongs to — powers the org switcher. */
+/** The caller's standing in the current tenant, for owner-only UI. */
+exports.getMyAccess = async (req, res) => {
+  try {
+    return success(res, {
+      is_tenant_admin: membershipService.isRequestTenantAdmin(req),
+      role: req.membership?.role_id?.name ?? null,
+    });
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+/** The signed-in user's organisations, for the org switcher. */
 exports.listMyOrganisations = async (req, res) => {
   try {
     const memberships = await membershipService.listUserMemberships(req.user._id);

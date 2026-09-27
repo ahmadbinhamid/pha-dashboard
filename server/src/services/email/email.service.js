@@ -4,16 +4,25 @@ const config = require("../../config");
 const defaultFrom = () =>
   `"${config.emailBrand.fromName}" <${config.emailBrand.fromEmail}>`;
 
-// Only the display name can be pre-built here — the address depends on which SMTP account ends
-// up sending it, resolved by mailer.js#sendEmail at send time.
+// Name only; the address depends on which SMTP account mailer.js picks.
 const tenantFromName = (companyProfile) => companyProfile?.company_name || null;
+
+// The app's --accent (hsl 24 95% 53%); email clients can't read CSS vars.
+const EMAIL_PRIMARY_COLOR = "#f97316";
+
+// Platform-branded mail (team invites): header and support are the app's own.
+const platformBrandVars = () => ({
+  app_name: config.emailBrand.appName,
+  support_email: config.emailBrand.supportEmail,
+  primary_color: EMAIL_PRIMARY_COLOR,
+});
 
 const tenantBrandVars = (companyProfile) => ({
   app_name: companyProfile?.company_name || config.emailBrand.appName,
   support_email: companyProfile?.email || config.emailBrand.supportEmail,
+  primary_color: EMAIL_PRIMARY_COLOR,
 });
 
-/** Sends the login verification OTP. */
 async function sendOTP({ to, name, otp }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -27,7 +36,6 @@ async function sendOTP({ to, name, otp }) {
   });
 }
 
-/** Sends the account-verified notification. */
 async function accountVerified({ to, name, verifiedDate }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -42,7 +50,6 @@ async function accountVerified({ to, name, verifiedDate }) {
   });
 }
 
-/** Sends the password reset email. */
 async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -57,7 +64,7 @@ async function sendPasswordReset({ to, name, resetUrl, expiryMinutes }) {
   });
 }
 
-/** Notifies a tenant's own inbox of a storefront inquiry; `to` is that tenant's own email, never platform-wide. */
+/** `to` is the tenant's own inbox, never a platform-wide address. */
 async function sendInquiryNotification({ to, customerName, customerEmail, customerPhone, subject, message }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -75,7 +82,7 @@ async function sendInquiryNotification({ to, customerName, customerEmail, custom
   });
 }
 
-/** Notifies a tenant's own inbox of a new newsletter subscriber (same reasoning as sendInquiryNotification). */
+/** `to` is the tenant's own inbox, never a platform-wide address. */
 async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -88,7 +95,7 @@ async function sendNewsletterSignupNotification({ to, subscriberEmail }) {
   });
 }
 
-/** Notifies the platform's own inbox of a "Request a Demo" submission — no tenant to resolve `to` from. */
+/** Goes to the platform inbox; a demo request has no tenant to resolve. */
 async function sendDemoRequestNotification({ fullName, businessName, phone, workEmail, message }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -105,7 +112,7 @@ async function sendDemoRequestNotification({ fullName, businessName, phone, work
   });
 }
 
-/** Notifies a customer their delivery order shipped, with tracking and the invoice PDF (base64, since Bull payloads are JSON). */
+/** Invoice PDF travels as base64 since Bull payloads are JSON. */
 async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -130,7 +137,7 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
   });
 }
 
-/** Notifies a customer their pickup order is ready, with the invoice PDF attached (base64). */
+/** Invoice PDF travels as base64 since Bull payloads are JSON. */
 async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {}, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -157,7 +164,7 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
   });
 }
 
-/** Notifies a customer their delivery order was placed and paid; no invoice here (see sendOrderShipped). */
+/** No invoice here; it goes with sendOrderShipped. */
 async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -173,7 +180,7 @@ async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, te
   });
 }
 
-/** Notifies a customer their pickup order was placed and paid; no invoice here (see sendOrderReadyForPickup). */
+/** No invoice here; it goes with sendOrderReadyForPickup. */
 async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -189,7 +196,7 @@ async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, 
   });
 }
 
-/** Sends the invoice/receipt for a manual sale — no shipped/pickup framing, just the invoice and any balance due. */
+/** Manual-sale receipt: no shipped/pickup framing, just invoice and balance. */
 async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -213,7 +220,7 @@ async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBas
   });
 }
 
-/** Sends a customer a link to pay an order online. No invoice PDF; they see it once they pay. */
+/** No invoice PDF; the customer sees it once they pay. */
 async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, companyProfile, tenantId }) {
   return enqueueEmailJob({
     fromName: tenantFromName(companyProfile),
@@ -231,7 +238,7 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
   });
 }
 
-/** Sends a product's title/SKU/images to a recipient the admin picks; images attached by disk path (shared uploads volume). */
+/** Images attach by disk path, relying on the shared uploads volume. */
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
   return enqueueEmailJob(
     {
@@ -249,14 +256,12 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
       },
       attachments,
     },
-    // Product photos are several MB through a rate-limited transporter — the default 30s job
-    // timeout was too short and, since it can't cancel an in-flight SMTP send, caused duplicate
-    // deliveries on retry. Longer timeout + fewer attempts caps the worst case.
+    // Large photos are slow; a timeout can't cancel SMTP, so retries duplicate.
     { timeout: 180000, attempts: 2 },
   );
 }
 
-/** Sends a tenant's daily low-stock digest, always from the platform mailbox (never BYOK SMTP), always with at least one item. */
+/** Always from the platform mailbox (never BYOK SMTP); items is never empty. */
 async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFilename }) {
   return enqueueEmailJob({
     from: defaultFrom(),
@@ -283,11 +288,11 @@ async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFil
   });
 }
 
-/** Invites someone into a tenant's organisation, sent from the tenant's own brand. */
-async function sendTeamInvite({ to, organisationName, inviterName, roleName, inviteUrl, expiresAt, companyProfile, tenantId }) {
+/** Legacy join-link invite, sent under the tenant's own brand. */
+async function sendTeamInvite({ to, organisationName, inviterName, roleName, inviteUrl, expiresAt }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    // Sent by the platform, not the tenant's own mailbox.
+    from: defaultFrom(),
     to,
     subject: `You've been invited to ${organisationName}`,
     template: "teamInvite",
@@ -298,13 +303,54 @@ async function sendTeamInvite({ to, organisationName, inviterName, roleName, inv
       role_name: roleName,
       invite_url: inviteUrl,
       expires_on: expiresAt ? new Date(expiresAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : null,
-      ...tenantBrandVars(companyProfile),
+      ...platformBrandVars(),
+    },
+  });
+}
+
+/** New member: a link to set their first password. */
+async function sendTeamSetPassword({ to, firstName, organisationName, inviterName, setPasswordUrl, expiresInHours }) {
+  return enqueueEmailJob({
+    // Sent by the platform, not the tenant's own mailbox.
+    from: defaultFrom(),
+    to,
+    subject: `Set up your ${organisationName} account`,
+    template: "teamSetPassword",
+    variables: {
+      email: to,
+      first_name: firstName,
+      organisation_name: organisationName,
+      inviter_name: inviterName,
+      set_password_url: setPasswordUrl,
+      expires_in: `${expiresInHours} hour${expiresInHours === 1 ? "" : "s"}`,
+      ...platformBrandVars(),
+    },
+  });
+}
+
+/** Existing account added to another tenant: no password link, just sign in. */
+async function sendTeamAdded({ to, firstName, organisationName, inviterName, loginUrl }) {
+  return enqueueEmailJob({
+    // Sent by the platform, not the tenant's own mailbox.
+    from: defaultFrom(),
+    to,
+    subject: `You've been added to ${organisationName}`,
+    template: "teamAdded",
+    variables: {
+      email: to,
+      first_name: firstName,
+      organisation_name: organisationName,
+      inviter_name: inviterName,
+      login_url: loginUrl,
+      ...platformBrandVars(),
     },
   });
 }
 
 module.exports = {
   sendTeamInvite,
+  sendTeamSetPassword,
+  sendTeamAdded,
   sendOTP,
   accountVerified,
   sendPasswordReset,

@@ -1,0 +1,28 @@
+{{> _header}}
+
+<div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+  <h2 style="color: #18140f; text-align: center;">You've been added to {{organisation_name}}</h2>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Hi {{first_name}}, {{#if inviter_name}}{{inviter_name}} has added you{{else}}you've been added{{/if}}
+    to <strong>{{organisation_name}}</strong> on {{app_name}}. Sign in with your existing password and
+    switch to {{organisation_name}} from the organisation menu.
+  </p>
+
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="{{login_url}}" style="background-color: {{primary_color}}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+      Sign in
+    </a>
+  </div>
+
+  <p style="color: #999; font-size: 12px; word-break: break-all;">
+    Button not working? Use this link instead:<br />
+    <a href="{{login_url}}" style="color: {{primary_color}};">{{login_url}}</a>
+  </p>
+
+  <p style="color: #999; font-size: 13px; line-height: 1.5;">
+    Not expecting this? Contact {{organisation_name}}; your password hasn't changed.
+  </p>
+</div>
+
+{{> _footer}}

@@ -12,7 +12,6 @@ import { PackageDimensionsFields } from "@/components/shared/PackageDimensionsFi
 import { ProductShippingSection } from "@/components/products/ProductShippingSection";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 import type { ProductFormValues } from "@/lib/validation/product";
-import { cn } from "@/utils/cn";
 
 interface ProductFormSectionsProps {
   methods: UseFormReturn<ProductFormValues>;
@@ -67,11 +66,8 @@ export function ProductFormSections({
           <Input {...register("title")} placeholder="e.g. Front brake pad set, ceramic" autoFocus={autoFocusTitle} />
         </FormField>
 
-        <div className={cn("grid grid-cols-1 gap-3", skuField ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {skuField && <FormField label="SKU">{skuField}</FormField>}
-          <FormField label="Barcode">
-            <Input {...register("barcode")} placeholder="Scan or type EAN / UPC" maxLength={13} />
-          </FormField>
           <FormField label="Manufacturer part number">
             <Input {...register("mpn")} placeholder="e.g. 45022-TBC-A01" />
           </FormField>

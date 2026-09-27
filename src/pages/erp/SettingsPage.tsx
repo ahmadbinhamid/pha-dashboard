@@ -8,7 +8,7 @@ import { ComingSoonPanel } from "@/components/settings/ComingSoonPanel";
 import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab";
 import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
-// UsersTab/RolesTab exist but aren't wired up (available: false, see below).
+import { UsersTab } from "@/components/settings/tabs/UsersTab";
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
   DEFAULT_SETTINGS_TAB,
@@ -68,6 +68,8 @@ export default function SettingsPage() {
             onSelectProvider={(id) => navigate(id ? `/settings/integrations/${id}` : "/settings/integrations")}
             settings={settings}
           />
+        ) : activeTab.id === "users" ? (
+          <UsersTab />
         ) : (
           <ComingSoonPanel title={activeTab.label} summary={activeTab.summary} planned={activeTab.planned} />
         )}

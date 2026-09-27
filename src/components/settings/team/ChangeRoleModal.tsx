@@ -6,7 +6,7 @@ import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { updateMember } from "@/lib/api/access";
-import { SYSTEM_ROLE_SUPER_ADMIN } from "@/config/access";
+import { TENANT_ADMIN_ROLE_NAMES } from "@/config/access";
 import type { Member, Role } from "@/types/access";
 
 /** Changes the role in this organisation only (membership.service.js). */
@@ -54,8 +54,8 @@ export function ChangeRoleModal({
           <FormField label="Role" required>
             <SingleSelect
               options={roles
-                // Super Admin can't be granted here: it can't be edited or removed later.
-                .filter((role) => role.name !== SYSTEM_ROLE_SUPER_ADMIN)
+                // The owner role isn't grantable here; it can't be undone later.
+                .filter((role) => !TENANT_ADMIN_ROLE_NAMES.includes(role.name))
                 .map((role) => ({ value: role._id, label: role.name }))}
               value={roleId}
               onChange={setRoleId}

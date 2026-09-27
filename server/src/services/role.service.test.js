@@ -15,7 +15,7 @@ const Invitation = require("../models/Invitation");
 const roleService = require("./role.service");
 const membershipService = require("./membership.service");
 const inviteService = require("./invite.service");
-const { SYSTEM_ROLE } = require("../constants/access.constants");
+const { SYSTEM_ROLE, LEGACY_OWNER_ROLE } = require("../constants/access.constants");
 const { ALL_PERMISSIONS } = require("../config/permissions");
 
 async function makeTenant(suffix) {
@@ -37,20 +37,11 @@ test("roles: seeding is idempotent, and the seeded set is what it claims", async
     const second = await roleService.seedSystemRoles(tenant._id);
 
     assert.deepEqual(Object.keys(first).sort(), Object.keys(second).sort());
-    assert.equal(await Role.countDocuments({ tenant_id: tenant._id, is_system: true }), 3, "no duplicates on re-run");
+    assert.equal(await Role.countDocuments({ tenant_id: tenant._id, is_system: true }), 2, "Admin and Staff, no duplicates");
 
-    assert.deepEqual(
-      [...first[SYSTEM_ROLE.SUPER_ADMIN].permissions].sort(),
-      [...ALL_PERMISSIONS].sort(),
-      "Super Admin lists the whole catalogue",
-    );
-    assert.ok(
-      !first[SYSTEM_ROLE.ADMIN].permissions.includes("roles.update"),
-      "Admin can't redefine what roles may do",
-    );
-    assert.ok(first[SYSTEM_ROLE.ADMIN].permissions.includes("users.create"), "Admin can still invite");
-    assert.ok(!first[SYSTEM_ROLE.STAFF].permissions.includes("settings.update"), "Staff stays out of settings");
-    assert.ok(first[SYSTEM_ROLE.STAFF].permissions.includes("orders.create"), "Staff can still sell");
+    assert.deepEqual([...first[SYSTEM_ROLE.ADMIN].permissions].sort(), [...ALL_PERMISSIONS].sort(), "Admin is the owner: everything");
+    assert.ok(!first[SYSTEM_ROLE.STAFF].permissions.includes("users.create"), "Staff can't invite");
+    assert.ok(first[SYSTEM_ROLE.STAFF].permissions.includes("orders.create"), "Staff can sell");
   } finally {
     await Role.deleteMany({ tenant_id: tenant._id });
     await Tenant.deleteOne({ _id: tenant._id });
@@ -131,26 +122,58 @@ test("roles: can't be deleted while a pending invitation still promises it", asy
   const tenant = await makeTenant(suffix);
 
   try {
-    const role = await roleService.createRole(tenant._id, {
-      name: "Warehouse Lead",
-      permissions: ["inventory.view"],
+    const role = await roleService.createRole(tenant._id, { name: "Warehouse Lead", permissions: ["inventory.view"] });
+    // Only pre-change invites could name a custom role; recreate one.
+    const invite = await Invitation.create({
+      tenant_id: tenant._id,
+      email: `invitee-${suffix}@example.test`,
+      role_id: role._id,
+      token_hash: inviteService.hashToken(crypto.randomBytes(32).toString("hex")),
+      expires_at: new Date(Date.now() + 60_000),
+      sent_at: new Date(),
     });
 
-    await inviteService.sendInvite({ tenantId: tenant._id, email: `invitee-${suffix}@example.test`, roleId: role._id });
-
-    await assert.rejects(
-      () => roleService.deleteRole(role._id, tenant._id),
-      /pending invitation/,
-      "a role a pending invite points at can't be deleted out from under it",
-    );
-
-    // Revoking the invite frees the role again, with no orphaned reference.
-    const invite = await Invitation.findOne({ tenant_id: tenant._id, role_id: role._id });
+    await assert.rejects(() => roleService.deleteRole(role._id, tenant._id), /pending invitation/);
     await inviteService.revokeInvite({ invitationId: invite._id, tenantId: tenant._id });
-    assert.ok(await roleService.deleteRole(role._id, tenant._id));
+    assert.ok(await roleService.deleteRole(role._id, tenant._id), "freed once revoked");
   } finally {
     await Invitation.deleteMany({ tenant_id: tenant._id });
     await Role.deleteMany({ tenant_id: tenant._id });
+    await Tenant.deleteOne({ _id: tenant._id });
+    await mongoose.disconnect();
+  }
+});
+
+test("roles: migration folds old Super Admin + Admin into one Admin; dry run writes nothing", async () => {
+  await mongoose.connect(config.mongoUri);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const tenant = await makeTenant(suffix);
+  const emails = [`owner-${suffix}@example.test`, `manager-${suffix}@example.test`];
+
+  try {
+    const legacy = await Role.create({ tenant_id: tenant._id, name: LEGACY_OWNER_ROLE, permissions: ALL_PERMISSIONS, is_system: true });
+    const oldAdmin = await Role.create({ tenant_id: tenant._id, name: SYSTEM_ROLE.ADMIN, permissions: ["orders.view"], is_system: true });
+    const [owner, manager] = await Promise.all(
+      emails.map((email) => User.create({ tenant_id: tenant._id, first_name: "M", last_name: "T", email, password: "password123", status: "active" })),
+    );
+    await membershipService.addMember({ tenantId: tenant._id, userId: owner._id, roleId: legacy._id });
+    await membershipService.addMember({ tenantId: tenant._id, userId: manager._id, roleId: oldAdmin._id });
+
+    const dry = await roleService.migrateTenantAdminRoles({ dryRun: true, tenantId: tenant._id });
+    assert.equal(dry.results[0].moved_members, 1);
+    assert.ok(await Role.exists({ _id: legacy._id, name: LEGACY_OWNER_ROLE }), "dry run changes nothing");
+
+    await roleService.migrateTenantAdminRoles({ dryRun: false, tenantId: tenant._id });
+    const systemRoles = await Role.find({ tenant_id: tenant._id, is_system: true }).lean();
+    assert.deepEqual(systemRoles.map((r) => r.name), [SYSTEM_ROLE.ADMIN], "one Admin role left");
+    assert.deepEqual([...systemRoles[0].permissions].sort(), [...ALL_PERMISSIONS].sort());
+    assert.equal(await membershipService.isTenantAdmin(owner._id, tenant._id), true);
+    assert.equal(await membershipService.isTenantAdmin(manager._id, tenant._id), true, "old Admins stay admins");
+    assert.equal((await roleService.migrateTenantAdminRoles({ dryRun: false, tenantId: tenant._id })).tenants, 0, "idempotent");
+  } finally {
+    await Membership.deleteMany({ tenant_id: tenant._id });
+    await Role.deleteMany({ tenant_id: tenant._id });
+    await User.deleteMany({ email: { $in: emails } });
     await Tenant.deleteOne({ _id: tenant._id });
     await mongoose.disconnect();
   }

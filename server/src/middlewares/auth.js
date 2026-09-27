@@ -9,7 +9,6 @@ const { MEMBERSHIP_STATUS } = require("../constants/access.constants");
 
 const ROLES = { superadmin: "superadmin", admin: "admin", user: "user" };
 
-// extract token from Authorization: Bearer <token> or 'auth-token'
 function extractToken(req) {
   const h = req.headers.authorization || "";
   if (h.startsWith("Bearer ")) return h.slice(7).trim();
@@ -18,7 +17,6 @@ function extractToken(req) {
   return null;
 }
 
-// Authenticate: verifies token, loads user, attaches to req.user and req.auth
 const auth =
   (required = true) =>
   async (req, res, next) => {
@@ -34,8 +32,7 @@ const auth =
         return unauthorized(res, "Invalid or expired token");
       }
 
-      // Loaded alongside the membership list, not after — both only depend on decoded.sub, so
-      // running them serially was a wasted round trip on every request.
+      // Parallel: both depend only on decoded.sub.
       const [user, memberships] = await Promise.all([
         User.findById(decoded.sub).select("-password"),
         membershipService.listUserMemberships(decoded.sub),
@@ -45,9 +42,7 @@ const auth =
       req.auth = decoded;
       req.user = user;
 
-      // Active org comes from X-Tenant-Id when named, else the default membership; validated
-      // against the user's own memberships either way. Sourced per-request, not from the JWT,
-      // so joining/leaving/switching orgs takes effect immediately.
+      // Per request, not from the JWT, so org switches/joins apply immediately.
       const requestedTenantId = req.header("x-tenant-id");
       const active = requestedTenantId
         ? memberships.find((m) => String(m.tenant_id?._id ?? m.tenant_id) === String(requestedTenantId))
@@ -60,14 +55,11 @@ const auth =
       if (active) {
         req.membership = active;
         req.tenantId = active.tenant_id?._id ?? active.tenant_id;
-        // Always the full tenant document, never the membership's populated (lean, partial)
-        // copy — that broke generateNextSku, order/invoice prefixes, and payment_domain_mode.
-        // Also matches what middlewares/tenant.js assigns for guest routes.
+        // Full doc, not the populated lean copy; SKU/prefix code needs every field.
         req.tenant = await Tenant.findById(req.tenantId);
         req.permissions = active.role_id?.permissions ?? [];
       } else {
-        // No membership row yet; fall back to the tenant stamped on the account and the
-        // legacy User.role for permission checks.
+        // No membership yet: fall back to User.tenant_id and legacy User.role.
         req.tenantId = user.tenant_id;
         req.permissions = [];
         if (user.tenant_id) req.tenant = await Tenant.findById(user.tenant_id);
@@ -84,7 +76,6 @@ const auth =
     }
   };
 
-// Role guard: allow if req.user.role is in allowed
 const requireRoles =
   (...allowed) =>
   (req, res, next) => {
@@ -94,9 +85,7 @@ const requireRoles =
     return next();
   };
 
-/** Permission guard, e.g. requirePermission("users.create"). Queried live (not off
- * req.membership) so a role change takes effect immediately. Falls back to legacy User.role
- * for accounts with no membership row yet. */
+/** Queried live, not off req.membership, so role changes apply at once. */
 const requirePermission =
   (...permissions) =>
   async (req, res, next) => {
@@ -121,9 +110,23 @@ const requirePermission =
     }
   };
 
-// Shorthands
 const superadmin = requireRoles(ROLES.superadmin);
 const admin = requireRoles(ROLES.admin, ROLES.superadmin);
 const user = requireRoles(ROLES.user, ROLES.admin, ROLES.superadmin);
 
-module.exports = { auth, requireRoles, requirePermission, superadmin, admin, user };
+/** Any active tenant member; Staff included while permissions are off. */
+const tenantMember = (req, res, next) => {
+  if (!req.user) return unauthorized(res, "Unauthorized");
+  // The platform superadmin belongs to no tenant, so has no tenant data here.
+  if (!req.tenantId) return forbidden(res, "Select an organisation to continue");
+  return next();
+};
+
+/** The tenant's Admin (owner): team management and anything else owner-only. */
+const tenantAdmin = (req, res, next) => {
+  if (!req.user) return unauthorized(res, "Unauthorized");
+  if (!req.tenantId) return forbidden(res, "Select an organisation to continue");
+  return membershipService.isRequestTenantAdmin(req) ? next() : forbidden(res, "Only an organisation Admin can do this");
+};
+
+module.exports = { auth, requireRoles, requirePermission, superadmin, admin, user, tenantMember, tenantAdmin };

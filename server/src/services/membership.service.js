@@ -1,11 +1,15 @@
 // services/membership.service.js
-// Owns every Membership query, the join letting one person belong to several organisations.
-// Permissions only ever come from an ACTIVE membership; removing someone deletes only that membership.
+// Owns Membership queries; only an ACTIVE membership grants permissions.
 
 const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
 const Role = require("../models/Role");
-const { MEMBERSHIP_STATUS, SYSTEM_ROLE } = require("../constants/access.constants");
+const { MEMBERSHIP_STATUS, TENANT_ADMIN_ROLE_NAMES } = require("../constants/access.constants");
+
+// Admin, or the pre-migration Super Admin name for the same owner role.
+function isAdminRole(role) {
+  return TENANT_ADMIN_ROLE_NAMES.includes(role?.name);
+}
 
 function toObjectId(id) {
   return typeof id === "string" ? new Types.ObjectId(id) : id;
@@ -28,17 +32,17 @@ async function getMembership(userId, tenantId) {
     .lean();
 }
 
-/** Every organisation a user belongs to — what the org switcher renders and auth picks the active tenant from. */
+/** A user's active orgs; feeds the org switcher and auth's tenant pick. */
 async function listUserMemberships(userId) {
   return Membership.find({ user_id: userId, status: MEMBERSHIP_STATUS.ACTIVE })
     .populate("tenant_id", "name company_name slug logo_url status")
-    // `permissions` comes along since auth.js resolves the active org from this same call per request.
+    // auth.js resolves the active org from this call, so it needs permissions.
     .populate("role_id", "name is_system permissions")
     .sort({ is_default: -1, joined_at: 1 })
     .lean();
 }
 
-/** Attaches a user to an organisation; joining twice is a no-op. Their first org becomes the default. */
+/** Idempotent; a user's first organisation becomes their default. */
 async function addMember({ tenantId, userId, roleId, invitedBy = null }) {
   const existing = await Membership.findOne({ tenant_id: tenantId, user_id: userId });
   if (existing) return existing.toObject();
@@ -57,13 +61,13 @@ async function addMember({ tenantId, userId, roleId, invitedBy = null }) {
   return membership.toObject();
 }
 
-/** Changes someone's role or suspends/restores them; refuses to touch a Super Admin. */
+/** Changes someone's role or suspends/restores them; refuses an Admin. */
 async function updateMember(userId, tenantId, { roleId, status }) {
   const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId }).populate("role_id", "name");
   if (!membership) return null;
 
-  if (membership.role_id?.name === SYSTEM_ROLE.SUPER_ADMIN) {
-    const err = new Error("A Super Admin's access can't be changed.");
+  if (isAdminRole(membership.role_id)) {
+    const err = new Error("An Admin's access can't be changed.");
     err.status = 403;
     throw err;
   }
@@ -83,13 +87,13 @@ async function updateMember(userId, tenantId, { roleId, status }) {
   return getMembership(userId, tenantId);
 }
 
-/** Removes someone from one organisation only; if it was their default, the oldest remaining membership takes over. */
+/** Removes one membership; the oldest remaining one becomes the default. */
 async function removeMember(userId, tenantId) {
   const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId }).populate("role_id", "name");
   if (!membership) return null;
 
-  if (membership.role_id?.name === SYSTEM_ROLE.SUPER_ADMIN) {
-    const err = new Error("A Super Admin can't be removed from the organisation.");
+  if (isAdminRole(membership.role_id)) {
+    const err = new Error("An Admin can't be removed from the organisation.");
     err.status = 403;
     throw err;
   }
@@ -119,7 +123,7 @@ async function setDefaultMembership(userId, tenantId) {
   return target.toObject();
 }
 
-/** The permissions a user holds; [] when not a member or suspended. Super Admin gets the whole catalogue. */
+/** The permissions a user holds; [] when not a member or suspended. */
 async function getPermissions(userId, tenantId) {
   const membership = await Membership.findOne({
     user_id: userId,
@@ -132,11 +136,11 @@ async function getPermissions(userId, tenantId) {
   return membership?.role_id?.permissions ?? [];
 }
 
-/** Pure check against an already-loaded membership, so callers with one already don't need a second query. */
+/** Checks an already-loaded membership, avoiding a second query. */
 function membershipHasPermission(membership, permission) {
   if (!membership) return false;
-  // Short-circuit, so Super Admin keeps working as the catalogue grows.
-  if (membership.role_id?.name === SYSTEM_ROLE.SUPER_ADMIN) return true;
+  // Admin short-circuits, so it keeps full access as the catalogue grows.
+  if (isAdminRole(membership.role_id)) return true;
   return (membership.role_id?.permissions ?? []).includes(permission);
 }
 
@@ -151,6 +155,22 @@ async function hasPermission(userId, tenantId, permission) {
     .lean();
 
   return membershipHasPermission(membership, permission);
+}
+
+// Legacy account roles that owned a tenant before memberships existed.
+const LEGACY_OWNER_ACCOUNT_ROLES = ["admin", "superadmin"];
+
+/** Tenant Admin via membership, else via the legacy account role. */
+function isRequestTenantAdmin({ membership, user }) {
+  return membership ? isAdminRole(membership.role_id) : LEGACY_OWNER_ACCOUNT_ROLES.includes(user?.role);
+}
+
+/** Whether the user is an active Admin (owner) of this tenant. */
+async function isTenantAdmin(userId, tenantId) {
+  const membership = await Membership.findOne({ user_id: userId, tenant_id: tenantId, status: MEMBERSHIP_STATUS.ACTIVE })
+    .populate("role_id", "name")
+    .lean();
+  return isAdminRole(membership?.role_id);
 }
 
 /** Stamped by the auth layer, so "last active" on the members table is real. */
@@ -181,6 +201,9 @@ module.exports = {
   getPermissions,
   hasPermission,
   membershipHasPermission,
+  isAdminRole,
+  isTenantAdmin,
+  isRequestTenantAdmin,
   touchLastActive,
   countMembersByRole,
 };

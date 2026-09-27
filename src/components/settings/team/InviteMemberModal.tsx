@@ -1,62 +1,52 @@
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { sendInvitation } from "@/lib/api/access";
 import { inviteMemberSchema, type InviteMemberFormValues } from "@/lib/validation/access";
-import type { Invitation, Role } from "@/types/access";
 
-/** Re-inviting a pending/declined/revoked address reopens that invite. */
-export function InviteMemberModal({
-  open,
-  onOpenChange,
-  roles,
-  onSent,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  roles: Role[];
-  /** Hands back the link, which exists only in this response. */
-  onSent: (invitation: Invitation) => void;
-}) {
+const EMPTY_FORM: InviteMemberFormValues = { first_name: "", last_name: "", email: "" };
+
+// Adds a teammate as Staff; new emails get a link to set their password.
+export function InviteMemberModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const {
-    control,
     register,
     handleSubmit,
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<InviteMemberFormValues>({
-    resolver: zodResolver(inviteMemberSchema),
-    defaultValues: { email: "", role_id: "" },
-  });
+  } = useForm<InviteMemberFormValues>({ resolver: zodResolver(inviteMemberSchema), defaultValues: EMPTY_FORM });
 
-  // Modal stays mounted between opens, so reset on close for a clean reopen.
+  // Stays mounted between opens, so reset on close for a clean reopen.
   useEffect(() => {
-    if (!open) reset({ email: "", role_id: "" });
+    if (!open) reset(EMPTY_FORM);
   }, [open, reset]);
 
   const mutation = useMutation({
-    mutationFn: (values: InviteMemberFormValues) => sendInvitation(values),
-    onSuccess: (res) => {
-      toast({ title: "Invitation sent", description: "They'll get an email with a link to join.", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["invitations"] });
-      if (res.data) onSent(res.data);
+    mutationFn: sendInvitation,
+    onSuccess: (res, values) => {
+      const added = res.data?.mode === "added";
+      toast({
+        title: added ? "Added to your team" : "Invite sent",
+        description: added
+          ? `${values.email} already had an account; they can sign in and switch to this organisation.`
+          : `${values.email} will get an email to set their password.`,
+        tone: "success",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["invitations"] });
+      void queryClient.invalidateQueries({ queryKey: ["members"] });
       onOpenChange(false);
     },
-    onError: (err: Error) => {
-      // e.g. "already a member" — shown on the field it's about.
-      setError("email", { message: err.message || "Could not send this invitation" });
-    },
+    // e.g. "already a member", shown on the field it's about.
+    onError: (err: Error) => setError("email", { message: err.message || "Could not add this person" }),
   });
 
   return (
@@ -64,31 +54,23 @@ export function InviteMemberModal({
       <ModalContent>
         <form onSubmit={handleSubmit((values) => mutation.mutate(values))}>
           <ModalHeader>
-            <ModalTitle>Invite a team member</ModalTitle>
+            <ModalTitle>Add a team member</ModalTitle>
             <ModalDescription>
-              They'll get an email with a link to join this organisation. The link works once, for that address only.
+              They join as Staff. A new email gets a link to set a password; an existing account is added straight away.
             </ModalDescription>
           </ModalHeader>
 
           <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField label="First name" required error={errors.first_name?.message}>
+                <Input {...register("first_name")} autoComplete="off" autoFocus />
+              </FormField>
+              <FormField label="Last name" required error={errors.last_name?.message}>
+                <Input {...register("last_name")} autoComplete="off" />
+              </FormField>
+            </div>
             <FormField label="Email address" required error={errors.email?.message}>
-              <Input {...register("email")} type="email" placeholder="name@example.com" autoFocus />
-            </FormField>
-
-            <FormField label="Role" required error={errors.role_id?.message} hint="What they'll be able to do here.">
-              <Controller
-                control={control}
-                name="role_id"
-                render={({ field }) => (
-                  <SingleSelect
-                    options={roles.map((role) => ({ value: role._id, label: role.name }))}
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    placeholder="Choose a role…"
-                  />
-                )}
-              />
+              <Input {...register("email")} type="email" placeholder="name@example.com" autoComplete="off" />
             </FormField>
           </div>
 
@@ -97,7 +79,7 @@ export function InviteMemberModal({
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="md" className="flex-1" disabled={isSubmitting || mutation.isPending}>
-              {mutation.isPending ? "Sending…" : "Send invitation"}
+              {mutation.isPending ? "Sending…" : "Send invite"}
             </Button>
           </ModalFooter>
         </form>

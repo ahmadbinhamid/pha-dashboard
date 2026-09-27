@@ -48,8 +48,8 @@ test("membership: one user, two organisations, a different role in each", async 
     const rolesA = await roleService.seedSystemRoles(orgA._id);
     const rolesB = await roleService.seedSystemRoles(orgB._id);
 
-    await membershipService.addMember({ tenantId: orgA._id, userId: user._id, roleId: rolesA[SYSTEM_ROLE.ADMIN]._id });
-    await membershipService.addMember({ tenantId: orgB._id, userId: user._id, roleId: rolesB[SYSTEM_ROLE.STAFF]._id });
+    await membershipService.addMember({ tenantId: orgA._id, userId: user._id, roleId: rolesA[SYSTEM_ROLE.STAFF]._id });
+    await membershipService.addMember({ tenantId: orgB._id, userId: user._id, roleId: rolesB[SYSTEM_ROLE.ADMIN]._id });
 
     const memberships = await membershipService.listUserMemberships(user._id);
     assert.equal(memberships.length, 2, "belongs to both organisations");
@@ -60,21 +60,21 @@ test("membership: one user, two organisations, a different role in each", async 
     assert.equal(String(defaults[0].tenant_id._id), String(orgA._id));
 
     // The role is per-organisation, not per-account.
-    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "settings.update"), true, "Admin in A");
-    assert.equal(await membershipService.hasPermission(user._id, orgB._id, "settings.update"), false, "Staff in B");
-    assert.equal(await membershipService.hasPermission(user._id, orgB._id, "orders.create"), true, "Staff can still sell in B");
+    assert.equal(await membershipService.isTenantAdmin(user._id, orgB._id), true, "Admin in B");
+    assert.equal(await membershipService.isTenantAdmin(user._id, orgA._id), false, "Staff in A");
+    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "orders.create"), true, "Staff can sell in A");
 
     // Joining twice is a no-op, not a duplicate or an error.
-    await membershipService.addMember({ tenantId: orgA._id, userId: user._id, roleId: rolesA[SYSTEM_ROLE.STAFF]._id });
+    await membershipService.addMember({ tenantId: orgA._id, userId: user._id, roleId: rolesA[SYSTEM_ROLE.ADMIN]._id });
     assert.equal(await Membership.countDocuments({ user_id: user._id, tenant_id: orgA._id }), 1);
-    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "settings.update"), true, "role unchanged by re-add");
+    assert.equal(await membershipService.isTenantAdmin(user._id, orgA._id), false, "role unchanged by re-add");
 
     // Suspension removes access without deleting the record.
     await membershipService.updateMember(user._id, orgA._id, { status: MEMBERSHIP_STATUS.SUSPENDED });
-    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "settings.update"), false, "suspended has nothing");
+    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "orders.create"), false, "suspended has nothing");
     assert.deepEqual(await membershipService.getPermissions(user._id, orgA._id), [], "suspended grants no permissions");
     await membershipService.updateMember(user._id, orgA._id, { status: MEMBERSHIP_STATUS.ACTIVE });
-    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "settings.update"), true, "restored");
+    assert.equal(await membershipService.hasPermission(user._id, orgA._id, "orders.create"), true, "restored");
 
     // Leaving one organisation leaves the account and the other membership.
     await membershipService.removeMember(user._id, orgA._id);
@@ -92,7 +92,7 @@ test("membership: one user, two organisations, a different role in each", async 
   }
 });
 
-test("membership: Super Admin is protected and short-circuits permission checks", async () => {
+test("membership: the tenant Admin is protected and short-circuits permission checks", async () => {
   await mongoose.connect(config.mongoUri);
   const suffix = crypto.randomUUID().slice(0, 8);
 
@@ -101,22 +101,22 @@ test("membership: Super Admin is protected and short-circuits permission checks"
 
   try {
     const roles = await roleService.seedSystemRoles(org._id);
-    await membershipService.addMember({ tenantId: org._id, userId: owner._id, roleId: roles[SYSTEM_ROLE.SUPER_ADMIN]._id });
+    await membershipService.addMember({ tenantId: org._id, userId: owner._id, roleId: roles[SYSTEM_ROLE.ADMIN]._id });
 
     // Holds a permission that no role lists explicitly.
-    await Role.updateOne({ _id: roles[SYSTEM_ROLE.SUPER_ADMIN]._id }, { $set: { permissions: [] } });
+    await Role.updateOne({ _id: roles[SYSTEM_ROLE.ADMIN]._id }, { $set: { permissions: [] } });
     assert.equal(
       await membershipService.hasPermission(owner._id, org._id, "roles.delete"),
       true,
-      "Super Admin passes regardless of its stored permission list",
+      "Admin passes regardless of its stored permission list",
     );
 
     await assert.rejects(
       () => membershipService.updateMember(owner._id, org._id, { roleId: roles[SYSTEM_ROLE.STAFF]._id }),
-      /Super Admin/,
+      /An Admin/,
       "cannot be demoted",
     );
-    await assert.rejects(() => membershipService.removeMember(owner._id, org._id), /Super Admin/, "cannot be removed");
+    await assert.rejects(() => membershipService.removeMember(owner._id, org._id), /An Admin/, "cannot be removed");
   } finally {
     await Membership.deleteMany({ user_id: owner._id });
     await Role.deleteMany({ tenant_id: org._id });
@@ -137,7 +137,7 @@ test("membership: a member of one organisation has nothing in another", async ()
   try {
     const roles = await roleService.seedSystemRoles(mine._id);
     await roleService.seedSystemRoles(theirs._id);
-    await membershipService.addMember({ tenantId: mine._id, userId: user._id, roleId: roles[SYSTEM_ROLE.SUPER_ADMIN]._id });
+    await membershipService.addMember({ tenantId: mine._id, userId: user._id, roleId: roles[SYSTEM_ROLE.ADMIN]._id });
 
     assert.equal(await membershipService.hasPermission(user._id, theirs._id, "dashboard.view"), false);
     assert.deepEqual(await membershipService.getPermissions(user._id, theirs._id), []);

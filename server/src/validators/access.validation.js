@@ -1,5 +1,4 @@
 // validators/access.validation.js
-//
 // Shapes for the team surface: members, roles and invitations.
 
 const Joi = require("joi");
@@ -8,7 +7,7 @@ const { MEMBERSHIP_STATUS, INVITE_STATUS } = require("../constants/access.consta
 
 const objectId = Joi.string().hex().length(24);
 
-// ── Members ─────────────────────────────────────────────────────────────────
+// ── Members ──
 
 const updateMember = {
   params: Joi.object({ userId: objectId.required() }),
@@ -27,9 +26,9 @@ const tenantIdParam = {
   params: Joi.object({ tenantId: objectId.required() }),
 };
 
-// ── Roles ───────────────────────────────────────────────────────────────────
+// ── Roles ──
 
-// Validated against the catalogue here too, so a typo gets a field-level 400, not a 422 deeper in.
+// Checked here too so a typo gets a field-level 400, not a later 422.
 const permissionList = Joi.array().items(Joi.string().valid(...ALL_PERMISSIONS)).min(1);
 
 const createRole = {
@@ -53,12 +52,14 @@ const roleIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };
 
-// ── Invitations ─────────────────────────────────────────────────────────────
+// ── Invitations ──
 
+// Everyone joins as Staff for now, so no role is chosen.
 const sendInvitation = {
   body: Joi.object({
+    first_name: Joi.string().trim().min(1).max(60).required(),
+    last_name: Joi.string().trim().min(1).max(60).required(),
     email: Joi.string().trim().lowercase().email().required(),
-    role_id: objectId.required(),
   }),
 };
 
@@ -72,7 +73,7 @@ const invitationIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };
 
-// Opaque to everything but the hash lookup; length is the only thing worth asserting.
+// Opaque token; only its length is worth asserting.
 const invitationTokenParam = {
   params: Joi.object({ token: Joi.string().trim().min(16).max(256).required() }),
 };
@@ -87,7 +88,14 @@ const registerFromInvitation = {
   }),
 };
 
+// NIST minimum of 8 for a brand-new password.
+const activateInvitation = {
+  params: invitationTokenParam.params,
+  body: Joi.object({ password: Joi.string().min(8).max(128).required() }),
+};
+
 module.exports = {
+  activateInvitation,
   updateMember,
   memberIdParam,
   tenantIdParam,

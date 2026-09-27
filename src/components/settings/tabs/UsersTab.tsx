@@ -1,11 +1,25 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, UserPlus, Users } from "lucide-react";
+import { Lock, Mail, UserPlus, Users } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
-import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+} from "@/components/ui/Table";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalTitle,
+  ModalDescription,
+} from "@/components/ui/Modal";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { MemberRow } from "@/components/settings/team/MemberRow";
 import { InvitationRow } from "@/components/settings/team/InvitationRow";
@@ -22,23 +36,37 @@ import {
   revokeInvitation,
   updateMember,
 } from "@/lib/api/access";
+import { PERMISSIONS_ENABLED } from "@/config/access";
+import { useMyAccess } from "@/hooks/useMyAccess";
 import type { Invitation, Member } from "@/types/access";
 
 export function UsersTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  // Team management is the tenant Admin's; Staff get a read-only list.
+  const { isTenantAdmin, isLoading: accessLoading } = useMyAccess();
 
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Member | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
-  // A link exists only in the response that minted it (server keeps just its hash), so it's held here for the session and nowhere else.
-  const [links, setLinks] = useState<Record<string, string>>({});
-
-  const { data: membersRes, isLoading: membersLoading } = useQuery({ queryKey: ["members"], queryFn: getMembers });
-  const { data: invitesRes, isLoading: invitesLoading } = useQuery({ queryKey: ["invitations"], queryFn: getInvitations });
-  const { data: rolesRes } = useQuery({ queryKey: ["roles"], queryFn: getRoles });
+  const { data: membersRes, isLoading: membersLoading } = useQuery({
+    queryKey: ["members"],
+    queryFn: getMembers,
+    enabled: isTenantAdmin,
+  });
+  const { data: invitesRes, isLoading: invitesLoading } = useQuery({
+    queryKey: ["invitations"],
+    queryFn: getInvitations,
+    enabled: isTenantAdmin,
+  });
+  // Roles only matter for changing a role, which waits on permissions.
+  const { data: rolesRes } = useQuery({
+    queryKey: ["roles"],
+    queryFn: getRoles,
+    enabled: isTenantAdmin && PERMISSIONS_ENABLED,
+  });
 
   const members = membersRes?.data ?? [];
   const invitations = invitesRes?.data ?? [];
@@ -50,68 +78,130 @@ export function UsersTab() {
     return members.filter((m) => {
       const u = m.user_id;
       return (
-        `${u?.first_name ?? ""} ${u?.last_name ?? ""}`.toLowerCase().includes(term) ||
+        `${u?.first_name ?? ""} ${u?.last_name ?? ""}`
+          .toLowerCase()
+          .includes(term) ||
         (u?.email ?? "").toLowerCase().includes(term) ||
         (m.role_id?.name ?? "").toLowerCase().includes(term)
       );
     });
   }, [members, search]);
 
-  // Accepted and revoked invites are history; this list is only what's still in flight.
-  const openInvitations = useMemo(() => invitations.filter((i) => i.status !== "accepted"), [invitations]);
-
-  const rememberLink = (invitation: Invitation) => {
-    if (invitation.link) setLinks((prev) => ({ ...prev, [invitation._id]: invitation.link! }));
-  };
+  // Accepted and revoked invites are history; show only what's in flight.
+  const openInvitations = useMemo(
+    () => invitations.filter((i) => i.status !== "accepted"),
+    [invitations],
+  );
 
   const suspendMutation = useMutation({
     mutationFn: (member: Member) =>
-      updateMember(member.user_id._id, { status: member.status === "suspended" ? "active" : "suspended" }),
+      updateMember(member.user_id._id, {
+        status: member.status === "suspended" ? "active" : "suspended",
+      }),
     onSuccess: (_res, member) => {
-      toast({ title: member.status === "suspended" ? "Access restored" : "Access suspended", tone: "success" });
+      toast({
+        title:
+          member.status === "suspended"
+            ? "Access restored"
+            : "Access suspended",
+        tone: "success",
+      });
       queryClient.invalidateQueries({ queryKey: ["members"] });
     },
-    onError: (err: Error) => toast({ title: "Couldn't update access", description: err.message, tone: "danger" }),
+    onError: (err: Error) =>
+      toast({
+        title: "Couldn't update access",
+        description: err.message,
+        tone: "danger",
+      }),
   });
 
   const removeMutation = useMutation({
     mutationFn: (member: Member) => removeMember(member.user_id._id),
     onSuccess: () => {
-      toast({ title: "Member removed", description: "Their account and any other organisations are untouched.", tone: "success" });
+      toast({
+        title: "Member removed",
+        description: "Their account and any other organisations are untouched.",
+        tone: "success",
+      });
       queryClient.invalidateQueries({ queryKey: ["members"] });
       setRemoveTarget(null);
     },
-    onError: (err: Error) => toast({ title: "Couldn't remove this member", description: err.message, tone: "danger" }),
+    onError: (err: Error) =>
+      toast({
+        title: "Couldn't remove this member",
+        description: err.message,
+        tone: "danger",
+      }),
   });
 
   const resendMutation = useMutation({
     mutationFn: (invitation: Invitation) => resendInvitation(invitation._id),
-    onSuccess: (res) => {
-      toast({ title: "Invitation sent again", description: "The previous link no longer works.", tone: "success" });
-      if (res.data) rememberLink(res.data);
-      queryClient.invalidateQueries({ queryKey: ["invitations"] });
+    onSuccess: () => {
+      toast({
+        title: "Invite sent again",
+        description: "The previous link no longer works.",
+        tone: "success",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["invitations"] });
     },
-    onError: (err: Error) => toast({ title: "Couldn't resend", description: err.message, tone: "danger" }),
+    // The server says how long to wait when it's within the cooldown.
+    onError: (err: Error) =>
+      toast({
+        title: "Couldn't resend yet",
+        description: err.message,
+        tone: "danger",
+      }),
   });
 
   const revokeMutation = useMutation({
     mutationFn: (invitation: Invitation) => revokeInvitation(invitation._id),
     onSuccess: () => {
-      toast({ title: "Invitation revoked", description: "The link has been deactivated.", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["invitations"] });
+      toast({
+        title: "Invite cancelled",
+        description: "The link no longer works.",
+        tone: "success",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["invitations"] });
+      void queryClient.invalidateQueries({ queryKey: ["members"] });
     },
-    onError: (err: Error) => toast({ title: "Couldn't revoke", description: err.message, tone: "danger" }),
+    onError: (err: Error) =>
+      toast({
+        title: "Couldn't revoke",
+        description: err.message,
+        tone: "danger",
+      }),
   });
+
+  if (!accessLoading && !isTenantAdmin) {
+    return (
+      <SettingsSection
+        title="Members"
+        description="People who can sign in to this organisation."
+      >
+        <EmptyState
+          icon={Lock}
+          title="Only your organisation's Admin manages the team"
+          description="Ask them to add or remove people."
+        />
+      </SettingsSection>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <SettingsSection
         title="Members"
-        description="People who can sign in to this organisation. Each holds one role here, independent of any other organisation they belong to."
+        description="People who can sign in to this organisation. New members join as Staff."
         right={
-          <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setInviteOpen(true)}>
+          <Button
+            variant="primary"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setInviteOpen(true)}
+          >
             <UserPlus className="h-4 w-4" />
-            Invite Team Member
+            Add Team Member
           </Button>
         }
       >
@@ -131,9 +221,15 @@ export function UsersTab() {
             </div>
           ) : filteredMembers.length === 0 ? (
             <EmptyState
-              icon={<Users className="h-8 w-8 text-fg/30" />}
-              title={search ? "No one matches that search" : "It's just you so far"}
-              description={search ? "Try a different name, email or role." : "Invite a teammate to give them access."}
+              icon={Users}
+              title={
+                search ? "No one matches that search" : "It's just you so far"
+              }
+              description={
+                search
+                  ? "Try a different name, email or role."
+                  : "Invite a teammate to give them access."
+              }
             />
           ) : (
             <div className="overflow-x-auto">
@@ -154,6 +250,7 @@ export function UsersTab() {
                       key={member._id}
                       member={member}
                       isSelf={String(member.user_id?._id) === String(user?._id)}
+                      canManage={isTenantAdmin}
                       onChangeRole={setRoleTarget}
                       onToggleSuspended={(m) => suspendMutation.mutate(m)}
                       onRemove={setRemoveTarget}
@@ -168,7 +265,7 @@ export function UsersTab() {
 
       <SettingsSection
         title="Pending Invitations"
-        description="One invitation per address — inviting someone again reopens theirs with a fresh link rather than adding a second."
+        description="Waiting for the person to set a password. Links last 24 hours; resending sends a fresh one and cancels the old."
       >
         {invitesLoading ? (
           <div className="space-y-2">
@@ -178,9 +275,9 @@ export function UsersTab() {
           </div>
         ) : openInvitations.length === 0 ? (
           <EmptyState
-            icon={<Mail className="h-8 w-8 text-fg/30" />}
+            icon={Mail}
             title="No invitations outstanding"
-            description="Anyone you invite will appear here until they accept."
+            description="Anyone you add appears here until they set a password."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -199,7 +296,7 @@ export function UsersTab() {
                   <InvitationRow
                     key={invitation._id}
                     invitation={invitation}
-                    link={links[invitation._id]}
+                    canManage={isTenantAdmin}
                     onResend={(i) => resendMutation.mutate(i)}
                     onRevoke={(i) => revokeMutation.mutate(i)}
                   />
@@ -210,10 +307,19 @@ export function UsersTab() {
         )}
       </SettingsSection>
 
-      <InviteMemberModal open={inviteOpen} onOpenChange={setInviteOpen} roles={roles} onSent={rememberLink} />
-      <ChangeRoleModal member={roleTarget} roles={roles} onOpenChange={(open) => !open && setRoleTarget(null)} />
+      <InviteMemberModal open={inviteOpen} onOpenChange={setInviteOpen} />
+      {PERMISSIONS_ENABLED && (
+        <ChangeRoleModal
+          member={roleTarget}
+          roles={roles}
+          onOpenChange={(open) => !open && setRoleTarget(null)}
+        />
+      )}
 
-      <Modal open={Boolean(removeTarget)} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+      <Modal
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+      >
         <ModalContent>
           <ModalHeader>
             <ModalTitle>Remove from organisation?</ModalTitle>
@@ -224,7 +330,13 @@ export function UsersTab() {
             </ModalDescription>
           </ModalHeader>
           <ModalFooter>
-            <Button type="button" variant="secondary" size="md" className="flex-1" onClick={() => setRemoveTarget(null)}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="flex-1"
+              onClick={() => setRemoveTarget(null)}
+            >
               Cancel
             </Button>
             <Button
@@ -233,25 +345,15 @@ export function UsersTab() {
               size="md"
               className="flex-1"
               disabled={removeMutation.isPending}
-              onClick={() => removeTarget && removeMutation.mutate(removeTarget)}
+              onClick={() =>
+                removeTarget && removeMutation.mutate(removeTarget)
+              }
             >
               {removeMutation.isPending ? "Removing…" : "Remove member"}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">{icon}</div>
-      <div>
-        <p className="font-medium text-fg">{title}</p>
-        <p className="mt-1 text-sm text-fg/50">{description}</p>
-      </div>
     </div>
   );
 }

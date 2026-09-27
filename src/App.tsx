@@ -11,6 +11,7 @@ import LoginPage from "@/pages/LoginPage";
 // import RegisterPage from "@/pages/RegisterPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import SetPasswordPage from "@/pages/SetPasswordPage";
 
 // ERP pages
 import DashboardPage from "@/pages/erp/DashboardPage";
@@ -60,6 +61,8 @@ export default function App() {
 
           {/* Not behind GuestRoute: signed-in users accept, new users sign up. */}
           <Route path="/invite" element={<InvitePage />} />
+          {/* Admin-added members set their first password here. */}
+          <Route path="/set-password" element={<SetPasswordPage />} />
 
           <Route
             path="/login"

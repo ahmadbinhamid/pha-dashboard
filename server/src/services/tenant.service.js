@@ -1,5 +1,5 @@
 // services/tenant.service.js
-// Self-service tenant signup: creates a new Tenant plus its first admin user, active immediately.
+// Self-service signup: a new Tenant plus its active first Admin user.
 
 const Tenant = require("../models/Tenant");
 const { createUser } = require("./user.service");
@@ -13,7 +13,7 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-// Used to label each organization a multi-tenant account can choose between.
+// Labels each organization a multi-tenant account can choose between.
 async function findTenantsByIds(ids) {
   return Tenant.find({ _id: { $in: ids } }).select("name slug");
 }
@@ -22,13 +22,12 @@ async function findTenantById(id) {
   return Tenant.findById(id);
 }
 
-// email is unique per-tenant, not globally, so join-an-existing-tenant registration resolves the
-// tenant by its slug first.
+// Emails are unique per tenant, so joining a tenant resolves it by slug first.
 async function findTenantBySlug(slug) {
   return Tenant.findOne({ slug });
 }
 
-// Order/invoice number prefix (e.g. "PHA-00001"); falls back to a fixed prefix if no usable letters.
+// Order/invoice prefix (e.g. "PHA-00001"); fixed fallback when no letters.
 function baseCodeFromCompanyName(companyName) {
   const letters = companyName.toUpperCase().replace(/[^A-Z]/g, "");
   return letters.slice(0, 4) || "TEN";
@@ -49,7 +48,7 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
   const baseSlug = generateSlug(company_name);
   if (!baseSlug) throw httpError("Company name must contain at least one letter or number", 400);
 
-  // check-then-create races are retried on a genuine unique-index conflict, same pattern used elsewhere.
+  // Check-then-create can race; retry on a real slug/code unique conflict.
   const MAX_ATTEMPTS = 5;
   let tenant;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -82,19 +81,17 @@ async function registerTenantWithAdmin({ company_name, first_name, last_name, em
       verified_at: new Date(),
     });
 
-    // Membership, not User.tenant_id, is what grants access — a tenant whose only user has
-    // no membership would be one nobody can administer.
+    // Membership, not User.tenant_id, grants access; the owner needs one.
     const roles = await seedSystemRoles(tenant._id);
     await addMember({
       tenantId: tenant._id,
       userId: user._id,
-      roleId: roles[SYSTEM_ROLE.SUPER_ADMIN]._id,
+      roleId: roles[SYSTEM_ROLE.ADMIN]._id,
     });
 
     return { tenant, user };
   } catch (err) {
-    // No transaction spans Tenant + User creation (standalone MongoDB); clean up the orphaned
-    // tenant rather than leave it occupying its slug/code forever. Safe: nothing else references it yet.
+    // No transactions on standalone Mongo; drop the orphan to free its slug/code.
     await Tenant.deleteOne({ _id: tenant._id });
     throw err;
   }

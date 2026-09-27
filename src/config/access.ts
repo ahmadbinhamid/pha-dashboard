@@ -1,11 +1,18 @@
-// Shared constants for the team surface. The role name is meaningful to the UI (Super Admin is protected server-side, so its actions are hidden, not offered-then-refused) — mirrored here, not string-literalled per call site.
+// Team surface constants, mirroring the server's role names.
 
 import type { InvitationStatus, MembershipStatus } from "@/types/access";
 import type { AuthUser } from "@/types/auth";
 
-export const SYSTEM_ROLE_SUPER_ADMIN = "Super Admin";
+// The tenant owner role; "Super Admin" until migrateTenantAdminRoles runs.
+export const TENANT_ADMIN_ROLE_NAMES = ["Admin", "Super Admin"];
 
-// The signed-in user's platform role (AuthUser.role), not the per-tenant Role records the team surface manages. Shown in the account menu and Profile page.
+// NOTE: role-based permissions are off; everyone joins as Staff for now.
+export const PERMISSIONS_ENABLED = false;
+
+// Mirrors the server's activateInvitation rule (NIST minimum).
+export const INVITE_PASSWORD_MIN_LENGTH = 8;
+
+// Account-level role (AuthUser.role), not the per-tenant roles managed here.
 export const ACCOUNT_ROLE_LABEL: Record<AuthUser["role"], string> = {
   superadmin: "Super Admin",
   admin: "Admin",

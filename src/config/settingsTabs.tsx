@@ -13,8 +13,7 @@ import {
   Warehouse,
 } from "lucide-react";
 
-// The Settings page's top-level tabs and Store Settings sub-sections. Split out (like config/nav.tsx) so the tab bar, router redirects and page body read from one list instead of three copies.
-// `available: false` marks an area with no backend yet — the tab still renders and navigates, just showing <ComingSoonPanel> instead of controls that would save nowhere.
+// Settings tabs; `available: false` shows ComingSoonPanel instead of controls.
 
 export type SettingsTabId =
   | "appearance"
@@ -40,19 +39,8 @@ export const SETTINGS_TABS: SettingsTab[] = [
   { id: "appearance", label: "Appearance & Theme", icon: (p) => <Palette {...p} />, available: true },
   { id: "store", label: "Store Settings", icon: (p) => <Store {...p} />, available: true },
   { id: "integrations", label: "Integrations", icon: (p) => <Blocks {...p} />, available: true },
-  // Both fully built end-to-end but pulled behind Coming Soon for now (see SettingsPage.tsx's fallback) — backend routes/services/components are untouched, this only stops the UI being reachable.
-  {
-    id: "users",
-    label: "User Management",
-    icon: (p) => <Users {...p} />,
-    available: false,
-    summary: "Invite teammates to your store and manage who has access.",
-    planned: [
-      "Invite people by email, with a role assigned on acceptance",
-      "See everyone's status — active, pending invite, suspended",
-      "Move someone to a different role, or remove their access",
-    ],
-  },
+  { id: "users", label: "User Management", icon: (p) => <Users {...p} />, available: true },
+  // Built, but hidden until role-based permissions are switched on.
   {
     id: "roles",
     label: "Roles & Permissions",
@@ -106,7 +94,7 @@ export function findSettingsTab(id: string | undefined): SettingsTab | undefined
   return SETTINGS_TABS.find((t) => t.id === id);
 }
 
-// ── Store Settings sub-sections ─────────────────────────────────────────────
+// ── Store Settings sub-sections ──
 
 export type StoreSectionId = "general" | "warehouses" | "regional" | "invoices" | "policies";
 
