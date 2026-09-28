@@ -528,6 +528,33 @@ async function deleteOffer(token, settings, offerId) {
   return { ok: true };
 }
 
+// Price and quantity only, without replacing the whole inventory item.
+async function updatePriceQuantity(token, settings, { sku, offerId, quantity, price }) {
+  const res = await fetch(`${inventoryBaseFor(settings.sandbox)}/bulk_update_price_quantity`, {
+    method: "POST",
+    headers: ebayHeaders(token, settings.marketplace_id),
+    body: JSON.stringify({
+      requests: [
+        {
+          sku,
+          shipToLocationAvailability: { quantity },
+          offers: [{ offerId, availableQuantity: quantity, ...(price ? { price } : {}) }],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) await throwEbayApiError("bulk_update_price_quantity", res);
+  // The call is 200 even when the item fails; each result carries its own status.
+  const [result] = (await res.json()).responses ?? [];
+  if (result && result.statusCode >= 400) {
+    throw new EbayApiError(`bulk_update_price_quantity failed: ${result.statusCode}`, {
+      status: result.statusCode,
+      body: JSON.stringify({ errors: result.errors ?? [] }),
+    });
+  }
+  return { ok: true };
+}
+
 // Read-only GET; 404 comes back as { status: 404, body: null }, never throws.
 async function ebayGet(token, settings, path) {
   const res = await fetch(`${inventoryBaseFor(settings.sandbox)}${path}`, {
@@ -830,6 +857,7 @@ module.exports = {
   publishOffer,
   getOffer,
   deleteOffer,
+  updatePriceQuantity,
   getInventoryItem,
   getOffersForSku,
   withdrawOffer,

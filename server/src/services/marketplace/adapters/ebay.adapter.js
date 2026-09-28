@@ -15,6 +15,7 @@ const {
   publishOffer,
   getOffer,
   deleteOffer,
+  updatePriceQuantity,
   withdrawOffer,
   deleteProduct,
   ensureLocation,
@@ -274,6 +275,17 @@ async function resetStuckSku(resolved, settings, hooks) {
   return publish({ ...resolved, listing: { ...listing, external_offer_id: null, external_listing_id: null } }, settings, hooks);
 }
 
+// Live listing whose item eBay won't replace: restock the same listing anyway.
+async function restockLiveListing(token, settings, resolved, quantity, hooks) {
+  const { sku, listing } = resolved;
+  const offerId = listing.external_offer_id;
+  const price = buildOfferFromResolved(resolved, settings, quantity).pricingSummary?.price;
+  await updatePriceQuantity(token, settings, { sku, offerId, quantity, price });
+  logger.warn(`[EbayAdapter] ${sku}: eBay rejected the full item update; price and qty ${quantity} set on the same listing`);
+  await hooks.onQuantityPushed?.(quantity);
+  return { external_listing_id: listing.external_listing_id || null, external_offer_id: offerId, quantity };
+}
+
 // Relists an offer whose listing ended (e.g. sold out); null if it's live.
 async function relistIfEnded(token, settings, offerId, offerBody, sku, hooks) {
   const offer = await getOffer(token, settings, offerId);
@@ -414,9 +426,11 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
   try {
     await pushInventoryItem(token, settings, inventoryItem, quantity, listing.external_offer_id, hooks);
   } catch (err) {
-    if (!canResetStuckSku(err, listing, quantity)) throw err;
-    if (!(await listingIsGone(token, settings, listing.external_offer_id))) throw err;
-    return resetStuckSku(resolved, settings, hooks);
+    if (!isStuckSkuError(err) || quantity == null) throw err;
+    const gone = await listingIsGone(token, settings, listing.external_offer_id);
+    if (gone && canResetStuckSku(err, listing, quantity)) return resetStuckSku(resolved, settings, hooks);
+    if (gone || !listing.external_offer_id) throw err;
+    return restockLiveListing(token, settings, resolved, quantity, hooks);
   }
 
   if (!categoryId) {
