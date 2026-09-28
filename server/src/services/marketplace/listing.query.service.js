@@ -10,6 +10,7 @@ const ebaySettingsService = require("../ebay/ebay.settings.service");
 const { buildEbayItemUrl } = require("../ebay/ebay.listing.service");
 const { MARKETPLACE_PLATFORM, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { readableSyncError } = require("../../utils/syncErrorMessage");
+const circuitBreaker = require("./circuitBreaker");
 
 // Same needs_attention definition as channel.service#listChannelsForTenant.
 const NEEDS_ATTENTION_STATUSES = [LISTING_SYNC_STATUS.ERROR, LISTING_SYNC_STATUS.PRICE_LOCKED];
@@ -240,10 +241,11 @@ async function deleteListing(id, tenantId, { logger } = {}) {
   return listing;
 }
 
-// Re-enqueues sync_listing; seq: null as a manual push has no fencing token.
+// Manual re-sync (no fencing seq); resumes a paused channel as the go-ahead.
 async function pushListing(id, tenantId) {
   const listing = await MarketplaceListing.findOne({ _id: id, tenant_id: tenantId }).select("platform");
   if (!listing) return null;
+  if (await circuitBreaker.isOpen(tenantId, listing.platform)) await circuitBreaker.resume(tenantId, listing.platform);
   await enqueueChannelJob(listing.platform, "sync_listing", { listingId: listing._id.toString(), seq: null });
   return listing;
 }

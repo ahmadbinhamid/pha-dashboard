@@ -136,3 +136,24 @@ test("our own Mongo failing never trips a channel breaker", () => {
   });
   assert.equal(circuitBreaker.isTransportOrAuthFailure(err), false);
 });
+
+test("an eBay 500 tagged 'Request' is one item's rejection, not an outage", () => {
+  const { isTransportOrAuthFailure } = require("./circuitBreaker");
+  const { EbayApiError } = require("../ebay/ebay.api.service");
+  const itemError = new EbayApiError("upsert inventory_item failed: 500", {
+    status: 500,
+    body: JSON.stringify({ errors: [{ errorId: 25001, category: "Request", message: "A system error has occurred." }] }),
+  });
+  const outage = new EbayApiError("GET /offer failed: 500", {
+    status: 500,
+    body: JSON.stringify({ errors: [{ errorId: 25001, category: "System", message: "A system error has occurred." }] }),
+  });
+  const authFailure = new EbayApiError("upsert failed: 401", {
+    status: 401,
+    body: JSON.stringify({ errors: [{ errorId: 1001, category: "Request", message: "Invalid access token" }] }),
+  });
+  assert.equal(isTransportOrAuthFailure(itemError), false);
+  assert.equal(isTransportOrAuthFailure(outage), true, "eBay's own system failures still count");
+  assert.equal(isTransportOrAuthFailure(authFailure), true, "auth failures always count");
+  assert.equal(isTransportOrAuthFailure(Object.assign(new Error("bad gateway"), { status: 502 })), true);
+});

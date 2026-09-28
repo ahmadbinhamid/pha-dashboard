@@ -24,10 +24,17 @@ function isNetworkFailure(err, depth = 0) {
   return isNetworkFailure(err.cause, depth + 1);
 }
 
+// eBay tags a single item's rejection "Request" even on a 500; not an outage.
+function isItemRejection(err) {
+  const errors = Array.isArray(err?.errors) ? err.errors : [];
+  return errors.length > 0 && errors.every((e) => String(e?.category).toLowerCase() === "request");
+}
+
 // Positive match only: network error, 5xx, 401 or 403; nothing else trips.
 function isTransportOrAuthFailure(err) {
   const status = Number(err?.status ?? err?.statusCode);
-  if (Number.isInteger(status) && status > 0) return status >= 500 || status === 401 || status === 403;
+  if (status === 401 || status === 403) return true;
+  if (Number.isInteger(status) && status > 0) return status >= 500 && !isItemRejection(err);
   return isNetworkFailure(err);
 }
 

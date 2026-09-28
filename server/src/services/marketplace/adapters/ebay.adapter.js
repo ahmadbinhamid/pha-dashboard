@@ -499,5 +499,6 @@ module.exports = {
   resolveCategoryCondition,
   resolveQuantity,
   withRenderedDescription,
+  listingIsGone,
   ConditionUnverifiedError,
 };

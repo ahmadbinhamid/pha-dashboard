@@ -81,4 +81,4 @@ async function previewEbayInventoryItem(sku, tenantId = null, { live = false } =
   return { listingId: String(listing._id), syncError: listing.sync_error, item, offer, images, liveState };
 }
 
-module.exports = { previewEbayInventoryItem };
+module.exports = { previewEbayInventoryItem, findEbayListingBySku };
