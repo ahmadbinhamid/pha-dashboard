@@ -333,6 +333,22 @@ function buildVehicleAspects(product) {
   return aspects;
 }
 
+const positive = (value) => (Number(value) > 0 ? Number(value) : null);
+
+// Partial dimensions or zero values make eBay fail with a bare 25001 500.
+function buildPackageWeightAndSize(pkg) {
+  const length = positive(pkg?.length);
+  const width = positive(pkg?.width);
+  const height = positive(pkg?.height);
+  const weight = positive(pkg?.weight);
+  const dimensions = length && width && height ? { length, width, height, unit: "CENTIMETER" } : null;
+  if (!dimensions && !weight) return null;
+  return {
+    ...(dimensions ? { dimensions } : {}),
+    ...(weight ? { weight: { value: weight, unit: "KILOGRAM" } } : {}),
+  };
+}
+
 function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverride = null, settings = null) {
   const { sku, title, description, brand, photos, listing, product, authenticity } = resolved;
   const imageUrls = resolveImageUrls(photos, settings);
@@ -378,27 +394,7 @@ function buildInventoryItemFromResolved(resolved, quantity = 0, conditionOverrid
   }
 
   // Resolved package: the listing's, else the product's (null when neither).
-  const pkg = resolved.package || {};
-  const hasAnyDimension = pkg.length || pkg.width || pkg.height;
-  const hasWeight = pkg.weight != null;
-  const packageWeightAndSize =
-    hasAnyDimension || hasWeight
-      ? {
-          ...(hasAnyDimension
-            ? {
-                dimensions: {
-                  ...(pkg.length ? { length: Number(pkg.length) } : {}),
-                  ...(pkg.width ? { width: Number(pkg.width) } : {}),
-                  ...(pkg.height ? { height: Number(pkg.height) } : {}),
-                  unit: "CENTIMETER",
-                },
-              }
-            : {}),
-          ...(hasWeight
-            ? { weight: { value: Number(pkg.weight), unit: "KILOGRAM" } }
-            : {}),
-        }
-      : null;
+  const packageWeightAndSize = buildPackageWeightAndSize(resolved.package);
 
   return {
     sku,

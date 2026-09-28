@@ -29,3 +29,8 @@ test("plain text and empty values pass through", () => {
   assert.equal(readableSyncError("Platform not connected"), "Platform not connected");
   assert.equal(readableSyncError(null), null);
 });
+
+test("eBay's opaque system error gets an actionable hint", () => {
+  const raw = 'upsert inventory_item failed: 500 {"errors":[{"errorId":25001,"message":"A system error has occurred. Internal Server Error"}]}';
+  assert.match(readableSyncError(raw), /^eBay couldn't process this item\. Check its package size/);
+});

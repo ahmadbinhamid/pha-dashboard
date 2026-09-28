@@ -6,6 +6,11 @@ const API_FAILURE = /^(.+?) failed: (\d{3})\s*([\s\S]*)$/;
 const STOREFRONT_REQUIRED = /^No verified default domain/;
 const STOREFRONT_REQUIRED_TEXT = "Google Shopping needs a verified storefront domain. Add one in Settings > Domains, then retry.";
 
+// eBay codes whose own text gives nothing to act on.
+const EBAY_ERROR_HINTS = {
+  25001: "eBay couldn't process this item. Check its package size, weight and photos, then retry.",
+};
+
 function parseJson(text) {
   try {
     return JSON.parse(text);
@@ -17,7 +22,7 @@ function parseJson(text) {
 // eBay: { errors: [{ message, longMessage }] }; Google: { error: { message } }.
 function messagesFrom(body) {
   if (Array.isArray(body?.errors)) {
-    return body.errors.map((e) => e.longMessage || e.message).filter(Boolean);
+    return body.errors.map((e) => EBAY_ERROR_HINTS[e.errorId] || e.longMessage || e.message).filter(Boolean);
   }
   return body?.error?.message ? [body.error.message] : [];
 }

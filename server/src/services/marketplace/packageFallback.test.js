@@ -57,3 +57,13 @@ test("eBay inventory item omits the package when nothing is set", () => {
   const resolved = { sku: "PKG-2", title: "t", description: "d", photos: [], listing: { item_specifics: {} }, product: {}, package: null, condition: "NEW", fitment: [] };
   assert.equal(buildInventoryItemFromResolved(resolved, 1, "NEW", null).packageWeightAndSize, undefined);
 });
+
+test("eBay package: partial dimensions and zero weight are never sent", () => {
+  const base = { sku: "PKG-3", title: "t", description: "d", photos: [], listing: { item_specifics: {} }, product: {}, condition: "NEW", fitment: [] };
+  const build = (pkg) => buildInventoryItemFromResolved({ ...base, package: pkg }, 1, "NEW", null).packageWeightAndSize;
+  assert.deepEqual(build({ length: 40, width: null, height: 10, weight: 2 }), { weight: { value: 2, unit: "KILOGRAM" } });
+  assert.deepEqual(build({ length: 40, width: 30, height: 20, weight: 0 }), {
+    dimensions: { length: 40, width: 30, height: 20, unit: "CENTIMETER" },
+  });
+  assert.equal(build({ length: 40, width: 0, height: 0, weight: 0 }), undefined);
+});
