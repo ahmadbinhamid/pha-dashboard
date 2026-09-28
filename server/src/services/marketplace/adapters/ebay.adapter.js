@@ -237,6 +237,43 @@ async function republishWithFreshOffer(token, settings, staleOfferId, offerBody,
   return { listingId, offerId };
 }
 
+// eBay's record for a sold-out SKU can get stuck: every write fails this way.
+function isStuckSkuError(err) {
+  return err instanceof EbayApiError && (err.hasErrorId(EBAY_ERROR_CODE.SYSTEM_ERROR) || isAvailabilityNotFoundError(err));
+}
+
+// Safe only when eBay last confirmed 0: that listing ended, none is live.
+function canResetStuckSku(err, listing, quantity) {
+  const lastConfirmed = listing.ebay_synced_quantity ?? listing.synced_quantity;
+  return quantity > 0 && lastConfirmed === 0 && isStuckSkuError(err);
+}
+
+// Out-of-stock control keeps a 0-qty listing alive; never delete one of those.
+async function listingIsGone(token, settings, offerId) {
+  if (!offerId) return true;
+  try {
+    const offer = await getOffer(token, settings, offerId);
+    return offer.status !== "PUBLISHED" || EBAY_RELISTABLE_STATUSES.includes(offer.listing?.listingStatus);
+  } catch (err) {
+    // Unreadable is the stuck case itself; a missing offer has no listing left.
+    return isStuckSkuError(err) || isOfferMissingError(err);
+  }
+}
+
+// Deletes eBay's stuck item and offers, then publishes the SKU from scratch.
+async function resetStuckSku(resolved, settings, hooks) {
+  const { sku, listing } = resolved;
+  logger.warn(`[EbayAdapter] ${sku}: eBay's record is stuck after selling out — recreating it`);
+  const removed = await deleteProduct(settings, sku, listing.external_offer_id || null);
+  if (removed.error) {
+    // 422: a data problem, so it never trips the connection circuit breaker.
+    throw httpError(`eBay's record for ${sku} is stuck and eBay couldn't remove it. Contact eBay support about this SKU.`, 422, {
+      cause: removed.cause,
+    });
+  }
+  return publish({ ...resolved, listing: { ...listing, external_offer_id: null, external_listing_id: null } }, settings, hooks);
+}
+
 // Relists an offer whose listing ended (e.g. sold out); null if it's live.
 async function relistIfEnded(token, settings, offerId, offerBody, sku, hooks) {
   const offer = await getOffer(token, settings, offerId);
@@ -374,7 +411,13 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
   const categoryId = effectiveCategoryId(resolved);
   const condition = await resolveCategoryCondition(resolved.condition, categoryId, settings, resolved.sku);
   const inventoryItem = buildInventoryItemFromResolved(resolved, quantity, condition, settings);
-  await pushInventoryItem(token, settings, inventoryItem, quantity, listing.external_offer_id, hooks);
+  try {
+    await pushInventoryItem(token, settings, inventoryItem, quantity, listing.external_offer_id, hooks);
+  } catch (err) {
+    if (!canResetStuckSku(err, listing, quantity)) throw err;
+    if (!(await listingIsGone(token, settings, listing.external_offer_id))) throw err;
+    return resetStuckSku(resolved, settings, hooks);
+  }
 
   if (!categoryId) {
     logger.warn(`[EbayAdapter] ${resolved.sku}: ebay_category_id missing — skipping offer update`);

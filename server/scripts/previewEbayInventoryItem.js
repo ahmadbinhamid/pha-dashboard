@@ -32,6 +32,9 @@ function report({ listingId, syncError, item, offer, images, liveState }, log) {
   }
   log(`  offer's location: ${liveState.location ? `${liveState.location.key} (${liveState.location.status})` : "NOT FOUND on eBay"}`);
   log(`  all locations: ${liveState.allLocationKeys.join(", ") || "(none)"}`);
+  for (const [part, message] of Object.entries(liveState.readErrors)) {
+    if (message) log(`  eBay failed to read ${part}: ${message}`);
+  }
 }
 
 if (require.main === module) {

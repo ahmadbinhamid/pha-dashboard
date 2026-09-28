@@ -17,6 +17,8 @@ const EBAY_ERROR_CODE = Object.freeze({
   INVALID_LISTING_QUANTITY: 25004,
   // updateOffer during an eBay sale; self-resolves when the sale ends.
   PRICE_LOCKED_BY_ACTIVE_SALE: 25019,
+  // Generic eBay-side failure; on a sold-out SKU it means a stuck record.
+  SYSTEM_ERROR: 25001,
   // Stored offer id eBay no longer knows (validation error or 404): recreate.
   OFFER_NOT_FOUND_INPUT: 25604,
   OFFER_NOT_FOUND_RESOURCE: 25710,

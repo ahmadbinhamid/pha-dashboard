@@ -42,17 +42,21 @@ async function checkImage(url) {
 async function readLiveState(settings, sku, locationKey) {
   const token = await getAccessToken(settings);
   if (!token) return { error: "Could not get an eBay access token" };
-  const [item, offers, locations] = await Promise.all([
+  // Settled, not all: one failing eBay read shouldn't hide the others.
+  const [item, offers, locations] = await Promise.allSettled([
     getInventoryItem(token, settings, sku),
     getOffersForSku(token, settings, sku),
     getInventoryLocations(token, settings),
   ]);
-  const location = locations.find((l) => l.merchantLocationKey === locationKey) || null;
+  const failed = (r) => (r.status === "rejected" ? r.reason.message : null);
+  const locationList = locations.value ?? [];
+  const location = locationList.find((l) => l.merchantLocationKey === locationKey) || null;
   return {
-    inventoryItem: item.body,
-    offers: offers.body?.offers ?? [],
+    inventoryItem: item.value?.body ?? null,
+    offers: offers.value?.body?.offers ?? [],
     location: location ? { key: location.merchantLocationKey, status: location.merchantLocationStatus } : null,
-    allLocationKeys: locations.map((l) => `${l.merchantLocationKey} (${l.merchantLocationStatus})`),
+    allLocationKeys: locationList.map((l) => `${l.merchantLocationKey} (${l.merchantLocationStatus})`),
+    readErrors: { inventoryItem: failed(item), offers: failed(offers), locations: failed(locations) },
   };
 }
 

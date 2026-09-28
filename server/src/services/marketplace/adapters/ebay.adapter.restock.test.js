@@ -20,6 +20,8 @@ const publishOffer = mock.method(ebayApiService, "publishOffer", async () => "L-
 const withdrawOffer = mock.method(ebayApiService, "withdrawOffer", async () => ({ ok: true }));
 const deleteOffer = mock.method(ebayApiService, "deleteOffer", async () => ({ ok: true }));
 const createOffer = mock.method(ebayApiService, "createOffer", async () => "O-FRESH");
+const deleteProduct = mock.method(ebayApiService, "deleteProduct", async () => ({ ok: true }));
+mock.method(ebayApiService, "ensureLocation", async () => {});
 
 const ebayAdapter = require("./ebay.adapter");
 
@@ -51,7 +53,8 @@ function resolvedFor(quantity) {
 }
 
 beforeEach(() => {
-  for (const m of [upsert, updateOffer, getOffer, publishOffer, withdrawOffer, deleteOffer, createOffer]) m.mock.resetCalls();
+  for (const m of [upsert, updateOffer, getOffer, publishOffer, withdrawOffer, deleteOffer, createOffer, deleteProduct]) m.mock.resetCalls();
+  deleteProduct.mock.mockImplementation(async () => ({ ok: true }));
   publishOffer.mock.mockImplementation(async () => "L-NEW");
   upsert.mock.mockImplementation(async () => ({ ok: true }));
   getOffer.mock.mockImplementation(async () => ({ status: "PUBLISHED", listing: { listingStatus: "ACTIVE" } }));
@@ -142,4 +145,91 @@ test("sold-out relist refused with 'Availability not found': fresh offer replace
   assert.deepEqual(saved, ["O-FRESH"], "new offer id saved before publishing");
   assert.equal(result.external_offer_id, "O-FRESH");
   assert.equal(result.external_listing_id, "L-FRESH");
+});
+
+const stuckError = () =>
+  new ebayApiService.EbayApiError("upsert inventory_item failed: 500", {
+    status: 500,
+    body: JSON.stringify({ errors: [{ errorId: EBAY_ERROR_CODE.SYSTEM_ERROR, message: "A system error has occurred." }] }),
+  });
+
+// Sold out on eBay last time (baseline 0), with policies so publish can run.
+function soldOutResolved(quantity) {
+  const resolved = resolvedFor(quantity);
+  resolved.listing = {
+    ...resolved.listing,
+    ebay_synced_quantity: 0,
+    fulfillment_policy_id: "F",
+    payment_policy_id: "P",
+    return_policy_id: "R",
+  };
+  return resolved;
+}
+
+test("stuck SKU after selling out: eBay record deleted, same SKU published fresh", async () => {
+  // Stuck records can't even be read, as seen in production.
+  getOffer.mock.mockImplementation(async () => {
+    throw stuckError();
+  });
+  let calls = 0;
+  upsert.mock.mockImplementation(async () => {
+    calls += 1;
+    if (calls === 1) throw stuckError();
+    return { ok: true };
+  });
+  const saved = [];
+  const result = await ebayAdapter.update(soldOutResolved(3), SETTINGS, { onOfferCreated: async (id) => saved.push(id) });
+
+  const [, sku, offerId] = deleteProduct.mock.calls[0].arguments;
+  assert.equal(sku, "RESTOCK-1", "same SKU, never rotated");
+  assert.equal(offerId, "O-1");
+  assert.equal(result.external_offer_id, "O-FRESH");
+  assert.equal(result.external_listing_id, "L-NEW");
+  assert.deepEqual(saved, ["O-FRESH"]);
+});
+
+test("stuck-looking error on a listing eBay didn't confirm at 0: no reset", async () => {
+  upsert.mock.mockImplementation(async () => {
+    throw stuckError();
+  });
+  const resolved = soldOutResolved(3);
+  resolved.listing.ebay_synced_quantity = 2;
+  await assert.rejects(() => ebayAdapter.update(resolved, SETTINGS, {}), /upsert inventory_item failed: 500/);
+  assert.equal(deleteProduct.mock.callCount(), 0, "a possibly live listing is never deleted");
+});
+
+test("eBay can't delete the stuck record: clear, non-breaker 422", async () => {
+  upsert.mock.mockImplementation(async () => {
+    throw stuckError();
+  });
+  deleteProduct.mock.mockImplementation(async () => ({ error: "500: system error", status: 500 }));
+  getOffer.mock.mockImplementation(async () => {
+    throw stuckError();
+  });
+  await assert.rejects(
+    () => ebayAdapter.update(soldOutResolved(3), SETTINGS, {}),
+    (err) => err.status === 422 && /Contact eBay support/.test(err.message),
+  );
+});
+
+test("hidden out-of-stock listing (still alive) is never reset on a stuck-looking error", async () => {
+  upsert.mock.mockImplementation(async () => {
+    throw stuckError();
+  });
+  getOffer.mock.mockImplementation(async () => ({ status: "PUBLISHED", listing: { listingStatus: "OUT_OF_STOCK" } }));
+  await assert.rejects(() => ebayAdapter.update(soldOutResolved(3), SETTINGS, {}), /upsert inventory_item failed: 500/);
+  assert.equal(deleteProduct.mock.callCount(), 0, "the preserved listing is kept; next sync retries");
+});
+
+test("listing eBay reports as ENDED is reset", async () => {
+  let calls = 0;
+  upsert.mock.mockImplementation(async () => {
+    calls += 1;
+    if (calls === 1) throw stuckError();
+    return { ok: true };
+  });
+  getOffer.mock.mockImplementation(async () => ({ status: "PUBLISHED", listing: { listingStatus: "ENDED" } }));
+  const result = await ebayAdapter.update(soldOutResolved(3), SETTINGS, {});
+  assert.equal(deleteProduct.mock.callCount(), 1);
+  assert.equal(result.external_offer_id, "O-FRESH");
 });
