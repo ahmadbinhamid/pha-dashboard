@@ -22,6 +22,9 @@ const EBAY_ERROR_CODE = Object.freeze({
   OFFER_NOT_FOUND_RESOURCE: 25710,
 });
 
+// publishOffer on a sold-out listing's old offer; only a fresh offer relists.
+const EBAY_AVAILABILITY_NOT_FOUND = /availability not found/i;
+
 // Offer listingStatus values a restock should relist; EBAY_ENDED is policy.
 const EBAY_RELISTABLE_STATUSES = Object.freeze(["ENDED", "INACTIVE", "NOT_LISTED"]);
 
@@ -54,6 +57,7 @@ function currencyForMarketplace(marketplaceId) {
 const EBAY_TITLE_MAX_LENGTH = 80;
 
 module.exports = {
+  EBAY_AVAILABILITY_NOT_FOUND,
   EBAY_SCOPES,
   EBAY_ERROR_CODE,
   EBAY_RELISTABLE_STATUSES,

@@ -14,6 +14,7 @@ const {
   updateOffer,
   publishOffer,
   getOffer,
+  deleteOffer,
   withdrawOffer,
   deleteProduct,
   ensureLocation,
@@ -29,7 +30,7 @@ const {
   UPFRONT_KEYS,
   POLICY_KEYS,
 } = require("./ebay.fieldSchema");
-const { EBAY_ERROR_CODE, EBAY_RELISTABLE_STATUSES } = require("../../../constants/ebay.constants");
+const { EBAY_ERROR_CODE, EBAY_RELISTABLE_STATUSES, EBAY_AVAILABILITY_NOT_FOUND } = require("../../../constants/ebay.constants");
 const { httpError } = require("../../../utils/http/httpError");
 
 const key = "ebay";
@@ -221,8 +222,23 @@ async function withdrawOfferTolerant(token, settings, offerId, sku) {
   }
 }
 
-// Relists an offer whose listing ended (e.g. sold out); returns the new id.
-async function relistIfEnded(token, settings, offerId, sku) {
+function isAvailabilityNotFoundError(err) {
+  return err instanceof EbayApiError && EBAY_AVAILABILITY_NOT_FOUND.test(err.message);
+}
+
+// The old offer is dead; a fresh one from the same body lists it again.
+async function republishWithFreshOffer(token, settings, staleOfferId, offerBody, sku, hooks) {
+  logger.warn(`[EbayAdapter] ${sku}: eBay won't republish offer ${staleOfferId} — replacing it`);
+  await deleteOffer(token, settings, staleOfferId);
+  const { offerId } = await createOrRecoverOffer(token, settings, offerBody, sku);
+  // Saved before publishing, so a failed publish can't leave a second offer.
+  await hooks.onOfferCreated?.(offerId);
+  const listingId = await publishOffer(token, settings, offerId);
+  return { listingId, offerId };
+}
+
+// Relists an offer whose listing ended (e.g. sold out); null if it's live.
+async function relistIfEnded(token, settings, offerId, offerBody, sku, hooks) {
   const offer = await getOffer(token, settings, offerId);
   const listingStatus = offer.listing?.listingStatus;
   if (offer.status === "PUBLISHED" && !EBAY_RELISTABLE_STATUSES.includes(listingStatus)) return null;
@@ -230,9 +246,14 @@ async function relistIfEnded(token, settings, offerId, sku) {
     logger.warn(`[EbayAdapter] ${sku}: listing was ended by eBay (policy) — not relisting`);
     return null;
   }
-  const listingId = await publishOffer(token, settings, offerId);
-  logger.info(`[EbayAdapter] ${sku}: ended listing relisted on restock, listingId: ${listingId}`);
-  return listingId;
+  try {
+    const listingId = await publishOffer(token, settings, offerId);
+    logger.info(`[EbayAdapter] ${sku}: ended listing relisted on restock, listingId: ${listingId}`);
+    return { listingId, offerId };
+  } catch (err) {
+    if (!isAvailabilityNotFoundError(err)) throw err;
+    return republishWithFreshOffer(token, settings, offerId, offerBody, sku, hooks);
+  }
 }
 
 // null = untracked stock: skip qty and baseline rather than invent a number.
@@ -373,10 +394,10 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
       const { priceLocked } = await updateOfferTolerant(token, settings, offerId, offerBody, resolved.sku);
       if (!priceLocked) logger.info(`[EbayAdapter] offer updated: ${offerId}`);
       // Back in stock: a listing eBay ended at 0 needs republishing to sell.
-      const relistedId = quantity > 0 ? await relistIfEnded(token, settings, offerId, resolved.sku) : null;
+      const relisted = quantity > 0 ? await relistIfEnded(token, settings, offerId, offerBody, resolved.sku, hooks) : null;
       return {
-        external_listing_id: relistedId || listing.external_listing_id || null,
-        external_offer_id: offerId,
+        external_listing_id: relisted?.listingId || listing.external_listing_id || null,
+        external_offer_id: relisted?.offerId || offerId,
         quantity,
         ...(priceLocked ? { priceLocked: true } : {}),
       };
@@ -431,7 +452,9 @@ module.exports = {
   update,
   end,
   syncBaselineFields,
-  // Exported for tests only, not the adapter contract.
+  // Exported for tests and the payload preview script, not the adapter contract.
   resolveCategoryCondition,
+  resolveQuantity,
+  withRenderedDescription,
   ConditionUnverifiedError,
 };

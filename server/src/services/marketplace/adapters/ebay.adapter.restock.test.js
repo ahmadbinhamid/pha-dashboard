@@ -18,6 +18,8 @@ const updateOffer = mock.method(ebayApiService, "updateOffer", async () => ({ ok
 const getOffer = mock.method(ebayApiService, "getOffer", async () => ({ status: "PUBLISHED", listing: { listingStatus: "ACTIVE" } }));
 const publishOffer = mock.method(ebayApiService, "publishOffer", async () => "L-NEW");
 const withdrawOffer = mock.method(ebayApiService, "withdrawOffer", async () => ({ ok: true }));
+const deleteOffer = mock.method(ebayApiService, "deleteOffer", async () => ({ ok: true }));
+const createOffer = mock.method(ebayApiService, "createOffer", async () => "O-FRESH");
 
 const ebayAdapter = require("./ebay.adapter");
 
@@ -49,7 +51,8 @@ function resolvedFor(quantity) {
 }
 
 beforeEach(() => {
-  for (const m of [upsert, updateOffer, getOffer, publishOffer, withdrawOffer]) m.mock.resetCalls();
+  for (const m of [upsert, updateOffer, getOffer, publishOffer, withdrawOffer, deleteOffer, createOffer]) m.mock.resetCalls();
+  publishOffer.mock.mockImplementation(async () => "L-NEW");
   upsert.mock.mockImplementation(async () => ({ ok: true }));
   getOffer.mock.mockImplementation(async () => ({ status: "PUBLISHED", listing: { listingStatus: "ACTIVE" } }));
 });
@@ -116,4 +119,27 @@ test("other upsert errors still fail the sync", async () => {
   });
   await assert.rejects(ebayAdapter.update(resolvedFor(0), SETTINGS, {}), /boom/);
   assert.equal(withdrawOffer.mock.callCount(), 0);
+});
+
+test("sold-out relist refused with 'Availability not found': fresh offer replaces it", async () => {
+  getOffer.mock.mockImplementation(async () => ({ status: "PUBLISHED", listing: { listingStatus: "ENDED" } }));
+  let publishes = 0;
+  publishOffer.mock.mockImplementation(async () => {
+    publishes += 1;
+    if (publishes === 1) {
+      throw new ebayApiService.EbayApiError("publishOffer failed: 400 Input error. Availability not found.", {
+        status: 400,
+        body: JSON.stringify({ errors: [{ errorId: 25002, message: "Input error. Availability not found." }] }),
+      });
+    }
+    return "L-FRESH";
+  });
+  const saved = [];
+  const result = await ebayAdapter.update(resolvedFor(3), SETTINGS, { onOfferCreated: async (id) => saved.push(id) });
+
+  assert.equal(deleteOffer.mock.calls[0].arguments[2], "O-1", "the dead offer is removed");
+  assert.equal(createOffer.mock.callCount(), 1);
+  assert.deepEqual(saved, ["O-FRESH"], "new offer id saved before publishing");
+  assert.equal(result.external_offer_id, "O-FRESH");
+  assert.equal(result.external_listing_id, "L-FRESH");
 });

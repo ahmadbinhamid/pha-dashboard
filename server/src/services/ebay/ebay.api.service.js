@@ -38,12 +38,17 @@ async function throwEbayApiError(action, res) {
 // Strip HTML and collapse whitespace for plain-text-only fields
 function toPlainText(html, maxLen = 4000) {
   return (html || "")
+    // Style/script/head bodies are code, not text; drop them with their tags.
+    .replace(/<(style|script|head)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLen);
@@ -513,6 +518,30 @@ async function getOffer(token, settings, offerId) {
   return res.json();
 }
 
+// Deletes an offer; an already-gone one (404) counts as done.
+async function deleteOffer(token, settings, offerId) {
+  const res = await fetch(`${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`, {
+    method: "DELETE",
+    headers: ebayHeaders(token, settings.marketplace_id),
+  });
+  if (!res.ok && res.status !== 404) await throwEbayApiError("deleteOffer", res);
+  return { ok: true };
+}
+
+// Read-only GET; 404 comes back as { status: 404, body: null }, never throws.
+async function ebayGet(token, settings, path) {
+  const res = await fetch(`${inventoryBaseFor(settings.sandbox)}${path}`, {
+    headers: ebayHeaders(token, settings.marketplace_id),
+  });
+  if (res.status === 404) return { status: 404, body: null };
+  if (!res.ok) await throwEbayApiError(`GET ${path}`, res);
+  return { status: res.status, body: await res.json() };
+}
+
+const getInventoryItem = (token, settings, sku) => ebayGet(token, settings, `/inventory_item/${encodeURIComponent(sku)}`);
+
+const getOffersForSku = (token, settings, sku) => ebayGet(token, settings, `/offer?sku=${encodeURIComponent(sku)}`);
+
 // Ends the live listing but keeps the offer, so publishOffer can relist it.
 async function withdrawOffer(token, settings, offerId) {
   const res = await fetch(
@@ -536,16 +565,13 @@ async function deleteProduct(settings, sku, offerId = null) {
   if (!token) return { error: "Could not obtain access token", status: 401 };
 
   try {
-    // Step 1 - withdraw the offer first (eBay blocks item delete while it exists)
+    // Offer first: eBay blocks deleting an item that still has one.
     if (offerId) {
-      const offerRes = await fetch(
-        `${inventoryBaseFor(settings.sandbox)}/offer/${encodeURIComponent(offerId)}`,
-        { method: "DELETE", headers: ebayHeaders(token, settings.marketplace_id) },
-      );
-      if (!offerRes.ok && offerRes.status !== 404) {
-        const text = await offerRes.text();
-        logger.error(`[eBay] deleteProduct withdraw offer ${offerId} failed: ${offerRes.status} ${text}`);
-        return { error: `withdraw offer failed: ${offerRes.status}: ${text}`, status: offerRes.status };
+      try {
+        await deleteOffer(token, settings, offerId);
+      } catch (err) {
+        logger.error(`[eBay] deleteProduct withdraw offer ${offerId} failed: ${err.message}`);
+        return { error: `withdraw offer failed: ${err.message}`, status: err.status };
       }
       logger.info(`[eBay] offer withdrawn: ${offerId}`);
     }
@@ -803,6 +829,9 @@ module.exports = {
   updateOffer,
   publishOffer,
   getOffer,
+  deleteOffer,
+  getInventoryItem,
+  getOffersForSku,
   withdrawOffer,
   deleteProduct,
   getInventoryLocations,
