@@ -5,7 +5,7 @@ const { previewEbayInventoryItem } = require("../src/services/marketplace/ebayPa
 
 const DESCRIPTION_PREVIEW_CHARS = 200;
 
-function report({ listingId, syncError, item, offer, images, liveState }, log) {
+function report({ listingId, syncError, stored, item, offer, images, liveState }, log) {
   const description = item.product.description || "";
   const shown = {
     ...item,
@@ -13,6 +13,9 @@ function report({ listingId, syncError, item, offer, images, liveState }, log) {
   };
   log(`\n== Listing ${listingId}`);
   log(`  last sync error: ${syncError ?? "(none)"}`);
+  log(`  our record: status ${stored.syncStatus}, eBay item ${stored.ebayItemId ?? "-"}, offer ${stored.offerId ?? "-"}`);
+  log(`  last qty eBay confirmed: ${stored.lastConfirmedQty ?? "-"} at ${stored.syncedAt ?? "-"}`);
+  log(`  qty we send now: ${item.availability?.shipToLocationAvailability?.quantity ?? "none (stock not tracked)"}`);
   log("\n== Inventory item sent to eBay");
   log(JSON.stringify(shown, null, 2));
   const { listingDescription, ...offerShown } = offer;

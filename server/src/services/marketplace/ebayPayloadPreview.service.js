@@ -78,7 +78,14 @@ async function previewEbayInventoryItem(sku, tenantId = null, { live = false } =
   const offer = buildOfferFromResolved(resolved, settings, quantity);
   const images = await Promise.all((item.product.imageUrls || []).map(checkImage));
   const liveState = live ? await readLiveState(settings, resolved.sku, offer.merchantLocationKey) : null;
-  return { listingId: String(listing._id), syncError: listing.sync_error, item, offer, images, liveState };
+  const stored = {
+    syncStatus: listing.sync_status,
+    ebayItemId: listing.external_listing_id,
+    offerId: listing.external_offer_id,
+    lastConfirmedQty: listing.ebay_synced_quantity ?? listing.synced_quantity ?? null,
+    syncedAt: listing.synced_at ?? null,
+  };
+  return { listingId: String(listing._id), syncError: listing.sync_error, stored, item, offer, images, liveState };
 }
 
 module.exports = { previewEbayInventoryItem, findEbayListingBySku };
