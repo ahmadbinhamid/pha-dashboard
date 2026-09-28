@@ -24,6 +24,9 @@ const EBAY_ERROR_CODE = Object.freeze({
   OFFER_NOT_FOUND_RESOURCE: 25710,
 });
 
+// eBay's definitive "this listing ended", even when the offer still says live.
+const EBAY_ENDED_ITEM = /not allowed to revise an ended item/i;
+
 // publishOffer on a sold-out listing's old offer; only a fresh offer relists.
 const EBAY_AVAILABILITY_NOT_FOUND = /availability not found/i;
 
@@ -59,6 +62,7 @@ function currencyForMarketplace(marketplaceId) {
 const EBAY_TITLE_MAX_LENGTH = 80;
 
 module.exports = {
+  EBAY_ENDED_ITEM,
   EBAY_AVAILABILITY_NOT_FOUND,
   EBAY_SCOPES,
   EBAY_ERROR_CODE,

@@ -31,7 +31,12 @@ const {
   UPFRONT_KEYS,
   POLICY_KEYS,
 } = require("./ebay.fieldSchema");
-const { EBAY_ERROR_CODE, EBAY_RELISTABLE_STATUSES, EBAY_AVAILABILITY_NOT_FOUND } = require("../../../constants/ebay.constants");
+const {
+  EBAY_ERROR_CODE,
+  EBAY_RELISTABLE_STATUSES,
+  EBAY_AVAILABILITY_NOT_FOUND,
+  EBAY_ENDED_ITEM,
+} = require("../../../constants/ebay.constants");
 const { httpError } = require("../../../utils/http/httpError");
 
 const key = "ebay";
@@ -275,12 +280,23 @@ async function resetStuckSku(resolved, settings, hooks) {
   return publish({ ...resolved, listing: { ...listing, external_offer_id: null, external_listing_id: null } }, settings, hooks);
 }
 
+function isEndedItemError(err) {
+  if (!(err instanceof EbayApiError)) return false;
+  return EBAY_ENDED_ITEM.test(err.message) || err.errors.some((e) => EBAY_ENDED_ITEM.test(e?.message ?? ""));
+}
+
 // Live listing whose item eBay won't replace: restock the same listing anyway.
 async function restockLiveListing(token, settings, resolved, quantity, hooks) {
   const { sku, listing } = resolved;
   const offerId = listing.external_offer_id;
   const price = buildOfferFromResolved(resolved, settings, quantity).pricingSummary?.price;
-  await updatePriceQuantity(token, settings, { sku, offerId, quantity, price });
+  try {
+    await updatePriceQuantity(token, settings, { sku, offerId, quantity, price });
+  } catch (err) {
+    // eBay's own "ended" beats a stale PUBLISHED offer: now safe to rebuild.
+    if (isEndedItemError(err)) return resetStuckSku(resolved, settings, hooks);
+    throw err;
+  }
   logger.warn(`[EbayAdapter] ${sku}: eBay rejected the full item update; price and qty ${quantity} set on the same listing`);
   await hooks.onQuantityPushed?.(quantity);
   return { external_listing_id: listing.external_listing_id || null, external_offer_id: offerId, quantity };

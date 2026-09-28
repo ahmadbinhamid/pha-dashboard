@@ -251,3 +251,24 @@ test("listing eBay reports as ENDED is reset", async () => {
   assert.equal(deleteProduct.mock.callCount(), 1);
   assert.equal(result.external_offer_id, "O-FRESH");
 });
+
+test("live-looking offer but eBay says the item ended: rebuilt under the same SKU", async () => {
+  let calls = 0;
+  upsert.mock.mockImplementation(async () => {
+    calls += 1;
+    if (calls === 1) throw stuckError();
+    return { ok: true };
+  });
+  updatePriceQuantity.mock.mockImplementation(async () => {
+    throw new ebayApiService.EbayApiError(
+      'bulk_update_price_quantity failed: 400 {"errors":[{"message":"You are not allowed to revise an ended item \\"257747512651\\"."}]}',
+      { status: 400, body: JSON.stringify({ errors: [{ errorId: 25002, message: 'You are not allowed to revise an ended item "257747512651".' }] }) },
+    );
+  });
+  const resolved = soldOutResolved(3);
+  resolved.listing.ebay_synced_quantity = 2;
+  const result = await ebayAdapter.update(resolved, SETTINGS, {});
+  assert.equal(deleteProduct.mock.calls[0].arguments[1], "RESTOCK-1", "same SKU");
+  assert.equal(result.external_offer_id, "O-FRESH");
+  assert.equal(result.external_listing_id, "L-NEW");
+});
