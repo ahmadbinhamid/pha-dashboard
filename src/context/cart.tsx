@@ -24,6 +24,7 @@ export type CartApi = CartData &
   CartActions & {
     totalItems: number;
     totalPrice: number; // dollars
+    totalShipping: number; // dollars, per-unit freight x qty; delivery only
   };
 
 const DataCtx = createContext<CartData | null>(null);
@@ -34,7 +35,7 @@ function isCartItem(row: unknown): row is CartItem {
   const r = row as Partial<CartItem>;
   return (
     typeof r.key === "string" &&
-    typeof r.product_id === "string" &&
+    (typeof r.product_id === "string" || r.is_custom === true) &&
     typeof r.name === "string" &&
     typeof r.unit_price === "number" &&
     typeof r.quantity === "number" &&
@@ -48,8 +49,14 @@ function readStored(): CartItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    // `note`/`shipping_cost` predate carts persisted before they were added — normalize rather than drop those items.
-    return parsed.filter(isCartItem).map((i) => ({ ...i, note: i.note ?? null, shipping_cost: i.shipping_cost ?? 0 }));
+    // Older persisted carts lack newer fields; normalize rather than drop.
+    return parsed.filter(isCartItem).map((i) => ({
+      ...i,
+      note: i.note ?? null,
+      shipping_cost: i.shipping_cost ?? 0,
+      is_custom: i.is_custom ?? false,
+      default_discount: i.default_discount ?? null,
+    }));
   } catch {
     return [];
   }
@@ -59,11 +66,11 @@ function persist(items: CartItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   } catch {
-    /* localStorage unavailable (private mode / quota) — cart still works for this tab */
+    /* localStorage unavailable (private mode / quota); cart still works */
   }
 }
 
-// For use outside the CartProvider tree (logout, 401 interceptor) where there's no `clearCart()` action to update in-memory state too.
+// For callers outside CartProvider (logout, 401 interceptor).
 export function clearCartStorage() {
   try {
     localStorage.removeItem(STORAGE_KEY);
@@ -77,13 +84,13 @@ function clamp(quantity: number, max: number | null) {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  // Read during initialization, not a mount effect — an effect here left every consumer seeing an empty cart on first render, breaking CreateOrderPage's "cart empty, go back to step 1" mount-effect guard on reload. No SSR here, so reading localStorage during render is safe.
+  // Read at init: a mount effect shows an empty cart first and resets step 1.
   const [items, _setItems] = useState<CartItem[]>(readStored);
   const { toast } = useToast();
 
   const addItem = useCallback(
     (item: AddCartItemInput) => {
-      if (!item.key || !item.product_id || !item.name) {
+      if (!item.key || (!item.product_id && !item.is_custom) || !item.name) {
         toast({ title: "Couldn't add item", description: "This product is missing required data.", tone: "danger" });
         return;
       }
@@ -107,7 +114,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             toast({ title: "Out of stock", description: `${item.name} has no stock available.`, tone: "danger" });
             return prev;
           }
-          next = [...prev, { ...item, note: item.note ?? null, quantity }];
+          next = [
+            ...prev,
+            {
+              ...item,
+              note: item.note ?? null,
+              is_custom: item.is_custom ?? false,
+              default_discount: item.default_discount ?? null,
+              quantity,
+            },
+          ];
         }
 
         persist(next);
@@ -192,5 +208,6 @@ export function useCart(): CartApi {
   const actions = useCartActions();
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalPrice = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
-  return { items, totalItems, totalPrice, ...actions };
+  const totalShipping = items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0);
+  return { items, totalItems, totalPrice, totalShipping, ...actions };
 }

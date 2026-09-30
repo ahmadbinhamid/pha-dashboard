@@ -220,9 +220,16 @@ export function OrderItemsTable({
         </TableHeader>
         <TableBody>
           {items.map((item, i) => (
-            <TableRow key={`${item.product}-${item.variant ?? i}`} className="group">
+            <TableRow key={item._id ?? i} className="group">
               <StickyTableCell size={48} width={itemColWidth ?? undefined} onResize={setItemColWidth}>
-                <div className="truncate font-medium text-fg">{item.name}</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate font-medium text-fg">{item.name}</div>
+                  {item.is_custom && (
+                    <Badge variant="muted" className="shrink-0 px-1.5 py-0.5 text-3xs font-medium">
+                      Custom
+                    </Badge>
+                  )}
+                </div>
                 {item.note && (
                   <div className="mt-1 rounded-xs bg-bg-2 px-2 py-1 text-xs text-fg/55">{item.note}</div>
                 )}

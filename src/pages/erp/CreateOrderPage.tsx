@@ -85,7 +85,7 @@ function persistWizard(state: WizardStorage) {
   try {
     localStorage.setItem(ORDER_DRAFT_STORAGE_KEY, JSON.stringify(state));
   } catch {
-    /* localStorage unavailable (private mode / quota) — wizard still works f... */
+    /* localStorage unavailable (private mode / quota); wizard still works */
   }
 }
 
@@ -107,6 +107,15 @@ export default function CreateOrderPage() {
 
   const customerDeliveryRef = useRef<StepHandle>(null);
   const reviewOrderRef = useRef<StepHandle>(null);
+
+  // Cart freight changed, so drop the old prefill; Review recomputes it.
+  const freightKey = items.map((i) => `${i.key}:${i.quantity}:${i.shipping_cost}`).join("|");
+  const lastFreightKey = useRef(freightKey);
+  useEffect(() => {
+    if (lastFreightKey.current === freightKey) return;
+    lastFreightKey.current = freightKey;
+    setShippingCostInput("");
+  }, [freightKey]);
 
   // Restored step 2/3 with an empty cart (cleared elsewhere): back to step 1.
   useEffect(() => {
@@ -217,7 +226,7 @@ export default function CreateOrderPage() {
 
           {/* Pinned under the header; it now sticks 16px higher (flush top). */}
           <div className="lg:sticky lg:top-40 lg:self-start">
-            <OrderSummaryPanel />
+            <OrderSummaryPanel pickup={step === 2 && customerDelivery.deliveryMethod === "pickup"} />
           </div>
         </div>
       ) : null}

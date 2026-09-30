@@ -7,6 +7,7 @@ const {
   ORDER_DELIVERY_METHOD,
   ORDER_FULFILLMENT_STATUS,
   ORDER_PAYMENT_STATUS,
+  CUSTOM_ORDER_ITEM_NAME_MAX,
 } = require("../constants/order.constants");
 const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
@@ -86,19 +87,39 @@ const adminByIdParam = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
 };
 
+// Customer-facing note for this specific line.
+const lineNoteSchema = Joi.string().trim().allow("", null).default(null);
+
+const catalogueLineSchema = Joi.object({
+  product: Joi.string().hex().length(24).required(),
+  variant: Joi.string().hex().length(24).allow(null).default(null),
+  quantity: Joi.number().integer().min(1).required(),
+  discount_amount: Joi.number().min(0).default(0),
+  note: lineNoteSchema,
+});
+
+// Order-only line typed in at POS; prices are dollars, shipping is per unit.
+const customLineSchema = Joi.object({
+  is_custom: Joi.valid(true).required(),
+  name: Joi.string().trim().min(1).max(CUSTOM_ORDER_ITEM_NAME_MAX).required(),
+  unit_price: Joi.number().greater(0).required(),
+  shipping_cost: Joi.number().min(0).default(0),
+  quantity: Joi.number().integer().min(1).default(1),
+  discount_amount: Joi.number().min(0).default(0),
+  note: lineNoteSchema,
+});
+
+const isCustomLine = Joi.object({ is_custom: Joi.valid(true).required() }).unknown();
+
 // Counter sale for a known customer: line discounts and an amount paid.
 const createManualOrder = {
   body: Joi.object({
     customer_id: Joi.string().hex().length(24).required(),
     items: Joi.array()
       .items(
-        Joi.object({
-          product: Joi.string().hex().length(24).required(),
-          variant: Joi.string().hex().length(24).allow(null).default(null),
-          quantity: Joi.number().integer().min(1).required(),
-          discount_amount: Joi.number().min(0).default(0),
-          // Customer-facing note for this specific line.
-          note: Joi.string().trim().allow("", null).default(null),
+        Joi.alternatives().conditional(isCustomLine, {
+          then: customLineSchema,
+          otherwise: catalogueLineSchema,
         }),
       )
       .min(1)

@@ -1,6 +1,6 @@
 import type { PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
 
-// Legacy rollup of fulfillment+payment status; use OrderFulfillmentStatus/OrderPaymentStatus for editing/badges instead.
+// Legacy rollup; use OrderFulfillmentStatus/OrderPaymentStatus for badges.
 export type OrderStatus =
   | "pending_payment"
   | "partially_paid"
@@ -10,10 +10,10 @@ export type OrderStatus =
   | "refunded"
   | "partially_refunded";
 
-// Admin-editable lifecycle, independent of payment status; written via updateOrderStatus/OrderStatusSelect.
+// Admin-editable lifecycle, independent of payment status.
 export type OrderFulfillmentStatus = "pending" | "processing" | "on_hold" | "completed" | "cancelled";
 
-// Derived server-side from payments/refunds, never settable by hand (see OrderPaymentStatusBadge).
+// Derived server-side from payments/refunds, never settable by hand.
 export type OrderPaymentStatus = "pending_payment" | "partially_paid" | "paid" | "partially_refunded" | "refunded";
 
 export type OrderChannel = "storefront" | "ebay" | "manual";
@@ -24,7 +24,7 @@ export interface OrderCustomer {
   name: string;
   // Shown on the invoice instead of `name` when present.
   company_name: string | null;
-  // Optional for manual orders (walk-in customers); always present for storefront/eBay orders.
+  // Optional for manual orders (walk-ins); always set for storefront/eBay.
   email: string | null;
   phone: string | null;
 }
@@ -37,9 +37,11 @@ export interface OrderAddress {
 }
 
 export interface OrderItem {
-  // Every item has a stable _id per refund-redesign-spec.md §1.1; older orders backfilled per §6.2.
+  // Stable per-item id (refund spec §1.1); older orders were backfilled.
   _id: string;
-  product: string;
+  // Null for custom lines, which exist only on this order.
+  product: string | null;
+  is_custom?: boolean;
   variant: string | null;
   name: string;
   sku: string | null;
@@ -51,19 +53,40 @@ export interface OrderItem {
   note: string | null;
   ebay_sync_status: "not_applicable" | "pending" | "synced" | "failed";
   ebay_sync_error: string | null;
-  // Price-edit audit trail (storefront/eBay only, see order.service.js#updateOrderItemPrice); original_unit_price set once on first edit.
+  // Price-edit audit; original_unit_price is set once, on the first edit.
   original_unit_price: number | null;
   unit_price_updated_at: string | null;
   unit_price_updated_by: string | null;
-  // Refund ledger (spec §1.1): cumulative across succeeded, non-voided refunds; server-derived, never frontend-computed.
+  // Refund ledger: server-derived from succeeded, non-voided refunds.
   quantity_refunded: number;
   amount_refunded: number; // cents, this line's share only
   quantity_restocked: number; // <= quantity_refunded; restock is opt-in per refund
-  // Virtual (quantity - quantity_refunded), server-computed so the frontend can't drift from refund-calculator.service.js.
+  // Server virtual (quantity - quantity_refunded) so the UI can't drift.
   refundable_quantity: number;
 }
 
-// Internal staff comment thread, distinct from Order.note (customer-facing, set at creation).
+interface CatalogueOrderItemPayload {
+  product: string;
+  variant?: string | null;
+  quantity: number;
+  discount_amount?: number; // dollars
+  note?: string | null;
+}
+
+// Order-only line typed in at POS; never becomes a catalogue product.
+interface CustomOrderItemPayload {
+  is_custom: true;
+  name: string;
+  unit_price: number; // dollars
+  shipping_cost?: number; // dollars, per unit
+  quantity: number;
+  discount_amount?: number; // dollars
+  note?: string | null;
+}
+
+export type CreateManualOrderItemPayload = CatalogueOrderItemPayload | CustomOrderItemPayload;
+
+// Staff-only comment thread, separate from the customer-facing Order.note.
 export interface OrderInternalNote {
   _id: string;
   text: string;
@@ -87,16 +110,15 @@ export interface OrderPaymentSummary {
 
 export interface Order {
   _id: string;
-  // Bare zero-padded sequence ("00001"); format via formatOrderNumber() from @/utils/format, never a hardcoded prefix.
+  // Bare zero-padded sequence ("00001"); display via formatOrderNumber().
   order_number: string;
-  // Snapshotted from TenantSettings.order_number_prefix at creation; stays fixed even if the setting later changes.
+  // Snapshotted at creation, so later prefix setting changes don't apply.
   order_number_prefix: string;
   invoice_number: string;
   invoice_number_prefix: string;
   items: OrderItem[];
   customer: OrderCustomer;
-  // Linked Customer record, when this order belongs to a known customer —
-  // null for guest storefront checkouts.
+  // Linked Customer record; null for guest storefront checkouts.
   customer_id: string | null;
   delivery_method: OrderDeliveryMethod;
   // null when delivery_method is "pickup" — there's nowhere to ship.
@@ -106,10 +128,7 @@ export interface Order {
   note: string | null;
   internal_notes: OrderInternalNote[];
   subtotal: number; // cents, GST-inclusive
-  // Order-level manual adjustment (goodwill credit, negotiated discount) —
-  // distinct from each line item's own discount_amount, which subtotal
-  // already nets out. Zero unless an admin has set one via the order-detail
-  // page's editable Discount row.
+  // Order-level adjustment, separate from line discounts (already in subtotal).
   discount_amount: number; // cents
   shipping_cost: number; // cents
   tax_amount: number; // cents — GST component of subtotal, display-only
@@ -123,22 +142,17 @@ export interface Order {
   external_buyer_username: string | null;
   has_stock_issue: boolean;
   stock_issue_note: string | null;
-  // Set together when an admin fulfils a DELIVERY order — null until then,
-  // always null for PICKUP orders.
+  // Set together when a delivery order is fulfilled; always null for pickup.
   tracking_number: string | null;
   carrier_name: string | null;
-  // Optional customer/staff-supplied reference (e.g. a customer's own PO
-  // number) — distinct from order_number/invoice_number, which are always
-  // system-generated. Null until an admin fills it in.
+  // Optional customer/staff reference (e.g. a PO number), not system-made.
   reference_number: string | null;
   payment: OrderPaymentSummary | null;
   created_at: string;
   updated_at: string;
 }
 
-// The admin order-detail endpoint returns the full payment history (every
-// Payment doc for the order — a deposit plus a later top-up, for instance),
-// not just the single most-recently-created one `Order.payment` points at.
+// Detail endpoint returns every payment, not just the one Order.payment holds.
 export interface OrderDetail extends Omit<Order, "payment"> {
   payments: OrderPaymentSummary[];
   refunds: Refund[];

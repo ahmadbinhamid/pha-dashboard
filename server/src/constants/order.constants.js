@@ -46,8 +46,12 @@ const ORDER_FULFILLMENT_STATUS = Object.freeze({
 // Orders with money still owing: an outstanding invoice.
 const UNPAID_ORDER_STATUSES = Object.freeze([ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID]);
 
+// Title cap for custom (order-only) lines entered at POS.
+const CUSTOM_ORDER_ITEM_NAME_MAX = 200;
+
 module.exports = {
   ORDER_STATUS,
+  CUSTOM_ORDER_ITEM_NAME_MAX,
   UNPAID_ORDER_STATUSES,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
