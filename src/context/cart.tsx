@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useToast } from "@/context/toast";
 import type { AddCartItemInput, CartItem } from "@/types/cart";
+import { addCartLine, removeCartLine, setCartLineNote, setCartLineQuantity } from "@/lib/cart/cartState";
 
 const STORAGE_KEY = "pha-dashboard-pos-cart";
 
@@ -79,10 +80,6 @@ export function clearCartStorage() {
   }
 }
 
-function clamp(quantity: number, max: number | null) {
-  return max != null ? Math.min(quantity, max) : quantity;
-}
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
   // Read at init: a mount effect shows an empty cart first and resets step 1.
   const [items, _setItems] = useState<CartItem[]>(readStored);
@@ -94,40 +91,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         toast({ title: "Couldn't add item", description: "This product is missing required data.", tone: "danger" });
         return;
       }
-      const requestedQty = item.quantity ?? 1;
       let cappedAt: number | null = null;
 
       _setItems((prev) => {
-        const existing = prev.find((i) => i.key === item.key);
-        let next: CartItem[];
-
-        if (existing) {
-          const combined = existing.quantity + requestedQty;
-          const quantity = clamp(combined, existing.max_quantity);
-          if (existing.max_quantity != null && quantity < combined) cappedAt = existing.max_quantity;
-          next = prev.map((i) => (i.key === item.key ? { ...i, quantity } : i));
-        } else {
-          const max = item.max_quantity ?? null;
-          const quantity = clamp(requestedQty, max);
-          if (max != null && quantity < requestedQty) cappedAt = max;
-          if (quantity <= 0) {
-            toast({ title: "Out of stock", description: `${item.name} has no stock available.`, tone: "danger" });
-            return prev;
-          }
-          next = [
-            ...prev,
-            {
-              ...item,
-              note: item.note ?? null,
-              is_custom: item.is_custom ?? false,
-              default_discount: item.default_discount ?? null,
-              quantity,
-            },
-          ];
+        const result = addCartLine(prev, item);
+        if (result.outOfStock) {
+          toast({ title: "Out of stock", description: `${item.name} has no stock available.`, tone: "danger" });
+          return prev;
         }
-
-        persist(next);
-        return next;
+        cappedAt = result.cappedAt;
+        persist(result.next);
+        return result.next;
       });
 
       if (cappedAt != null) {
@@ -143,7 +117,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeItem = useCallback((key: string) => {
     _setItems((prev) => {
-      const next = prev.filter((i) => i.key !== key);
+      const next = removeCartLine(prev, key);
       persist(next);
       return next;
     });
@@ -151,14 +125,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const setQuantity = useCallback((key: string, quantity: number) => {
     _setItems((prev) => {
-      if (quantity <= 0) {
-        const next = prev.filter((i) => i.key !== key);
-        persist(next);
-        return next;
-      }
-      const next = prev.map((i) =>
-        i.key === key ? { ...i, quantity: clamp(quantity, i.max_quantity) } : i,
-      );
+      const next = setCartLineQuantity(prev, key, quantity);
       persist(next);
       return next;
     });
@@ -166,7 +133,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const setItemNote = useCallback((key: string, note: string) => {
     _setItems((prev) => {
-      const next = prev.map((i) => (i.key === key ? { ...i, note: note.trim() || null } : i));
+      const next = setCartLineNote(prev, key, note);
       persist(next);
       return next;
     });

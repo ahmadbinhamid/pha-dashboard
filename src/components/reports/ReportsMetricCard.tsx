@@ -21,6 +21,7 @@ export function ReportsMetricCard({
   colorVar,
   sparkline,
   loading,
+  footnote,
 }: {
   label: string;
   value: React.ReactNode;
@@ -28,9 +29,11 @@ export function ReportsMetricCard({
   changeLabel?: string;
   icon: React.ReactNode;
   colorVar: ReportsMetricColorVar;
-  /** Real per-day series for the same range (e.g. dailyRevenueCents) — not... */
+  /** Real per-day series for the same range, e.g. dailyRevenueCents. */
   sparkline: number[];
   loading?: boolean;
+  // Caveat under the value, e.g. what a figure leaves out.
+  footnote?: React.ReactNode;
 }) {
   const isUp = changePct !== null && changePct >= 0;
   const sparklineData = sparkline.map((v) => ({ v }));
@@ -71,6 +74,7 @@ export function ReportsMetricCard({
           ) : (
             <div className="mt-1 text-2xs font-medium text-fg/40">No prior period yet</div>
           )}
+          {footnote && <div className="mt-1 text-2xs text-fg/45">{footnote}</div>}
         </div>
       )}
 

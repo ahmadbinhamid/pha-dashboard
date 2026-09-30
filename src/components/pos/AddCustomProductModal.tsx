@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useCartActions } from "@/context/cart";
+import { buildCustomCartItem } from "@/lib/cart/customCartItem";
 import { customOrderItemSchema, type CustomOrderItemFormValues } from "@/lib/validation/customOrderItem";
 
 interface AddCustomProductModalProps {
@@ -34,19 +35,7 @@ export function AddCustomProductModal({ open, onOpenChange }: AddCustomProductMo
   }, [open, reset]);
 
   const onSubmit = (values: CustomOrderItemFormValues) => {
-    addItem({
-      key: `custom:${crypto.randomUUID()}`,
-      product_id: null,
-      variant_id: null,
-      is_custom: true,
-      name: values.title,
-      sku: null,
-      image_url: null,
-      unit_price: Number(values.price),
-      shipping_cost: values.shipping ? Number(values.shipping) : 0,
-      max_quantity: null,
-      default_discount: values.discount ? Number(values.discount) : null,
-    });
+    addItem(buildCustomCartItem(values));
     onOpenChange(false);
   };
 

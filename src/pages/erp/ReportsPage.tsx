@@ -128,6 +128,7 @@ export default function ReportsPage() {
                   itemsSold: summary.itemsSold,
                   avgOrderValue: (summary.avgOrderValueCents / 100).toFixed(2),
                   grossProfit: (summary.grossProfitCents / 100).toFixed(2),
+                  excludedCustomRevenue: (summary.excludedCustomRevenueCents / 100).toFixed(2),
                 },
               ])
             }
@@ -185,6 +186,11 @@ export default function ReportsPage() {
           colorVar="var(--color-cat-4)"
           sparkline={summary?.dailyGrossProfitCents ?? []}
           loading={summaryLoading}
+          footnote={
+            summary?.excludedCustomRevenueCents
+              ? `Excludes ${formatCurrencyFromCents(summary.excludedCustomRevenueCents)} custom-line revenue (no cost)`
+              : undefined
+          }
         />
       </div>
 
