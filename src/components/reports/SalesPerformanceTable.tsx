@@ -53,6 +53,11 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
                     <TableCell className="px-1 py-2.5 text-right text-fg/70 tabular-nums">{formatCurrencyFromCents(row.avgOrderValueCents)}</TableCell>
                     <TableCell className="px-1 py-2.5 last:pr-0 text-right">
                       <span className="font-semibold text-ok tabular-nums">{formatCurrencyFromCents(row.grossProfitCents)}</span>
+                      {row.excludedCustomRevenueCents > 0 && (
+                        <span className="block text-4xs font-normal text-fg/45">
+                          excl. {formatCurrencyFromCents(row.excludedCustomRevenueCents)} custom
+                        </span>
+                      )}
                       {row.trendPct !== null && (
                         <span className={`block text-4xs font-normal ${row.trendPct >= 0 ? "text-ok" : "text-danger"}`}>
                           {row.trendPct >= 0 ? "↗" : "↘"} {Math.abs(row.trendPct).toFixed(1)}%
@@ -81,6 +86,7 @@ export function SalesPerformanceTable({ rows, loading }: { rows: SalesPerformanc
               itemsSold: r.itemsSold,
               avgOrderValue: (r.avgOrderValueCents / 100).toFixed(2),
               grossProfit: (r.grossProfitCents / 100).toFixed(2),
+              excludedCustomRevenue: (r.excludedCustomRevenueCents / 100).toFixed(2),
             })),
             { title: "Sales Performance by Channel" },
           )

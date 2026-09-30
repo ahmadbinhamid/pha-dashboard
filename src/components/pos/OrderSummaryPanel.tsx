@@ -5,11 +5,18 @@ import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
 import { formatCurrency, getLineGst } from "@/utils/format";
 
-// The running order, pinned beside steps 1 and 2. Used to live only inside Add Products and vanished once you moved to Customer; Step 3 keeps its own richer summary since discounts/shipping/payment are editable there.
-export function OrderSummaryPanel({ className }: { className?: string }) {
-  const { items, totalItems, totalPrice } = useCart();
+interface OrderSummaryPanelProps {
+  // Pickup chosen on step 2: freight isn't charged, matching the backend.
+  pickup?: boolean;
+  className?: string;
+}
 
-  // GST-inclusive AU pricing: extracted from the total, never added on top (utils/format.ts#getLineGst). Labelled items-only since shipping/discounts aren't known until step 3.
+// Running order beside steps 1-2; Review keeps its own editable summary.
+export function OrderSummaryPanel({ pickup = false, className }: OrderSummaryPanelProps) {
+  const { items, totalItems, totalPrice, totalShipping } = useCart();
+  const shipping = pickup ? 0 : totalShipping;
+
+  // AU prices include GST, so it's extracted from the items, never added.
   const gst = getLineGst(Math.round(totalPrice * 100)) / 100;
 
   return (
@@ -28,7 +35,7 @@ export function OrderSummaryPanel({ className }: { className?: string }) {
           <p className="text-xs text-fg/40">Add products from the list to get started.</p>
         </div>
       ) : (
-        // Caps at roughly six lines before scrolling so a large order can't push totals below the fold.
+        // ~6 lines then scroll, so a big order can't push totals off-screen.
         <div className="max-h-[26rem] divide-y divide-border/60 overflow-y-auto">
           {items.map((item) => (
             <CartItemRow key={item.key} item={item} />
@@ -45,11 +52,19 @@ export function OrderSummaryPanel({ className }: { className?: string }) {
           <span>Incl. GST</span>
           <span className="tabular-nums">{formatCurrency(gst)}</span>
         </div>
+        <div className="flex justify-between text-fg/60">
+          <span>{pickup ? "Shipping (pickup)" : "Shipping"}</span>
+          <span className="tabular-nums">{formatCurrency(shipping)}</span>
+        </div>
         <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-fg">
           <span>Total</span>
-          <span className="tabular-nums">{formatCurrency(totalPrice)}</span>
+          <span className="tabular-nums">{formatCurrency(totalPrice + shipping)}</span>
         </div>
-        <p className="pt-1 text-xs text-fg/45">Discounts, freight and payment are set at Review.</p>
+        <p className="pt-1 text-xs text-fg/45">
+          {pickup && totalShipping > 0
+            ? "Pickup orders aren't charged shipping."
+            : "Discounts, freight edits and payment are set at Review."}
+        </p>
       </div>
     </Card>
   );

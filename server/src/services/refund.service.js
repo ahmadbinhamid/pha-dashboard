@@ -1,19 +1,5 @@
 // services/refund.service.js
-//
-// refund-redesign-spec.md §3. Order-scoped, not payment-scoped — a refund is
-// driven by what the customer returns, not which card paid (§0's "core
-// reframe"). One Refund entity with a `scope` and a settlement adapter
-// chosen by each allocation's own payment.provider, not six hand-written
-// scope × method code paths.
-//
-// No Mongo transaction anywhere (standalone mongod — see the revised §3.7 in
-// the spec doc for the full reasoning). Every ledger field this file writes
-// (order.items[i].quantity_refunded/quantity_restocked, payment.amount_refunded,
-// order.payment_status) is DERIVED STATE: recomputed from the Refund
-// collection and assigned absolutely, never incremented. That's what makes
-// applyRefundEffects safe to call from anywhere, any number of times —
-// initial settlement, webhook redelivery, a stuck-refund sweep — with no
-// transaction needed to make it crash-safe.
+// Order-scoped refunds; the ledger is derived state, recomputed not added.
 
 const crypto = require("node:crypto");
 const Order = require("../models/Order");
@@ -47,9 +33,7 @@ async function nextRefundNumber(tenantId) {
   return `CN-${String(counter.seq).padStart(5, "0")}`;
 }
 
-// Stripe's refund `reason` only accepts a few literal values distinct from
-// ours; map what we can, default the rest — same mapping stripe.refund.service.js
-// used, kept here since that file is being retired in favour of this one.
+// Stripe accepts only a few reason literals; map ours, default the rest.
 function mapReasonToStripe(reason) {
   const map = {
     [REFUND_REASON.DUPLICATE_PAYMENT]: "duplicate",
@@ -58,67 +42,21 @@ function mapReasonToStripe(reason) {
   return map[reason] || "requested_by_customer";
 }
 
-// Practical Stripe/card-network refund window — Stripe's API doesn't hard-
-// enforce this itself, but issuing banks routinely reject a refund request
-// on a charge this old. §2.1's stripe_window_open / §3.1.6's allocation cap.
+// Banks routinely reject refunds on charges older than this (Stripe won't).
 const STRIPE_REFUND_WINDOW_DAYS = 180;
 function isWithinStripeRefundWindow(paidAt) {
   if (!paidAt) return false;
   return Date.now() - new Date(paidAt).getTime() <= STRIPE_REFUND_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 }
 
-// ── Shared ledger helpers — one query, reused by every derivation below ───
+// Shared ledger helpers
 
-// {order:1, status:1} index (§1.3) — every succeeded, non-voided refund on
-// the order. A voided refund's status is "voided", not "succeeded", so it's
-// naturally excluded here without any separate "subtract it back out" logic.
-// Used by the LEDGER (recomputeLedger) — succeeded is the only status that
-// has actually moved money/quantity.
+// Succeeded only (voided is excluded): the refunds that actually moved money.
 async function getSucceededRefunds(orderId) {
   return Refund.find({ order: orderId, status: REFUND_STATUS.SUCCEEDED });
 }
 
-// Everything that could still resolve to succeeded — i.e. NOT already
-// terminally failed/canceled/voided. Used for ADMISSION (§3.1/§9's
-// concurrency fix): a Stripe allocation sits in "processing" between
-// creation and webhook confirmation, and its claimed quantity/amount must
-// be reserved against a NEW refund request during that window, or two
-// refunds issued moments apart (not just truly concurrent ones) could both
-// claim the same units/dollars before the first's webhook ever lands. The
-// per-order lock (acquireRefundLock) serializes concurrent ADMISSION, but
-// only counting `status: SUCCEEDED` here would still let request B under-
-// count request A's still-in-flight claim even though the lock correctly
-// serialized the two calls in time.
-//
-// PENDING only counts while younger than RESERVATION_STALE_AFTER_MS
-// (corrections round). PENDING means Refund.create() wrote the doc but no
-// Stripe call has succeeded yet — settleRefund's catch block sets FAILED
-// the moment a Stripe call actually fails, so a refund stuck in PENDING
-// past this window means the PROCESS crashed before ever reaching Stripe
-// (or partway through a multi-allocation loop with SOME calls still
-// unresolved); nothing has committed externally, so ageing it out and
-// letting a new refund proceed is safe — refund.reconciliation.service.js's
-// sweep resumes it via settleRefund regardless (safe to call again).
-//
-// PROCESSING is DELIBERATELY NOT age-bounded — Stripe has ALREADY ACCEPTED
-// the refund and money is moving at Stripe's end. There is no API to
-// "un-refund" at Stripe: voidRefund only reverses OUR books (restock,
-// ledger). If a PROCESSING refund aged out of this reservation, a second
-// refund could be admitted for the same units/dollars, settle, and then the
-// first refund's delayed webhook would land, recompute the ledger, see a
-// quantity/total violation, and auto-void ITSELF — even though Stripe had
-// already paid it out. That leaves the customer refunded twice at Stripe,
-// the books showing only one refund, and inventory restocked short. A
-// webhook arriving late (Stripe incident, queue backlog, endpoint
-// misconfigured) must never mean "treat the money as not having moved."
-// refund.reconciliation.service.js's sweep is what actually resolves a
-// stuck PROCESSING refund — by asking Stripe directly. Only if Stripe
-// itself reports failed/canceled (or has no record of it at all) does the
-// reservation legitimately release, via that refund flipping to FAILED for
-// a real, verified reason — never via a mere clock.
-//
-// SUCCEEDED refunds have no age bound either — they drive the ledger
-// directly and are never "stuck".
+// Stale PENDING never reached Stripe so stops reserving; PROCESSING never.
 const RESERVATION_STALE_AFTER_MS = 60 * 60 * 1000;
 
 async function getReservingRefunds(orderId) {
@@ -144,10 +82,7 @@ function sumReservedTotal(refunds) {
   return refunds.reduce((sum, r) => sum + (r.total_amount || 0), 0);
 }
 
-// This item's own cumulative line_discount already recorded across every
-// prior succeeded refund touching it — refund-calculator.service.js#lineDiscount's
-// exhaustion-residual check needs this, and it can't be reconstructed from
-// line_amount alone (that also nets out order_discount_share).
+// Prior line_discount per item; lineDiscount's residual check needs it.
 function priorLineDiscountByItem(refunds, itemIds) {
   const map = new Map(itemIds.map((id) => [String(id), 0]));
   for (const r of refunds) {
@@ -159,11 +94,7 @@ function priorLineDiscountByItem(refunds, itemIds) {
   return map;
 }
 
-// Total quantity of an item already claimed by ANY non-terminally-failed
-// refund (succeeded or still in-flight) — the admission-time counterpart to
-// order.items[i].quantity_refunded, which only reflects succeeded ones.
-// refunds MUST be getReservingRefunds' result here, not getSucceededRefunds'
-// — see that function's comment.
+// Qty claimed by succeeded + in-flight refunds; pass getReservingRefunds.
 function reservedQuantityByItem(refunds, itemIds) {
   const map = new Map(itemIds.map((id) => [String(id), 0]));
   for (const r of refunds) {
@@ -175,43 +106,10 @@ function reservedQuantityByItem(refunds, itemIds) {
   return map;
 }
 
-// §9's concurrency fix — an atomic per-order mutex. findOneAndUpdate's
-// filter+update is a single atomic operation at the database level: only
-// one concurrent caller can ever match the "unlocked or stale" condition
-// and flip it to locked in the same instant, so this is race-free even
-// under genuine parallel requests (unlike a read-then-write check). Returns
-// the freshly-read order document itself (no separate Order.findById needed
-// afterward) so the caller works from the same snapshot the lock was taken
-// against. The 30s staleness window lets a crashed request's lock be
-// reclaimed rather than wedging the order permanently.
-//
-// Corrections round: createRefund's critical section is now deliberately
-// narrow (validate + compute + Refund.create() the PENDING doc only — no
-// Stripe network calls inside the lock, see createRefund/settleRefund's own
-// comments), so reaching this staleness window at all should be rare in
-// practice. 30s stays generous rather than tight, on the assumption that
-// "rare" isn't "never" — a slow Mongo write under load, a GC pause — and
-// the fencing token below is what actually makes a stale reclaim safe regardless.
+// Atomic per-order mutex; a crashed holder's lock is reclaimable after 30s.
 const REFUND_LOCK_STALE_MS = 30_000;
 
-// A single claim attempt fails fast the instant another request holds the
-// lock — which is correct for THAT one attempt, but a burst of genuinely
-// concurrent requests (the exact scenario §9's stress test requires) needs
-// each one to get a fair turn as the lock frees up, not have all but the
-// winner reject immediately. Retrying with a short, jittered backoff lets
-// legitimate concurrent admissions queue and drain in turn; a request only
-// ever gives up with a "busy" 409 after genuinely failing to get a turn
-// within this window, not merely losing the very first race.
-//
-// Budget dropped from 10s to 2s (corrections round): 10s was sized to
-// comfortably cover a live Stripe round-trip held by another request — but
-// that round-trip no longer happens inside the lock at all (see above), so
-// the only thing left to wait out is local DB work (validate + compute +
-// one insert) from however many other requests are ahead in the queue.
-// 10s also exceeded typical proxy/browser timeouts: a client that gave up
-// and retried with a fresh idempotency_key while the server was still
-// patiently waiting out the old budget could produce two refunds for one
-// customer action. 2s is still generous for pure local-DB contention.
+// Jittered retries let concurrent admissions queue; 2s fits DB-only work.
 const REFUND_LOCK_RETRY_BUDGET_MS = 2_000;
 const REFUND_LOCK_RETRY_BASE_MS = 40;
 const REFUND_LOCK_RETRY_MAX_INTERVAL_MS = 400;
@@ -239,9 +137,7 @@ async function acquireRefundLock(orderId, tenantId) {
     if (claimed) return { order: claimed, token };
 
     if (Date.now() >= deadline) {
-      // Either genuinely still locked after a fair chance to acquire it, or
-      // the order doesn't exist — distinguish so a bad orderId doesn't get
-      // miscast as "busy".
+      // Still locked, or no such order: tell them apart so a 404 isn't a 409.
       const exists = await Order.exists({ _id: orderId, tenant_id: tenantId });
       if (!exists) throw httpError("Order not found", 404);
       throw httpError("Another refund is already in progress for this order — try again shortly", 409);
@@ -253,14 +149,7 @@ async function acquireRefundLock(orderId, tenantId) {
   }
 }
 
-// Fencing token (corrections round) — only clears the lock when `token`
-// still matches what's stored. Without this, a holder whose critical
-// section outlasted REFUND_LOCK_STALE_MS would have its lock reclaimed by
-// a new caller, and then THIS holder's own `finally` would clear the new
-// caller's lock out from under it: two callers would both believe they
-// hold the lock, and the very race this mutex exists to prevent would be
-// back — caused by the mutex's own cleanup. A stale holder's release now
-// just no-ops instead.
+// Fencing token: a stale holder's release must not clear a newer lock.
 async function releaseRefundLock(orderId, token) {
   await Order.updateOne(
     { _id: orderId, refund_lock_token: token },
@@ -268,11 +157,9 @@ async function releaseRefundLock(orderId, token) {
   );
 }
 
-// ── §2.1 GET /orders/:orderId/refundable — server tells the UI what's
-// possible, the UI computes nothing. ────────────────────────────────────
+// §2.1 GET /orders/:orderId/refundable: the server computes, UI only shows.
 
-// §2.3 GET /orders/:orderId/refunds — history, lines already populated
-// (embedded, not a ref — no populate() needed).
+// §2.3 GET /orders/:orderId/refunds: lines are embedded, no populate.
 async function listRefundsForOrder(orderId, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).select("_id");
   if (!order) throw httpError("Order not found", 404);
@@ -288,34 +175,14 @@ async function getRefundableSummary(orderId, tenantId) {
     getTotalPaidForOrder(orderId),
     getTotalRefundedForOrder(orderId), // confirmed only — for display
     getReservingRefunds(orderId),
-    // A refund stuck past an hour is worth an admin's attention either way,
-    // but the two statuses mean very different things (corrections round):
-    // a stuck PENDING one has ALREADY dropped out of getReservingRefunds'
-    // count (nothing committed externally, safe to stop reserving) — this
-    // is what makes that silent exclusion visible instead of just looking
-    // like max_refundable doesn't add up. A stuck PROCESSING one is STILL
-    // fully reserved (Stripe already accepted it — see getReservingRefunds'
-    // own comment on why that must never age out) and listed here purely as
-    // an FYI that its webhook is overdue, not because anything's being
-    // excluded. Both resolved automatically by
-    // refund.reconciliation.service.js's sweep, or investigable manually via
-    // refund_number in the meantime.
+    // Stuck >1h: PENDING already stopped reserving; PROCESSING still reserves.
     Refund.find({
       order: orderId,
       status: { $in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSING] },
       created_at: { $lt: new Date(Date.now() - RESERVATION_STALE_AFTER_MS) },
     }).select("refund_number status created_at total_amount"),
   ]);
-  // §9's concurrency fix, extended to the display endpoint for consistency:
-  // an in-flight (pending/processing) Stripe refund has already claimed
-  // quantity/money even though the ledger (order.items[i].quantity_refunded,
-  // payment.amount_refunded) won't reflect it until its webhook confirms —
-  // showing the pre-reservation figures here would let an admin start a
-  // second refund the server then has to reject, on a line the UI told them
-  // was fully available. max_refundable uses the reserved total (what's
-  // safe to claim right now); total_refunded above stays the confirmed
-  // figure (what's actually happened so far) — deliberately different
-  // numbers for deliberately different questions.
+  // Reserved totals, so the UI never offers what admission would reject.
   const reservedTotal = sumReservedTotal(reservingRefunds);
   const maxRefundable = Math.max(0, order.total - reservedTotal);
   const shippingAlreadyRefunded = sumShipping(reservingRefunds);
@@ -334,8 +201,7 @@ async function getRefundableSummary(orderId, tenantId) {
       refundable_quantity: refundableQuantity,
       unit_price: item.unit_price,
       effective_unit_price: effectiveUnitPrice,
-      // Display estimate only — the authoritative figure comes from
-      // POST /orders/:orderId/refunds' own computation at submit time.
+      // Display estimate only; createRefund computes the real figure on submit.
       refundable_amount: Math.max(
         0,
         calc.lineGross(item, refundableQuantity) -
@@ -381,22 +247,18 @@ async function getRefundableSummary(orderId, tenantId) {
       status: r.status,
       created_at: r.created_at,
       total_amount: r.total_amount,
-      // PENDING has already stopped reserving (excluded from max_refundable
-      // above); PROCESSING still fully reserves it — see getReservingRefunds'
-      // comment. Told apart explicitly so this list isn't misread as "all of
-      // these are blocking a refund you could otherwise issue".
+      // Tell apart: PENDING no longer blocks, PROCESSING still reserves.
       still_reserved: r.status === REFUND_STATUS.PROCESSING,
     })),
   };
 }
 
-// Batched (2 queries total, not per-line) — §2.1's has_inventory_record /
-// has_ebay_listing let the UI disable/warn on the restock checkbox instead
-// of silently no-oping. Lazy-requires MarketplaceListing/its constants,
-// matching inventory.service.js#fanOutMarketplaceInventory's own reasoning
-// (avoid a hard dependency on that module graph for stores with no eBay).
+// Batched (2 queries); lazy-requires listings for stores with no eBay.
 async function annotateInventoryAndListingFlags(order, lines) {
-  const pairs = order.items.map((i) => ({ product: i.product, variant: i.variant || null }));
+  // Custom lines have no product; never let a null pair match a real doc.
+  const pairs = order.items
+    .filter((i) => i.product)
+    .map((i) => ({ product: i.product, variant: i.variant || null }));
   if (!pairs.length) return;
 
   const inventoryRecords = await Inventory.find({ $or: pairs }).select("product variant").lean();
@@ -417,14 +279,14 @@ async function annotateInventoryAndListingFlags(order, lines) {
   const itemsById = new Map(order.items.map((i) => [String(i._id), i]));
   for (const line of lines) {
     const item = itemsById.get(String(line.order_item_id));
-    if (!item) continue;
+    if (!item?.product) continue;
     const key = `${item.product}:${item.variant || "null"}`;
     line.has_inventory_record = invSet.has(key);
     line.has_ebay_listing = listingSet.has(key);
   }
 }
 
-// ── §2.2 POST /orders/:orderId/refunds ──────────────────────────────────
+// §2.2 POST /orders/:orderId/refunds
 
 const REFUNDABLE_PAYMENT_STATUSES = [
   ORDER_PAYMENT_STATUS.PAID,
@@ -447,35 +309,13 @@ async function createRefund(orderId, body, userId, tenantId) {
     ebay_refund_confirmed: ebayRefundConfirmed = false,
   } = body;
 
-  // §3.1.7 — return the existing refund, 200 not 409, on a genuine
-  // concurrent double-submit with the same client-generated key. No lock
-  // needed for this: it's a read, and two requests with the SAME key are
-  // supposed to converge on the same document, not race over one.
+  // §3.1.7: same key returns the existing refund (200); a read needs no lock.
   if (idempotencyKey) {
     const existing = await Refund.findOne({ idempotency_key: idempotencyKey, tenant_id: tenantId });
     if (existing) return existing;
   }
 
-  // §9's concurrency fix — the derived-state ledger makes effect
-  // APPLICATION idempotent; it does nothing for ADMISSION, which is
-  // read-then-act (refundable_quantity, remaining money). Two concurrent
-  // requests with DIFFERENT idempotency keys can both read the same
-  // pre-refund state, both pass validation, both insert — this lock
-  // serializes admission per order so the second request's validation runs
-  // against the first's already-committed claim.
-  //
-  // Corrections round: the critical section is deliberately narrow — it
-  // ends the moment Refund.create() below writes the PENDING doc, NOT after
-  // the Stripe API calls that used to happen inside this same try block.
-  // Once that write lands, getReservingRefunds durably reserves this
-  // refund's quantity/money against every later admission check — the
-  // reservation doesn't need the lock to stay held, it needs the write to
-  // have happened. Holding the mutex across N Stripe network round-trips
-  // (settleRefund, below, called AFTER release) was real, unnecessary risk:
-  // it was the reason this needed a 10s retry budget in the first place,
-  // and a slow/hanging Stripe call would have blocked every other refund on
-  // this order for its entire duration. Released in finally, always,
-  // including on validation rejection.
+  // Serializes admission per order; held only until the PENDING doc exists.
   const { order, token } = await acquireRefundLock(orderId, tenantId);
   let refund;
   try {
@@ -484,10 +324,7 @@ async function createRefund(orderId, body, userId, tenantId) {
       throw httpError(`Order payment_status "${order.payment_status}" is not refundable`, 400);
     }
 
-    // Corrections round, condition 2(a) — fail loud per-order, never assume
-    // the §6.2 backfill ran. item._id's mere presence can't be trusted (see
-    // Order.js's item_ids_migrated_at comment: Mongoose auto-generates one
-    // in memory on every hydrate, persisted or not).
+    // Fail loud: in-memory item _ids exist even if the backfill never ran.
     if ((scope === "line_items" || scope === "full_order") && !order.item_ids_migrated_at) {
       throw httpError(
         "This order needs migration before item/full-invoice refunds can be issued — run scripts/backfillRefundRedesign.js",
@@ -495,12 +332,7 @@ async function createRefund(orderId, body, userId, tenantId) {
       );
     }
 
-    // getReservingRefunds (not getSucceededRefunds) — an in-flight Stripe
-    // allocation has already claimed quantity/money even though the ledger
-    // won't reflect it until its webhook confirms; validation must account
-    // for that claim or a second request slipping in before the first's
-    // webhook lands could still over-admit despite the lock serializing the
-    // two calls in time.
+    // Reserving, not succeeded: in-flight Stripe claims must count here.
     const priorRefunds = await getReservingRefunds(order._id);
     const totalRefundedSoFar = sumReservedTotal(priorRefunds);
     const maxRefundable = order.total - totalRefundedSoFar;
@@ -528,18 +360,10 @@ async function createRefund(orderId, body, userId, tenantId) {
       );
     }
 
-    // §3.1.6 — allocations. Just Payment reads, no network calls — safe to
-    // keep inside the lock.
+    // §3.1.6 allocations: Payment reads only, no network, so safe in the lock.
     const allocations = await resolveAllocations({ order, totalAmount: computed.total_amount, requestedAllocations });
 
-    // §5 — an eBay allocation settles through eBay Managed Payments, so this
-    // is bookkeeping only, and restocking pushes the SKU's quantity back UP
-    // on the live eBay listing. Which payments actually get used isn't known
-    // until allocations resolve above, so this can only be checked here, not
-    // earlier — the admin must have already explicitly acknowledged issuing
-    // the refund in eBay Seller Hub before proceeding, or a restock here
-    // would silently push stock up on both eBay and locally for a refund
-    // that was never actually issued on eBay's side.
+    // eBay refunds are bookkeeping; restock needs Seller Hub acknowledgement.
     const touchesEbayPayment = allocations.some((a) => a.provider === PAYMENT_PROVIDER.EBAY);
     if (touchesEbayPayment && !ebayRefundConfirmed) {
       throw httpError(
@@ -552,18 +376,14 @@ async function createRefund(orderId, body, userId, tenantId) {
     refund = await Refund.create({
       tenant_id: tenantId,
       order: order._id,
-      // Legacy top-level fields, kept populated so any not-yet-migrated
-      // reader still sees something sane during the transition (§9 removes them).
+      // Legacy top-level fields for readers not yet migrated (removed in §9).
       payment: allocations[0].payment,
       amount: computed.total_amount,
       reason,
       status: REFUND_STATUS.PENDING,
       initiated_via: "admin_api",
       initiated_by: userId || null,
-      // settled defaults true (schema) but MUST start false for a Stripe
-      // allocation — §3.7's "do NOT apply effects optimistically" means
-      // even a successful stripe.refunds.create() call below doesn't count
-      // as settled, only the charge.refunded/charge.refund.updated webhook does.
+      // Stripe allocations settle only on webhook, never optimistically (§3.7).
       payment_allocations: allocations.map((a) => ({
         payment: a.payment,
         amount: a.amount,
@@ -582,9 +402,7 @@ async function createRefund(orderId, body, userId, tenantId) {
       idempotency_key: idempotencyKey || null,
       ebay_refund_confirmed: touchesEbayPayment ? true : false,
     });
-    // Reservation is durable from here — getReservingRefunds counts this
-    // PENDING doc immediately. Safe to release the lock and move the actual
-    // settlement (Stripe calls, or the manual/effects path) outside it.
+    // Reservation is durable now, so settle outside the lock.
   } finally {
     await releaseRefundLock(orderId, token);
   }
@@ -592,32 +410,9 @@ async function createRefund(orderId, body, userId, tenantId) {
   return settleRefund(refund);
 }
 
-// Everything that happens AFTER the reservation is durable — deliberately
-// OUTSIDE the per-order lock (see createRefund's own comment above). Split
-// out into its own function for a second reason beyond that: it's also
-// exactly the resume step refund.reconciliation.service.js needs for a
-// refund that crashed between Refund.create() and here (still PENDING, no
-// Stripe calls attempted yet, or only some of a multi-allocation refund's
-// calls made) — safe to call more than once for the same refund because it
-// skips any allocation that already has a stripe_refund_id recorded, rather
-// than re-sending it to Stripe.
-// Corrections round — Stripe's idempotency keys expire after 24 HOURS.
-// settleRefund's own idempotency key (below) protects a quick retry, but
-// refund.reconciliation.service.js exists specifically for a refund stuck
-// this long: if stripe.refunds.create() actually succeeded at Stripe but
-// the response never made it back here (crash, timeout, process killed
-// mid-call), and resumption happens more than a day later, the idempotency
-// key alone no longer prevents Stripe from creating a second, genuinely
-// duplicate refund. Every create call sets metadata.refund_id — checking
-// Stripe's own refund list for this payment intent and matching on that
-// BEFORE ever creating one recovers the lost id in exactly that case.
+// Stripe idempotency keys expire in 24h; match metadata.refund_id first.
 async function findExistingStripeRefund(stripe, paymentIntentId, refundId) {
-  // A single .list({ limit: 100 }) call only returns page 1 — on a payment
-  // intent with more than 100 refunds (a busy order over its lifetime),
-  // this refund_id could sit on a later page, findExistingStripeRefund
-  // would wrongly return null, and settleRefund would create a genuine
-  // duplicate at Stripe. The Stripe SDK's async iterator walks every page
-  // automatically (auto-pagination) — use that instead of a single .list().
+  // Auto-paginate: this refund_id may sit past the first 100 results.
   for await (const r of stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 })) {
     if (r.metadata?.refund_id === String(refundId)) return r;
   }
@@ -633,8 +428,7 @@ async function settleRefund(refund) {
     const stripeKeysService = require("./stripe/stripe.keys.service");
     const stripe = await stripeKeysService.getStripeClient(refund.tenant_id);
 
-    // Batched, not per-iteration — the lock no longer covers this loop, but
-    // there's still no reason to run N separate Payment queries.
+    // One batched Payment query instead of one per allocation.
     const paymentIds = stripeAllocationIndexes.map((i) => refund.payment_allocations[i].payment);
     const payments = await Payment.find({ _id: { $in: paymentIds } });
     const paymentById = new Map(payments.map((p) => [String(p._id), p]));
@@ -642,13 +436,10 @@ async function settleRefund(refund) {
 
     for (const i of stripeAllocationIndexes) {
       const alloc = refund.payment_allocations[i];
-      if (alloc.stripe_refund_id) continue; // already sent to Stripe on a prior (crashed) attempt — resuming, not resending
+      if (alloc.stripe_refund_id) continue; // sent on a prior crashed attempt; resume, never resend
       const payment = paymentById.get(String(alloc.payment));
       try {
-        // Check for a refund Stripe already has on file for this exact
-        // refund_id before creating a new one — see findExistingStripeRefund's
-        // own comment on why the idempotency key below isn't enough on its
-        // own for a resume that happens more than 24h later.
+        // Reuse a refund Stripe already holds; the idempotency key expires in 24h.
         const existing = await findExistingStripeRefund(stripe, payment.stripe_payment_intent_id, refund._id);
         if (existing) {
           refund.payment_allocations[i].stripe_refund_id = existing.id;
@@ -670,9 +461,7 @@ async function settleRefund(refund) {
         );
         refund.payment_allocations[i].stripe_refund_id = stripeRefund.id;
       } catch (err) {
-        // §3.1's guardrail on partial failure: earlier allocations in this
-        // loop may have already succeeded at Stripe. Mark failed and
-        // surface exactly which allocations settled rather than silently retrying.
+        // Earlier allocations may have settled: fail loudly, never retry silently.
         refund.status = REFUND_STATUS.FAILED;
         refund.failure_reason = err.message;
         await refund.save();
@@ -689,29 +478,12 @@ async function settleRefund(refund) {
     return refund;
   }
 
-  // status = SUCCEEDED must be saved BEFORE applyRefundEffects runs, not
-  // after: applyRefundEffects's recomputeLedger only counts refunds via
-  // getSucceededRefunds — if this refund isn't SUCCEEDED yet when its own
-  // recompute runs, its own contribution is silently excluded from
-  // order.items[].quantity_refunded. (Tried reordering this once — broke
-  // the concurrency test: exactly the last-admitted refund in a sequence
-  // never got its own recompute rerun, so quantity_refunded came out one
-  // short every time. Reverted.) A sweep to auto-retry a refund stuck
-  // SUCCEEDED-with-effects-never-applied was also tried and reverted — see
-  // refund.reconciliation.service.js's own comment on why (indistinguishable
-  // from old, legitimately fine historical refunds; re-running it against
-  // one auto-voided a real settled refund in testing). Accepted as a residual gap.
+  // Must be SUCCEEDED before effects, or its own recompute excludes it.
   refund.status = REFUND_STATUS.SUCCEEDED;
   await refund.save();
   const settled = await applyRefundEffects(refund._id);
 
-  // The belt-and-braces invariant check now lives inside applyRefundEffects
-  // itself (corrections round) — it runs there because that function is
-  // also what the Stripe webhook calls to confirm a card refund, and the
-  // check needs to cover that path too, not just this one. If it fired, the
-  // refund it was just handed comes back VOIDED; surface that as a rejection
-  // here since this is the synchronous API caller, and 409 is meaningful to
-  // them in a way it isn't to a webhook redelivery.
+  // applyRefundEffects voids on a ledger violation; surface that as a 409.
   if (settled.status === REFUND_STATUS.VOIDED) {
     throw httpError(
       `Refund rejected — ledger invariant violated after settlement; the attempt was voided (see refund ${settled.refund_number} for details)`,
@@ -722,10 +494,7 @@ async function settleRefund(refund) {
   return settled;
 }
 
-// §9's belt-and-braces check — every line's cumulative quantity_refunded
-// must never exceed its quantity, and the order's total refunded must never
-// exceed order.total. Returns a human-readable description of the first
-// violation found, or null if everything's consistent.
+// Returns the first ledger violation (qty or total over-refunded), or null.
 async function findLedgerViolation(order) {
   for (const item of order.items) {
     if (item.quantity_refunded > item.quantity) {
@@ -755,21 +524,11 @@ function computeAmountScope({ amount, adjustmentAmountInput, maxRefundable }) {
 function computeFullOrderScope({ order, priorRefunds, totalRefundedSoFar, refundShipping, restockAll, adjustmentAmountInput, requestedLines }) {
   if (requestedLines) throw httpError('lines must not be provided for scope: "full_order"', 400);
 
-  // reservedQuantityByItem, not the raw ledger field — priorRefunds is
-  // getReservingRefunds' result (succeeded + still-in-flight), so this
-  // correctly excludes quantity an unconfirmed Stripe allocation already
-  // claimed, not just what's been confirmed so far (§9's concurrency fix).
+  // Reserved quantities, so in-flight Stripe claims are excluded too.
   const reservedQty = reservedQuantityByItem(priorRefunds, order.items.map((i) => i._id));
   const remainingItems = order.items.filter((i) => i.quantity - (reservedQty.get(String(i._id)) || 0) > 0);
   const priorLineDiscount = priorLineDiscountByItem(priorRefunds, remainingItems.map((i) => i._id));
-  // Plain objects, not the live Mongoose subdocuments — computeFullOrderRefund
-  // only reads a handful of fields and needs the extra
-  // priorLineDiscountRefunded one bolted on, which a Mongoose subdocument
-  // (a strict schema instance) won't accept an arbitrary property onto.
-  // quantity_refunded here is the RESERVED figure (not just confirmed) —
-  // computeFullOrderRefund only ever uses it as "quantity - quantity_refunded
-  // = how much is left", so feeding it the reserved total is exactly what
-  // makes that subtraction account for in-flight claims too.
+  // Plain objects (calc adds a field); quantity_refunded is the reserved qty.
   const itemsForCalc = remainingItems.map((i) => ({
     _id: i._id,
     sku: i.sku,
@@ -822,8 +581,7 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
   const ids = requestedLines.map((l) => String(l.order_item_id));
   if (new Set(ids).size !== ids.length) throw httpError("lines must not contain duplicate order_item_id", 400);
 
-  // reservedQuantityByItem, not the raw ledger field — see
-  // computeFullOrderScope's matching comment (§9's concurrency fix).
+  // Reserved quantities, as in computeFullOrderScope.
   const reservedQty = reservedQuantityByItem(priorRefunds, order.items.map((i) => i._id));
 
   const itemsById = new Map(order.items.map((i) => [String(i._id), i]));
@@ -846,11 +604,7 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
 
   const computedLines = requestedLines.map((l) => {
     const item = itemsById.get(String(l.order_item_id));
-    // lineDiscount's exhaustion-residual check reads item.quantity_refunded
-    // directly — must be the RESERVED figure here too, not just confirmed,
-    // or a pending Stripe allocation on this same line would make this
-    // computation think it's not the exhausting refund when it actually is
-    // (or vice versa), throwing off which figure gets the exact residual.
+    // Reserved qty, so the exhaustion residual goes to the right refund.
     const itemForCalc = { ...item.toObject(), quantity_refunded: reservedQty.get(String(item._id)) || 0 };
     const result = calc.computeLineItemsLine({
       item: itemForCalc,
@@ -868,39 +622,14 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
       order_discount_share: result.order_discount_share,
       line_amount: result.line_amount,
       gst_amount: result.gst_amount,
-      // §3.5 — restock is driven solely by the submitted boolean, never
-      // inferred from reason or fullness. A line with no sku can't restock
-      // regardless of what was requested.
+      // §3.5: restock only when asked and the line has a SKU (never custom).
       restock: !!l.restock && !!item.sku,
     };
   });
 
   const naturalItemsAmount = computedLines.reduce((sum, l) => sum + l.line_amount, 0);
 
-  // Design correction — quantity-exhaustion ≠ dollar-exhaustion. Every item's
-  // quantity being fully claimed does NOT mean there's nothing left owed on
-  // the order: shipping attaches to no line item at all (scope: line_items
-  // never touches it — shipping_amount is hardcoded 0 below), so if shipping
-  // was never separately refunded (via a scope: full_order request),
-  // reconcileExhaustingTotal's "take the exact remaining order.total balance"
-  // shortcut would silently hand THIS items-only refund the leftover
-  // shipping money too — a real customer over-refund, not just a rounding
-  // slip, dressed up as ordinary item money. All three conditions must hold
-  // before this is genuinely "nothing left to claim":
-  //   - quantities: every item's cumulative refunded quantity (reserved,
-  //     same reasoning as reservedQty above) reaches its own quantity.
-  //   - shipping: either there was never any shipping cost, or it's already
-  //     been fully refunded elsewhere — nothing left on that side either.
-  //   - no pending adjustment: THIS request carries no manual
-  //     adjustmentAmountInput. reconcileExhaustingTotal computes total_amount
-  //     as `order.total - priorTotalRefunded` when exhausting — a manual
-  //     adjustment gets added ON TOP of that in the return below, which
-  //     would stack an extra goodwill/restocking-fee amount onto an already
-  //     "claim everything left" total rather than onto the natural
-  //     (non-exhausting) proportional total. An admin adding a deliberate
-  //     manual adjustment is doing something bespoke, not naturally
-  //     finishing off the order — fall back to the ordinary proportional
-  //     math in that case and let their adjustment sit on top of THAT.
+  // Exhausted only if qty, shipping and no manual adjustment are all covered.
   const quantitiesExhausted = order.items.every((item) => {
     const req = requestedLines.find((l) => String(l.order_item_id) === String(item._id));
     const willRefundQty = req ? req.quantity : 0;
@@ -933,9 +662,7 @@ function computeLineItemsScope({ order, priorRefunds, totalRefundedSoFar, reques
   };
 }
 
-// §3.1.6 — sum(allocations.amount) === total_amount; each <= payment's own
-// refundable; each Stripe allocation <= stripe_refundable and within the
-// refund window; every referenced payment succeeded.
+// §3.1.6: allocations sum to total, each within its payment's refundable.
 async function resolveAllocations({ order, totalAmount, requestedAllocations }) {
   const payments = await Payment.find({ order: order._id, status: PAYMENT_STATUS.SUCCEEDED }).sort({ created_at: 1 });
   const byId = new Map(payments.map((p) => [String(p._id), p]));
@@ -956,8 +683,7 @@ async function resolveAllocations({ order, totalAmount, requestedAllocations }) 
     });
   }
 
-  // Auto-allocate: oldest payment first (deposit before a later top-up),
-  // filling each up to its own refundable capacity.
+  // Auto-allocate oldest payment first, each up to its refundable amount.
   let remaining = totalAmount;
   const allocations = [];
   for (const p of payments) {
@@ -992,13 +718,7 @@ function assertAllocationValid(payment, amount) {
   }
 }
 
-// ── §3.7 — settlement effect application ────────────────────────────────
-//
-// Two parts, two different safety properties:
-//   (a) ledger recompute — unconditional, no guard needed (derived state,
-//       idempotent by construction).
-//   (b) restock + eBay — guarded by effects_applied_at, since THIS is a real
-//       side effect (stock adjustment, live eBay push), not derived state.
+// §3.7 effects: ledger recompute is idempotent; restock is guarded.
 async function applyRefundEffects(refundId) {
   const refund = await Refund.findById(refundId);
   if (!refund) throw httpError("Refund not found", 404);
@@ -1030,37 +750,14 @@ async function applyRefundEffects(refundId) {
   refund.effects_applied_at = new Date();
   await refund.save();
 
-  // Ledger recompute again — this time quantity_restocked reflects the
-  // restock_applied_at values just set above. Cheap (one indexed query),
-  // idempotent — no reason to hand-maintain a narrower update path.
+  // Recompute again so quantity_restocked reflects the lines just restocked.
   await recomputeLedger(order);
 
-  // §9's belt-and-braces check, moved HERE (corrections round) rather than
-  // only in createRefund. Every path that actually settles a refund funnels
-  // through this function — createRefund's manual branch above, AND
-  // stripe.webhook.service.js#reconcileStripeRefund's confirmation of a
-  // card refund (and refund.reconciliation.service.js's sweep, which calls
-  // the same webhook-reconciliation path). Checking only in createRefund
-  // meant this protected manual refunds and never card refunds — backwards,
-  // since card refunds are the majority and the ones where money actually
-  // left. A webhook can't usefully reject with a 409 the way an API caller
-  // can, so on violation this voids when it's SAFE to (see below) and flags
-  // needs_reconciliation rather than throwing; the synchronous caller
-  // (settleRefund, above) is the one that turns a VOIDED result back into a
-  // 409 for whoever's waiting on it.
+  // Ledger check lives here so webhook-settled card refunds are covered too.
   const freshOrder = await Order.findById(order._id);
   const violation = await findLedgerViolation(freshOrder);
   if (violation) {
-    // voidRefund only reverses OUR books — there is no Stripe API to
-    // "un-refund" a charge. If this refund has a Stripe allocation that
-    // ALREADY SETTLED (webhook-confirmed), the money is a fact about the
-    // real world now: voiding here would desync the books from it (Stripe
-    // says refunded, our ledger says not) rather than fix anything — a
-    // quieter, second money bug on top of whatever caused the violation.
-    // Surface it for a human instead of automating a reversal that can't
-    // actually happen at Stripe's end. Auto-void stays correct (and stays
-    // below) for an all-manual refund, where nothing external has committed
-    // and the ledger genuinely IS the whole picture.
+    // Settled Stripe money can't be un-refunded: flag it rather than void.
     const hasSettledStripeMoney = refund.payment_allocations.some(
       (a) => a.provider === PAYMENT_PROVIDER.STRIPE && a.settled,
     );
@@ -1084,9 +781,7 @@ async function applyRefundEffects(refundId) {
     logger.error(
       `[refund.service] ALERT: refund ${refund.refund_number} (order ${order._id}) violated a ledger invariant after settlement and was auto-voided: ${violation}`,
     );
-    // Reload — voidRefund saved its own separate copy of this document, and
-    // needs_reconciliation was just set via a targeted update rather than
-    // through that same in-memory copy.
+    // Reload: voidRefund saved its own copy and the flag was set separately.
     return Refund.findById(refund._id);
   }
 
@@ -1108,8 +803,7 @@ async function applyRefundEffects(refundId) {
   return refund;
 }
 
-// The derived-state recompute itself — see the revised §3.7 in the spec doc.
-// Always safe to call, any number of times, from any caller.
+// Derived-state ledger recompute; safe to call any number of times.
 async function recomputeLedger(order) {
   const succeeded = await getSucceededRefunds(order._id);
 
@@ -1129,10 +823,7 @@ async function recomputeLedger(order) {
       const key = String(a.payment);
       amountByPayment.set(key, (amountByPayment.get(key) || 0) + a.amount);
     }
-    // Legacy single-payment shape (scope: amount refunds created before this
-    // rewrite, or the deprecated shim path) — payment_allocations may be
-    // empty on those; fall back to the top-level payment/amount fields so
-    // they still count toward the recompute.
+    // Legacy single-payment refunds have no allocations; use top-level fields.
     if (r.payment_allocations.length === 0 && r.payment) {
       const key = String(r.payment);
       amountByPayment.set(key, (amountByPayment.get(key) || 0) + r.amount);
@@ -1145,14 +836,7 @@ async function recomputeLedger(order) {
     item.quantity_restocked = qtyRestockedByItem.get(key) || 0;
   }
 
-  // Payments MUST be reset before computing payment_status below — ALL of
-  // the order's payments, not just the ones appearing in amountByPayment
-  // right now (a payment that had every one of its refunds voided needs
-  // resetting back to 0, not skipping). Found live: voiding every refund on
-  // a fully-paid manual order left its Payment stuck at a stale non-zero
-  // amount_refunded, which then made getTotalPaidForOrder (below) undercount
-  // and recompute the order as partially_paid instead of paid — that read
-  // was happening before this write ever landed.
+  // Reset every payment first, or fully voided ones keep a stale refund total.
   const payments = await Payment.find({ order: order._id });
   await Promise.all(
     payments.map((p) => {
@@ -1174,19 +858,13 @@ async function recomputeLedger(order) {
   }
   // fulfillment_status is never touched here (§3.7 guardrail).
 
-  // Legacy `status` (§1.2/§9) — kept in sync here as a DERIVED value, not
-  // independently set, until every consumer (order list/badges/dashboard/
-  // invoice PDF) migrates to payment_status/fulfillment_status directly.
-  // Without this, `status` would silently go stale after any refund. See
-  // utils/paymentStatus.js#deriveLegacyOrderStatus (shared with
-  // order.service.js#updateOrderStatus, the admin status-dropdown path) for
-  // the rule itself.
+  // Legacy status stays derived until every consumer uses payment_status.
   order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
 
   await order.save();
 }
 
-// ── §3.8 void / reversal ─────────────────────────────────────────────────
+// §3.8 void / reversal
 
 async function voidRefund(refundId, { reason: voidReason, userId, source = "admin", force = false }, tenantId) {
   const refund = await Refund.findOne({ _id: refundId, tenant_id: tenantId });
@@ -1195,19 +873,7 @@ async function voidRefund(refundId, { reason: voidReason, userId, source = "admi
     throw httpError(`Only a succeeded refund can be voided (current status: ${refund.status})`, 400);
   }
 
-  // Corrections round — voidRefund only reverses OUR books (ledger,
-  // restock). There is no Stripe API to "un-refund" a charge. If a Stripe
-  // allocation on this refund actually settled (webhook-confirmed
-  // sr.status === "succeeded", tracked via payment_allocations[].settled),
-  // the money has already left; voiding here would desync the books from
-  // reality — Stripe says refunded, our ledger says not, and the customer
-  // keeps the money regardless of what this function does. §4.2's
-  // charge.refund.updated reversal is the one legitimate exception: Stripe
-  // itself reporting the refund failed/canceled AFTER we thought it settled
-  // means the money genuinely came back, so that call site passes
-  // source: "stripe_reversal" and is exempt. Every other caller touching a
-  // Stripe-settled refund (the admin void endpoint, or a bug anywhere else)
-  // needs an explicit, human-justified `force`.
+  // Settled Stripe money can't be reversed; only stripe_reversal or force.
   const hasSettledStripeMoney = refund.payment_allocations.some(
     (a) => a.provider === PAYMENT_PROVIDER.STRIPE && a.settled,
   );
@@ -1221,10 +887,7 @@ async function voidRefund(refundId, { reason: voidReason, userId, source = "admi
   const order = await Order.findById(refund.order);
   if (!order) throw httpError("Order not found for refund", 404);
 
-  // Reverse the restock BEFORE flipping status — re-deduct stock for any
-  // line that was actually restocked, and push the lowered quantity to
-  // eBay. A real side effect, stays explicit (mirrors applyRefundEffects'
-  // own restock leg).
+  // Reverse the restock before flipping status (mirrors applyRefundEffects).
   const restockedLines = refund.lines.filter((l) => l.restock_applied_at && l.sku);
   if (restockedLines.length > 0) {
     await syncOrderStock(order, DIRECTION.DEDUCT, {
@@ -1243,16 +906,13 @@ async function voidRefund(refundId, { reason: voidReason, userId, source = "admi
   refund.void_reason = voidReason || null;
   await refund.save();
 
-  // Excluded from the {status: SUCCEEDED} query now — recompute naturally
-  // reverses everything applyRefundEffects did, no decrement logic needed.
+  // Voided refunds leave the SUCCEEDED query, so recompute reverses them.
   await recomputeLedger(order);
 
   return refund;
 }
 
-// ── §7 POST /refunds/:id/retry-restock — re-runs ONLY the eBay leg for
-// lines whose push previously failed. Never re-touches local stock (already
-// correctly adjusted) or already-synced lines. ──────────────────────────
+// §7 retry-restock: re-runs only failed eBay pushes, never local stock.
 
 async function retryRestockForRefund(refundId, tenantId) {
   const refund = await Refund.findOne({ _id: refundId, tenant_id: tenantId });
@@ -1280,10 +940,6 @@ async function retryRestockForRefund(refundId, tenantId) {
   return { refund, retried: failedLines.length };
 }
 
-// createLegacyPaymentRefund removed (refund-redesign-spec.md §9) — the
-// /payment/:id/refund and /payment/:id/refund-manual shims it backed are
-// gone; POST /order/:orderId/refunds (createRefund below) is the only path now.
-
 module.exports = {
   httpError,
   getRefundableSummary,
@@ -1294,12 +950,10 @@ module.exports = {
   retryRestockForRefund,
   recomputeLedger,
   nextRefundNumber,
-  // Exported for refund.reconciliation.service.js (corrections round).
+  // Exported for refund.reconciliation.service.js.
   settleRefund,
   RESERVATION_STALE_AFTER_MS,
-  // Exported for refund.service.lock.test.js only — the fencing-token
-  // behaviour needs to be exercised directly against the lock primitives,
-  // not indirectly through createRefund's full validate/compute/settle path.
+  // Exported for refund.service.lock.test.js to test the fencing token.
   acquireRefundLock,
   releaseRefundLock,
 };

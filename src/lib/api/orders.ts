@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type {
+  CreateManualOrderItemPayload,
   Order,
   OrderAddress,
   OrderDeliveryMethod,
@@ -46,7 +47,7 @@ export const sendOrderEmail = async (id: string, payload: SendOrderEmailPayload 
   return data;
 };
 
-// The same pdfkit tax invoice attached to order emails — no BeResponse envelope, raw PDF bytes. Filename comes from Content-Disposition, with a generic fallback if missing.
+// Raw pdfkit invoice bytes (no envelope); filename from Content-Disposition.
 export const downloadInvoicePdf = async (id: string) => {
   const response = await apiClient.get(`/order/${id}/invoice-pdf`, { responseType: "blob" });
   const disposition = response.headers["content-disposition"] as string | undefined;
@@ -54,15 +55,7 @@ export const downloadInvoicePdf = async (id: string) => {
   return { blob: response.data as Blob, filename };
 };
 
-// ── Manual/in-person orders (POS) ───────────────────────────────────────────
-
-export interface CreateManualOrderItemPayload {
-  product: string;
-  variant?: string | null;
-  quantity: number;
-  discount_amount?: number; // dollars
-  note?: string | null;
-}
+// Manual/in-person orders (POS)
 
 export interface CreateManualOrderPayload {
   customer_id: string;
@@ -71,7 +64,7 @@ export interface CreateManualOrderPayload {
   shipping_address?: OrderAddress;
   billing_address?: OrderAddress | null;
   note?: string | null;
-  // Always required — "payment_link" means nothing is collected now; a Stripe Checkout link is generated separately instead.
+  // "payment_link" collects nothing now; the Stripe link is made separately.
   payment_method: OrderPaymentChoice;
   amount_paid?: number; // dollars — omit/0 leaves the invoice fully outstanding
   shipping_cost?: number; // dollars — overrides the computed per-item shipping total
@@ -87,7 +80,7 @@ export const generatePaymentLink = async (orderId: string) => {
   return data;
 };
 
-// Generates the same link as generatePaymentLink and emails it to the customer — used by the "Send Payment Link" action on the confirmation screen.
+// Same link as generatePaymentLink, emailed to the customer.
 export const sendPaymentLinkEmail = async (orderId: string) => {
   const { data } = await apiClient.post<BeResponse<{ url: string }>>(`/order/${orderId}/payment-link/send`);
   return data;
@@ -103,7 +96,7 @@ export interface RecordOrderPaymentPayload {
   amount: number; // dollars
 }
 
-// Follow-up cash/online-transfer payment against an order's outstanding balance, e.g. settling the rest of a deposit later.
+// Follow-up cash/transfer payment against the balance, e.g. after a deposit.
 export const recordOrderPayment = async (orderId: string, payload: RecordOrderPaymentPayload) => {
   const { data } = await apiClient.post<BeResponse<Order>>(`/order/${orderId}/payments`, payload);
   return data;
@@ -114,7 +107,7 @@ export const addOrderNote = async (orderId: string, text: string) => {
   return data;
 };
 
-// Corrects a line item's price on an eBay/manual order — storefront orders reject this server-side. Recomputes subtotal/tax_amount/total on the backend.
+// eBay/manual only (storefront rejects it); the backend recomputes totals.
 export const updateOrderItemPrice = async (orderId: string, itemIndex: number, unit_price: number) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/price`, {
     unit_price,
@@ -122,13 +115,13 @@ export const updateOrderItemPrice = async (orderId: string, itemIndex: number, u
   return data;
 };
 
-// Corrects the order's freight charge after the fact (eBay/manual only). Recomputes tax_amount/total on the backend.
+// Freight fix after the fact (eBay/manual only); the backend recomputes totals.
 export const updateOrderShippingCost = async (orderId: string, shipping_cost: number) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/shipping-cost`, { shipping_cost });
   return data;
 };
 
-// Optional customer/staff-supplied reference (e.g. a PO number) — order.service.js#updateOrderReferenceNumber. Blank clears it.
+// Customer/staff reference (e.g. a PO number); blank clears it.
 export const updateOrderReferenceNumber = async (orderId: string, reference_number: string) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/reference-number`, {
     reference_number,
@@ -136,7 +129,7 @@ export const updateOrderReferenceNumber = async (orderId: string, reference_numb
   return data;
 };
 
-// Corrects a line item's discount on an eBay/manual order (order.service.js#updateOrderItemDiscount). Recomputes subtotal/tax_amount/total on the backend.
+// Line discount fix on eBay/manual orders; the backend recomputes totals.
 export const updateOrderItemDiscount = async (orderId: string, itemIndex: number, discount_amount: number) => {
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/discount`, {
     discount_amount,
@@ -150,7 +143,7 @@ export interface UpdateOrderCustomerDetailsPayload {
   billing_address?: OrderAddress | null;
 }
 
-// Corrects the order's own customer/address snapshot, never the linked Customer record (order.service.js#updateOrderCustomerDetails).
+// Edits the order's own snapshot, never the linked Customer record.
 export const updateOrderCustomerDetails = async (orderId: string, payload: UpdateOrderCustomerDetailsPayload) => {
   const { data } = await apiClient.put<BeResponse<Order>>(`/order/${orderId}/customer-details`, payload);
   return data;

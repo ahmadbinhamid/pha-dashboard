@@ -172,6 +172,41 @@ async function resolveManualOrderItem(
   };
 }
 
+// Order-only line: no product, no sku, so stock sync and eBay skip it.
+function resolveCustomOrderItem({
+  name,
+  unit_price,
+  shipping_cost = 0,
+  quantity = 1,
+  discount_amount = 0,
+  note = null,
+}) {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw httpError("Invalid quantity", 400);
+  }
+  const unitPriceCents = Math.round(unit_price * 100);
+  if (!name || unitPriceCents <= 0) {
+    throw httpError("Custom product needs a title and a price", 400);
+  }
+  const discountCents = Math.round(discount_amount * 100);
+  if (discountCents < 0 || discountCents > unitPriceCents * quantity) {
+    throw httpError(`Discount for "${name}" cannot exceed the line subtotal`, 400);
+  }
+
+  return {
+    product: null,
+    variant: null,
+    is_custom: true,
+    name,
+    sku: null,
+    unit_price: unitPriceCents,
+    shipping_cost: shipping_cost ?? 0, // dollars, per unit
+    quantity,
+    discount_amount: discountCents,
+    note: note || null,
+  };
+}
+
 // Stock drops now: goods leave with the customer whatever is paid.
 async function createManualOrder(
   {
@@ -196,7 +231,11 @@ async function createManualOrder(
   }
 
   // Resolve lines concurrently to keep multi-item sales fast.
-  const resolvedItems = await Promise.all(items.map((item) => resolveManualOrderItem(item, tenant._id)));
+  const resolvedItems = await Promise.all(
+    items.map((item) =>
+      item.is_custom ? resolveCustomOrderItem(item) : resolveManualOrderItem(item, tenant._id),
+    ),
+  );
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const subtotal = resolvedItems.reduce(

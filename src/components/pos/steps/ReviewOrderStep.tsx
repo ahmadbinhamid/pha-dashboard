@@ -10,13 +10,13 @@ import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
 import { useToast } from "@/context";
 import { createManualOrder } from "@/lib/api/orders";
-import type { CreateManualOrderItemPayload } from "@/lib/api/orders";
 import { formatCurrency, formatInvoiceNumber } from "@/utils/format";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { ORDER_PAYMENT_CHOICE_LABEL } from "@/config/paymentMethods";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
-import type { Order } from "@/types/orders";
+import type { CartItem } from "@/types/cart";
+import type { CreateManualOrderItemPayload, Order } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
 import { paymentChoiceSchema } from "@/lib/validation/reviewOrder";
 
@@ -35,6 +35,11 @@ interface ReviewOrderStepProps {
   onOrderCreated: (order: Order) => void;
   // Pending state goes up to the page header, which owns the Create button.
   onPendingChange?: (pending: boolean) => void;
+}
+
+// Custom lines prefill with the discount typed when they were created.
+function discountInput(item: CartItem, discounts: Record<string, string>) {
+  return discounts[item.key] ?? (item.default_discount != null ? String(item.default_discount) : "");
 }
 
 export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(function ReviewOrderStep(
@@ -57,7 +62,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 ) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { items, clearCart } = useCart();
+  const { items, clearCart, totalShipping } = useCart();
   const { customer, deliveryMethod, shippingAddress, useDifferentBilling, billingAddress } = customerDelivery;
 
   const { data: tenantSettingsData } = useQuery({
@@ -72,7 +77,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
     () =>
       items.map((item) => {
         const lineSubtotal = item.unit_price * item.quantity;
-        const rawDiscount = Number(discounts[item.key]) || 0;
+        const rawDiscount = Number(discountInput(item, discounts)) || 0;
         const discount = Math.min(Math.max(rawDiscount, 0), lineSubtotal);
         return { item, lineSubtotal, discount, lineTotal: lineSubtotal - discount };
       }),
@@ -82,8 +87,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   const rawSubtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0);
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
   // Pickup has no freight, matching order.service.js#createManualOrder.
-  const computedShipping =
-    deliveryMethod === "delivery" ? items.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) : 0;
+  const computedShipping = deliveryMethod === "delivery" ? totalShipping : 0;
   // Staff may override freight; empty input falls back to the computed sum.
   const shippingTotal =
     deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
@@ -131,13 +135,25 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
     }
     setPaymentMethodError(undefined);
 
-    const payloadItems: CreateManualOrderItemPayload[] = lines.map(({ item, discount }) => ({
-      product: item.product_id,
-      variant: item.variant_id,
-      quantity: item.quantity,
-      discount_amount: discount,
-      note: item.note,
-    }));
+    const payloadItems: CreateManualOrderItemPayload[] = lines.map(({ item, discount }) =>
+      item.is_custom || !item.product_id
+        ? {
+            is_custom: true,
+            name: item.name,
+            unit_price: item.unit_price,
+            shipping_cost: item.shipping_cost,
+            quantity: item.quantity,
+            discount_amount: discount,
+            note: item.note,
+          }
+        : {
+            product: item.product_id,
+            variant: item.variant_id,
+            quantity: item.quantity,
+            discount_amount: discount,
+            note: item.note,
+          },
+    );
 
     createMutation.mutate({
       customer_id: customer._id,
@@ -173,7 +189,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <CartItemRow
                   key={item.key}
                   item={item}
-                  discountValue={discounts[item.key] ?? ""}
+                  discountValue={discountInput(item, discounts)}
                   onDiscountChange={(value) => onDiscountsChange({ ...discounts, [item.key]: value })}
                   lineTotal={lineTotal}
                 />
@@ -205,7 +221,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <span>{totalDiscount > 0 ? `-${formatCurrency(totalDiscount)}` : formatCurrency(0)}</span>
               </div>
               <div className="flex items-center justify-between text-fg/60">
-                <span>Shipping</span>
+                <span>{deliveryMethod === "pickup" ? "Shipping (pickup)" : "Shipping"}</span>
                 {deliveryMethod === "delivery" ? (
                   <Input
                     type="number"
@@ -221,6 +237,12 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                   <span>{formatCurrency(shippingTotal)}</span>
                 )}
               </div>
+              {deliveryMethod === "pickup" && totalShipping > 0 && (
+                <p className="text-xs text-fg/45">
+                  {formatCurrency(totalShipping)} of item shipping isn't charged on pickup. Choose Delivery
+                  on the previous step to charge it.
+                </p>
+              )}
               <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-fg">
                 <span>Total</span>
                 <span>{formatCurrency(total)}</span>

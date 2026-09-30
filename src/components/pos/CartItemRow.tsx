@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { FileText, Package, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { QuantityStepper } from "@/components/pos/QuantityStepper";
 import { useCart } from "@/context/cart";
@@ -44,6 +46,11 @@ export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }
               </TooltipTrigger>
               <TooltipContent side="top">{item.name}</TooltipContent>
             </Tooltip>
+            {item.is_custom && (
+              <Badge variant="muted" className="mt-0.5">
+                Custom
+              </Badge>
+            )}
             {noteOpen ? (
               <Input
                 value={item.note ?? ""}
@@ -54,14 +61,15 @@ export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }
                 autoFocus={!item.note}
               />
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setNoteOpen(true)}
-                className="mt-0.5 inline-flex items-center gap-1 text-xs text-fg/45 transition hover:text-fg/70"
+                className="mt-0.5 h-auto gap-1 rounded-xs p-0 text-xs font-normal text-fg/45 hover:bg-transparent hover:text-fg/70"
               >
                 <FileText className="h-3 w-3" />
                 Add note
-              </button>
+              </Button>
             )}
           </div>
 
@@ -75,8 +83,11 @@ export function CartItemRow({ item, discountValue, onDiscountChange, lineTotal }
             <QuantityStepper value={item.quantity} max={item.max_quantity} onChange={(q) => setQuantity(item.key, q)} />
             {showDiscount && (
               <div className="flex items-center gap-1.5">
-                <label className="text-3xs font-semibold uppercase tracking-wider text-fg/40">Disc.</label>
+                <Label htmlFor={`discount-${item.key}`} className="text-3xs uppercase tracking-wider text-fg/40">
+                  Disc.
+                </Label>
                 <Input
+                  id={`discount-${item.key}`}
                   type="number"
                   min={0}
                   step="0.01"

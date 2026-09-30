@@ -1,19 +1,28 @@
 export interface CartItem {
-  // `${product_id}:${variant_id ?? "base"}` — unique dedup key per line.
+  // Dedup key: `${product_id}:${variant_id ?? "base"}`, or `custom:<uuid>`.
   key: string;
-  product_id: string;
+  // Null for custom lines: typed in at POS, never a catalogue product.
+  product_id: string | null;
   variant_id: string | null;
+  is_custom: boolean;
   name: string;
   sku: string | null;
   image_url: string | null;
   unit_price: number; // dollars, matches Product/ProductVariant.price convention
-  // Per-unit freight cost, dollars — always the parent Product's shipping_cost, summed into the order total for delivery only. Mirrors Order.service.js#resolveOrderItem.
+  // Per-unit freight in dollars, summed into the order total for delivery only.
   shipping_cost: number;
   quantity: number;
-  // Soft stock cap at add-to-cart time — a best-effort UX guard; backend always re-validates at order-creation time.
+  // Soft stock cap at add time; the backend re-validates on order creation.
   max_quantity: number | null;
-  // Customer-facing note for this line, editable from Add Products and Review Order steps.
+  // Customer-facing note, editable on the Add Products and Review Order steps.
   note: string | null;
+  // Dollars; custom lines prefill the Review step's discount with this.
+  default_discount: number | null;
 }
 
-export type AddCartItemInput = Omit<CartItem, "quantity" | "note"> & { quantity?: number; note?: string | null };
+export type AddCartItemInput = Omit<CartItem, "quantity" | "note" | "is_custom" | "default_discount"> & {
+  quantity?: number;
+  note?: string | null;
+  is_custom?: boolean;
+  default_discount?: number | null;
+};

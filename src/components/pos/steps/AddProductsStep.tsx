@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search } from "lucide-react";
+import { Package, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
+import { AddCustomProductModal } from "@/components/pos/AddCustomProductModal";
 import { getProducts } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { formatCurrency } from "@/utils/format";
@@ -16,6 +18,7 @@ export function AddProductsStep() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [customOpen, setCustomOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -38,8 +41,16 @@ export function AddProductsStep() {
   return (
     <Card className="flex flex-col overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-fg">Add Products</h2>
-        <p className="mt-0.5 text-xs text-fg/50">Search the catalogue and add lines to this order.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-fg">Add Products</h2>
+            <p className="mt-0.5 text-xs text-fg/50">Search the catalogue and add lines to this order.</p>
+          </div>
+          <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={() => setCustomOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Custom product
+          </Button>
+        </div>
 
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -112,6 +123,8 @@ export function AddProductsStep() {
           ))
         )}
       </div>
+
+      <AddCustomProductModal open={customOpen} onOpenChange={setCustomOpen} />
     </Card>
   );
 }

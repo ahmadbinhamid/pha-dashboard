@@ -1,4 +1,4 @@
-// Response shapes for /reports/*, mirrors reports.service.js. Money is cents everywhere (types/dashboard.ts convention), converted from dollars server-side.
+// Response shapes for /reports/*, mirroring reports.service.js; money in cents.
 
 export interface ReportsDateRangeParams {
   days?: number;
@@ -18,6 +18,8 @@ export interface ReportsSummary {
   avgOrderValueChangePct: number | null;
   grossProfitCents: number;
   grossProfitChangePct: number | null;
+  // Custom-line revenue left out of gross profit (it has no cost basis).
+  excludedCustomRevenueCents: number;
   // One entry per day in `range` — feeds each metric card's sparkline.
   dailyRevenueCents: number[];
   dailyOrders: number[];
@@ -45,6 +47,7 @@ export interface SalesPerformanceRow {
   itemsSold: number;
   avgOrderValueCents: number;
   grossProfitCents: number;
+  excludedCustomRevenueCents: number;
   trendPct: number | null;
 }
 

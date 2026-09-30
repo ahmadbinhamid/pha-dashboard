@@ -14,7 +14,17 @@ const { ADDRESS_TYPE } = require("../constants/shipping.constants");
 
 const orderItemSchema = new Schema(
   {
-    product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    // Custom lines are order-only, never catalogue products, so no product.
+    product: {
+      type: Schema.Types.ObjectId,
+      ref: "Product",
+      default: null,
+      required: function () {
+        return !this.is_custom;
+      },
+    },
+    // NOTE: revert breaks saves once custom lines exist; docs/custom-order-lines.md
+    is_custom: { type: Boolean, default: false },
     variant: { type: Schema.Types.ObjectId, ref: "ProductVariant", default: null },
     // Snapshot at order time, so later product edits don't rewrite history.
     name: { type: String, required: true },
