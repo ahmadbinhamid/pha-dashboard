@@ -8,12 +8,9 @@ const { enqueueChannelJob } = require("../../queues/channel.queue");
 const { buildWordSearchOr } = require("../../utils/regex");
 const ebaySettingsService = require("../ebay/ebay.settings.service");
 const { buildEbayItemUrl } = require("../ebay/ebay.listing.service");
-const { MARKETPLACE_PLATFORM, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
+const { MARKETPLACE_PLATFORM, LISTING_NEEDS_ATTENTION_STATUSES } = require("../../constants/marketplace.constants");
 const { readableSyncError } = require("../../utils/syncErrorMessage");
 const circuitBreaker = require("./circuitBreaker");
-
-// Same needs_attention definition as channel.service#listChannelsForTenant.
-const NEEDS_ATTENTION_STATUSES = [LISTING_SYNC_STATUS.ERROR, LISTING_SYNC_STATUS.PRICE_LOCKED];
 
 // Cross-platform listListings; omit `platform` to mix every platform's rows.
 async function listListings(
@@ -29,7 +26,7 @@ async function listListings(
   }
   if (state) match.state = state;
   // needs_attention takes precedence over a plain sync_status.
-  if (needs_attention) match.sync_status = { $in: NEEDS_ATTENTION_STATUSES };
+  if (needs_attention) match.sync_status = { $in: LISTING_NEEDS_ATTENTION_STATUSES };
   else if (sync_status) match.sync_status = sync_status;
 
   const pipeline = [
@@ -124,7 +121,7 @@ async function listListingsGroupedByProduct(
   }
   if (state) match.state = state;
   // See listListings' identical NOTE — needs_attention takes precedence.
-  if (needs_attention) match.sync_status = { $in: NEEDS_ATTENTION_STATUSES };
+  if (needs_attention) match.sync_status = { $in: LISTING_NEEDS_ATTENTION_STATUSES };
   else if (sync_status) match.sync_status = sync_status;
 
   // Pass 1: which products qualify (filtered), paginated

@@ -1,12 +1,13 @@
 export interface DashboardStats {
   totalInventoryValue: number; // dollars
-  // % change in inventory value over the last 7 days; null when there's no baseline to compare against.
+  // % change in inventory value over 7 days; null with no baseline.
   inventoryValueChangePct: number | null;
   lowStockCount: number;
   outOfStockCount: number;
   pendingOrdersCount: number;
   pendingOrdersAvgAgeHours: number;
-  syncStabilityPct: number;
+  // Successful / (successful + failed) listings; null when none has settled.
+  syncStabilityPct: number | null;
   channelsOperational: number;
   channelsTotal: number;
 }
@@ -16,26 +17,26 @@ export interface OrderVolumePoint {
   orders: number;
   revenueCents: number;
   items: number;
-  // Keyed by whatever ORDER_CHANNEL values actually appear in this tenant's orders, not a fixed list.
+  // Keyed by the ORDER_CHANNEL values present in this tenant's orders.
   byChannel: Record<string, number>;
 }
 
 export interface OrderVolumeResponse {
   points: OrderVolumePoint[];
-  // Total revenue for the same-length window immediately before `points`, a real computed baseline for "vs prior period".
+  // Revenue for the same-length window before `points` (vs prior period).
   previousPeriodRevenueCents: number;
 }
 
 export type OrderVolumeMetric = "orders" | "revenueCents" | "items";
 
-// Either a preset day count or an explicit from/to range (backend prefers from/to when both present) — the single date-range filter driving both dashboard charts.
+// Preset days or an explicit from/to range; from/to wins when both are set.
 export interface OrderVolumeParams {
   days?: number;
   from?: string;
   to?: string;
 }
 
-// Only channels this app integrates with are ever returned — "not_connected" is a real channel with zero activity, never an unbuilt platform.
+// "not_connected" is a real integrated channel with no activity yet.
 export type ChannelStatus = "operational" | "attention" | "not_connected";
 
 export interface ChannelHealth {
@@ -44,7 +45,8 @@ export interface ChannelHealth {
   status: ChannelStatus;
   lastSyncedAt: string | null;
   detail?: string;
-  listingsSynced?: number;
+  listingsSynced?: number; // synced + out_of_stock (successful pushes)
+  listingsFailed?: number; // error + price_locked, as on the Channel sync page
   listingsTotal?: number;
 }
 
@@ -55,7 +57,7 @@ export interface ActivityEvent {
   type: ActivityEventType;
   title: string;
   description: string;
-  // Only set on "stock" events — the SKU the adjustment applies to, rendered on its own line under the description.
+  // Stock events only: the adjusted SKU, shown on its own line.
   sku?: string | null;
   timestamp: string;
   tags: string[];

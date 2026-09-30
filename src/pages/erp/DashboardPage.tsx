@@ -76,7 +76,8 @@ export default function DashboardPage() {
   const activityEvents = activityRes?.data ?? [];
   const criticalStock = criticalStockRes?.data ?? [];
 
-  const syncHealthy = stats ? stats.syncStabilityPct >= 90 : true;
+  const syncPct = stats?.syncStabilityPct ?? null;
+  const syncHealthy = syncPct === null || syncPct >= 90;
 
   return (
     <div className="space-y-6">
@@ -133,8 +134,8 @@ export default function DashboardPage() {
         />
         <MetricCard
           label="Sync Stability"
-          value={stats ? `${stats.syncStabilityPct}%` : "—"}
-          badge={stats ? (syncHealthy ? "Healthy" : "Attention") : undefined}
+          value={syncPct !== null ? `${syncPct}%` : "—"}
+          badge={stats ? (syncPct === null ? "No syncs yet" : syncHealthy ? "Healthy" : "Attention") : undefined}
           subLabel={stats ? `${stats.channelsOperational}/${stats.channelsTotal} channels operational` : undefined}
           icon={<Radio className="h-4 w-4" />}
           tone={syncHealthy ? "ok" : "danger"}

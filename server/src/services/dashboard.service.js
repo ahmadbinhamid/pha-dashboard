@@ -1,13 +1,5 @@
 // services/dashboard.service.js
-//
-// Every function here takes tenantId and scopes its queries by it — this
-// file previously had NO tenant filtering anywhere (Order.find({}),
-// InventoryHistory.find({}), etc.), so any tenant's admin loading their own
-// dashboard saw every OTHER tenant's revenue, orders, customer names/emails,
-// and stock levels too. Found live. Inventory/InventoryHistory have no
-// tenant_id field of their own (see Inventory.js/InventoryHistory.js), so
-// those are scoped via a $lookup on Product + a match on product.tenant_id
-// instead of a direct filter.
+// Tenant-scoped; Inventory/History scope via a $lookup on product.tenant_id.
 
 const Order = require("../models/Order");
 const Inventory = require("../models/Inventory");
@@ -16,18 +8,21 @@ const MarketplaceListing = require("../models/MarketplaceListing");
 const InventorySettings = require("../models/InventorySettings");
 const Tenant = require("../models/Tenant");
 const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
-const { LISTING_STATE } = require("../constants/marketplace.constants");
+const mongoose = require("mongoose");
+const {
+  LISTING_STATE,
+  LISTING_SUCCESS_STATUSES,
+  LISTING_NEEDS_ATTENTION_STATUSES,
+} = require("../constants/marketplace.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 
 // Orders still awaiting settlement — what the dashboard means by "pending".
 const PENDING_ORDER_STATUSES = [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID];
 
-// ── Stat cards ───────────────────────────────────────────────────────────────
+// Stat cards
 
-// Sum of stock_count * product.price (dollars — Product.price is stored in
-// dollars, unlike Order/Payment which are cents) across every inventory
-// record for a non-deleted product belonging to this tenant.
+// Stock value in dollars (Product.price is dollars) for non-deleted products.
 async function getInventoryValue(tenantId) {
   const [result] = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
@@ -38,30 +33,10 @@ async function getInventoryValue(tenantId) {
   return result?.totalValue || 0;
 }
 
-// Real (not fabricated) trend figure for the Total Inventory Value card —
-// the % the value has moved over the last `days` days, derived from actual
-// InventoryHistory adjustments (each one's stock delta × the product's
-// price) rather than a snapshot history this app doesn't keep. Returns null
-// when there isn't enough history to establish a baseline (division by
-// zero, or a brand-new tenant) — the frontend shows "no trend yet" rather
-// than a misleading 0%/Infinity.
-//
-// Also returns null when the baseline was near-zero — a tenant going from
-// $1 of stock to $500 is a real 49900% "increase" but not a meaningful
-// trend figure, and rendering it verbatim is what blew out the MetricCard
-// layout in production (a 5-character badge assumption baked into the
-// component). MAX_MEANINGFUL_CHANGE_PCT draws the line: past it, "no
-// baseline to compare against" is the more honest read than the number.
+// Past this, a near-zero baseline makes the % noise; return null instead.
 const MAX_MEANINGFUL_CHANGE_PCT = 500;
 
-/**
- * Current stock value broken down by the product's FIRST category (the same
- * one reports.service.js attributes a line to), keyed by category id as a
- * string. Products with no category are grouped under "" so the caller can
- * account for them rather than silently losing their value.
- *
- * Returned in dollars, like getInventoryValue — Product.price is dollars.
- */
+/** Stock value (dollars) by first category id; uncategorised under "". */
 async function getInventoryValueByCategory(tenantId) {
   const rows = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
@@ -99,8 +74,7 @@ async function getInventoryValueChangePct(tenantId, currentValue, days = 7) {
   return changePct;
 }
 
-// Rolls locations up to one row per product+variant first — "low on stock"
-// is a property of the item overall, not of any single shelf.
+// One row per product+variant: low stock is per item, not per shelf.
 async function getStockCounts(tenantId, lowStockThreshold) {
   const [result] = await Inventory.aggregate([
     { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },
@@ -138,43 +112,45 @@ async function getPendingOrdersStats(tenantId) {
   };
 }
 
-// A platform's health is measured by what fraction of its ACTIVE listings
-// are currently in sync — one query per registered adapter (eBay, Google,
-// any future one), not hardcoded per platform. Extracted so getChannelHealth
-// below can just map this over registry.getAll() instead of duplicating this
-// same block again for every new channel — see that function's own comment.
+// Per-adapter health from one grouped query over the tenant's active listings.
 async function getPlatformChannelHealth(tenantId, adapter) {
-  const listings = await MarketplaceListing.find({
-    tenant_id: tenantId,
-    platform: adapter.key,
-    state: LISTING_STATE.ACTIVE,
-  })
-    .select("sync_status synced_at")
-    .lean();
+  const rows = await MarketplaceListing.aggregate([
+    {
+      $match: {
+        tenant_id: new mongoose.Types.ObjectId(String(tenantId)),
+        platform: adapter.key,
+        state: LISTING_STATE.ACTIVE,
+      },
+    },
+    { $group: { _id: "$sync_status", count: { $sum: 1 }, lastSyncedAt: { $max: "$synced_at" } } },
+  ]);
 
-  const total = listings.length;
-  const syncedCount = listings.filter((l) => l.sync_status === "synced").length;
-  const erroredCount = listings.filter((l) => l.sync_status === "error").length;
-  const lastSyncedAt = listings.reduce(
-    (latest, l) => (l.synced_at && (!latest || l.synced_at > latest) ? l.synced_at : latest),
+  const countOf = (statuses) => rows.filter((r) => statuses.includes(r._id)).reduce((sum, r) => sum + r.count, 0);
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  const failed = countOf(LISTING_NEEDS_ATTENTION_STATUSES);
+  const lastSyncedAt = rows.reduce(
+    (latest, r) => (r.lastSyncedAt && (!latest || r.lastSyncedAt > latest) ? r.lastSyncedAt : latest),
     null,
   );
 
   return {
     key: adapter.key,
     name: adapter.manifest?.name || adapter.key,
-    status: total === 0 ? "not_connected" : erroredCount > 0 ? "attention" : "operational",
+    status: total === 0 ? "not_connected" : failed > 0 ? "attention" : "operational",
     lastSyncedAt,
-    listingsSynced: syncedCount,
+    listingsSynced: countOf(LISTING_SUCCESS_STATUSES),
+    listingsFailed: failed,
     listingsTotal: total,
   };
 }
 
-// Storefront is the only channel that isn't a registered marketplace adapter
-// (it's always available, no external sync concept) — kept as one hardcoded
-// row for that reason; every other channel comes from registry.getAll(), so
-// a new adapter (Google today, anything registered later) shows up here with
-// zero changes to this function once it's registered — see registerAdapters.js.
+// NOTE: floor, so any failure shows under 100%; null when nothing has settled.
+function syncStabilityPct(succeeded, failed) {
+  const settled = succeeded + failed;
+  return settled === 0 ? null : Math.floor((succeeded / settled) * 100);
+}
+
+// Storefront is hardcoded (no sync); every adapter comes from the registry.
 async function getChannelHealth(tenantId) {
   const registry = require("./marketplace/registry");
   const platformChannels = await Promise.all(
@@ -193,18 +169,16 @@ async function getChannelHealth(tenantId) {
   ];
 
   const operationalCount = channels.filter((c) => c.status === "operational").length;
-  const totalListings = platformChannels.reduce((sum, c) => sum + c.listingsTotal, 0);
-  const totalSynced = platformChannels.reduce((sum, c) => sum + c.listingsSynced, 0);
-  const stabilityPct = totalListings === 0 ? 100 : Math.round((totalSynced / totalListings) * 100);
+  const totalSucceeded = platformChannels.reduce((sum, c) => sum + c.listingsSynced, 0);
+  const totalFailed = platformChannels.reduce((sum, c) => sum + c.listingsFailed, 0);
+  const stabilityPct = syncStabilityPct(totalSucceeded, totalFailed);
 
   return { channels, operationalCount, totalChannels: channels.length, stabilityPct };
 }
 
 async function getStats(tenantId) {
   const settings = await InventorySettings.getOrCreate(tenantId);
-  // getInventoryValueChangePct needs the current total as its baseline
-  // reference point, so it can't join the Promise.all below — the other
-  // three are still fetched concurrently with it.
+  // The change % needs this total as its baseline, so it can't join the batch.
   const totalInventoryValue = await getInventoryValue(tenantId);
   const [inventoryValueChangePct, stockCounts, pendingOrders, channelHealth] = await Promise.all([
     getInventoryValueChangePct(tenantId, totalInventoryValue),
@@ -226,35 +200,9 @@ async function getStats(tenantId) {
   };
 }
 
-// ── Dashboard trend (order volume + revenue, by channel) ───────────────────
+// Dashboard trend (order volume + revenue, by channel)
 
-// Single source of truth for the whole dashboard's date-range filter — one
-// bucket per calendar day across the requested window, always returning a
-// fully-populated series (zero-filled) so a chart never has to guess about
-// missing days. Two ways to specify the window: `days` (last N days ending
-// today — the default) or an explicit `from`/`to` pair (an arbitrary custom
-// range, which doesn't have to end today). `from`/`to` take precedence when
-// both are given. Every known ORDER_CHANNEL value is pre-seeded at 0 on
-// every bucket (not just channels that happened to have an order that day)
-// so a multi-line "by channel" chart never has to treat a zero-order day as
-// a missing data point and break the line.
-//
-// Also returns previousPeriodRevenueCents — real revenue for the
-// same-length window immediately before the requested one — so the
-// dashboard can show a genuine "+X% vs prior period" figure instead of a
-// fabricated target. Fetched in the same query (one wider $gte down to the
-// start of the prior period) rather than a second round trip.
-//
-// Every boundary here is built with Date.UTC(...) rather than the local-time
-// setters (setDate/setHours) that used to be here — those construct a LOCAL
-// midnight, which toISOString() (used for the bucket key and for matching
-// order.created_at) then renders as the PREVIOUS UTC calendar day on any
-// server whose local timezone is ahead of UTC. That silently dropped today
-// and shifted the entire window a day into the past. Found by running this
-// against real data on a UTC+5 box — every bucket came back one calendar
-// day earlier than intended. Since order.created_at is a real timestamp
-// compared with the same toISOString() slice, bucketing everything through
-// UTC from construction onward is what keeps the two sides consistent.
+// UTC boundaries: local midnights shifted every bucket a day on UTC+ hosts.
 function startOfUtcDay(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
@@ -268,9 +216,7 @@ async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
     untilUtc = startOfUtcDay(new Date());
     sinceUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() - (days - 1)));
   }
-  // "to" is a whole day, not an instant — the upper query bound is the start
-  // of the day AFTER it, so orders placed any time during that last day are
-  // still included.
+  // "to" is a whole day, so the bound is the start of the next day.
   const exclusiveUntilUtc = new Date(Date.UTC(untilUtc.getUTCFullYear(), untilUtc.getUTCMonth(), untilUtc.getUTCDate() + 1));
   const dayCount = Math.round((exclusiveUntilUtc - sinceUtc) / 86_400_000);
   const previousSinceUtc = new Date(Date.UTC(sinceUtc.getUTCFullYear(), sinceUtc.getUTCMonth(), sinceUtc.getUTCDate() - dayCount));
@@ -312,13 +258,9 @@ async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
   return { points: Array.from(byDate.values()), previousPeriodRevenueCents };
 }
 
-// ── Recent activity — synthesized from Orders + InventoryHistory ───────────
-// No dedicated activity/audit log exists in this system; this merges the two
-// event sources this app actually has, newest first.
+// Recent activity: no audit log exists, so merge Orders + InventoryHistory.
 
-// Same "A$1,234.56" convention as invoicePdf.js#formatMoney — kept as its
-// own copy rather than a shared import since that one lives under utils/pdf
-// for a PDF-rendering context, while this is a plain activity-feed string.
+// Same "A$1,234.56" format as invoicePdf.js#formatMoney.
 function formatOrderTotal(cents) {
   return `A$${(cents / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -328,9 +270,7 @@ function mapOrderEvent(o) {
     id: `order_${o._id}`,
     type: "order",
     title: `New Order ${formatOrderNumber(o.order_number_prefix, o.order_number)}`,
-    // Channel isn't folded into this string — tags[0] carries the raw
-    // channel value (see below) so the frontend renders it as its own
-    // OrderChannelBadge pill instead of plain "via storefront" text.
+    // Channel goes in tags[0] so the UI renders it as its own badge.
     description: formatOrderTotal(o.total),
     timestamp: o.created_at,
     tags: [o.channel, o.status],
@@ -350,21 +290,14 @@ function mapStockEvent(h) {
     ]
       .filter(Boolean)
       .join(" "),
-    // Structured (not folded into description) so the frontend can render
-    // it on its own line — variant SKU takes precedence since it's the one
-    // that actually maps to eBay's inventory item.
+    // Variant SKU wins: it's the one that maps to eBay's inventory item.
     sku: h.variant?.sku || h.product?.sku || null,
     timestamp: h.created_at,
     tags: [h.type],
   };
 }
 
-// InventoryHistory has no tenant_id of its own (see the file-level comment),
-// so tenant scoping goes through an aggregation $lookup on Product instead
-// of the plain .find().populate() this used to be — same output shape,
-// `product`/`variant` still come back populated (as embedded documents
-// rather than Mongoose refs, .lean() already made these plain objects
-// either way so mapStockEvent needs no changes).
+// No tenant_id on InventoryHistory, so scope via a $lookup on Product.
 async function findRecentStockEvents(tenantId, limit) {
   return InventoryHistory.aggregate([
     { $sort: { created_at: -1 } },
@@ -393,13 +326,7 @@ async function getRecentActivity(tenantId, limit = 10) {
   return events.slice(0, limit);
 }
 
-// ── Activity log — paginated, filterable version of the feed above ─────────
-// Merging two differently-shaped collections into one sorted, paginated feed
-// means skip/limit can't be pushed to a single query. Instead each source is
-// queried for its own top (skip + limit) rows (already filtered/sorted),
-// merged, re-sorted, then sliced to the requested page — every page comes
-// out exactly right while only ever fetching two bounded slices, never the
-// whole table. `total` is a separate, cheap countDocuments per source.
+// Each source fetches its top skip+limit, then merge; never the whole table.
 async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, to, search } = {}) {
   const skip = (page - 1) * limit;
   const fetchCount = skip + limit;
@@ -418,15 +345,11 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   if (search) {
     const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
     strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
-    // Previously interpolated the raw search string straight into $regex
-    // with no escaping — a user-controlled regex-injection/ReDoS surface
-    // (e.g. `(a+)+$`-style patterns). buildWordSearchOr always escapes.
+    // buildWordSearchOr escapes input, closing a regex-injection/ReDoS hole.
     orderFilter.$or = buildWordSearchOr(["order_number", "customer.name", "customer.email"], strippedSearch);
   }
 
-  // $lookup+$match on product.tenant_id BEFORE $sort/$limit — this must be
-  // an early stage, not a post-filter, or the fetchCount slice could fill up
-  // with another tenant's rows before this tenant's own are ever reached.
+  // Tenant match must precede $sort/$limit or other tenants fill the slice.
   const stockBasePipeline = [];
   if (hasDateFilter) stockBasePipeline.push({ $match: { created_at: dateFilter } });
   stockBasePipeline.push(
@@ -438,9 +361,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   );
   if (search) {
     stockBasePipeline.push({
-      // product.sku/variant.sku included so a specific SKU (visible in
-      // logs/eBay Seller Hub, but not always the product's title) can be
-      // searched directly, instead of having to guess a title fragment.
+      // SKUs are searchable too; staff often only know the SKU from eBay.
       $match: { $or: buildWordSearchOr(["product.title", "product.sku", "variant.sku", "reason"], search) },
     });
   }
@@ -473,10 +394,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   };
 }
 
-// One zero-filled bucket per calendar day across [from, to] (default: the
-// trailing 14 days) — same "always fully populated" contract as
-// getOrderVolumeTrend, so the activity log's trend chart never has to guess
-// about missing days.
+// Zero-filled day buckets (default: last 14 days), like getOrderVolumeTrend.
 async function getActivityAnalytics(tenantId, { from, to } = {}) {
   const rangeTo = to ? new Date(to) : new Date();
   const rangeFrom = from
@@ -528,11 +446,9 @@ async function getActivityAnalytics(tenantId, { from, to } = {}) {
   };
 }
 
-// ── Critical stock ───────────────────────────────────────────────────────────
+// Critical stock
 
-// Rolled up to one row per product+variant (summed across locations) so this
-// lines up with getStockCounts()'s definition of "low on stock" — a product
-// split across two half-empty shelves shouldn't read as two separate alerts.
+// Summed across locations, matching getStockCounts' low-stock definition.
 async function getCriticalStock(tenantId, limit = 10) {
   const settings = await InventorySettings.getOrCreate(tenantId);
 
@@ -546,13 +462,10 @@ async function getCriticalStock(tenantId, limit = 10) {
       $group: {
         _id: { product: "$product._id", variant: "$variant._id" },
         stockCount: { $sum: "$stock_count" },
-        // Every location record for the same product+variant carries identical
-        // product/variant details — $first is just "pick one", not an aggregate.
+        // Every location row shares the product details; $first just picks one.
         product: { $first: "$product" },
         variant: { $first: "$variant" },
-        // A stand-in id for the Reorder action — any one of this item's
-        // per-location Inventory records works, since adjustStock() only
-        // needs *a* record for this product+variant to attribute the credit to.
+        // Any location record works: adjustStock only needs one for this item.
         sampleInventoryId: { $first: "$_id" },
       },
     },
@@ -579,9 +492,7 @@ module.exports = {
   listActivity,
   getActivityAnalytics,
   getCriticalStock,
-  // Exported so reports.service.js can reuse the same inventory-value
-  // aggregation instead of duplicating it (the Reports page's Inventory
-  // Insights card and its turnover-ratio denominator both need it).
+  // Shared with reports.service.js (inventory insights, turnover denominator).
   getInventoryValue,
   getInventoryValueByCategory,
 };
