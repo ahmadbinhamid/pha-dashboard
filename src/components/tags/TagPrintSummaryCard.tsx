@@ -5,7 +5,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { TagPreview } from "@/components/tags/TagPreview";
 import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
-import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
+import { tagSizeMm } from "@/config/productTag";
 import type { TagContent, TagQueueItem, TagStyle } from "@/types/tags";
 
 interface TagPrintSummaryCardProps {
@@ -29,7 +29,7 @@ export function TagPrintSummaryCard({
   busy,
 }: TagPrintSummaryCardProps) {
   const totalTags = items.reduce((sum, i) => sum + i.copies, 0);
-  const { width, height } = PRODUCT_TAG_SIZE_MM;
+  const { width, height } = tagSizeMm(style);
 
   return (
     <Card className="lg:sticky lg:top-6">

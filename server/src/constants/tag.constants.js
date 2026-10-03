@@ -1,5 +1,5 @@
 // constants/tag.constants.js
-// Printed tag options; the 76 x 25 mm size is the printer's, never a setting.
+// Printed tag options; mirrored by the dashboard's config/productTag.ts.
 
 const TAG_FONT = Object.freeze({ HELVETICA: "helvetica", TIMES: "times", COURIER: "courier" });
 const TAG_QR_POSITION = Object.freeze({ LEFT: "left", RIGHT: "right" });
@@ -8,6 +8,8 @@ const TAG_LINE_SPACING = Object.freeze({ TIGHT: "tight", NORMAL: "normal", RELAX
 const TAG_PRINT_SOURCE = Object.freeze({ QUEUE: "queue", PRODUCT: "product" });
 // "set" replaces the queued copies; "increment" adds to them.
 const TAG_QUEUE_MODE = Object.freeze({ SET: "set", INCREMENT: "increment" });
+// Common Australian direct-thermal label sizes, "widthxheight" in mm.
+const TAG_SIZES = Object.freeze(["50x25", "62x29", "76x25", "76x38", "76x50", "102x25", "102x36", "102x50", "102x76"]);
 
 // Body fields stack in the saved order; stock number and bay form the footer.
 const TAG_FIELD = Object.freeze({
@@ -31,6 +33,7 @@ const DEFAULT_TAG_FIELDS = Object.freeze([
 ]);
 
 const DEFAULT_TAG_STYLE = Object.freeze({
+  size: "76x25",
   font: TAG_FONT.HELVETICA,
   qr_position: TAG_QR_POSITION.LEFT,
   align: TAG_ALIGN.LEFT,
@@ -46,6 +49,7 @@ module.exports = {
   TAG_LINE_SPACING,
   TAG_PRINT_SOURCE,
   TAG_QUEUE_MODE,
+  TAG_SIZES,
   TAG_FIELD,
   TAG_BODY_FIELDS,
   MAX_TAG_COPIES,

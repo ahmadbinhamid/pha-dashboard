@@ -4,7 +4,7 @@ import { CheckCircle2, Printer, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from "@/components/ui/Modal";
 import { TagPreview } from "@/components/tags/TagPreview";
-import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
+import { tagSizeMm } from "@/config/productTag";
 import { useToast } from "@/context";
 import { TAG_QUERY_KEYS, recordTagPrint } from "@/lib/api/tags";
 import { printTags } from "@/lib/tags/tagPdf";
@@ -31,6 +31,7 @@ export function PrintTagsModal({ open, onOpenChange, items, source, style }: Pri
   }, [open]);
 
   const totalTags = items.reduce((sum, i) => sum + i.copies, 0);
+  const size = tagSizeMm(style);
   const fromQueue = source === "queue";
 
   const confirmMutation = useMutation({
@@ -57,7 +58,7 @@ export function PrintTagsModal({ open, onOpenChange, items, source, style }: Pri
             <ModalHeader>
               <ModalTitle>Print {pluralize(totalTags, "tag")}?</ModalTitle>
               <ModalDescription>
-                {pluralize(items.length, "product")} · {PRODUCT_TAG_SIZE_MM.width} × {PRODUCT_TAG_SIZE_MM.height} mm labels, one per page.
+                {pluralize(items.length, "product")} · {size.width} × {size.height} mm labels, one per page.
               </ModalDescription>
             </ModalHeader>
             <div className="space-y-3 pt-2">

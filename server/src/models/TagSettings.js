@@ -8,6 +8,7 @@ const {
   TAG_QR_POSITION,
   TAG_ALIGN,
   TAG_LINE_SPACING,
+  TAG_SIZES,
   TAG_FIELD,
   TAG_FONT_PT,
   TAG_MARGIN_MM,
@@ -27,6 +28,7 @@ const tagFieldSchema = new Schema(
 const tagSettingsSchema = buildSchema(
   {
     tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, unique: true },
+    size: { type: String, enum: TAG_SIZES, default: DEFAULT_TAG_STYLE.size },
     font: { type: String, enum: Object.values(TAG_FONT), default: DEFAULT_TAG_STYLE.font },
     qr_position: { type: String, enum: Object.values(TAG_QR_POSITION), default: DEFAULT_TAG_STYLE.qr_position },
     align: { type: String, enum: Object.values(TAG_ALIGN), default: DEFAULT_TAG_STYLE.align },

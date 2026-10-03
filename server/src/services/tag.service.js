@@ -15,6 +15,7 @@ const {
   TAG_PRINT_SOURCE,
   TAG_QUEUE_MODE,
   TAG_FIELD,
+  TAG_SIZES,
   DEFAULT_TAG_FIELDS,
   DEFAULT_TAG_STYLE,
 } = require("../constants/tag.constants");
@@ -218,6 +219,7 @@ function normalizeFields(fields) {
 
 function toStyle(doc = {}) {
   return {
+    size: TAG_SIZES.includes(doc.size) ? doc.size : DEFAULT_TAG_STYLE.size,
     font: doc.font ?? DEFAULT_TAG_STYLE.font,
     qr_position: doc.qr_position ?? DEFAULT_TAG_STYLE.qr_position,
     align: doc.align ?? DEFAULT_TAG_STYLE.align,

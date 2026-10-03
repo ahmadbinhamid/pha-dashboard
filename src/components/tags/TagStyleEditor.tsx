@@ -10,13 +10,13 @@ import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
 import {
   DEFAULT_TAG_STYLE,
-  PRODUCT_TAG_SIZE_MM,
   TAG_ALIGN_OPTIONS,
   TAG_BODY_FIELDS,
   TAG_FONT_OPTIONS,
   TAG_LINE_SPACING_OPTIONS,
   TAG_MARGIN_MM,
   TAG_QR_POSITION_OPTIONS,
+  TAG_SIZE_OPTIONS,
 } from "@/config/productTag";
 import { useToast } from "@/context";
 import { TAG_QUERY_KEYS, updateTagStyle } from "@/lib/api/tags";
@@ -73,11 +73,11 @@ export function TagStyleEditor({ style, sample }: TagStyleEditorProps) {
       <Card className="lg:col-span-3">
         <CardHeader
           title="Tag style"
-          description={`Applies to every tag. Size stays ${PRODUCT_TAG_SIZE_MM.width} × ${PRODUCT_TAG_SIZE_MM.height} mm for your printer.`}
+          description="Applies to every tag. Pick the label size loaded in your printer."
           right={
             <Can permission={PERMISSIONS.tags.update}>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="ghost" size="sm" disabled={saveMutation.isPending} onClick={() => setDraft(DEFAULT_TAG_STYLE)}>
+                <Button type="button" variant="ghost" size="sm" disabled={saveMutation.isPending} onClick={() => setDraft((d) => ({ ...DEFAULT_TAG_STYLE, size: d.size }))}>
                   Reset
                 </Button>
                 <Button type="button" variant="primary" size="sm" disabled={!dirty || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
@@ -91,6 +91,9 @@ export function TagStyleEditor({ style, sample }: TagStyleEditorProps) {
           <section className="space-y-3">
             <p className="text-2xs font-semibold uppercase tracking-wider text-fg/55">Layout</p>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <FormField label="Label size (W × H)">
+                <SingleSelect options={TAG_SIZE_OPTIONS} value={draft.size} onChange={(v) => set("size", v as TagStyle["size"])} />
+              </FormField>
               <FormField label="Font">
                 <SingleSelect options={TAG_FONT_OPTIONS} value={draft.font} onChange={(v) => set("font", v as TagStyle["font"])} />
               </FormField>

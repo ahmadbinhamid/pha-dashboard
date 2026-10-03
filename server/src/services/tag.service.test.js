@@ -121,6 +121,13 @@ test("style: defaults on first read, partial update keeps the rest", async () =>
   assert.equal(saved.fields.find((f) => f.key === "note").visible, false);
 });
 
+test("style: label size defaults, saves, and survives a later partial update", async () => {
+  const tenantId = fixtureId();
+  assert.equal((await tagService.getStyle(tenantId)).size, DEFAULT_TAG_STYLE.size);
+  assert.equal((await tagService.updateStyle(tenantId, { size: "102x36" })).size, "102x36");
+  assert.equal((await tagService.updateStyle(tenantId, { font: "times" })).size, "102x36");
+});
+
 test("style: legacy show_*/title_size docs read as fields", async () => {
   const tenantId = fixtureId();
   await TagSettings.collection.insertOne({ tenant_id: tenantId, font: "times", show_note: false, title_size: "lg" });
