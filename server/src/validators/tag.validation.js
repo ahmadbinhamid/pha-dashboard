@@ -8,6 +8,7 @@ const {
   TAG_LINE_SPACING,
   TAG_PRINT_SOURCE,
   TAG_QUEUE_MODE,
+  TAG_SIZES,
   TAG_FIELD,
   TAG_FONT_PT,
   TAG_MARGIN_MM,
@@ -50,6 +51,7 @@ const tagField = Joi.object({
 
 const updateStyle = {
   body: Joi.object({
+    size: Joi.string().valid(...TAG_SIZES),
     font: Joi.string().valid(...Object.values(TAG_FONT)),
     qr_position: Joi.string().valid(...Object.values(TAG_QR_POSITION)),
     align: Joi.string().valid(...Object.values(TAG_ALIGN)),

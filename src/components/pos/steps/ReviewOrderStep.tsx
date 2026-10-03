@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { CartItemRow } from "@/components/pos/CartItemRow";
+import { AddCustomProductButton } from "@/components/pos/AddCustomProductButton";
 import { useCart } from "@/context/cart";
 import { useToast } from "@/context";
 import { createManualOrder } from "@/lib/api/orders";
@@ -183,7 +184,11 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           <Card>
-            <CardHeader title="Product List" description={`${items.length} line${items.length !== 1 ? "s" : ""}`} />
+            <CardHeader
+              title="Product List"
+              description={`${items.length} line${items.length !== 1 ? "s" : ""}`}
+              right={<AddCustomProductButton />}
+            />
             <div className="divide-y divide-border">
               {lines.map(({ item, lineTotal }) => (
                 <CartItemRow

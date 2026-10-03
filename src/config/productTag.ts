@@ -1,7 +1,28 @@
-import type { TagAlign, TagFieldKey, TagFieldStyle, TagFont, TagLineSpacing, TagQrPosition, TagStyle } from "@/types/tags";
+import type { TagAlign, TagFieldKey, TagFieldStyle, TagFont, TagLineSpacing, TagQrPosition, TagSize, TagStyle } from "@/types/tags";
 
-// Printed tag: label stock size and the link its QR code opens.
-export const PRODUCT_TAG_SIZE_MM = { width: 76, height: 25 } as const;
+// Common Australian direct-thermal label sizes, in mm.
+export const TAG_SIZE_MM: Record<TagSize, { width: number; height: number }> = {
+  "50x25": { width: 50, height: 25 },
+  "62x29": { width: 62, height: 29 },
+  "76x25": { width: 76, height: 25 },
+  "76x38": { width: 76, height: 38 },
+  "76x50": { width: 76, height: 50 },
+  "102x25": { width: 102, height: 25 },
+  "102x36": { width: 102, height: 36 },
+  "102x50": { width: 102, height: 50 },
+  "102x76": { width: 102, height: 76 },
+};
+export const DEFAULT_TAG_SIZE: TagSize = "76x25";
+
+export const TAG_SIZE_OPTIONS: { value: TagSize; label: string }[] = (Object.keys(TAG_SIZE_MM) as TagSize[]).map((size) => ({
+  value: size,
+  label: `${TAG_SIZE_MM[size].width} × ${TAG_SIZE_MM[size].height} mm`,
+}));
+
+// Unknown sizes (e.g. an older client's cache) fall back to the default.
+export function tagSizeMm(style: Pick<TagStyle, "size">) {
+  return TAG_SIZE_MM[style.size] ?? TAG_SIZE_MM[DEFAULT_TAG_SIZE];
+}
 
 // NOTE: mobile app contract; it must register this scheme to open the product.
 export const PRODUCT_TAG_DEEP_LINK_BASE = "autopartspro://product/";
@@ -24,6 +45,7 @@ export const DEFAULT_TAG_FIELDS: TagFieldStyle[] = [
 ];
 
 export const DEFAULT_TAG_STYLE: TagStyle = {
+  size: DEFAULT_TAG_SIZE,
   font: "helvetica",
   qr_position: "left",
   align: "left",

@@ -2,15 +2,13 @@ import { useMemo, useRef } from "react";
 import QRCode from "qrcode";
 import { cn } from "@/utils/cn";
 import { useElementSize } from "@/hooks/useElementSize";
-import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
+import { tagSizeMm } from "@/config/productTag";
 import { BAY_CHIP_PAD_MM, PT_TO_MM, layoutTag } from "@/lib/tags/tagPdf";
 import type { TagContent, TagFont, TagStyle } from "@/types/tags";
 
-// 380px wide for the 76 mm tag.
+// 380px wide for a 76 mm tag.
 const PX_PER_MM = 5;
 const mm = (v: number) => `${(v * PX_PER_MM).toFixed(2)}px`;
-const TAG_W_PX = PRODUCT_TAG_SIZE_MM.width * PX_PER_MM;
-const TAG_H_PX = PRODUCT_TAG_SIZE_MM.height * PX_PER_MM;
 const pt = (v: number) => mm(v * PT_TO_MM);
 // Same families the PDF prints with, so line breaks match.
 const FONT_FAMILY: Record<TagFont, string> = {
@@ -31,8 +29,11 @@ interface TagPreviewProps {
 export function TagPreview({ content, style, className }: TagPreviewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const { width } = useElementSize(frameRef);
+  const size = tagSizeMm(style);
+  const tagWPx = size.width * PX_PER_MM;
+  const tagHPx = size.height * PX_PER_MM;
   // Drawn at true size, then scaled down to fit narrow containers.
-  const scale = width ? Math.min(1, width / TAG_W_PX) : 1;
+  const scale = width ? Math.min(1, width / tagWPx) : 1;
   const qr = useMemo(() => {
     const { modules } = QRCode.create(content.link, {
       errorCorrectionLevel: "M",
@@ -59,15 +60,15 @@ export function TagPreview({ content, style, className }: TagPreviewProps) {
   return (
     <div
       ref={frameRef}
-      className={cn("w-95 max-w-full shrink-0", className)}
-      style={{ height: TAG_H_PX * scale }}
+      className={cn("max-w-full shrink-0", className)}
+      style={{ width: tagWPx, height: tagHPx * scale }}
     >
       {/* Tags print black on white whatever the app theme is. */}
       <div
         className="relative origin-top-left overflow-hidden rounded-md border border-border bg-white text-black shadow-sm"
         style={{
-          width: TAG_W_PX,
-          height: TAG_H_PX,
+          width: tagWPx,
+          height: tagHPx,
           transform: `scale(${scale})`,
           fontFamily: FONT_FAMILY[style.font],
         }}
@@ -129,7 +130,7 @@ export function TagPreview({ content, style, className }: TagPreviewProps) {
                 left: mm(textLeft),
                 width: mm(layout.textWidth),
                 bottom: mm(
-                  PRODUCT_TAG_SIZE_MM.height - layout.footerBaseline - 0.4,
+                  size.height - layout.footerBaseline - 0.4,
                 ),
               }}
             >

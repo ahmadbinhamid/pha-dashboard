@@ -40,8 +40,9 @@ const listCategories = {
   query: Joi.object({
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
-    // Mirrors product.validation.js's listProducts filters, so product_count reflects the
-    // active shop filters instead of a static catalog-wide total.
+    // Comma-separated slugs; narrows which categories are listed.
+    slugs: Joi.string().allow(""),
+    // Same filters as listProducts, so product_count follows the shop filters.
     search: Joi.string().allow("").default(""),
     price_min: Joi.number().min(0),
     price_max: Joi.number().min(0),

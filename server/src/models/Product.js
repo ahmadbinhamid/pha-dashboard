@@ -120,4 +120,9 @@ productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code
 // getProductCountsByCategory; autoIndex is off in prod, so build it manually.
 productSchema.index({ tenant_id: 1, categories: 1, is_published_online: 1, status: 1 });
 
+// Pickup-only products never post, so no stale flat rate can be charged.
+productSchema.pre("validate", function clearPickupShippingCost() {
+  if (this.shipping_method === SHIPPING_METHOD.PICKUP) this.shipping_cost = null;
+});
+
 module.exports = model("Product", productSchema);

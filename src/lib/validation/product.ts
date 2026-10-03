@@ -30,7 +30,7 @@ const productFormShape = {
     weight: optionalNonNegativePriceSchema("Weight"),
   }),
   bay: z.string().trim().max(40, "Bay must be 40 characters or fewer"),
-  shipping_method: z.enum(["standard", "calculated"]),
+  shipping_method: z.enum(["standard", "calculated", "pickup"]),
   tailgate_pickup: z.boolean(),
   tailgate_delivery: z.boolean(),
   type: z.string(),

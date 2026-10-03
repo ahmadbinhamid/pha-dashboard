@@ -1,15 +1,16 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
-import { PRODUCT_TAG_SIZE_MM, TAG_BODY_FIELDS, TAG_LINE_HEIGHT, productTagDeepLink } from "@/config/productTag";
+import { TAG_BODY_FIELDS, TAG_LINE_HEIGHT, productTagDeepLink, tagSizeMm } from "@/config/productTag";
 import type { Product } from "@/types/product";
 import type { TagContent, TagFieldKey, TagFieldStyle, TagLayout, TagPrintItem, TagPrintJob, TagProduct, TagQueueItem, TagStyle, TagTextBlock } from "@/types/tags";
 
-const { width: W, height: H } = PRODUCT_TAG_SIZE_MM;
 const PRINT_FRAME_ID = "tag-print-frame";
 const GAP = 2.5;
 const BLOCK_GAP = 0.8;
 const TITLE_MIN_PT = 5;
 const NOTE_MAX_LINES = 2;
+// Caps the QR on tall labels so the text column keeps usable width.
+const QR_MAX_WIDTH_SHARE = 0.45;
 export const PT_TO_MM = 0.3528;
 export const BAY_CHIP_PAD_MM = 1.2;
 
@@ -68,9 +69,11 @@ let measurer: jsPDF | null = null;
 
 /** Where every field goes; the PDF and the on-screen preview share this. */
 export function layoutTag(content: TagContent, style: TagStyle, doc?: jsPDF): TagLayout {
+  const { width: W, height: H } = tagSizeMm(style);
+  // Text metrics don't depend on page size, so one measurer serves all sizes.
   const d = doc ?? (measurer ??= new jsPDF({ unit: "mm", format: [W, H], orientation: "landscape" }));
   const margin = style.margin_mm;
-  const qrSize = H - margin * 2;
+  const qrSize = Math.min(H - margin * 2, (W - margin * 2) * QR_MAX_WIDTH_SHARE);
   const textWidth = W - margin * 2 - qrSize - GAP;
   const lineHeight = TAG_LINE_HEIGHT[style.line_spacing];
   const lineMm = (pt: number) => pt * PT_TO_MM * lineHeight;
@@ -125,6 +128,7 @@ export function layoutTag(content: TagContent, style: TagStyle, doc?: jsPDF): Ta
   const stock = block(stockField, textWidth - bayWidth);
 
   return {
+    width: W,
     margin,
     qrSize,
     textWidth,
@@ -149,11 +153,10 @@ function drawQr(doc: jsPDF, text: string, x: number, y: number, size: number) {
   }
 }
 
-function drawTag(doc: jsPDF, content: TagContent, style: TagStyle) {
-  const layout = layoutTag(content, style, doc);
-  const { margin, qrSize, textWidth, lineHeight } = layout;
+function drawTag(doc: jsPDF, content: TagContent, style: TagStyle, layout: TagLayout) {
+  const { width, margin, qrSize, textWidth, lineHeight } = layout;
   const qrLeft = style.qr_position === "left";
-  drawQr(doc, content.link, qrLeft ? margin : W - margin - qrSize, margin, qrSize);
+  drawQr(doc, content.link, qrLeft ? margin : width - margin - qrSize, margin, qrSize);
   const x = qrLeft ? margin + qrSize + GAP : margin;
   const center = style.align === "center";
   const textX = center ? x + textWidth / 2 : x;
@@ -189,14 +192,17 @@ function drawTag(doc: jsPDF, content: TagContent, style: TagStyle) {
   }
 }
 
-/** One PDF, one 76 × 25 mm page per copy of every job, in order. */
+/** One PDF, one label-sized page per copy of every job, in order. */
 export function buildTagsPdf(jobs: TagPrintJob[], style: TagStyle): jsPDF {
+  const { width: W, height: H } = tagSizeMm(style);
   const doc = new jsPDF({ unit: "mm", format: [W, H], orientation: "landscape" });
   let first = true;
   for (const { content, copies } of jobs) {
+    // Copies are identical, so fit the text once per job, not per page.
+    const layout = layoutTag(content, style, doc);
     for (let i = 0; i < copies; i++) {
       if (!first) doc.addPage([W, H], "landscape");
-      drawTag(doc, content, style);
+      drawTag(doc, content, style, layout);
       first = false;
     }
   }

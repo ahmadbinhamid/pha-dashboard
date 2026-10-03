@@ -35,7 +35,7 @@ const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
 const { getCompanyProfile } = require("./tenantSettings.service");
 const notificationService = require("./notification.service");
-const { quoteCart, hasCalculatedShipping } = require("./shipping/shippingQuote.service");
+const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shippingQuote.service");
 
 // AU prices are GST-inclusive: GST = price / 11, never added on top.
 const GST_DIVISOR = 11;
@@ -516,6 +516,12 @@ async function orderShippingCents(tenantId, items, resolvedItems, shippingAddres
   return quote.shipping_cost;
 }
 
+// Delivery orders can't include products sold for in-store pickup only.
+async function assertDeliverable(tenantId, items) {
+  const titles = await findPickupOnlyTitles(tenantId, items);
+  if (titles.length) throw httpError(`In-store pickup only: ${titles.join(", ")}`, 400);
+}
+
 // `tenant` comes from the storefront identifier, not a JWT; no staff user.
 async function createOrder(
   { items, customer, shipping_address, billing_address, delivery_method = ORDER_DELIVERY_METHOD.DELIVERY },
@@ -525,12 +531,14 @@ async function createOrder(
     throw httpError("Order must contain at least one item", 400);
   }
 
+  const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  if (!isPickup) await assertDeliverable(tenant._id, items);
+
   const resolvedItems = [];
   for (const item of items) {
     resolvedItems.push(await resolveOrderItem(item, tenant._id));
   }
 
-  const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   const subtotal = resolvedItems.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
   // Pickup ships nothing; otherwise flat rates plus any calculated quote.
   const shipping_cost = isPickup ? 0 : await orderShippingCents(tenant._id, items, resolvedItems, shipping_address);

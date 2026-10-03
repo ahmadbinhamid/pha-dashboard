@@ -13,7 +13,7 @@ import {
 import { TagPreview } from "@/components/tags/TagPreview";
 import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
-import { PRODUCT_TAG_SIZE_MM } from "@/config/productTag";
+import { tagSizeMm } from "@/config/productTag";
 import { useToast } from "@/context";
 import { useTagStyle } from "@/hooks/useTagStyle";
 import { TAG_QUERY_KEYS, addToTagQueue } from "@/lib/api/tags";
@@ -41,7 +41,7 @@ export function PrintProductTagModal({
   const { style } = useTagStyle();
   const [printOpen, setPrintOpen] = useState(false);
   const content = tagContent(product);
-  const { width, height } = PRODUCT_TAG_SIZE_MM;
+  const { width, height } = tagSizeMm(style);
 
   const queueMutation = useMutation({
     mutationFn: () => addToTagQueue(product._id),

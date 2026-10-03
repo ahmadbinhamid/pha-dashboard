@@ -5,6 +5,8 @@ export type TagLineSpacing = "tight" | "normal" | "relaxed";
 export type TagPrintSource = "queue" | "product";
 export type TagQueueMode = "set" | "increment";
 export type TagFieldKey = "title" | "note" | "stock_number" | "bay";
+// Width x height in mm; landscape thermal label stock.
+export type TagSize = "50x25" | "62x29" | "76x25" | "76x38" | "76x50" | "102x25" | "102x36" | "102x50" | "102x76";
 
 export interface TagFieldStyle {
   key: TagFieldKey;
@@ -14,6 +16,7 @@ export interface TagFieldStyle {
 }
 
 export interface TagStyle {
+  size: TagSize;
   font: TagFont;
   qr_position: TagQrPosition;
   align: TagAlign;
@@ -94,6 +97,7 @@ export interface TagTextBlock {
 }
 
 export interface TagLayout {
+  width: number;
   margin: number;
   qrSize: number;
   textWidth: number;
