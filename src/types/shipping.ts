@@ -1,4 +1,4 @@
-export type ShippingMethod = "standard" | "calculated";
+export type ShippingMethod = "standard" | "calculated" | "pickup";
 export type ShippingAddressType = "business" | "residential";
 export type AuStateCode = "ACT" | "NSW" | "NT" | "QLD" | "SA" | "TAS" | "VIC" | "WA";
 

@@ -20,7 +20,7 @@ const quoteShipment = mock.method(transdirect, "quoteShipment", async () => [
   { courier: "allied", total: 31, service: "road", transit_time: "1 day" },
 ]);
 
-const { quoteCart, hasCalculatedShipping } = require("./shippingQuote.service");
+const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shippingQuote.service");
 const { toQuotes } = transdirect;
 const { updateSettings, getSettings } = require("./shippingSettings.service");
 
@@ -47,6 +47,17 @@ test("standard-only cart: flat rate per unit, Transdirect never called", async (
   assert.equal(result.calculated, null);
   assert.equal(quoteShipment.mock.callCount(), 0);
   assert.equal(await hasCalculatedShipping(tenantId, [{ product: p._id }]), false);
+});
+
+test("pickup-only product: no flat rate kept or charged, and it is flagged", async () => {
+  const tenantId = fixtureId();
+  const pickup = await product(tenantId, { shipping_method: "pickup", shipping_cost: 25 });
+  const flat = await product(tenantId, { shipping_cost: 10 });
+  assert.equal(pickup.shipping_cost, null, "model clears the stale flat rate");
+  const items = [{ product: pickup._id, quantity: 2 }, { product: flat._id, quantity: 1 }];
+  const result = await quoteCart(tenantId, { items, receiver: RECEIVER });
+  assert.equal(result.shipping_cost, 1000);
+  assert.deepEqual(await findPickupOnlyTitles(tenantId, items), [pickup.title]);
 });
 
 test("mixed cart: flat + cheapest courier, and the quote is reused", async () => {

@@ -11,7 +11,7 @@ const {
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 const { buildProductFilter } = require("../utils/productFilter");
 
-// Counts only storefront-visible products, scoped by whatever shop-page filters are active.
+// Counts storefront-visible products only, scoped by the active shop filters.
 async function getProductCountsByCategory(categoryIds, extraFilter = {}) {
   if (!categoryIds.length) return new Map();
 
@@ -32,8 +32,9 @@ async function getProductCountsByCategory(categoryIds, extraFilter = {}) {
   return new Map(counts.map((c) => [c._id.toString(), c.count]));
 }
 
-async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {}, tenantId) {
+async function listCategories({ skip = 0, limit = 0, productFilters = {}, slugs = [] } = {}, tenantId) {
   const filter = { tenant_id: tenantId };
+  if (slugs.length) filter.slug = { $in: slugs };
   const [items, total] = await Promise.all([
     Category.find(filter)
       .populate("thumbnail")
@@ -43,7 +44,7 @@ async function listCategories({ skip = 0, limit = 0, productFilters = {} } = {},
     Category.countDocuments(filter),
   ]);
 
-  // Exclude category/publish/active filters — getProductCountsByCategory enforces those itself.
+  // getProductCountsByCategory applies category/publish/active filters itself.
   const countFilter = buildProductFilter(productFilters, { authenticated: false, tenantId });
   delete countFilter.categories;
   delete countFilter.is_published_online;
@@ -67,7 +68,7 @@ async function getCategoryById(id, tenantId) {
   return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
 
-// Verify client-supplied parent/thumbnail ids belong to this tenant, to prevent cross-tenant linking.
+// Parent/thumbnail ids must belong to this tenant: no cross-tenant links.
 async function verifyReferenceOwnership({ parent, thumbnail }, tenantId) {
   const checks = [];
   if (parent) checks.push(Category.exists({ _id: parent, tenant_id: tenantId }).then((ok) => ({ field: "parent", ok })));
@@ -81,7 +82,7 @@ async function createCategory({ name, description, thumbnail, parent, sort_order
   await verifyReferenceOwnership({ parent, thumbnail }, tenantId);
 
   const baseSlug = generateSlug(name);
-  // Race-safe: retries on slug conflict rather than check-then-insert (see utils/slug.js).
+  // Race-safe: retries on slug conflict instead of check-then-insert.
   return createWithUniqueSlug(
     Category,
     baseSlug,
@@ -117,7 +118,7 @@ async function updateCategory(id, { name, description, thumbnail, parent, sort_o
   if (parent !== undefined) category.parent = parent || null;
   if (sort_order !== undefined) category.sort_order = sort_order;
 
-  // Race-safe: retries on slug conflict rather than check-then-save (see utils/slug.js).
+  // Race-safe: retries on slug conflict instead of check-then-save.
   if (pendingSlugBase) {
     await saveWithUniqueSlug(category, Category, pendingSlugBase, category._id.toString(), { tenantId });
   } else {

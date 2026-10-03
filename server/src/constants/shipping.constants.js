@@ -1,8 +1,8 @@
 // constants/shipping.constants.js
 // Storefront shipping methods and Transdirect API settings.
 
-// standard: product.shipping_cost per unit; calculated: Transdirect quote.
-const SHIPPING_METHOD = Object.freeze({ STANDARD: "standard", CALCULATED: "calculated" });
+// standard: flat rate per unit; calculated: Transdirect; pickup: in store only.
+const SHIPPING_METHOD = Object.freeze({ STANDARD: "standard", CALCULATED: "calculated", PICKUP: "pickup" });
 const ADDRESS_TYPE = Object.freeze({ BUSINESS: "business", RESIDENTIAL: "residential" });
 
 const TRANSDIRECT = Object.freeze({

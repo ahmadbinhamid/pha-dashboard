@@ -8,7 +8,7 @@ import { CalculatedShippingNotice } from "@/components/products/CalculatedShippi
 import { missingPackageFields } from "@/lib/products/packageDimensions";
 import type { ProductFormValues } from "@/lib/validation/product";
 
-// Storefront shipping: a flat rate per unit, or a Transdirect quote.
+// Storefront shipping: flat rate per unit, Transdirect quote, or pickup only.
 export function ProductShippingSection({ methods }: { methods: UseFormReturn<ProductFormValues> }) {
   const {
     control,
@@ -23,7 +23,10 @@ export function ProductShippingSection({ methods }: { methods: UseFormReturn<Pro
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label="Shipping method">
+        <FormField
+          label="Shipping method"
+          hint={method === "pickup" ? "Customers collect in store, it can't be posted." : undefined}
+        >
           <Controller
             control={control}
             name="shipping_method"

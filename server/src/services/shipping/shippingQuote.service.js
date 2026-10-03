@@ -78,7 +78,8 @@ async function quoteCalculated(tenantId, lines, receiver) {
 /** Shipping for a cart in cents: flat rates plus the cheapest courier. */
 async function quoteCart(tenantId, { items, receiver }) {
   const lines = await resolveLines(tenantId, items);
-  const standard = lines.filter((l) => l.product.shipping_method !== SHIPPING_METHOD.CALCULATED);
+  // Legacy products without a method are flat rate; pickup lines cost nothing.
+  const standard = lines.filter((l) => ![SHIPPING_METHOD.CALCULATED, SHIPPING_METHOD.PICKUP].includes(l.product.shipping_method));
   const calculatedLines = lines.filter((l) => l.product.shipping_method === SHIPPING_METHOD.CALCULATED);
   const standardCost = toCents(standard.reduce((sum, l) => sum + (l.product.shipping_cost ?? 0) * l.quantity, 0));
 
@@ -105,4 +106,13 @@ async function hasCalculatedShipping(tenantId, items) {
   return !!(await Product.exists({ _id: { $in: ids }, tenant_id: tenantId, shipping_method: SHIPPING_METHOD.CALCULATED }));
 }
 
-module.exports = { quoteCart, hasCalculatedShipping };
+/** Titles of cart products sold for in-store pickup only (one query). */
+async function findPickupOnlyTitles(tenantId, items) {
+  const ids = [...new Set(items.map((i) => String(i.product)))];
+  const products = await Product.find({ _id: { $in: ids }, tenant_id: tenantId, shipping_method: SHIPPING_METHOD.PICKUP })
+    .select("title")
+    .lean();
+  return products.map((p) => p.title);
+}
+
+module.exports = { quoteCart, hasCalculatedShipping, findPickupOnlyTitles };

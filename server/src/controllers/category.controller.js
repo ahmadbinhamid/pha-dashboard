@@ -12,9 +12,10 @@ const {
 exports.getCategories = async (req, res) => {
   try {
     const { page, limit, skip } = req.pagination;
+    const { slugs, ...productFilters } = req.query;
 
     const { items, total } = await categoryService.listCategories(
-      { skip, limit, productFilters: req.query },
+      { skip, limit, productFilters, slugs: slugs ? slugs.split(",").map((s) => s.trim()).filter(Boolean) : [] },
       req.tenantId,
     );
 
