@@ -7,8 +7,13 @@ import {
   type EbayListingFormState,
   type GoogleChannelFormState,
 } from "@/types/marketplace";
-import { createListing, pushListing, updateListing } from "@/lib/api/listings";
-import { createGoogleListing, updateGoogleListing } from "@/lib/api/googleListings";
+import {
+  createEbayListing,
+  createGoogleListing,
+  pushListing,
+  updateEbayListing,
+  updateGoogleListing,
+} from "@/lib/api/listings";
 import { listingToForm } from "@/lib/marketplace/listingToForm";
 
 // Per-channel create/save glue for the product form (no generic create route).
@@ -58,12 +63,12 @@ const ebayAdapter: ChannelFormAdapter = {
   fromListing: (listing) => listingToForm(listing as EbayListing),
   // Old flow: create a DRAFT, then push (validates + queues).
   create: async (_product, form) => {
-    const { data } = await createListing(form as EbayListingFormState);
+    const { data } = await createEbayListing(form as EbayListingFormState);
     await pushOrThrow(data._id);
     return data._id;
   },
   saveAndSync: async (listingId, form) => {
-    await updateListing(listingId, form as EbayListingFormState);
+    await updateEbayListing(listingId, form as EbayListingFormState);
     await pushOrThrow(listingId);
   },
   supportsPhotoOverrides: true,

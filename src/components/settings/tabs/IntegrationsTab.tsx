@@ -13,9 +13,7 @@ import { SmtpSettingsCard, SMTP_SETTINGS_FORM_ID } from "@/components/tenant-set
 import { PaymentDomainForm, PAYMENT_DOMAIN_FORM_ID } from "@/components/tenant-settings/PaymentDomainForm";
 import { TransdirectSettingsCard, TRANSDIRECT_SETTINGS_FORM_ID } from "@/components/shipping-settings/TransdirectSettingsCard";
 import { SHIPPING_SETTINGS_QUERY_KEY, getShippingSettings } from "@/lib/api/shipping";
-import { EbayConnectCard } from "@/components/ebay-settings/EbayConnectCard";
-import { EbaySettingsForm, EBAY_SETTINGS_FORM_ID } from "@/components/ebay-settings/EbaySettingsForm";
-import { GoogleConnectCard } from "@/components/google-settings/GoogleConnectCard";
+import { ChannelConnectCard } from "@/components/channels/ChannelConnectCard";
 import { CategoryMappingsPanel } from "@/components/category-mappings/CategoryMappingsPanel";
 import DomainsPage from "@/pages/erp/settings/DomainsPage";
 import { getEbaySettings } from "@/lib/api/ebay";
@@ -23,12 +21,11 @@ import { getChannels } from "@/lib/api/channels";
 import { getDomains } from "@/lib/api/domains";
 import { getSmtpStatus } from "@/lib/api/tenantSettings";
 import { INTEGRATION_CATALOGUE, findIntegration, type IntegrationId } from "@/config/integrations";
-import type { TenantSettings } from "@/types/tenantSettings";
+import type { TenantSettings, SettingsMutationState } from "@/types/tenantSettings";
 import type { EbayConnectionStatus } from "@/types/ebaySettings";
 import type { ChannelConnectionStatus } from "@/types/channel";
 
-type MutationState = { isPending: boolean; isSuccess: boolean; error: string | null };
-const IDLE: MutationState = { isPending: false, isSuccess: false, error: null };
+const IDLE: SettingsMutationState = { isPending: false, isSuccess: false, error: null };
 
 const EBAY_STATUS_MAP: Record<EbayConnectionStatus, IntegrationStatus> = {
   connected: "connected",
@@ -46,30 +43,8 @@ const CHANNEL_STATUS_MAP: Record<ChannelConnectionStatus, IntegrationStatus> = {
   pending: "error",
 };
 
-function EbayPanel() {
-  const { data, isLoading } = useQuery({ queryKey: ["ebay-settings"], queryFn: getEbaySettings });
-  const settings = data?.data;
-  const [state, setState] = useState<MutationState>(IDLE);
-
-  return (
-    <div className="space-y-6">
-      <SettingsHeaderActions>
-        <SaveStatusText isSuccess={state.isSuccess} error={state.error} />
-        <Can permission={PERMISSIONS.integrations.update}>
-          <Button type="submit" form={EBAY_SETTINGS_FORM_ID} disabled={!settings || state.isPending}>
-            {state.isPending ? "Saving…" : "Save changes"}
-          </Button>
-        </Can>
-      </SettingsHeaderActions>
-
-      <EbayConnectCard />
-      {isLoading || !settings ? <SkeletonCard /> : <EbaySettingsForm settings={settings} onMutationStateChange={setState} />}
-    </div>
-  );
-}
-
 function StripePanel() {
-  const [state, setState] = useState<MutationState>(IDLE);
+  const [state, setState] = useState<SettingsMutationState>(IDLE);
   return (
     <>
       <SettingsHeaderActions>
@@ -86,7 +61,7 @@ function StripePanel() {
 }
 
 function PaymentLinksPanel({ settings }: { settings?: TenantSettings }) {
-  const [state, setState] = useState<MutationState>(IDLE);
+  const [state, setState] = useState<SettingsMutationState>(IDLE);
   return (
     <>
       <SettingsHeaderActions>
@@ -103,7 +78,7 @@ function PaymentLinksPanel({ settings }: { settings?: TenantSettings }) {
 }
 
 function EmailPanel() {
-  const [state, setState] = useState<MutationState>(IDLE);
+  const [state, setState] = useState<SettingsMutationState>(IDLE);
   return (
     <>
       <SettingsHeaderActions>
@@ -120,7 +95,7 @@ function EmailPanel() {
 }
 
 function TransdirectPanel() {
-  const [state, setState] = useState<MutationState>(IDLE);
+  const [state, setState] = useState<SettingsMutationState>(IDLE);
   return (
     <>
       <SettingsHeaderActions>
@@ -201,10 +176,8 @@ export function IntegrationsTab({
           </div>
         )}
 
-        {providerId === "ebay" ? (
-          <EbayPanel />
-        ) : providerId === "google" ? (
-          <GoogleConnectCard />
+        {providerId === "ebay" || providerId === "google" ? (
+          <ChannelConnectCard platform={providerId} />
         ) : providerId === "channel-categories" ? (
           <CategoryMappingsPanel />
         ) : providerId === "stripe" ? (

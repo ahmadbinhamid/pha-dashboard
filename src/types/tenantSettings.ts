@@ -12,7 +12,7 @@ export interface PickupLocation {
   trading_hours: string[];
 }
 
-// Shared by every BYOK integration (Stripe keys, SMTP) — mirrors CONNECTION_STATUS in tenant.constants.js.
+// Every BYOK integration's status; mirrors tenant.constants CONNECTION_STATUS.
 export type ConnectionStatus = "not_connected" | "connected" | "error";
 
 // Mirrors PAYMENT_DOMAIN_MODE in tenant.constants.js.
@@ -42,12 +42,12 @@ export interface TenantSettings {
   brand_colour: string;
   accent_colour: string;
   payment_domain_mode: PaymentDomainMode;
-  // Only affects orders/invoices created after this changes — each order snapshots its own prefix at creation time (types/orders.ts), so changing this never relabels an existing order.
+  // New orders only: each order snapshots its prefix, so none are relabelled.
   order_number_prefix: string;
   invoice_number_prefix: string;
-  // Sample URLs for both modes, built server-side from PAYMENT_LINK_DOMAIN — not saved, just returned for the picker's preview.
+  // Server-built sample URLs for both modes; preview only, never saved.
   payment_link_preview: PaymentLinkPreview;
-  // BYOK: the secret key itself is never returned to the client (select: false on the backend); only what's safe to show in Settings.
+  // BYOK: the secret key is never returned; only what Settings may show.
   stripe_publishable_key: string | null;
   stripe_connection_status: ConnectionStatus;
   stripe_connected_at: string | null;
@@ -112,4 +112,11 @@ export interface UpdateSmtpCredentialsPayload {
   pass?: string;
   from_name?: string;
   from_email?: string;
+}
+
+// Save state a settings form reports up to the page header.
+export interface SettingsMutationState {
+  isPending: boolean;
+  isSuccess: boolean;
+  error: string | null;
 }
