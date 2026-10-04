@@ -33,9 +33,9 @@ const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service")
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
-const { getCompanyProfile } = require("./tenantSettings.service");
+const { getCompanyProfile } = require("./tenant-settings.service");
 const notificationService = require("./notification.service");
-const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shippingQuote.service");
+const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shipping-quote.service");
 
 // AU prices are GST-inclusive: GST = price / 11, never added on top.
 const GST_DIVISOR = 11;

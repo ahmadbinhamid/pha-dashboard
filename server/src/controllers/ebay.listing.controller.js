@@ -12,7 +12,7 @@ const {
   validationError,
 } = require("../utils/http/response");
 const { validateListingForPush } = require("../validators/ebay.listing.validation");
-const { resolveEffectiveCategoryId } = require("../services/categoryMapping.service");
+const { resolveEffectiveCategoryId } = require("../services/category-mapping.service");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
 exports.getListing = async (req, res) => {

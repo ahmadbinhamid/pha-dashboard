@@ -1,7 +1,7 @@
 // services/marketplace/fieldSchema.js
 // Server-side enforcement of adapter fieldSchema rules (the UI only mirrors them).
 
-const { FIELD_TYPE, STATIC_FIELD_OPTIONS, ENFORCED_OPTION_SOURCES } = require("../../constants/channelField.constants");
+const { FIELD_TYPE, STATIC_FIELD_OPTIONS, ENFORCED_OPTION_SOURCES } = require("../../constants/channel-field.constants");
 
 // status 400 so the circuit breaker treats it as a data problem.
 class ChannelFieldValidationError extends Error {

@@ -3,7 +3,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { cleanFixtureResidue } = require("../src/services/fixtureResidue.service");
+const { cleanFixtureResidue } = require("../src/services/fixture-residue.service");
 
 // Ids --confirm deleted, so --limit still picks the same ids once they're gone.
 const DEFAULT_LEDGER = path.join(__dirname, "..", ".fixture-residue-ledger.json");

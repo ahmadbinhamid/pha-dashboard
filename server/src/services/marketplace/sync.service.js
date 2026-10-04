@@ -10,7 +10,7 @@ const config = require("../../config");
 const { getAdapter } = require("./registry");
 const { resolveListing, resolveSku, hydrateResolved } = require("./listing.resolver");
 const circuitBreaker = require("./circuitBreaker");
-const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channelPrerequisite.service");
+const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channel-prerequisite.service");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
 

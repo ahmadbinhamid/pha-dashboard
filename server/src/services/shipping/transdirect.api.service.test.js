@@ -55,7 +55,7 @@ test("quoteShipment: sends the documented v4 quote body", async () => {
 
 test("requestingSite: the store's domain, else the configured storefront URL", () => {
   const config = require("../../config");
-  const { requestingSite } = require("./shippingSettings.service");
+  const { requestingSite } = require("./shipping-settings.service");
   assert.equal(requestingSite("shop.example.test"), "https://shop.example.test/");
   assert.equal(requestingSite(null), config.emailBrand.storefrontUrl);
   assert.ok(requestingSite(null), "never undefined, or Transdirect gets no requesting_site");

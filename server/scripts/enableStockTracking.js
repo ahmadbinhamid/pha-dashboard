@@ -1,7 +1,7 @@
 // Finds products with stock tracking off and turns it on, resyncing channels.
 // Usage: [--tenant=<id>] [--confirm]  (dry run by default; safe to re-run)
 
-const { enableStockTracking } = require("../src/services/stockTracking.service");
+const { enableStockTracking } = require("../src/services/stock-tracking.service");
 
 function report({ confirmed, products }, log) {
   if (!products.length) return log("No products have stock tracking off. Nothing to do.");

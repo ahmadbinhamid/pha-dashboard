@@ -25,8 +25,8 @@ registry.register(require("./adapters/google.adapter"));
 registry.register(require("./adapters/ebay.adapter"));
 
 const { syncListing, syncBatch } = require("./sync.service");
-const { reconcileTenantPrerequisites } = require("./channelPrerequisite.service");
-const { diagnoseChannelConnection } = require("./connectionDiagnosis.service");
+const { reconcileTenantPrerequisites } = require("./channel-prerequisite.service");
+const { diagnoseChannelConnection } = require("./connection-diagnosis.service");
 const googleOauth = require("../google/google.oauth.service");
 const ebaySettings = require("../ebay/ebay.settings.service");
 

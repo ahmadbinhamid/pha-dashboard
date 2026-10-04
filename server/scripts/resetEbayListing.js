@@ -1,7 +1,7 @@
 // Removes a sold-out SKU's stuck eBay record; next sync publishes it fresh.
 // Usage: --sku=<product SKU> [--tenant=<id>] [--confirm]  (dry run by default)
 
-const { resetEbayListing } = require("../src/services/marketplace/ebayListingReset.service");
+const { resetEbayListing } = require("../src/services/ebay/ebay.listing-reset.service");
 
 const MESSAGES = {
   not_found: () => "No eBay listing found for that SKU.",

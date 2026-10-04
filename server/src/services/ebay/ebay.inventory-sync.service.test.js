@@ -146,7 +146,7 @@ test("sync loop: accepting a flagged reconciliation applies the delta to stock a
   await mongoose.connect(config.mongoUri);
   const fixture = await makeFixture();
 
-  const { upsertPending, acceptReconciliation } = require("../pendingReconciliation.service");
+  const { upsertPending, acceptReconciliation } = require("../pending-reconciliation.service");
   await upsertPending({ tenantId: fixture.tenantId, listingId: fixture.listing._id, sku: fixture.sku, localQty: 1, ebayQty: 5 });
 
   const callsBefore = ebayEnqueueCount();

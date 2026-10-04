@@ -873,7 +873,7 @@ the resolver's hydration and the product form's Sales Channels section are all
 generic. A third channel needs:
 
 1. **The adapter** — `key`, `manifest` (including `fieldSchema`; see §13),
-   `capabilities`, `loadSettings` (via `channelConnection.service.js`, returning
+   `capabilities`, `loadSettings` (via `channel-connection.service.js`, returning
    `null` when not connected), `publish`/`update`/`end`, optionally
    `publishBatch`. Keep it a **pure translator**: declare I/O in `needs` and read
    it from `resolved` (`stock`, `productUrl`, `branding`, `category`,
@@ -1116,7 +1116,7 @@ Resolution order (`listing.resolver.js#hydrateResolved` → `applyMappedCategori
 
 Mappings are **not** copied onto listings, so editing a mapping moves every listing
 that relies on it. A verified auto-parts subset of Google's taxonomy
-(`constants/googleProductCategory.constants.js`, version 2021-09-21) is the default
+(`constants/google-product-category.constants.js`, version 2021-09-21) is the default
 pick-list, and name-based suggestions are shown, never auto-applied. No eBay
 category ids are shipped; they must come from eBay's live category search.
 

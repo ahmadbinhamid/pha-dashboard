@@ -3,7 +3,7 @@
 
 const Tenant = require("../../models/Tenant");
 const { listConfiguredTenants } = require("./ebay.settings.service");
-const { flaggedReauth, flagIfPrerequisiteError } = require("../marketplace/channelPrerequisite.service");
+const { flaggedReauth, flagIfPrerequisiteError } = require("../marketplace/channel-prerequisite.service");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 
