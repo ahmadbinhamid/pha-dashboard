@@ -38,10 +38,15 @@ function listingFitmentRows(listing) {
   return namedFitmentRows(listing?.fitment);
 }
 
-/** Fitment table: listing rows, else the product's non-default vehicles. */
+/** Product's default vehicle first, then its additional fitments. */
+function productFitmentRows(product) {
+  return [...fitmentFromVehicle(product?.vehicle), ...namedFitmentRows(product?.additional_fitments).map(toFitmentRow)];
+}
+
+/** Fitment table: listing rows, else every product vehicle. */
 function resolveFitment(listing, product) {
   const rows = listingFitmentRows(listing);
-  return (rows.length ? rows : namedFitmentRows(product?.additional_fitments)).map(toFitmentRow);
+  return rows.length ? rows.map(toFitmentRow) : productFitmentRows(product);
 }
 
 // Listing package if any value is set, else the product's; never mixed.
@@ -58,6 +63,7 @@ module.exports = {
   resolveFitment,
   fitmentFromVehicle,
   namedFitmentRows,
+  productFitmentRows,
   listingFitmentRows,
   toFitmentRow,
   FITMENT_KEYS,

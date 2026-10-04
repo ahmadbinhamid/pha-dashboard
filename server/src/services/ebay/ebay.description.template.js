@@ -99,9 +99,7 @@ function renderEbayDescription(input, { businessName, logoUrl } = {}) {
         <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
       </tr>`;
 
-  // Default vehicle sits in Technical Specifications; hide an empty table.
-  const hasDefaultVehicle = !!(str(vehicle?.make).trim() || str(vehicle?.model).trim());
-  const fitmentSection = validFitment.length === 0 && hasDefaultVehicle ? "" : `  <div class="pha-inner" style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);border-top:1px solid #2a2520;">
+  const fitmentSection = `  <div class="pha-inner" style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);border-top:1px solid #2a2520;">
     <h2 class="pha-h2" style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Vehicle Fitment</h2>
     <div style="width:40px;height:2px;background:#c5a059;margin-bottom:24px;"></div>
     <div class="pha-fit-scroll">

@@ -1,20 +1,5 @@
 // utils/pdf/invoicePdf.js
-//
-// Renders a Tax Invoice PDF for an order, generated server-side with pdfkit
-// since this is headless (an email attachment), not the browser's print
-// dialog. Palette, fonts, layout and field order are kept in lockstep with
-// the dashboard's InvoicePrintView.tsx (the "Print Invoice" button) — same
-// light theme, same rules, same sections — so the emailed PDF and the
-// printed copy never disagree.
-//
-// Layout language, mirroring that component: a heavy rule under the
-// letterhead, a hairline-divided meta strip for the four transaction facts,
-// Ship To / Bill To pushed to opposite edges, a hairline-ruled items table,
-// and a solid ink bar for the grand total. There are no icons anywhere in
-// this design (the previous revision hand-traced lucide glyphs to match the
-// old icon-led layout — all of that machinery is gone with it), and data
-// values are set in Courier so figures, dates and reference numbers align
-// column-to-column exactly as the monospace face does in the browser.
+// Tax Invoice PDF via pdfkit; kept in lockstep with InvoicePrintView.tsx.
 
 const path = require("path");
 const PDFDocument = require("pdfkit");
@@ -28,8 +13,7 @@ const PAGE_HEIGHT = 841.89; // A4 points
 const PAGE_MARGIN = 54;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 const CONTENT_RIGHT = PAGE_MARGIN + CONTENT_WIDTH;
-// Space reserved at the foot of every page for the printed-at / page-count
-// rule, which is stamped onto each page after all content is laid out.
+// Footer reserve for the page-count rule stamped after layout.
 const PAGE_RULE_RESERVE = 46;
 const BOTTOM_LIMIT = PAGE_HEIGHT - PAGE_MARGIN - PAGE_RULE_RESERVE;
 
@@ -37,31 +21,19 @@ const LOGO_PATH = path.join(__dirname, "../../assets/branding/logo.png");
 const LOGO_SIZE = 36;
 const LOGO_TEXT_GAP = 10;
 
-// Headings and names are the only proportional type on the sheet, and
-// they're all set bold — the regular weight went unused with the redesign.
+// Helvetica stands in for Arial: same metrics, built in, nothing to embed.
 const FONT_BOLD = "Helvetica-Bold";
-// Courier is the only monospace in pdfkit's standard 14 (no font file is
-// shipped or embedded), and it's what stands in for the browser's
-// ui-monospace stack in InvoicePrintView.tsx.
-const MONO = "Courier";
-const MONO_BOLD = "Courier-Bold";
-// The rich-text policy fields can carry italic and bold-italic runs too. All
-// four Courier faces share one advance width, which is what lets
-// measureRichText below size a mixed-weight block using a single font.
-const MONO_ITALIC = "Courier-Oblique";
-const MONO_BOLD_ITALIC = "Courier-BoldOblique";
+const FONT = "Helvetica";
+// Rich-text policy fields can carry italic and bold-italic runs too.
+const FONT_ITALIC = "Helvetica-Oblique";
+const FONT_BOLD_ITALIC = "Helvetica-BoldOblique";
 
-// List markers come from the parser ("•" or "3."). U+2022 is in WinAnsi, the
-// encoding the standard-14 faces are written with — anything outside it would
-// come out blank or substituted.
+// U+2022 is in WinAnsi; markers outside it would print blank.
 const markerRun = (marker) => ({ text: `${marker} `, bold: false, italic: false });
 
-// Same hex values as InvoicePrintView.tsx's INK/MUTED/ACCENT/BORDER/GREEN,
-// plus the lighter gold that the grand-total figure uses on the ink bar
-// (the accent itself is too dark to read against it).
+// Matches InvoicePrintView.tsx; goldOnInk is readable on the ink bar.
 const COLORS = {
-  text: "#18140f",
-  muted: "#6b6f7a",
+  text: "#000000",
   accent: "#c2790b",
   border: "#e2e0da",
   white: "#ffffff",
@@ -69,17 +41,10 @@ const COLORS = {
   goldOnInk: "#e0a83a",
 };
 
-// Column starts/widths sum to CONTENT_WIDTH — seven columns: a row-number
-// column plus GST/Qty/Discount each broken out as their own correctly-
-// labeled column (order.tax_amount is only ever an order-level figure, so it
-// can't answer "what's the GST on this specific line"). The numeric columns
-// are sized for Courier, which is appreciably wider per character than the
-// proportional face the labels are set in.
+// Column starts/widths sum to CONTENT_WIDTH.
 const COLUMNS = { number: 0, item: 22, unitPrice: 186, gst: 256, qty: 326, discount: 352, total: 422 };
 const COLUMN_WIDTHS = { number: 18, item: 160, unitPrice: 66, gst: 66, qty: 22, discount: 66, total: 65 };
-// Point size the table's figures are set at: 14 Courier characters
-// ("A$1,234,567.89", the widest amount the columns above are budgeted for)
-// measure 63pt here, inside even the narrowest numeric column.
+// A$1,234,567.89 fits the narrowest numeric column at this size.
 const FIGURE_SIZE = 7.5;
 
 const CHANNEL_LABEL = { ebay: "eBay", manual: "In-Store" };
@@ -96,30 +61,19 @@ function formatDate(date, opts) {
   return new Date(date).toLocaleDateString("en-AU", opts || { year: "numeric", month: "short", day: "numeric" });
 }
 
-// GST-inclusive AU retail pricing: extracted as total/11, never added on top
-// of unit_price — same convention as order.service.js#GST_DIVISOR and the
-// dashboard's utils/format.ts#getLineGst. order.tax_amount is only ever an
-// order-level figure, so each line recomputes its own GST from its own
-// (post-discount) total.
+// GST-inclusive pricing: per-line GST is total/11, never added on top.
 function lineGst(lineTotalCents) {
   return Math.round(lineTotalCents / 11);
 }
 
-// Same GST-inclusive convention as lineGst, applied to a single unit's
-// inclusive price to get its GST-exclusive counterpart for display.
+// GST-exclusive unit price for display, same convention as lineGst.
 function lineExclusiveUnitPrice(unitPriceCents) {
   return unitPriceCents - lineGst(unitPriceCents);
 }
 
-// ─── Primitives ──────────────────────────────────────────────────────────
+// ─── Primitives ───
 
-// Right-aligns `text` against `rightEdgeX` using the CURRENTLY set
-// font/fontSize/fillColor, with no `width` passed to .text() at all — a
-// width constraint is what makes pdfkit wrap, and `{ lineBreak: false }`
-// alone does not reliably suppress that (confirmed: a 5-figure total still
-// wrapped with it set). Measuring the string and positioning it directly is
-// the only fix that's actually guaranteed not to wrap, regardless of how
-// large the number gets.
+// Measured, not width-wrapped: lineBreak:false alone still wraps in pdfkit.
 function drawRightAligned(doc, text, rightEdgeX, y, opts = {}) {
   const w = doc.widthOfString(text, opts);
   doc.text(text, rightEdgeX - w, y, { lineBreak: false, ...opts });
@@ -140,30 +94,8 @@ function drawVerticalRule(doc, x, top, bottom, color = COLORS.border) {
   doc.save().strokeColor(color).lineWidth(0.75).moveTo(x, top).lineTo(x, bottom).stroke().restore();
 }
 
-// Joins `parts` with a middot onto as few lines as fit within `width`,
-// packing greedily rather than letting pdfkit wrap the joined string — a
-// plain wrap breaks at the space *after* a separator and strands a dangling
-// "·" at the end of the line. Returns the y below the last line drawn.
-function drawSeparatedParts(doc, parts, x, y, width, separator = "  ·  ") {
-  const lines = [];
-  parts.forEach((part) => {
-    const current = lines[lines.length - 1];
-    const candidate = current === undefined ? part : `${current}${separator}${part}`;
-    if (current !== undefined && doc.widthOfString(candidate) <= width) lines[lines.length - 1] = candidate;
-    else lines.push(part);
-  });
-  let cursor = y;
-  lines.forEach((line) => {
-    doc.text(line, x, cursor, { width, lineBreak: false });
-    cursor = doc.y + 1;
-  });
-  return cursor;
-}
-
-// Small-caps, wide-tracked section label in the accent color — "SHIP TO",
-// "PAYMENT DETAILS", "WARRANTY & RETURNS". Mirrors InvoicePrintView.tsx's
-// <SectionLabel>. Returns the y the block's content should start at.
-function drawSectionLabel(doc, label, x, y, { width = CONTENT_WIDTH, align = "left", color = COLORS.accent } = {}) {
+// Caps section label; returns the y content starts at.
+function drawSectionLabel(doc, label, x, y, { width = CONTENT_WIDTH, align = "left", color = COLORS.text } = {}) {
   doc
     .font(FONT_BOLD)
     .fontSize(6.5)
@@ -172,43 +104,35 @@ function drawSectionLabel(doc, label, x, y, { width = CONTENT_WIDTH, align = "le
   return y + 11;
 }
 
-// Tiny caps label stacked above a monospace value — the meta strip's cells
-// and the bank-details grid both use this pairing (InvoicePrintView.tsx's
-// <MetaCell>/<FieldBlock>). Returns the y below the value.
-function drawLabelledValue(doc, label, value, x, y, width, { labelSize = 6, valueSize = 8, valueFont = MONO } = {}) {
+// Caps label over a value; returns the y below the value.
+function drawLabelledValue(doc, label, value, x, y, width, { labelSize = 6, valueSize = 8, valueFont = FONT } = {}) {
   doc
     .font(FONT_BOLD)
     .fontSize(labelSize)
-    .fillColor(COLORS.muted)
+    .fillColor(COLORS.text)
     .text(label.toUpperCase(), x, y, { width, characterSpacing: 0.9 });
   const valueY = y + labelSize + 4;
   doc.font(valueFont).fontSize(valueSize).fillColor(COLORS.text).text(value, x, valueY, { width });
   return valueY + valueSize + 3;
 }
 
-// ─── Sections ────────────────────────────────────────────────────────────
+// ─── Sections ───
 
 function drawLetterhead(doc, order, companyProfile) {
   const top = PAGE_MARGIN;
   const textX = PAGE_MARGIN + LOGO_SIZE + LOGO_TEXT_GAP;
-  // The right-hand block only ever holds "TAX INVOICE" over an invoice
-  // number, so it needs far less room than the letterhead.
   const rightWidth = 110;
   const rightX = CONTENT_RIGHT - rightWidth;
-  // Width available to the company name, which sits on the same line as
-  // "TAX INVOICE" and so has to stop short of it.
+  // Company name must stop short of the TAX INVOICE block.
   const nameWidth = CONTENT_WIDTH - LOGO_SIZE - LOGO_TEXT_GAP - rightWidth - 16;
 
-  // Drawn before the letterhead so the address/contact lines below can be
-  // flowed at full width, starting beneath this block rather than beside it
-  // — a tenant's phone + email + ABN on one line is wider than what's left
-  // of the sheet next to an invoice number.
+  // Drawn first so seller details can drop below it when too wide.
   doc
     .font(FONT_BOLD)
     .fontSize(7)
-    .fillColor(COLORS.accent)
+    .fillColor(COLORS.text)
     .text("TAX INVOICE", rightX, top + 2, { width: rightWidth, align: "right", characterSpacing: 2.2 });
-  doc.font(MONO_BOLD).fontSize(16).fillColor(COLORS.text);
+  doc.font(FONT_BOLD).fontSize(16).fillColor(COLORS.text);
   drawRightAligned(doc, formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number), CONTENT_RIGHT, doc.y + 4);
   const rightBottom = doc.y + 16;
 
@@ -221,26 +145,26 @@ function drawLetterhead(doc, order, companyProfile) {
 
   const addressLine =
     [companyProfile.pickup_location?.address, companyProfile.pickup_location?.country].filter(Boolean).join(", ") || "—";
-  // Phone / email / ABN collapse onto one line separated by middots — only
-  // the parts the tenant has actually filled in.
-  const contactParts = [companyProfile.phone, companyProfile.email, companyProfile.abn ? `ABN ${companyProfile.abn}` : null].filter(
-    Boolean,
-  );
-  const contactLine = contactParts.join(" · ");
+  const detailLines = [
+    addressLine,
+    companyProfile.email,
+    companyProfile.phone,
+    companyProfile.abn ? `ABN ${companyProfile.abn}` : null,
+  ].filter(Boolean);
+  // Address, email, phone and ABN each on their own line, filled ones only.
 
-  // These two lines sit tucked under the company name where they fit beside
-  // the invoice-number block, and drop below it — across the full width left
-  // of the logo — only when a tenant's own details are too long to clear it.
-  // (Constraining them to the narrow column instead would wrap an address or
-  // an email onto a second line for no reason.)
-  doc.font(MONO).fontSize(7.5);
-  const fitsBeside = doc.widthOfString(addressLine) <= nameWidth && doc.widthOfString(contactLine) <= nameWidth;
+  // Details sit beside the invoice number if they fit, else drop below it.
+  doc.font(FONT).fontSize(7.5);
+  const fitsBeside = detailLines.every((line) => doc.widthOfString(line) <= nameWidth);
   const detailWidth = fitsBeside ? nameWidth : CONTENT_WIDTH - LOGO_SIZE - LOGO_TEXT_GAP;
   const detailY = fitsBeside ? doc.y + 3 : Math.max(doc.y + 3, rightBottom + 6);
 
-  doc.fillColor(COLORS.text).text(addressLine, textX, detailY, { width: detailWidth });
-  doc.font(MONO).fontSize(7.5).fillColor(COLORS.muted);
-  const leftBottom = drawSeparatedParts(doc, contactParts, textX, doc.y + 1, detailWidth, " · ");
+  doc.fillColor(COLORS.text);
+  let leftBottom = detailY;
+  detailLines.forEach((line) => {
+    doc.text(line, textX, leftBottom, { width: detailWidth });
+    leftBottom = doc.y + 1;
+  });
 
   const ruleY = Math.max(leftBottom, top + LOGO_SIZE) + 14;
   drawRule(doc, ruleY, { color: COLORS.text, thickness: 2.5 });
@@ -248,17 +172,11 @@ function drawLetterhead(doc, order, companyProfile) {
   return ruleY;
 }
 
-// The facts a reader actually looks up, in equal hairline-divided cells
-// directly under the letterhead rule.
-//
-// "Order Number" is the customer's OWN reference, typed on the order detail
-// page. It's optional, so the cell is dropped when it's blank rather than
-// falling back to our internal ORD-000xx — the strip then splits three ways
-// instead of four, since every width here is derived from cells.length.
+// Order Number is the customer's reference; dropped when blank.
 function drawMetaStrip(doc, order, topY) {
   const cells = [
     ["Invoice Date", formatDate(order.created_at)],
-    ["Due Date", "Upon receipt"],
+    ["Due Date", "Due on receipt"],
     ...(order.reference_number ? [["Order Number", order.reference_number]] : []),
     ["Sales Channel", channelLabelFor(order)],
   ];
@@ -283,8 +201,7 @@ function drawMetaStrip(doc, order, topY) {
   return stripBottom;
 }
 
-// Ship To (left) and Bill To (right) pushed to opposite edges of the sheet,
-// each block aligned to its own edge.
+// Bill To on the left, Ship To on the right, both left-aligned.
 function drawPartiesBlock(doc, order, topY) {
   const colWidth = 215;
   const startY = topY + 20;
@@ -295,7 +212,7 @@ function drawPartiesBlock(doc, order, topY) {
 
   const shipLines =
     isPickup || !order.shipping_address
-      ? ["Collecting in-store, see seller address above."]
+      ? ["Customer collection from the store address above."]
       : [
           stripEbayAddressPrefix(order.shipping_address.address),
           `${order.shipping_address.suburb} ${order.shipping_address.state} ${order.shipping_address.postcode}`,
@@ -303,28 +220,28 @@ function drawPartiesBlock(doc, order, topY) {
   const billLines = [
     billingAddress ? stripEbayAddressPrefix(billingAddress.address) : null,
     billingAddress ? `${billingAddress.suburb} ${billingAddress.state} ${billingAddress.postcode}, Australia` : null,
-    order.customer.phone ? `PH: ${order.customer.phone}` : null,
-    order.customer.email ? `EMAIL: ${order.customer.email}` : null,
+    order.customer.phone ? `Phone: ${order.customer.phone}` : null,
+    order.customer.email ? `Email: ${order.customer.email}` : null,
   ].filter(Boolean);
 
-  const shipBottom = drawPartyColumn(doc, "Ship To", displayName, shipLines, PAGE_MARGIN, startY, colWidth, "left");
-  const billBottom = drawPartyColumn(doc, "Bill To", displayName, billLines, CONTENT_RIGHT - colWidth, startY, colWidth, "right");
+  const billBottom = drawPartyColumn(doc, "Bill To", displayName, billLines, PAGE_MARGIN, startY, colWidth);
+  const shipBottom = drawPartyColumn(doc, "Ship To", displayName, shipLines, CONTENT_RIGHT - colWidth, startY, colWidth);
 
   doc.fillColor(COLORS.text);
   return Math.max(shipBottom, billBottom);
 }
 
-function drawPartyColumn(doc, label, displayName, lines, x, y, width, align) {
-  let cursor = drawSectionLabel(doc, label, x, y, { width, align });
+function drawPartyColumn(doc, label, displayName, lines, x, y, width) {
+  let cursor = drawSectionLabel(doc, label, x, y, { width });
   doc
     .font(FONT_BOLD)
     .fontSize(9.5)
     .fillColor(COLORS.text)
-    .text(displayName.toUpperCase(), x, cursor + 3, { width, align, characterSpacing: -0.2 });
+    .text(displayName.toUpperCase(), x, cursor + 3, { width, characterSpacing: -0.2 });
   cursor = doc.y + 5;
-  doc.font(MONO).fontSize(7.5).fillColor(COLORS.muted);
+  doc.font(FONT).fontSize(7.5).fillColor(COLORS.text);
   lines.forEach((line) => {
-    doc.text(line, x, cursor, { width, align });
+    doc.text(line, x, cursor, { width });
     cursor = doc.y + 1.5;
   });
   return cursor;
@@ -335,10 +252,10 @@ const TABLE_HEADER_HEIGHT = 20;
 function drawItemsTableHeader(doc, y) {
   drawRule(doc, y);
   const headerTextY = y + 8;
-  doc.font(FONT_BOLD).fontSize(6.5).fillColor(COLORS.muted);
+  doc.font(FONT_BOLD).fontSize(6.5).fillColor(COLORS.text);
   const spacing = { characterSpacing: 0.9 };
   doc.text("#", PAGE_MARGIN + COLUMNS.number, headerTextY, { width: COLUMN_WIDTHS.number, ...spacing });
-  doc.text("DESCRIPTION / ITEM CODE", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item, ...spacing });
+  doc.text("DESCRIPTION", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item, ...spacing });
   const rightLabels = [
     ["UNIT EX GST", "unitPrice"],
     ["GST 11%", "gst"],
@@ -355,63 +272,43 @@ function drawItemsTableHeader(doc, y) {
   return bottom;
 }
 
-// Item names wrap to however many lines they actually need — no clamp, no
-// ellipsis — so a long product title is always fully readable rather than
-// cut off. That means each row's height varies per item, so it's measured
-// with heightOfString() up front and checked against the remaining page
-// space *before* anything is drawn (see the loop below). Without that
-// pre-check, a long name could blow past the page boundary mid-draw —
-// pdfkit's own auto-pagination would kick in *inside* the item-name .text()
-// call, but the sibling cells (price/qty/discount/total) are drawn
-// afterwards at that same pre-computed rowY, now meaningless on whatever
-// page it auto-added, scattering a single row's columns across two or more pages.
+// Rows are pre-measured so a long name never splits a row across pages.
 const ROW_PAD_TOP = 9;
 const ROW_PAD_BOTTOM = 9;
 
+// Title with its SKU in brackets on the same line, saving a row per item.
+const itemLabel = (item) => (item.sku ? `${item.name} (SKU: ${item.sku})` : item.name);
+
 function estimateItemRowHeight(doc, item) {
-  doc.font(FONT_BOLD).fontSize(9.5);
-  let height = doc.heightOfString(item.name, { width: COLUMN_WIDTHS.item });
-  if (item.sku) {
-    doc.font(MONO).fontSize(7);
-    height += 2 + doc.currentLineHeight();
-  }
-  return height + ROW_PAD_TOP + ROW_PAD_BOTTOM;
+  doc.font(FONT).fontSize(9.5);
+  return doc.heightOfString(itemLabel(item), { width: COLUMN_WIDTHS.item }) + ROW_PAD_TOP + ROW_PAD_BOTTOM;
 }
 
 function drawItemRow(doc, item, index, y) {
   const textY = y + ROW_PAD_TOP;
 
   doc
-    .font(MONO)
+    .font(FONT)
     .fontSize(FIGURE_SIZE)
-    .fillColor(COLORS.muted)
+    .fillColor(COLORS.text)
     .text(String(index + 1).padStart(2, "0"), PAGE_MARGIN + COLUMNS.number, textY, { width: COLUMN_WIDTHS.number });
 
-  doc.font(FONT_BOLD).fontSize(9.5).fillColor(COLORS.text);
-  const nameHeight = doc.heightOfString(item.name, { width: COLUMN_WIDTHS.item });
-  doc.text(item.name, PAGE_MARGIN + COLUMNS.item, textY, { width: COLUMN_WIDTHS.item });
-  let leftBottom = textY + nameHeight;
-  if (item.sku) {
-    doc
-      .font(MONO)
-      .fontSize(7)
-      .fillColor(COLORS.muted)
-      .text(`SKU ${item.sku}`, PAGE_MARGIN + COLUMNS.item, leftBottom + 2, { width: COLUMN_WIDTHS.item });
-    leftBottom = doc.y;
-  }
+  doc.font(FONT).fontSize(9.5).fillColor(COLORS.text);
+  const label = itemLabel(item);
+  const leftBottom = textY + doc.heightOfString(label, { width: COLUMN_WIDTHS.item });
+  doc.text(label, PAGE_MARGIN + COLUMNS.item, textY, { width: COLUMN_WIDTHS.item });
 
   const discount = item.discount_amount || 0;
   const lineTotal = item.unit_price * item.quantity - discount;
 
-  doc.font(MONO).fontSize(FIGURE_SIZE).fillColor(COLORS.text);
+  doc.font(FONT).fontSize(FIGURE_SIZE).fillColor(COLORS.text);
   drawRightAligned(doc, formatMoney(lineExclusiveUnitPrice(item.unit_price)), PAGE_MARGIN + COLUMNS.unitPrice + COLUMN_WIDTHS.unitPrice, textY);
   drawRightAligned(doc, formatMoney(lineGst(lineTotal)), PAGE_MARGIN + COLUMNS.gst + COLUMN_WIDTHS.gst, textY);
   drawRightAligned(doc, String(item.quantity), PAGE_MARGIN + COLUMNS.qty + COLUMN_WIDTHS.qty, textY);
-  // A real deduction is called out in the accent color and signed, exactly
-  // as InvoicePrintView.tsx renders it; a zero stays muted and unsigned.
-  doc.fillColor(discount > 0 ? COLORS.accent : COLORS.muted);
+  // A real discount is signed; zero stays unsigned, as on screen.
+  doc.fillColor(COLORS.text);
   drawRightAligned(doc, discount > 0 ? `-${formatMoney(discount)}` : formatMoney(0), PAGE_MARGIN + COLUMNS.discount + COLUMN_WIDTHS.discount, textY);
-  doc.font(MONO_BOLD).fillColor(COLORS.text);
+  doc.font(FONT_BOLD).fillColor(COLORS.text);
   drawRightAligned(doc, formatMoney(lineTotal), PAGE_MARGIN + COLUMNS.total + COLUMN_WIDTHS.total, textY);
 
   const rowBottom = Math.max(leftBottom, textY + 10) + ROW_PAD_BOTTOM;
@@ -434,15 +331,7 @@ function drawItemsTable(doc, order, topY) {
   return y;
 }
 
-// Worst case: the bank-details grid + note + stamp on the left (~185), or
-// the totals ledger on the right — up to 5 rows when a discount applies
-// (~90) + the ink total bar (46) + paid/refunded/due rows (~54) + the
-// balance-outstanding bar (30) — whichever's taller, plus a safety margin.
-// Every draw call below uses an *absolute* y, not pdfkit's auto-flowing
-// cursor, so if that math starts beyond the page's bottom margin, pdfkit
-// silently pushes each individual call onto its own new (mostly blank) page
-// instead of raising an error — this pre-check is what avoids that,
-// mirroring drawItemsTable's own per-row overflow check above.
+// Absolute-y draws past the margin each spawn a blank page; pre-check fit.
 const PAYMENT_AND_TOTALS_HEIGHT_ESTIMATE = 250;
 const TOTALS_WIDTH = 190;
 
@@ -457,9 +346,7 @@ function drawPaymentDetails(doc, order, companyProfile, totalPaidCents, x, y, wi
     ["BSB", bankDetails.bsb || "—"],
     ["Account No", bankDetails.account_number || "—"],
   ];
-  // Two cells per row, with each row starting below the *measured* bottom of
-  // the one above it — a long account name wraps to two lines, and a fixed
-  // row pitch would let the next row's label run into it.
+  // Each row starts below the measured one above; account names can wrap.
   const gridColWidth = width / 2;
   let rowY = cursor;
   for (let row = 0; row * 2 < bankRows.length; row += 1) {
@@ -474,77 +361,51 @@ function drawPaymentDetails(doc, order, companyProfile, totalPaidCents, x, y, wi
   }
   const gridBottom = rowY - 8;
 
-  const noteRuleY = gridBottom + 10;
-  drawRule(doc, noteRuleY, { x, width });
-  const invoiceLabel = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
-  const note =
-    totalPaidCents > 0
-      ? `Payment received via ${channelLabelFor(order)}. No further action required, quote ${invoiceLabel} for any enquiry about this order.`
-      : `No payment recorded yet, quote ${invoiceLabel} when settling this invoice.`;
-  doc.font(MONO).fontSize(7).fillColor(COLORS.muted).text(note, x, noteRuleY + 9, { width, lineGap: 1.5 });
-
-  // Outlined status stamp: the settled/unsettled state of the invoice, and
-  // the channel it was taken through.
-  const stampY = doc.y + 12;
   const isPaid = totalPaidCents > 0;
+
+  // Status stamp: paid/unpaid plus the sales channel.
+  const stampY = gridBottom + 12;
   const stampColor = isPaid ? COLORS.green : COLORS.accent;
   const stampLabel = isPaid ? "PAID" : "UNPAID";
   const channelText = channelLabelFor(order).toUpperCase();
   doc.font(FONT_BOLD).fontSize(13);
   const stampLabelWidth = doc.widthOfString(stampLabel);
-  doc.font(MONO).fontSize(7);
+  doc.font(FONT).fontSize(7);
   const channelWidth = doc.widthOfString(channelText, { characterSpacing: 0.8 });
   const stampWidth = stampLabelWidth + channelWidth + 30;
   const stampHeight = 24;
   doc.roundedRect(x, stampY, stampWidth, stampHeight, 2).lineWidth(1).strokeColor(stampColor).stroke();
-  doc.font(FONT_BOLD).fontSize(13).fillColor(stampColor).text(stampLabel, x + 10, stampY + 6);
+  doc.font(FONT_BOLD).fontSize(13).fillColor(COLORS.text).text(stampLabel, x + 10, stampY + 6);
   doc
-    .font(MONO)
+    .font(FONT)
     .fontSize(7)
-    .fillColor(COLORS.muted)
+    .fillColor(COLORS.text)
     .text(channelText, x + 10 + stampLabelWidth + 10, stampY + 10, { characterSpacing: 0.8, lineBreak: false });
 
   return stampY + stampHeight;
 }
 
-// One line of the totals ledger — label left, figure right. `tone` picks the
-// emphasis: plain ink for a running figure, accent for a deduction, green
-// for a settled balance (same three tones as InvoicePrintView.tsx's <TotalRow>).
-function drawTotalRow(doc, label, value, x, y, width, tone = "default") {
-  const color = tone === "accent" ? COLORS.accent : tone === "green" ? COLORS.green : COLORS.text;
-  doc
-    .font(MONO)
-    .fontSize(8)
-    .fillColor(tone === "default" ? COLORS.muted : color)
-    .text(label, x, y, { width, lineBreak: false });
-  doc.font(MONO).fontSize(8).fillColor(color);
+// Totals ledger line: label left, figure right.
+function drawTotalRow(doc, label, value, x, y, width) {
+  doc.font(FONT).fontSize(8).fillColor(COLORS.text).text(label, x, y, { width, lineBreak: false });
   drawRightAligned(doc, value, x + width, y);
   return y + 14;
 }
 
 function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width) {
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  // Item-level discounts plus any legacy order-level discount (see Order.js's
-  // discount_amount comment) — order.subtotal already nets these out.
+  // Includes legacy order-level discount; order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
   const totalDiscount = itemDiscount + (order.discount_amount || 0);
-  // order.tax_amount is the authoritative GST embedded in order.subtotal
-  // (computed once, at order-creation time, from the POST-discount
-  // subtotal — order.service.js#GST_DIVISOR) — reused directly here rather
-  // than recomputed, so this invoice can never disagree with the rest of the
-  // app about how much GST an order actually carries. Ex-GST subtotal is
-  // just that subtotal with its own GST subtracted back out.
+  // order.tax_amount is the stored GST; reused so totals never disagree.
   const gstAmount = order.tax_amount || 0;
   const exGstSubtotal = order.subtotal - gstAmount;
 
   let cursor = y;
-  // Pre-discount figure + the discount itself only earn a line when there
-  // actually is a discount — an order with none goes straight from
-  // Subtotal (ex GST) to GST to Pickup/Freight, matching a clean invoice
-  // with nothing to net out.
+  // Pre-discount subtotal and discount lines only when discounted.
   if (totalDiscount > 0) {
     cursor = drawTotalRow(doc, "Subtotal", formatMoney(order.subtotal + totalDiscount), x, cursor, width);
-    cursor = drawTotalRow(doc, "Discount", `-${formatMoney(totalDiscount)}`, x, cursor, width, "accent");
+    cursor = drawTotalRow(doc, "Discount", `-${formatMoney(totalDiscount)}`, x, cursor, width);
   }
   cursor = drawTotalRow(doc, "Subtotal (ex GST)", formatMoney(exGstSubtotal), x, cursor, width);
   cursor = drawTotalRow(doc, "GST (11%)", formatMoney(gstAmount), x, cursor, width);
@@ -559,36 +420,24 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
     .fontSize(6.5)
     .fillColor(COLORS.white)
     .text("TOTAL INC GST", x + 12, barY + 12, { characterSpacing: 1, lineBreak: false });
-  doc.font(MONO_BOLD).fontSize(10).fillColor(COLORS.goldOnInk);
+  doc.font(FONT_BOLD).fontSize(10).fillColor(COLORS.goldOnInk);
   drawRightAligned(doc, formatMoney(order.total), x + width - 12, barY + 10);
   cursor = barY + barHeight + 10;
 
-  // A refund does NOT always mean "nothing more is owed" — see
-  // utils/paymentTotals.ts#getBalanceDue (the frontend twin of this logic)
-  // for the full reasoning: paid-in-full-then-refunded means due is 0
-  // regardless of the raw remainder, but never-paid-in-full-then-refunded-
-  // on-top means the real shortfall is still owed. totalPaidCents is already
-  // net of refunds, so totalPaidCents + totalRefundedCents reconstructs the
-  // gross amount ever collected.
+  // Paid-then-refunded is $0 due; partial-then-refunded still owes.
   const grossPaidCents = (totalPaidCents || 0) + (totalRefundedCents || 0);
   const wasEverPaidInFull = grossPaidCents >= order.total;
   const isFullyRefunded = order.status === "refunded";
   const amountDue = wasEverPaidInFull || isFullyRefunded ? 0 : Math.max(0, order.total - (totalPaidCents || 0));
 
-  // Total paid / Total due are always shown, even at $0 — same convention as
-  // the totals rows above.
+  // Paid / due rows always shown, even at $0.
   cursor = drawTotalRow(doc, "Total paid", formatMoney(totalPaidCents || 0), x, cursor, width);
   if (totalRefundedCents > 0) {
     cursor = drawTotalRow(doc, "Total refunded", formatMoney(totalRefundedCents), x, cursor, width);
   }
-  cursor = drawTotalRow(doc, "Total due", formatMoney(amountDue), x, cursor, width, amountDue === 0 ? "green" : "accent");
+  cursor = drawTotalRow(doc, "Total due", formatMoney(amountDue), x, cursor, width);
 
-  // Every channel can now carry an outstanding balance — storefront/eBay
-  // prices are editable after the fact (see updateOrderItemPrice), not just
-  // manual sales — mirroring InvoicePrintView.tsx's generalized Balance
-  // Outstanding treatment. getBalanceDue already correctly returns 0 for an
-  // order that was paid in full before being refunded, so no separate
-  // refunded-status check is needed here.
+  // Any channel can owe a balance, since prices can change post-payment.
   if (amountDue > 0) {
     const barTop = cursor + 6;
     const outstandingHeight = 26;
@@ -598,7 +447,7 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
       .fontSize(6)
       .fillColor(COLORS.white)
       .text("BALANCE OUTSTANDING", x + 10, barTop + 10, { characterSpacing: 0.9, lineBreak: false });
-    doc.font(MONO_BOLD).fontSize(9).fillColor(COLORS.white);
+    doc.font(FONT_BOLD).fontSize(9).fillColor(COLORS.white);
     drawRightAligned(doc, formatMoney(amountDue), x + width - 10, barTop + 8);
     cursor = barTop + outstandingHeight;
   }
@@ -621,30 +470,18 @@ function drawPaymentAndTotals(doc, order, totalPaidCents, totalRefundedCents, co
   return Math.max(leftBottom, rightBottom);
 }
 
-// ── Rich text ──────────────────────────────────────────────────────────────
-// The policy fields are authored in a rich-text editor and stored as HTML.
-// richTextToBlocks parses that into lines of styled runs (see
-// utils/richText.js, mirrored by the frontend's richText.ts), and these two
-// draw/measure it: one line per block, bold and italic honoured by swapping
-// Courier faces, list items prefixed with a bullet character.
+// Rich text: parsed HTML runs, bold/italic via Helvetica faces.
 
 function runFont(run) {
-  if (run.bold && run.italic) return MONO_BOLD_ITALIC;
-  if (run.bold) return MONO_BOLD;
-  if (run.italic) return MONO_ITALIC;
-  return MONO;
+  if (run.bold && run.italic) return FONT_BOLD_ITALIC;
+  if (run.bold) return FONT_BOLD;
+  if (run.italic) return FONT_ITALIC;
+  return FONT;
 }
 
-/**
- * Height the blocks will occupy, measured in one face. All four Courier
- * variants share the same advance width (294pt for the same string at 7pt,
- * checked), so a bold run wraps at exactly the same character as a regular
- * one. Their line heights differ by a hair — the bold faces are ~0.08pt
- * shorter per line — so measuring in regular slightly OVER-estimates a bold
- * block, which is the safe direction for something pinned to the page bottom.
- */
+/** Height measured in bold, the widest face, so it never under-estimates. */
 function measureRichText(doc, blocks, { width, size, lineGap }) {
-  doc.font(MONO).fontSize(size);
+  doc.font(FONT_BOLD).fontSize(size);
   return blocks.reduce((total, block) => {
     const line = (block.marker ? `${block.marker} ` : "") + block.runs.map((run) => run.text).join("");
     return total + doc.heightOfString(line, { width, lineGap });
@@ -663,9 +500,7 @@ function drawRichText(doc, blocks, x, y, { width, size, lineGap, color }) {
       const last = index === runs.length - 1;
       const options = { width, lineGap, continued: !last };
       doc.font(runFont(run)).fontSize(size);
-      // Only the first run of a line is positioned; the rest continue from
-      // wherever that one left off, which is what keeps a bold word inline
-      // instead of starting its own line.
+      // Only a line's first run is positioned so later runs stay inline.
       if (index === 0) doc.text(run.text, x, cursor, options);
       else doc.text(run.text, options);
     });
@@ -676,17 +511,9 @@ function drawRichText(doc, blocks, x, y, { width, size, lineGap, color }) {
   return cursor;
 }
 
-// Warranty & Returns / Legal Disclaimer, set as two plain hairline-topped
-// columns. Flows in normal document order right after payment/totals, like
-// every other section — it is not pinned to the foot of the page (unlike
-// InvoicePrintView.tsx's on-screen footer, which uses `mt-auto`).
+// Warranty / disclaimer columns flow after totals, not pinned to the foot.
 function drawFooter(doc, companyProfile, topY) {
-  // pdfkit's .text() auto-paginates against the page's own bottom margin
-  // even when given an explicit y below it (the same quirk drawPageRule
-  // works around) — this function's own pinning math is what decides where
-  // the footer sits, so pdfkit's independent check has to be disabled for
-  // the duration of this draw, or a well-placed final line could silently
-  // trigger an extra near-blank page. Restored at the end.
+  // pdfkit auto-paginates below the bottom margin; disabled during this draw.
   const originalBottomMargin = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
 
@@ -694,8 +521,7 @@ function drawFooter(doc, companyProfile, topY) {
   const colWidth = (CONTENT_WIDTH - colGap) / 2;
   const lineGap = 1.4;
   const bodySize = 7;
-  // Same parsed blocks InvoiceRichText.tsx renders on screen, so the printed
-  // sheet and the preview carry identical formatting.
+  // Same parsed blocks as InvoiceRichText.tsx, so formatting matches.
   const emptyBlock = [{ marker: null, runs: [{ text: "—", bold: false, italic: false }] }];
   const warrantyBlocks = richTextToBlocks(companyProfile.warranty_text);
   const legalBlocks = richTextToBlocks(companyProfile.legal_disclaimer_text);
@@ -708,9 +534,7 @@ function drawFooter(doc, companyProfile, topY) {
   );
   const blockHeight = 11 + 6 + bodyHeight;
 
-  // Flows immediately after the preceding content, like every other section
-  // on the sheet — not pinned to the page's bottom margin. Only breaks to a
-  // new page when it genuinely doesn't fit in what's left of the current one.
+  // Breaks to a new page only when it doesn't fit on the current one.
   let ruleY = topY + 26;
   if (ruleY + blockHeight > BOTTOM_LIMIT) {
     doc.addPage();
@@ -722,7 +546,7 @@ function drawFooter(doc, companyProfile, topY) {
   const col2X = PAGE_MARGIN + colWidth + colGap;
   drawSectionLabel(doc, "Warranty & Returns", PAGE_MARGIN, textY, { width: colWidth });
   drawSectionLabel(doc, "Legal Disclaimer", col2X, textY, { width: colWidth });
-  const bodyOpts = { width: colWidth, size: bodySize, lineGap, color: COLORS.muted };
+  const bodyOpts = { width: colWidth, size: bodySize, lineGap, color: COLORS.text };
   drawRichText(doc, warranty, PAGE_MARGIN, textY + 13, bodyOpts);
   drawRichText(doc, legal, col2X, textY + 13, bodyOpts);
 
@@ -730,37 +554,21 @@ function drawFooter(doc, companyProfile, topY) {
   doc.page.margins.bottom = originalBottomMargin;
 }
 
-// The rule closing the foot of every page, carrying the page count — drawn
-// after every other page's worth of content already exists (see
-// buildInvoicePdfBuffer's bufferPages/switchToPage pass), since the total
-// isn't known until then. InvoicePrintView.tsx closes its own sheet with the
-// same rule, minus the count that only a paginated document needs.
-//
-// pdfkit's .text() still auto-paginates against the page's own bottom
-// margin even when given explicit x/y coordinates below it — writing this
-// close to PAGE_HEIGHT silently triggered doc.addPage() and put the label on
-// a brand new blank page instead of the intended one. Zeroing the bottom
-// margin for the duration of this one call (the standard pdfkit workaround)
-// stops that check from firing.
+// Page-count rule drawn last; zero bottom margin stops a stray addPage.
 function drawPageRule(doc, pageIndex, pageCount) {
   const originalBottomMargin = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
   const ruleY = PAGE_HEIGHT - PAGE_MARGIN - 18;
   drawRule(doc, ruleY);
-  doc.font(MONO).fontSize(6).fillColor(COLORS.muted);
+  doc.font(FONT).fontSize(6).fillColor(COLORS.text);
   drawRightAligned(doc, `Page ${pageIndex + 1} of ${pageCount}`, CONTENT_RIGHT, ruleY + 7);
   doc.page.margins.bottom = originalBottomMargin;
 }
 
-// totalPaidCents/totalRefundedCents: sums of Payment fields for the order
-// (see payment.service.js#getTotalPaidForOrder/#getTotalRefundedForOrder) —
-// the caller computes these since they require a DB query this pure
-// rendering function shouldn't make itself.
+// Paid/refunded totals come from the caller; this renderer never hits the DB.
 function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents = 0, companyProfile = {} } = {}) {
   return new Promise((resolve, reject) => {
-    // bufferPages: true is required to go back and draw onto earlier pages
-    // (switchToPage below) after later pages already exist — the total page
-    // count for "Page X of Y" isn't known until every page has been drawn.
+    // bufferPages lets the page-count pass revisit earlier pages.
     const doc = new PDFDocument({ size: "A4", margin: PAGE_MARGIN, bufferPages: true });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
