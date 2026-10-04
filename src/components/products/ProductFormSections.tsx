@@ -145,7 +145,7 @@ export function ProductFormSections({
             rows={form.fitments}
             onChange={(fitments) => setValue("fitments", fitments, { shouldValidate: true, shouldDirty: true })}
             rowLabel={(i) => (i === 0 ? "Vehicle 1 · Default" : `Vehicle ${i + 1}`)}
-            hint="Vehicle 1 shows in Technical Specifications; the others are listed under Vehicle Fitment."
+            hint="Vehicle 1 shows in Technical Specifications; every vehicle is listed under Vehicle Fitment."
           />
         </div>
       </FormSection>
