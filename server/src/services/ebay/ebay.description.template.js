@@ -99,6 +99,37 @@ function renderEbayDescription(input, { businessName, logoUrl } = {}) {
         <td colspan="4" style="padding:14px 16px;font-family:Georgia,serif;font-size:14px;color:#8a8070;text-align:center;">Please contact us to verify fitment for your vehicle.</td>
       </tr>`;
 
+  // Default vehicle sits in Technical Specifications; hide an empty table.
+  const hasDefaultVehicle = !!(str(vehicle?.make).trim() || str(vehicle?.model).trim());
+  const fitmentSection = validFitment.length === 0 && hasDefaultVehicle ? "" : `  <div class="pha-inner" style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);border-top:1px solid #2a2520;">
+    <h2 class="pha-h2" style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Vehicle Fitment</h2>
+    <div style="width:40px;height:2px;background:#c5a059;margin-bottom:24px;"></div>
+    <div class="pha-fit-scroll">
+      <table class="pha-fit-tbl" cellpadding="0" cellspacing="0" border="0">
+        <tr style="background:#1a1611;">
+          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">MAKE</td>
+          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">MODEL</td>
+          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">SERIES</td>
+          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">YEAR RANGE</td>
+        </tr>
+        ${fitmentRows}
+      </table>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;background:#1a1611;border:1px solid #c5a059;">
+      <tr>
+        <td style="padding:24px;">
+          <div style="font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:4px;margin-bottom:8px;">VIN VERIFICATION SERVICE</div>
+          <div style="font-family:Georgia,serif;font-size:14px;color:#d1c5b4;line-height:1.7;">
+            Please confirm the compatibility table above matches your vehicle before purchasing.
+            <strong style="color:#f8e19b;">Unsure?</strong> Message us with your VIN or registration and we will verify fitment for you.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+`;
+
   // Only HTTPS photos embed (same rule as the client).
   const firstImage = input.imageUrl.startsWith("https://") ? input.imageUrl : "";
   const imageCell = firstImage
@@ -275,34 +306,7 @@ function renderEbayDescription(input, { businessName, logoUrl } = {}) {
     </table>
   </div>
 
-  <div class="pha-inner" style="background:linear-gradient(180deg,#0a0a0a 0%,#0e0e0e 100%);border-top:1px solid #2a2520;">
-    <h2 class="pha-h2" style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Vehicle Fitment</h2>
-    <div style="width:40px;height:2px;background:#c5a059;margin-bottom:24px;"></div>
-    <div class="pha-fit-scroll">
-      <table class="pha-fit-tbl" cellpadding="0" cellspacing="0" border="0">
-        <tr style="background:#1a1611;">
-          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">MAKE</td>
-          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">MODEL</td>
-          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">SERIES</td>
-          <td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:3px;border-bottom:1px solid #c5a059;">YEAR RANGE</td>
-        </tr>
-        ${fitmentRows}
-      </table>
-    </div>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;background:#1a1611;border:1px solid #c5a059;">
-      <tr>
-        <td style="padding:24px;">
-          <div style="font-family:Arial,sans-serif;font-size:10px;color:#c5a059;letter-spacing:4px;margin-bottom:8px;">VIN VERIFICATION SERVICE</div>
-          <div style="font-family:Georgia,serif;font-size:14px;color:#d1c5b4;line-height:1.7;">
-            Please confirm the compatibility table above matches your vehicle before purchasing.
-            <strong style="color:#f8e19b;">Unsure?</strong> Message us with your VIN or registration and we will verify fitment for you.
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="pha-inner" style="background:#0e0e0e;border-top:1px solid #2a2520;">
+${fitmentSection}  <div class="pha-inner" style="background:#0e0e0e;border-top:1px solid #2a2520;">
     <h2 class="pha-h2" style="font-family:Georgia,serif;font-size:22px;color:#e9c176;margin:0 0 4px 0;font-weight:normal;letter-spacing:1px;">Store Policies</h2>
     <div style="width:40px;height:2px;background:#c5a059;margin-bottom:28px;"></div>
     <table class="pha-pol-tbl" cellpadding="0" cellspacing="0" border="0">

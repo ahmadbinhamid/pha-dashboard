@@ -4,6 +4,7 @@ import { vehicleYearRangeSchema } from "@/lib/validation/commonFields";
 import type { PackageFormState, StockEntry } from "@/types/product";
 import { missingPackageFields } from "@/lib/products/packageDimensions";
 import type { Attachment } from "@/types/product";
+import type { FitmentRowFormState } from "@/types/marketplace";
 
 // Price, package and year are checked; the rest stay permissive.
 const productFormShape = {
@@ -18,11 +19,10 @@ const productFormShape = {
   mpn: z.string(),
   condition: z.string(),
   authenticity: z.string(),
-  vehicle_make: z.string(),
-  vehicle_model: z.string(),
-  vehicle_model_code: z.string(),
-  vehicle_year: z.string(),
-  vehicle_year_to: z.string(),
+  // First row is the default vehicle; the rest are additional fitments.
+  fitments: z.array(
+    z.object({ make: z.string(), model: z.string(), model_code: z.string(), year_from: z.string(), year_to: z.string() }),
+  ),
   package: z.object({
     length: optionalNonNegativePriceSchema("Length"),
     width: optionalNonNegativePriceSchema("Width"),
@@ -72,15 +72,16 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
       }
     }
 
-    const v = values as { vehicle_year: string; vehicle_year_to: string };
-    const yearResult = vehicleYearRangeSchema.safeParse({ year_from: v.vehicle_year, year_to: v.vehicle_year_to });
-    if (!yearResult.success) {
-      ctx.addIssue({
-        code: "custom",
-        message: yearResult.error.issues[0]?.message ?? "Invalid year range",
-        path: ["vehicle_year_to"],
-      });
-    }
+    (values as { fitments: FitmentRowFormState[] }).fitments.forEach((row, index) => {
+      const yearResult = vehicleYearRangeSchema.safeParse({ year_from: row.year_from, year_to: row.year_to });
+      if (!yearResult.success) {
+        ctx.addIssue({
+          code: "custom",
+          message: yearResult.error.issues[0]?.message ?? "Invalid year range",
+          path: ["fitments", index, "year_to"],
+        });
+      }
+    });
   });
 }
 

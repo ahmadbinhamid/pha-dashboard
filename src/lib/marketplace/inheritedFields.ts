@@ -22,7 +22,10 @@ export function formatVehicle(vehicle: ProductVehicle | null | undefined): strin
 export function productValueLabel(field: string, product: Product): string | null {
   if (field === "condition") return product.condition ? labelOf(CONDITIONS, product.condition) : null;
   if (field === "authenticity") return product.authenticity ? labelOf(AUTHENTICITY_OPTIONS, product.authenticity) : null;
-  if (field === "vehicle") return formatVehicle(product.vehicle);
+  if (field === "additional_fitments") {
+    const vehicles = (product.additional_fitments ?? []).map(formatVehicle).filter(Boolean);
+    return vehicles.length ? vehicles.join("; ") : null;
+  }
   if (field === "package") return formatPackage(product.package);
   const value = (product as unknown as Record<string, unknown>)[field];
   return value == null || value === "" ? null : String(value);

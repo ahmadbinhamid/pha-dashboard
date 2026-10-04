@@ -136,7 +136,7 @@ async function getListingById(id, tenantId) {
   return MarketplaceListing.findOne({ _id: id, tenant_id: tenantId })
     .populate({
       path: "product",
-      select: "title slug sku price brand mpn condition attachments vehicle categories",
+      select: "title slug sku price brand mpn condition attachments vehicle additional_fitments categories",
       populate: { path: "attachments" },
     })
     .populate({
@@ -255,7 +255,7 @@ async function updateListing(id, payload, tenantId) {
   if (update.fitment) await syncFitmentCatalog(update.fitment, tenantId);
 
   return MarketplaceListing.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: update }, { new: true, strict: false })
-    .populate("product", "title slug sku price brand mpn attachments vehicle")
+    .populate("product", "title slug sku price brand mpn attachments vehicle additional_fitments")
     .populate("variant", "display_name sku price attachments")
     .populate("photo_overrides");
 }

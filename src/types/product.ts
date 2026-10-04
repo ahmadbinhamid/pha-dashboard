@@ -1,3 +1,4 @@
+import type { FitmentRowFormState } from "./marketplace";
 import type { StockStatus } from "./inventory";
 import type { ShippingMethod } from "./shipping";
 
@@ -104,14 +105,6 @@ export interface PackageFormState {
   weight: string;
 }
 
-export interface VehicleFormState {
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_model_code: string;
-  vehicle_year: string;
-  vehicle_year_to: string;
-}
-
 export interface Product {
   _id: string;
   id: string;
@@ -139,7 +132,9 @@ export interface Product {
   mpn: string | null;
   condition: ProductCondition;
   authenticity: ProductAuthenticity | null;
+  // Default fitment; additional_fitments lists the other compatible vehicles.
   vehicle: ProductVehicle;
+  additional_fitments?: ProductVehicle[];
   // Absent on documents saved before products had one.
   package?: PackageDimensions;
   // Shelf/bin location, e.g. "A3-02"; printed on the product tag.
@@ -178,11 +173,7 @@ export interface ProductCreateFormState {
   mpn: string;
   condition: ProductCondition;
   authenticity: ProductAuthenticity | "";
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_model_code: string;
-  vehicle_year: string;
-  vehicle_year_to: string;
+  fitments: FitmentRowFormState[];
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;
@@ -207,11 +198,7 @@ export interface ProductEditFormState {
   mpn: string;
   condition: ProductCondition;
   authenticity: ProductAuthenticity | "";
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_model_code: string;
-  vehicle_year: string;
-  vehicle_year_to: string;
+  fitments: FitmentRowFormState[];
   type: ProductType;
   status: ProductStatus;
   is_published_online: boolean;

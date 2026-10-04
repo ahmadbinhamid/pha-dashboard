@@ -1,8 +1,5 @@
 // utils/marketplaceListing.js
-// Shapes a MarketplaceListing into the curated, public-safe subset for the storefront's
-// product detail response; internal/operational fields are deliberately excluded.
-// Only eBay is implemented today, so this mapper is eBay-shaped; branch on `listing.platform`
-// once Amazon/Shopify land.
+// Public-safe listing subset for the storefront; eBay-shaped for now.
 function toPublicListing(listing) {
   const aspects =
     listing.item_specifics?.aspects instanceof Map
@@ -30,10 +27,7 @@ function fitmentKey(f) {
   return `${f.make || ""}|${f.model || ""}|${f.model_code || ""}|${f.year_from ?? ""}|${f.year_to ?? ""}`;
 }
 
-// Resolves "which value wins" for storefront display: a listing's override wins when present,
-// else the product's own value, plus merged/deduped vehicle fitment. Domain/precedence logic
-// only, no presentation. `primaryListing` is the first active listing (0-1 today; revisit if a
-// product can carry multiple concurrently-relevant listings).
+// Storefront display values: listing override, else product; deduped fitment.
 function buildProductDisplay(product, listings) {
   const primaryListing = listings[0] ?? null;
 
@@ -54,6 +48,7 @@ function buildProductDisplay(product, listings) {
   };
 
   if (product.vehicle) pushFitment(product.vehicle);
+  for (const f of product.additional_fitments ?? []) pushFitment(f);
   for (const listing of listings) {
     for (const f of listing.fitment ?? []) pushFitment(f);
   }

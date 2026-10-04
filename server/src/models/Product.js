@@ -91,7 +91,9 @@ const productSchema = buildSchema({
     enum: Object.values(PRODUCT_AUTHENTICITY),
     default: null,
   },
+  // Default fitment: Technical Specifications, eBay aspects, search facets.
   vehicle: { type: vehicleSchema, default: () => ({}) },
+  additional_fitments: { type: [vehicleSchema], default: [] },
   rating: { type: Number, default: 0, min: 0, max: 5 },
   rating_count: { type: Number, default: 0, min: 0 },
   attachments: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
@@ -117,6 +119,7 @@ productSchema.index(
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ "vehicle.make": 1, "vehicle.model": 1, "vehicle.model_code": 1 });
+productSchema.index({ "additional_fitments.make": 1, "additional_fitments.model": 1, "additional_fitments.model_code": 1 });
 // getProductCountsByCategory; autoIndex is off in prod, so build it manually.
 productSchema.index({ tenant_id: 1, categories: 1, is_published_online: 1, status: 1 });
 

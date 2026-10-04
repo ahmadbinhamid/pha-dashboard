@@ -7,7 +7,7 @@ import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Switch } from "@/components/ui/Switch";
 import { ProductImages } from "@/components/media/ProductImages";
 import { FormSection } from "@/components/products/FormSection";
-import { ProductVehicleSection } from "@/components/products/ProductVehicleSection";
+import { FitmentRowsEditor } from "@/components/shared/FitmentRowsEditor";
 import { PackageDimensionsFields } from "@/components/shared/PackageDimensionsFields";
 import { ProductShippingSection } from "@/components/products/ProductShippingSection";
 import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
@@ -141,20 +141,11 @@ export function ProductFormSections({
             <span className="text-sm font-semibold text-fg">Vehicle fitment</span>
             <Badge variant="muted">Optional</Badge>
           </div>
-          <ProductVehicleSection
-            values={{
-              vehicle_make: form.vehicle_make,
-              vehicle_model: form.vehicle_model,
-              vehicle_model_code: form.vehicle_model_code,
-              vehicle_year: form.vehicle_year,
-              vehicle_year_to: form.vehicle_year_to,
-            }}
-            onChange={(patch) => {
-              for (const [key, value] of Object.entries(patch)) {
-                setValue(key as keyof ProductFormValues, value as never, { shouldValidate: true, shouldDirty: true });
-              }
-            }}
-            yearRangeError={errors.vehicle_year_to?.message}
+          <FitmentRowsEditor
+            rows={form.fitments}
+            onChange={(fitments) => setValue("fitments", fitments, { shouldValidate: true, shouldDirty: true })}
+            rowLabel={(i) => (i === 0 ? "Vehicle 1 · Default" : `Vehicle ${i + 1}`)}
+            hint="Vehicle 1 shows in Technical Specifications; the others are listed under Vehicle Fitment."
           />
         </div>
       </FormSection>

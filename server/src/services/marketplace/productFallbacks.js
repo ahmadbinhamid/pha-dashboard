@@ -29,15 +29,19 @@ function fitmentFromVehicle(vehicle) {
   return [toFitmentRow(vehicle)];
 }
 
-// Stored rows naming a make or model; blank form rows don't count.
-function listingFitmentRows(listing) {
-  return (Array.isArray(listing?.fitment) ? listing.fitment : []).filter((r) => present(r?.make) || present(r?.model));
+// Rows naming a make or model; blank form rows don't count.
+function namedFitmentRows(rows) {
+  return (Array.isArray(rows) ? rows : []).filter((r) => present(r?.make) || present(r?.model));
 }
 
-/** Listing rows if any, else one row derived from product.vehicle. */
+function listingFitmentRows(listing) {
+  return namedFitmentRows(listing?.fitment);
+}
+
+/** Fitment table: listing rows, else the product's non-default vehicles. */
 function resolveFitment(listing, product) {
   const rows = listingFitmentRows(listing);
-  return rows.length ? rows.map(toFitmentRow) : fitmentFromVehicle(product?.vehicle);
+  return (rows.length ? rows : namedFitmentRows(product?.additional_fitments)).map(toFitmentRow);
 }
 
 // Listing package if any value is set, else the product's; never mixed.
@@ -53,6 +57,7 @@ module.exports = {
   resolveAuthenticity,
   resolveFitment,
   fitmentFromVehicle,
+  namedFitmentRows,
   listingFitmentRows,
   toFitmentRow,
   FITMENT_KEYS,

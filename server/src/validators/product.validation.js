@@ -47,6 +47,7 @@ const createProduct = {
       .default(null),
     // JSON string: { make, model, model_code, year_from, year_to }
     vehicle: Joi.string().allow("", null).default(null),
+    additional_fitments: Joi.string().allow("", null),
     // JSON string: { length, width, height, weight }
     package: Joi.string().allow("", null).default(null),
     bay: Joi.string().trim().max(40).allow("", null).default(null),
@@ -93,6 +94,7 @@ const updateProduct = {
       .valid(...Object.values(PRODUCT_AUTHENTICITY))
       .allow("", null),
     vehicle: Joi.string().allow("", null),
+    additional_fitments: Joi.string().allow("", null),
     package: Joi.string().allow("", null),
     bay: Joi.string().trim().max(40).allow("", null),
     shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)),
