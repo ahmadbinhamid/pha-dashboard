@@ -22,8 +22,8 @@ export function formatVehicle(vehicle: ProductVehicle | null | undefined): strin
 export function productValueLabel(field: string, product: Product): string | null {
   if (field === "condition") return product.condition ? labelOf(CONDITIONS, product.condition) : null;
   if (field === "authenticity") return product.authenticity ? labelOf(AUTHENTICITY_OPTIONS, product.authenticity) : null;
-  if (field === "additional_fitments") {
-    const vehicles = (product.additional_fitments ?? []).map(formatVehicle).filter(Boolean);
+  if (field === "vehicle") {
+    const vehicles = [product.vehicle, ...(product.additional_fitments ?? [])].map(formatVehicle).filter(Boolean);
     return vehicles.length ? vehicles.join("; ") : null;
   }
   if (field === "package") return formatPackage(product.package);

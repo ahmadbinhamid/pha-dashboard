@@ -12,71 +12,64 @@ import {
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
-// Print-only invoice matching the emailed tax-invoice PDF (order.service.js#sendOrderNotification); colors hardcoded for print, not theme tokens, so it stays legible on paper regardless of dark mode.
-// Layout mirrors invoicePdf.js: monospace for data values so columns align, sans for names/headings.
+// Print invoice mirroring invoicePdf.js; fixed print colours ignore dark mode.
 
-const INK = "#18140f";
-const MUTED = "#6b6f7a";
+const INK = "#000000";
 const ACCENT = "#c2790b";
 const BORDER = "#e2e0da";
 const GREEN = "#15803d";
 
-// Small-caps, wide-tracked section label in the accent color (e.g. "SHIP TO").
+// Small-caps, wide-tracked section label (e.g. "SHIP TO").
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: ACCENT }}>
+    <div className="text-[8.5px] font-bold uppercase tracking-[0.16em]">
       {children}
     </div>
   );
 }
 
-// One cell of the header meta strip, divided from its neighbour by a hairline rule.
+// One header meta cell, hairline-divided from its neighbour.
 function MetaCell({ label, value, first }: { label: string; value: string; first?: boolean }) {
   return (
     <div className={first ? "" : "border-l pl-5"} style={first ? undefined : { borderColor: BORDER }}>
-      <div className="text-[8px] font-bold uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+      <div className="text-[8px] font-bold uppercase tracking-[0.12em]">
         {label}
       </div>
-      <div className="mt-1.5 font-mono text-[12px]" style={{ color: INK }}>
+      <div className="mt-1.5 text-[12px]">
         {value}
       </div>
     </div>
   );
 }
 
-// Tiny caps label above a monospace value — the bank-details grid's four fields.
+// Caps label over a value, for the bank-details grid.
 function FieldBlock({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[8px] font-bold uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+      <div className="text-[8px] font-bold uppercase tracking-[0.12em]">
         {label}
       </div>
-      <div className="mt-1 font-mono text-[10.5px]" style={{ color: INK }}>
+      <div className="mt-1 text-[10.5px]">
         {value}
       </div>
     </div>
   );
 }
 
-// One totals-ledger line; `tone` sets emphasis (plain/accent/green).
-function TotalRow({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "accent" | "green" }) {
-  const color = tone === "accent" ? ACCENT : tone === "green" ? GREEN : INK;
+// One totals-ledger line: label left, figure right.
+function TotalRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-[5px]">
-      <span className="font-mono text-[11px]" style={{ color: tone === "default" ? MUTED : color }}>
-        {label}
-      </span>
-      <span className="whitespace-nowrap font-mono text-[11px]" style={{ color }}>
-        {value}
-      </span>
+      <span className="text-[11px]">{label}</span>
+      <span className="whitespace-nowrap text-[11px] tabular-nums">{value}</span>
     </div>
   );
 }
 
-// A table cell's right-aligned monospace figure — every numeric column.
-function Figure({ children, bold, color = INK }: { children: React.ReactNode; bold?: boolean; color?: string }) {
+// A table cell's right-aligned figure, for every numeric column.
+function Figure({ children, bold }: { children: React.ReactNode; bold?: boolean }) {
   return (
-    <span className={`font-mono text-[11px] ${bold ? "font-bold" : ""}`} style={{ color }}>
+    <span className={`text-[11px] tabular-nums ${bold ? "font-bold" : ""}`}>
       {children}
     </span>
   );
@@ -92,13 +85,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
-  // Item-level discounts plus any legacy order-level discount; order.subtotal already nets these out.
+  // Includes legacy order-level discount; order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
   const totalDiscount = itemDiscount + order.discount_amount;
-  // order.tax_amount is the authoritative GST (order.service.js#GST_DIVISOR), reused as-is to match invoicePdf.js.
+  // order.tax_amount is the authoritative GST, same as invoicePdf.js.
   const gstAmount = order.tax_amount;
   const exGstSubtotal = order.subtotal - gstAmount;
-  // See utils/paymentTotals.ts#getBalanceDue — distinguishes "paid then refunded" ($0 due) from a real shortfall.
+  // Paid-then-refunded is $0 due, not a shortfall (getBalanceDue).
   const amountDue = getBalanceDue(order.total, order.payments, order.payment_status);
   const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
     year: "numeric",
@@ -107,59 +100,47 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   });
   const billingAddress = order.billing_address ?? order.shipping_address;
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
-  // "Order Number" is the customer's own reference; omitted entirely when blank, never falls back to our internal ORD-000xx.
+  // Customer's own reference; omitted when blank, never our internal number.
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
   const sellerAddress = [tenant?.pickup_location.address, tenant?.pickup_location.country].filter(Boolean).join(", ");
-  // Phone / email / ABN collapse onto one letterhead line, only the parts the tenant filled in.
-  const sellerContactLine = [tenant?.phone, tenant?.email, tenant?.abn ? `ABN ${tenant.abn}` : null]
-    .filter(Boolean)
-    .join(" · ");
+  // Address, email, phone and ABN each on their own line, filled ones only.
+  const sellerLines = [sellerAddress || "—", tenant?.email, tenant?.phone, tenant?.abn ? `ABN ${tenant.abn}` : null].filter(
+    Boolean,
+  );
 
   const metaCells = [
     { label: "Invoice Date", value: orderDate },
-    { label: "Due Date", value: "Upon receipt" },
+    { label: "Due Date", value: "Due on receipt" },
     ...(order.reference_number ? [{ label: "Order Number", value: order.reference_number }] : []),
     { label: "Sales Channel", value: channelLabel },
   ];
 
   return (
     <div
-      // Stays a flex column when printing (unlike the shell containers in
-      // AppShell.tsx, which switch to print:block) — that's what keeps the
-      // mt-auto footer pinned to the foot of the sheet on paper, not just on screen.
-      //
-      // globals.css pins @page to `margin: 0; size: A4`, so the printable
-      // area is the full 210×297mm sheet and this padding IS the page
-      // margin. min-h is one page less a 1mm rounding cushion: a normal
-      // invoice then fills exactly one page with the footer on its bottom
-      // edge, and a longer one flows onto further pages with the footer
-      // after the last of it.
+      // Flex column in print keeps the mt-auto footer at the A4 page foot.
       className="flex min-h-[296mm] flex-col p-10"
-      style={{ color: INK, background: "#ffffff" }}
+      style={{ color: INK, background: "#ffffff", fontFamily: "Arial, Helvetica, sans-serif" }}
     >
-      {/* Letterhead — seller identity left, document identity right. Never
-          wraps: the invoice number belongs on the same line as the company
-          name, hard against the right edge, however long the name runs. */}
+      {/* Letterhead never wraps: invoice number stays beside the company name. */}
       <div className="flex items-start justify-between gap-8">
         <div className="flex min-w-0 items-start gap-3">
           <TenantLogo logoUrl={tenant?.logo_url} name={tenant?.company_name} sizeClass="h-[44px]" maxWidthClass="max-w-[44px]" />
           <div>
             <h2 className="text-[16px] font-black uppercase leading-none tracking-tight">{tenant?.company_name || "—"}</h2>
-            <div className="mt-1 font-mono text-[10px]" style={{ color: INK }}>
-              {sellerAddress || "—"}
-            </div>
-            <div className="mt-0.5 font-mono text-[10px]" style={{ color: MUTED }}>
-              {sellerContactLine}
+            <div className="mt-1 space-y-0.5 text-[10px]">
+              {sellerLines.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
             </div>
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[9px] font-bold uppercase tracking-[0.28em]" style={{ color: ACCENT }}>
+          <div className="text-[9px] font-bold uppercase tracking-[0.28em]">
             Tax Invoice
           </div>
-          <div className="mt-1.5 font-mono text-[21px] font-black leading-none tracking-tight">{invoiceNumberValue}</div>
+          <div className="mt-1.5 text-[21px] font-black leading-none tracking-tight">{invoiceNumberValue}</div>
         </div>
       </div>
 
@@ -174,14 +155,29 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         ))}
       </div>
 
-      {/* Ship To / Bill To pushed to opposite edges of the sheet. */}
+      {/* Bill To on the left, Ship To on the right, both left-aligned. */}
       <div className="flex flex-wrap items-start justify-between gap-10 py-6">
         <div className="max-w-[46%]">
+          <SectionLabel>Bill To</SectionLabel>
+          <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
+          <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed">
+            {billingAddress && <div>{stripEbayAddressPrefix(billingAddress.address)}</div>}
+            {billingAddress && (
+              <div>
+                {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
+              </div>
+            )}
+            {order.customer.phone && <div>Phone: {order.customer.phone}</div>}
+            {order.customer.email && <div>Email: {order.customer.email}</div>}
+          </div>
+        </div>
+
+        <div className="w-[46%]">
           <SectionLabel>Ship To</SectionLabel>
           <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
-          <div className="mt-2 space-y-0.5 font-mono text-[10px] leading-relaxed" style={{ color: MUTED }}>
+          <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed">
             {isPickup || !order.shipping_address ? (
-              <div>Collecting in-store, see seller address above.</div>
+              <div>Customer collection from the store address above.</div>
             ) : (
               <>
                 <div>{stripEbayAddressPrefix(order.shipping_address.address)}</div>
@@ -192,33 +188,17 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             )}
           </div>
         </div>
-
-        <div className="max-w-[46%] text-right">
-          <SectionLabel>Bill To</SectionLabel>
-          <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
-          <div className="mt-2 space-y-0.5 font-mono text-[10px] leading-relaxed" style={{ color: MUTED }}>
-            {billingAddress && <div>{stripEbayAddressPrefix(billingAddress.address)}</div>}
-            {billingAddress && (
-              <div>
-                {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
-              </div>
-            )}
-            {order.customer.phone && <div>PH: {order.customer.phone}</div>}
-            {order.customer.email && <div>EMAIL: {order.customer.email}</div>}
-          </div>
-        </div>
       </div>
 
       <table className="w-full border-collapse">
-        {/* table-header-group repeats this row on every printed page the
-            table spans, so a row that lands on page 2 isn't unlabeled. */}
+        {/* table-header-group repeats this row on every printed page. */}
         <thead style={{ display: "table-header-group" }}>
-          <tr className="text-[8.5px] font-bold uppercase tracking-[0.1em]" style={{ color: MUTED }}>
+          <tr className="text-[8.5px] font-bold uppercase tracking-[0.1em]">
             <th className="w-9 border-t border-b-2 py-2.5 text-left whitespace-nowrap" style={{ borderTopColor: BORDER, borderBottomColor: INK }}>
               #
             </th>
             <th className="border-t border-b-2 py-2.5 pr-4 text-left whitespace-nowrap" style={{ borderTopColor: BORDER, borderBottomColor: INK }}>
-              Description / Item Code
+              Description
             </th>
             <th className="border-t border-b-2 py-2.5 pr-4 text-right whitespace-nowrap" style={{ borderTopColor: BORDER, borderBottomColor: INK }}>
               Unit ex GST
@@ -239,31 +219,24 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         </thead>
         <tbody>
           {order.items.map((item, i) => {
-            // GST-inclusive AU retail pricing: extracted as total/11, never
-            // added on top of unit_price — see utils/format.ts#getLineGst.
+            // GST-inclusive pricing: GST is total/11, never added on top.
             const lineTotal = item.unit_price * item.quantity - item.discount_amount;
             const lineGst = getLineGst(lineTotal);
             return (
               <tr
                 key={i}
                 className="border-b"
-                // Without this, the browser's print pagination can slice a
-                // row in half across a page boundary (reported: a long
-                // item name got cut off mid-line). pageBreakInside is the
-                // older alias some print engines still need alongside the
-                // standard breakInside property.
+                // Stops print pagination slicing a row; pageBreakInside for old engines.
                 style={{ borderColor: BORDER, breakInside: "avoid", pageBreakInside: "avoid" }}
               >
                 <td className="py-3 align-top">
-                  <Figure color={MUTED}>{String(i + 1).padStart(2, "0")}</Figure>
+                  <Figure>{String(i + 1).padStart(2, "0")}</Figure>
                 </td>
                 <td className="py-3 pr-4 align-top">
-                  <div className="text-[13px] font-bold leading-snug">{item.name}</div>
-                  {item.sku && (
-                    <div className="mt-1 font-mono text-[9.5px]" style={{ color: MUTED }}>
-                      SKU {item.sku}
-                    </div>
-                  )}
+                  <div className="text-[13px] font-normal leading-snug">
+                    {item.name}
+                    {item.sku && ` (SKU: ${item.sku})`}
+                  </div>
                 </td>
                 <td className="py-3 pr-4 text-right align-top">
                   <Figure>{formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))}</Figure>
@@ -276,9 +249,9 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                 </td>
                 <td className="py-3 pr-4 text-right align-top">
                   {item.discount_amount > 0 ? (
-                    <Figure color={ACCENT}>−{formatCurrencyFromCents(item.discount_amount)}</Figure>
+                    <Figure>−{formatCurrencyFromCents(item.discount_amount)}</Figure>
                   ) : (
-                    <Figure color={MUTED}>{formatCurrencyFromCents(0)}</Figure>
+                    <Figure>{formatCurrencyFromCents(0)}</Figure>
                   )}
                 </td>
                 <td className="py-3 text-right align-top">
@@ -303,22 +276,16 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             <FieldBlock label="Account No" value={tenant?.bank_details.account_number || "—"} />
           </div>
 
-          <div className="mt-4 max-w-[420px] border-t pt-3.5 font-mono text-[10px] leading-relaxed" style={{ borderColor: BORDER, color: MUTED }}>
-            {amountPaid > 0
-              ? `Payment received via ${channelLabel}. No further action required, quote ${invoiceNumberValue} for any enquiry about this order.`
-              : `No payment recorded yet, quote ${invoiceNumberValue} when settling this invoice.`}
-          </div>
 
-          {/* Outlined status stamp: the settled/unsettled state of the
-              invoice, and the channel it was taken through. */}
+          {/* Status stamp: paid/unpaid plus the sales channel. */}
           <div
             className="mt-4 inline-flex items-baseline gap-2.5 rounded-sm border px-3.5 py-2"
             style={{ borderColor: amountPaid > 0 ? GREEN : ACCENT }}
           >
-            <span className="text-[15px] font-black uppercase tracking-tight" style={{ color: amountPaid > 0 ? GREEN : ACCENT }}>
+            <span className="text-[15px] font-black uppercase tracking-tight">
               {amountPaid > 0 ? "Paid" : "Unpaid"}
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em]" style={{ color: MUTED }}>
+            <span className="text-[10px] uppercase tracking-[0.1em]">
               {channelLabel}
             </span>
           </div>
@@ -328,14 +295,11 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           className="w-[270px] print:inline-block print:w-[40%] print:ml-[4%] print:align-top"
           style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
         >
-          {/* Pre-discount subtotal + the discount itself only earn a line
-              when there actually is a discount — an order with none goes
-              straight from Subtotal (ex GST) to GST to Pickup/Freight,
-              matching a clean invoice with nothing to net out. */}
+          {/* Pre-discount subtotal and discount lines only when discounted. */}
           {totalDiscount > 0 && (
             <>
               <TotalRow label="Subtotal" value={formatCurrencyFromCents(order.subtotal + totalDiscount)} />
-              <TotalRow label="Discount" value={`−${formatCurrencyFromCents(totalDiscount)}`} tone="accent" />
+              <TotalRow label="Discount" value={`−${formatCurrencyFromCents(totalDiscount)}`} />
             </>
           )}
           <TotalRow label="Subtotal (ex GST)" value={formatCurrencyFromCents(exGstSubtotal)} />
@@ -344,7 +308,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
           <div className="mt-3 flex items-center justify-between gap-4 px-4 py-3.5" style={{ background: INK }}>
             <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-white">Total inc GST</span>
-            <span className="whitespace-nowrap font-mono text-[13px] font-black" style={{ color: "#e0a83a" }}>
+            <span className="whitespace-nowrap text-[13px] font-black" style={{ color: "#e0a83a" }}>
               {formatCurrencyFromCents(order.total)}
             </span>
           </div>
@@ -352,26 +316,16 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           <div className="mt-3">
             <TotalRow label="Total paid" value={formatCurrencyFromCents(amountPaid)} />
             {totalRefunded > 0 && <TotalRow label="Total refunded" value={formatCurrencyFromCents(totalRefunded)} />}
-            <TotalRow
-              label="Total due"
-              value={formatCurrencyFromCents(amountDue)}
-              tone={amountDue === 0 ? "green" : "accent"}
-            />
+            <TotalRow label="Total due" value={formatCurrencyFromCents(amountDue)} />
           </div>
 
-          {/* Every channel can carry an outstanding balance now that
-              storefront/eBay prices can be edited post-payment — not just
-              manual sales, so this is no longer gated on order.channel.
-              Only rendered when there's an actual balance (amountDue > 0) —
-              getBalanceDue already correctly returns 0 for an order that was
-              paid in full before being refunded, so no separate refunded-
-              status check is needed here. */}
+          {/* Any channel can owe a balance, since prices can change post-payment. */}
           {amountDue > 0 && (
             <div className="mt-3 flex items-center justify-between gap-4 px-4 py-3" style={{ background: ACCENT }}>
               <span className="whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.12em] text-white">
                 Balance Outstanding
               </span>
-              <span className="whitespace-nowrap font-mono text-[13px] font-bold text-white">
+              <span className="whitespace-nowrap text-[13px] font-bold text-white">
                 {formatCurrencyFromCents(amountDue)}
               </span>
             </div>
@@ -380,31 +334,23 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
       </div>
 
       <div
-        // Pinned to the bottom of the sheet, on screen and on paper alike —
-        // see the sheet's own comment for why it stays a flex column when
-        // printing. pt-8 keeps a minimum gap from the content above on an
-        // invoice long enough to have consumed the slack.
+        // mt-auto pins the footer to the sheet foot; pt-8 is the minimum gap.
         className="mt-auto pt-8"
       >
         <div
-          // print:block + inline-block columns, instead of keeping this a
-          // CSS grid at print time — see each column's own breakInside
-          // comment for why that guard lives on the column, not this wrapper.
+          // Inline-block columns in print so each can avoid breaking inside itself.
           className="grid grid-cols-2 gap-10 border-t pt-5 print:block"
           style={{ borderColor: BORDER }}
         >
           <div
             className="print:inline-block print:w-[48%] print:align-top"
-            // Keeps this column's own content from splitting mid-sentence
-            // across a page boundary (reported: "...returns." got orphaned
-            // alone on its own page).
+            // Keeps the column from splitting across a page boundary.
             style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
           >
             <SectionLabel>Warranty &amp; Returns</SectionLabel>
             <InvoiceRichText
               value={tenant?.warranty_text}
-              className="mt-2 font-mono text-[9.5px] leading-relaxed"
-              style={{ color: MUTED }}
+              className="mt-2 text-[9.5px] leading-relaxed"
             />
           </div>
           <div
@@ -414,8 +360,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             <SectionLabel>Legal Disclaimer</SectionLabel>
             <InvoiceRichText
               value={tenant?.legal_disclaimer_text}
-              className="mt-2 font-mono text-[9.5px] leading-relaxed"
-              style={{ color: MUTED }}
+              className="mt-2 text-[9.5px] leading-relaxed"
             />
           </div>
         </div>

@@ -1,18 +1,17 @@
 import { Button } from "@/components/ui/Button";
 import { FitmentRowsEditor } from "@/components/shared/FitmentRowsEditor";
-import { fitmentToForm, isNamedFitment } from "@/lib/products/fitments";
+import { productFitmentsToForm } from "@/lib/products/fitments";
 import type { EbayListingFormState } from "@/types/marketplace";
 import type { Product } from "@/types/product";
 
 interface Props {
   form: EbayListingFormState;
   onChange: (patch: Partial<EbayListingFormState>) => void;
-  product: Pick<Product, "additional_fitments">;
+  product: Pick<Product, "vehicle" | "additional_fitments">;
 }
 
 export function EbayVehicleFitmentSection({ form, onChange, product }: Props) {
-  // The default vehicle lives in Technical Specifications, not this table.
-  const productRows = (product.additional_fitments ?? []).map(fitmentToForm).filter(isNamedFitment);
+  const productRows = productFitmentsToForm(product);
 
   return (
     <FitmentRowsEditor
