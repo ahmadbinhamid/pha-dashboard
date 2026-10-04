@@ -5,7 +5,7 @@ const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const validate = require("../middlewares/validate");
 const { auth, requirePermission } = require("../middlewares/auth");
-const { loginLimiter } = require("../middlewares/rateLimit");
+const { inviteActivateLimiter } = require("../middlewares/rateLimit");
 const V = require("../validators/access.validation");
 const ctrl = require("../controllers/invitation.controller");
 
@@ -35,6 +35,6 @@ router.post("/token/:token/decline", auth(), validate(V.invitationTokenParam), a
 router.get("/token/:token", validate(V.invitationTokenParam), asyncHandler(ctrl.getInvitationByToken));
 router.post("/token/:token/register", validate(V.registerFromInvitation), asyncHandler(ctrl.registerFromInvitation));
 // Rate-limited like login: the token is the only credential here.
-router.post("/token/:token/activate", loginLimiter, validate(V.activateInvitation), asyncHandler(ctrl.activateInvitation));
+router.post("/token/:token/activate", inviteActivateLimiter, validate(V.activateInvitation), asyncHandler(ctrl.activateInvitation));
 
 module.exports = router;
