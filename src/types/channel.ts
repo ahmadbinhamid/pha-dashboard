@@ -3,8 +3,17 @@
 // "pending" (Google only): OAuth done but no Merchant Center account picked.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
 
-// Unmet manifest prerequisite behind a status of "error".
-export type ChannelStatusReason = "storefront_required";
+// Why a connection is "error": unmet prerequisite or a refused token.
+export type ChannelStatusReason = "storefront_required" | "reauthentication_required";
+
+// Channel identity a status_reason action is built from.
+export type ChannelRef = Pick<ChannelSummary, "key" | "name">;
+
+// Link to where the tenant fixes a status_reason.
+export interface ChannelStatusAction {
+  label: string;
+  href: string;
+}
 
 export interface ChannelConnectionInfo {
   status: ChannelConnectionStatus;

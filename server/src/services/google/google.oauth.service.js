@@ -1,7 +1,5 @@
 // services/google/google.oauth.service.js
-// Google OAuth 2.0 consent flow + token management, mirroring ebay.oauth.service.js's shape.
-// Unlike eBay's in-memory token cache, Google's access token is persisted on ChannelConnection
-// so it survives restarts and is shared across worker processes.
+// Google OAuth consent + tokens; access token persisted, unlike eBay's cache.
 
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
@@ -10,13 +8,14 @@ const { encrypt, decrypt, packCiphertext, unpackCiphertext } = require("../../ut
 const ChannelConnection = require("../../models/ChannelConnection");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
+const { isInvalidGrant, reauthRequiredError } = require("../../utils/http/oauthError");
 
 const PLATFORM = MARKETPLACE_PLATFORM.GOOGLE;
 
 const AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
-// The one scope this integration needs: insert/delete product inputs, manage data sources.
+// Only scope needed: product inputs and data sources.
 const MERCHANT_SCOPE = "https://www.googleapis.com/auth/content";
 
 const OAUTH_STATE_PURPOSE = "google_oauth";
@@ -33,10 +32,7 @@ function assertConfigured() {
   }
 }
 
-// Returns the consent URL. access_type offline + prompt consent are both required to get a
-// refresh_token back, since Google only issues one on first consent (or forced reconsent).
-// Consent happens before Merchant Center account selection — state carries only tenant_id +
-// purpose; account selection moves to listAccessibleAccounts/completeConnection below.
+// offline + prompt=consent: Google only returns a refresh_token on (re)consent.
 function buildConsentUrl({ tenantId }) {
   assertConfigured();
 
@@ -58,7 +54,7 @@ function buildConsentUrl({ tenantId }) {
   return `${AUTH_BASE}?${params.toString()}`;
 }
 
-// Verifies the round-tripped `state`; throws (never returns "no tenant") on any invalid token.
+// Throws (never returns "no tenant") on any invalid state token.
 function resolveState(state) {
   if (!state) throw new Error("Missing OAuth state");
   const payload = verifyJwt(state);
@@ -66,17 +62,18 @@ function resolveState(state) {
   return { tenantId: payload.tenant_id };
 }
 
-// Wraps a fetch failure into an Error carrying `.status` so the circuit breaker can classify it.
-async function throwForResponse(res, action) {
+// `.status` lets the breaker classify it; tagRevoked flags invalid_grant.
+async function throwForResponse(res, action, { tagRevoked = false } = {}) {
   const text = await res.text();
   logger.error(`[google.oauth] ${action} failed`, { status: res.status, body: text });
-  const err = new Error(`Google ${action} failed: ${res.status} ${text}`);
+  const message = `Google ${action} failed: ${res.status} ${text}`;
+  if (tagRevoked && isInvalidGrant(text)) throw reauthRequiredError(message, res.status);
+  const err = new Error(message);
   err.status = res.status;
   throw err;
 }
 
-// One-time code exchange. Returns both tokens, unlike eBay's (which only returns a refresh_token),
-// so the caller can persist a complete ChannelConnection without a second round trip.
+// Returns both tokens (eBay's returns only a refresh_token).
 async function exchangeCodeForTokens(code) {
   assertConfigured();
 
@@ -106,9 +103,7 @@ async function exchangeCodeForTokens(code) {
   return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: data.expires_in || 3600 };
 }
 
-// In-flight refresh de-duplication, keyed by tenant id, so two racing jobs share one refresh
-// instead of both hitting Google's endpoint. Only de-dupes within one process; cross-process
-// races are still safe (Mongo writes are atomic) but not fully eliminated without Redis.
+// Per-process refresh de-dupe; cross-process races are safe, not eliminated.
 const _refreshInFlight = new Map();
 
 async function refreshAccessToken(tenantId, refreshToken) {
@@ -130,7 +125,7 @@ async function refreshAccessToken(tenantId, refreshToken) {
       body: body.toString(),
     });
 
-    if (!res.ok) await throwForResponse(res, "token refresh");
+    if (!res.ok) await throwForResponse(res, "token refresh", { tagRevoked: true });
 
     const data = await res.json();
     const expiresAt = new Date(Date.now() + (data.expires_in || 3600) * 1000);
@@ -161,8 +156,7 @@ async function refreshAccessToken(tenantId, refreshToken) {
   }
 }
 
-// Returns a valid plaintext access token, refreshing and persisting proactively if needed.
-// `connection` is the lean ChannelConnection doc with access_token_ct/refresh_token_ct selected.
+/** Valid access token for a lean connection selected with both token fields. */
 async function getValidAccessToken(connection) {
   if (!connection) return null;
 
@@ -181,8 +175,7 @@ async function getValidAccessToken(connection) {
   return accessToken;
 }
 
-// Step 1 of 2, right after the OAuth redirect: exchanges the code and saves just the token
-// under a PENDING connection row — nothing Merchant-Center-specific chosen yet.
+// Step 1 of 2: saves the token as PENDING; a new token also ends any reauth.
 async function savePendingConnection({ tenantId, code }) {
   const { accessToken, refreshToken, expiresIn } = await exchangeCodeForTokens(code);
 
@@ -198,6 +191,7 @@ async function savePendingConnection({ tenantId, code }) {
         refresh_token_ct: packCiphertext({ ciphertext: rC, iv: rIv, tag: rTag }),
         token_expires_at: new Date(Date.now() + expiresIn * 1000),
         last_error: null,
+        status_reason: null,
       },
       $setOnInsert: { tenant_id: tenantId, platform: PLATFORM },
     },
@@ -207,8 +201,7 @@ async function savePendingConnection({ tenantId, code }) {
   logger.info("[google.oauth] OAuth consent completed, awaiting account selection", { tenantId: String(tenantId) });
 }
 
-// Shared by listAccessibleAccounts and completeConnection: both need a valid access token for
-// whatever connection this tenant has on file. Throws a named error if the OAuth step never ran.
+// Token for the tenant's connection; throws a named error before OAuth ran.
 async function loadTokenForTenant(tenantId) {
   const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: PLATFORM })
     .select("+access_token_ct +refresh_token_ct")
@@ -222,18 +215,14 @@ async function loadTokenForTenant(tenantId) {
   return getValidAccessToken(conn);
 }
 
-// Lists the Merchant Center accounts the just-granted token can access, for the tenant to
-// pick from. Thin pass-through to google.datasource.service.js#listAccounts.
+// Merchant Center accounts the just-granted token can access.
 async function listAccessibleAccounts(tenantId) {
   const token = await loadTokenForTenant(tenantId);
   const { listAccounts } = require("./google.datasource.service");
   return listAccounts(token);
 }
 
-// Step 2 of 2: the tenant picked a Merchant Center account — ensures the data source exists
-// and upgrades the PENDING connection to CONNECTED, reusing the token savePendingConnection saved.
-// `verifiedAccountIds`: pass the caller's fresh account ids to reject a mismatched merchantId early;
-// omit (not empty array) for the manual-entry fallback where accounts.list wasn't usable.
+// Step 2 of 2; omit verifiedAccountIds (not []) for the manual-entry fallback.
 async function completeConnection({ tenantId, merchantId, feedLabel, contentLanguage, targetCountry, verifiedAccountIds }) {
   if (verifiedAccountIds && !verifiedAccountIds.includes(String(merchantId))) {
     const err = new Error(`This Google account does not have access to Merchant Center account ${merchantId}.`);
@@ -261,8 +250,7 @@ async function completeConnection({ tenantId, merchantId, feedLabel, contentLang
         target_country: targetCountry,
       },
     },
-    // strict: false, since these fields are Google-discriminator-only and a base-model update
-    // would otherwise silently drop them. No upsert — a missing PENDING row should surface as null.
+    // strict:false keeps discriminator fields; no upsert, a missing row is null.
     { new: true, strict: false },
   );
 

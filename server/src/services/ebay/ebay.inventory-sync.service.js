@@ -1,11 +1,9 @@
 // services/ebay/ebay.inventory-sync.service.js
-// Flags eBay-side quantity drift for human review and removes listings deleted directly on eBay.
-// Direction: eBay -> App (opposite of order-stock-sync.service.js). Diffs eBay's live quantity against
-// our expected-quantity baseline, not local stock; confirmed mismatches go to PendingReconciliation, never auto-applied.
+// eBay -> app drift vs our baseline goes to review; never auto-applied.
 
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const ebayApi = require("./ebay.api.service");
-// Namespace imports (not destructured) so tests can mock.method() the source module after require.
+// Namespace imports, not destructured, so tests can mock.method() them.
 const ebayTenant = require("./ebay.tenant");
 const ebaySettingsService = require("./ebay.settings.service");
 const { resolveSku } = require("../marketplace/listing.resolver");
@@ -15,12 +13,10 @@ const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const { EBAY_CONNECTION_STATUS } = require("../../constants/ebay.constants");
 
-// Consecutive misses before treating a listing as genuinely deleted on eBay, not a transient blip.
+// Consecutive misses before a listing counts as deleted on eBay.
 const MISSING_POLLS_THRESHOLD = 2;
 
-// Listing was found absent from eBay's inventory list this poll. Tracks a
-// streak rather than acting on a single miss, so one flaky eBay API response
-// can't wrongly delete a listing that's still actually live.
+// A streak, not one miss, so a flaky eBay response can't delete a live listing.
 async function handleMissingFromEbay(listing, sku, tenantId) {
   const streak = (listing.ebay_missing_polls || 0) + 1;
 
@@ -38,15 +34,13 @@ async function handleMissingFromEbay(listing, sku, tenantId) {
   return { deleted: true };
 }
 
-// Compares eBay's live quantity against this listing's tracked baseline and progresses the
-// pending-drift state machine one step; mirrors handleMissingFromEbay's shape (one listing in,
-// one outcome out) so the per-listing loop below stays uniform between the missing and drift cases.
+// Advances the pending-drift state machine one step for one listing.
 async function reconcileListingDrift(listing, sku, ebayQty, tenantId) {
-  // Listing is confirmed live on eBay again — clear any missing streak.
+  // Confirmed live on eBay again: clear any missing streak.
   if (listing.ebay_missing_polls > 0) listing.ebay_missing_polls = 0;
 
   if (listing.ebay_synced_quantity == null) {
-    // First time tracked — establish a baseline instead of guessing at historical drift.
+    // First time tracked: baseline it rather than guess at past drift.
     listing.ebay_synced_quantity = ebayQty;
     listing.ebay_synced_at = new Date();
     await listing.save();
@@ -54,7 +48,7 @@ async function reconcileListingDrift(listing, sku, ebayQty, tenantId) {
   }
 
   if (listing.ebay_synced_quantity === ebayQty) {
-    // Confirmed back in sync — clear any stale pending drift.
+    // Back in sync: clear any stale pending drift.
     if (listing.ebay_pending_reconcile_qty != null) listing.ebay_pending_reconcile_qty = null;
     // Still persist a missing-streak reset if one happened above.
     if (listing.isModified()) await listing.save();
@@ -62,7 +56,7 @@ async function reconcileListingDrift(listing, sku, ebayQty, tenantId) {
   }
 
   if (listing.ebay_pending_reconcile_qty !== ebayQty) {
-    // First poll to see this drift — eBay's read side may still be catching up; defer to next poll.
+    // First sighting: eBay's read side may lag, so wait one more poll.
     listing.ebay_pending_reconcile_qty = ebayQty;
     await listing.save();
     logger.info(
@@ -72,8 +66,7 @@ async function reconcileListingDrift(listing, sku, ebayQty, tenantId) {
     return { baselined: false, flagged: false };
   }
 
-  // Drift confirmed twice — never auto-apply to stock (caused the Aug 2026 false-restock incident);
-  // flag for human review via GET/POST /inventory/reconciliations instead.
+  // Seen twice: flag for review; auto-apply caused a false-restock incident.
   await upsertPending({
     tenantId,
     listingId: listing._id,
@@ -106,14 +99,17 @@ async function reconcileEbayInventory() {
       summary.deletedFromEbay += tenantSummary.deletedFromEbay;
       summary.errors += tenantSummary.errors;
 
-      // Self-heal (mirrors ebay.orders.service.js): success is proof the connection works again.
+      // Self-heal, as in ebay.orders.service.js: success proves the connection.
       if (settings.connection_status && settings.connection_status !== EBAY_CONNECTION_STATUS.CONNECTED) {
         await ebaySettingsService.markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
       }
     } catch (err) {
       summary.errors++;
       logger.error(`[ebay.inventory-sync] tenant ${tenant._id} reconciliation failed: ${err.message}`);
-      await ebaySettingsService.markConnectionError(tenant._id, { message: err.message });
+      // NOTE: a refused token flags reauth instead of a raw last_error.
+      if (!(await ebayTenant.flagIfReauthRequired(tenant._id, err))) {
+        await ebaySettingsService.markConnectionError(tenant._id, { message: err.message });
+      }
     }
   }
 
@@ -136,8 +132,7 @@ async function reconcileEbayInventoryForTenant(tenant, settings) {
     .populate("product")
     .populate("variant");
 
-  // Defensive dedup: external_offer_id should be unique via a DB index, but if that index is
-  // missing (found live), duplicates would cause a self-sustaining drift. Keep only the oldest per offer.
+  // Oldest per offer only: duplicates (index once missing live) loop drift.
   const byOfferId = new Map();
   for (const listing of rawListings) {
     const existing = byOfferId.get(listing.external_offer_id);

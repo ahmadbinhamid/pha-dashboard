@@ -6,9 +6,9 @@ const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const circuitBreaker = require("./circuitBreaker");
 const registry = require("./registry");
-const { findUnmetPrerequisite } = require("./channelPrerequisite.service");
+const { findUnmetPrerequisite, flaggedReauth } = require("./channelPrerequisite.service");
 const config = require("../../config");
-const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
+const { CHANNEL_SYNC_LOG_STATUS, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
 
 const NO_CODE = "(no code)";
 
@@ -70,13 +70,15 @@ async function diagnoseChannelConnection(tenantId, platform, { recentLimit = 5, 
     .select("status status_reason consecutive_failures last_error last_success_at disabled_at connected_at token_expires_at external_account_id")
     .lean();
   const manifest = registry.has(platform) ? registry.get(platform).manifest : null;
-  const [breakerOpen, tokens, failures, listings, prerequisite] = await Promise.all([
+  const [breakerOpen, tokens, failures, listings, unmet] = await Promise.all([
     circuitBreaker.isOpen(tenantId, platform),
     connection ? tokenState(connection._id, connection.token_expires_at, now) : null,
     failureStats(tenantId, platform, recentLimit),
     listingCounts(tenantId, platform),
     manifest ? findUnmetPrerequisite(tenantId, manifest) : null,
   ]);
+  // Same precedence as sync's pre-flight: a reauth flag wins.
+  const prerequisite = flaggedReauth(connection, manifest) ?? unmet;
 
   const diagnosis = {
     tenantId: String(tenantId),
@@ -102,13 +104,16 @@ async function diagnoseChannelConnection(tenantId, platform, { recentLimit = 5, 
   return { ...diagnosis, summary: summarizeDiagnosis(diagnosis) };
 }
 
-const AUTH_PATTERN = /\b(401|403)\b|unauthori[sz]ed|forbidden|invalid_grant|invalid[_ ]token|token (has been )?(expired|revoked)|permission/i;
+// Google and eBay both answer a revoked/expired refresh with invalid_grant.
+const REVOKED_PATTERN = /invalid_grant|token (has been )?(expired|revoked)/i;
+const AUTH_PATTERN = /\b(401|403)\b|unauthori[sz]ed|forbidden|invalid[_ ]token|permission/i;
 const STOREFRONT_PATTERN = /no verified default domain|storefront domain/i;
 const TRANSPORT_PATTERN = /\b5\d\d\b|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|network/i;
 
 function classify(text) {
   if (!text) return null;
   if (STOREFRONT_PATTERN.test(text)) return "storefront";
+  if (REVOKED_PATTERN.test(text)) return "revoked";
   if (AUTH_PATTERN.test(text)) return "auth";
   if (TRANSPORT_PATTERN.test(text)) return "transport";
   return "other";
@@ -122,7 +127,8 @@ function summarizeDiagnosis(d) {
     return lines.join(" ");
   }
   const { connection: c, tokens: t, failures: f } = d;
-  const kind = d.prerequisite ? "prerequisite" : (classify(c.lastError) ?? classify(f.recent[0]?.message));
+  const flaggedKind = d.prerequisite?.reason === CHANNEL_STATUS_REASON.REAUTHENTICATION_REQUIRED ? "reauth" : "prerequisite";
+  const kind = d.prerequisite ? flaggedKind : (classify(c.lastError) ?? classify(f.recent[0]?.message));
   const latest = f.recent[0];
 
   if (c.disabledAt) lines.push(`Sync was paused on ${c.disabledAt.toISOString()} (disabled_at is set).`);
@@ -152,6 +158,18 @@ function summarizeDiagnosis(d) {
       );
     }
     if (c.statusReason) lines.push(`The connection is already flagged: status=${c.status}, status_reason=${c.statusReason}.`);
+  } else if (kind === "reauth") {
+    lines.push(
+      `The connection is flagged (status=${c.status}, status_reason=${CHANNEL_STATUS_REASON.REAUTHENTICATION_REQUIRED}): ` +
+        `${d.platform} refused the stored refresh token (invalid_grant), so it was revoked or has expired. ` +
+        "Sync skips without retrying, failing per listing or counting toward the breaker; a reconnect (OAuth) clears it.",
+    );
+  } else if (kind === "revoked") {
+    lines.push(
+      `${d.platform} refused the stored refresh token (invalid_grant): it was revoked or has expired, and only a reconnect (OAuth) fixes it. ` +
+        `The next sync flags the connection ${CHANNEL_STATUS_REASON.REAUTHENTICATION_REQUIRED}` +
+        (d.breakerOpen ? " once the breaker is resumed." : "."),
+    );
   } else if (kind === "auth") {
     lines.push(
       "The failures are authentication/authorisation errors while a refresh token is stored: most likely the refresh token was revoked or expired, or the Google account lost access to the Merchant Center account. A reconnect (OAuth) is the probable fix.",

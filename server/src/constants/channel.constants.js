@@ -12,13 +12,17 @@ const CHANNEL_CONNECTION_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-// Why a connection is ERROR; each maps to a manifest-declared prerequisite.
+// Why a connection is ERROR; each names what the tenant must fix.
 const CHANNEL_STATUS_REASON = Object.freeze({
   STOREFRONT_REQUIRED: "storefront_required",
+  // Refresh token revoked/expired; only a fresh OAuth connect clears it.
+  REAUTHENTICATION_REQUIRED: "reauthentication_required",
 });
 
 // err.code for a sync failure caused by an unmet channel prerequisite.
 const CHANNEL_PREREQUISITE_ERROR_CODE = "CHANNEL_PREREQUISITE_UNMET";
+// err.code for a token refresh refused with invalid_grant.
+const CHANNEL_REAUTH_ERROR_CODE = "CHANNEL_REAUTH_REQUIRED";
 
 const CHANNEL_SYNC_LOG_STATUS = Object.freeze({
   SUCCESS: "success",
@@ -31,4 +35,5 @@ module.exports = {
   CHANNEL_SYNC_LOG_STATUS,
   CHANNEL_STATUS_REASON,
   CHANNEL_PREREQUISITE_ERROR_CODE,
+  CHANNEL_REAUTH_ERROR_CODE,
 };

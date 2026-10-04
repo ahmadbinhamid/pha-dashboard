@@ -16,7 +16,7 @@ const formFields = upload.none();
 router.get(
   "/",
   auth(false),
-  resolveGuestTenant(),
+  resolveGuestTenant(), // NOTE: no IP limiter; storefront SSR fetches from one IP.
   pagination(),
   validate(v.listProducts),
   asyncHandler(ctrl.getProducts),

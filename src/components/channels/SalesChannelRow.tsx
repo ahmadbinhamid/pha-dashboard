@@ -47,7 +47,7 @@ function fieldErrorsFrom(err: unknown): Record<string, string> {
 // Where to fix a channel that can't be used yet.
 function fixLink(channel: ChannelSummary) {
   const reason = channel.connection.status_reason;
-  if (reason) return CHANNEL_STATUS_REASON_ACTION[reason].href;
+  if (reason) return CHANNEL_STATUS_REASON_ACTION[reason](channel).href;
   return channel.available ? `/settings/integrations/${channel.key}` : "/settings/integrations/domains";
 }
 

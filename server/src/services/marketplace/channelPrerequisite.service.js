@@ -6,6 +6,7 @@ const {
   CHANNEL_CONNECTION_STATUS,
   CHANNEL_STATUS_REASON,
   CHANNEL_PREREQUISITE_ERROR_CODE,
+  CHANNEL_REAUTH_ERROR_CODE,
 } = require("../../constants/channel.constants");
 
 // Only channel-level needs belong here; per-item data problems never do.
@@ -21,7 +22,14 @@ const PREREQUISITES = [
   },
 ];
 
-const byReason = new Map(PREREQUISITES.map((p) => [p.reason, p]));
+// Not checkable up front: flagged by a refused refresh, cleared by reconnect.
+const REAUTH = {
+  reason: CHANNEL_STATUS_REASON.REAUTHENTICATION_REQUIRED,
+  message: (name) => `${name} access was revoked or has expired. Reconnect ${name} to resume syncing.`,
+};
+
+const byReason = new Map([...PREREQUISITES, REAUTH].map((p) => [p.reason, p]));
+const TAGGED_ERROR_CODES = new Set([CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_REAUTH_ERROR_CODE]);
 
 /** Tenant-facing text (with remedy) for a CHANNEL_STATUS_REASON. */
 function prerequisiteMessage(reason, channelName) {
@@ -37,6 +45,12 @@ async function findUnmetPrerequisite(tenantId, manifest) {
     }
   }
   return null;
+}
+
+/** The reauth flag on a connection row, as an unmet entry, or null. */
+function flaggedReauth(connection, manifest) {
+  if (connection?.status_reason !== REAUTH.reason) return null;
+  return { reason: REAUTH.reason, message: REAUTH.message(manifest?.name ?? "This channel") };
 }
 
 // Only a live connection is flagged; other statuses keep their state.
@@ -60,6 +74,9 @@ async function clearPrerequisiteState(tenantId, platform) {
 
 /** Sync pre-flight: flags an unmet prerequisite, or clears it once met. */
 async function ensurePrerequisites({ tenantId, platform, manifest, connection }) {
+  // Sticky: retrying a refused token would only be refused again.
+  const reauth = flaggedReauth(connection, manifest);
+  if (reauth) return reauth;
   const unmet = await findUnmetPrerequisite(tenantId, manifest);
   if (unmet) {
     await markPrerequisiteUnmet(tenantId, platform, unmet);
@@ -70,15 +87,15 @@ async function ensurePrerequisites({ tenantId, platform, manifest, connection })
 }
 
 function isPrerequisiteError(err) {
-  return err?.code === CHANNEL_PREREQUISITE_ERROR_CODE && byReason.has(err.statusReason);
+  return TAGGED_ERROR_CODES.has(err?.code) && byReason.has(err.statusReason);
 }
 
-// Race backstop (domain removed mid-sync): the resolver's tagged error.
+/** Flags a tagged mid-sync error (lost domain, refused token), or null. */
 async function flagIfPrerequisiteError(tenantId, platform, manifest, err) {
-  if (!isPrerequisiteError(err)) return false;
-  const message = prerequisiteMessage(err.statusReason, manifest?.name ?? platform);
-  await markPrerequisiteUnmet(tenantId, platform, { reason: err.statusReason, message });
-  return true;
+  if (!isPrerequisiteError(err)) return null;
+  const unmet = { reason: err.statusReason, message: prerequisiteMessage(err.statusReason, manifest?.name ?? platform) };
+  await markPrerequisiteUnmet(tenantId, platform, unmet);
+  return unmet;
 }
 
 /** Clears a tenant's flagged connections whose prerequisite is now met. */
@@ -87,7 +104,8 @@ async function reconcileTenantPrerequisites(tenantId) {
   const flagged = await ChannelConnection.find({
     tenant_id: tenantId,
     status: CHANNEL_CONNECTION_STATUS.ERROR,
-    status_reason: { $ne: null },
+    // A domain change never fixes a refused token.
+    status_reason: { $nin: [null, REAUTH.reason] },
   })
     .select("platform")
     .lean();
@@ -104,6 +122,7 @@ async function reconcileTenantPrerequisites(tenantId) {
 
 module.exports = {
   findUnmetPrerequisite,
+  flaggedReauth,
   ensurePrerequisites,
   flagIfPrerequisiteError,
   isPrerequisiteError,

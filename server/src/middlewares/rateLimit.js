@@ -1,13 +1,13 @@
 // middlewares/rateLimit.js
-//
-// Brute-force/abuse guards for cost-free endpoints (login, payment intents), keyed by IP by default.
+// Abuse guards for free-to-call endpoints, keyed by client IP by default.
 
+// NOTE: MemoryStore is per process; two API instances need a shared store.
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
 const tooManyRequests = (message) => (req, res) =>
   res.status(429).json({ status: "Fail", systemfailure: false, message, data: null });
 
-// 15 min / 5 attempts — matches OWASP guidance for credential-guessing endpoints.
+// 15 min / 5 attempts: OWASP guidance for credential-guessing endpoints.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -27,7 +27,7 @@ const paymentLimiter = rateLimit({
   handler: tooManyRequests("Too many payment requests. Please slow down."),
 });
 
-// 1 hour / 5 attempts — public form queues a real email send, otherwise free to spam.
+// 1 hour / 5 attempts: the public form queues a real email send.
 const publicFormLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
@@ -36,4 +36,13 @@ const publicFormLimiter = rateLimit({
   handler: tooManyRequests("Too many requests. Please try again later."),
 });
 
-module.exports = { loginLimiter, paymentLimiter, publicFormLimiter };
+// 15 min / 20 orders: generous for payment retries and carrier-grade NAT.
+const guestOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: tooManyRequests("Too many orders. Please try again in 15 minutes."),
+});
+
+module.exports = { loginLimiter, paymentLimiter, publicFormLimiter, guestOrderLimiter };

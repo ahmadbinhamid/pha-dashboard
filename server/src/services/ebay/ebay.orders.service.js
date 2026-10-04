@@ -1,17 +1,17 @@
 // services/ebay/ebay.orders.service.js
-// Polls eBay Fulfillment API for new orders, imports them, and deducts stock; one tenant's failure never blocks another's.
+// Polls eBay orders, imports them and deducts stock, isolated per tenant.
 
 const ChannelProcessedEvent = require("../../models/ChannelProcessedEvent");
 const ebayApi = require("./ebay.api.service");
 const { adjustStockBySku } = require("../inventory.service");
 const { createOrderFromEbayOrder } = require("../order.service");
-const { getConfiguredTenants } = require("./ebay.tenant");
+const { getConfiguredTenants, flagIfReauthRequired } = require("./ebay.tenant");
 const { markConnectionError } = require("./ebay.settings.service");
 const { logger } = require("../../loaders/logging");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const { EBAY_CONNECTION_STATUS } = require("../../constants/ebay.constants");
 
-// Runs for every polled order — has its own idempotency (Order.external_order_id) independent of the stock guard below.
+// Idempotent on Order.external_order_id, independent of the stock guard.
 async function importOrder(order, tenant, settings) {
   try {
     await createOrderFromEbayOrder(order, tenant, settings);
@@ -35,8 +35,7 @@ async function pollOrdersForTenant(tenant, settings) {
 
     await importOrder(order, tenant, settings);
 
-    // Claimed per-SKU, not per-order: a webhook may have already claimed one SKU on this order,
-    // so each SKU races the webhook independently to avoid skipping or double-deducting.
+    // Claimed per SKU: the webhook may already hold one SKU of this order.
     const lineItems = order.lineItems || [];
     let anyClaimed = false;
 
@@ -96,14 +95,14 @@ async function pollAndProcessOrders() {
       processed += result.processed;
       total += result.total;
 
-      // Self-heal: a successful poll is proof the connection works again, clearing a stuck ERROR status.
+      // Self-heal: a successful poll proves the connection works again.
       if (settings.connection_status && settings.connection_status !== EBAY_CONNECTION_STATUS.CONNECTED) {
         await markConnectionError(tenant._id, { status: EBAY_CONNECTION_STATUS.CONNECTED, message: null });
       }
     } catch (err) {
-      // One tenant's failure must never block the rest; markConnectionError surfaces it to the tenant.
+      // One tenant's failure never blocks the rest; either write surfaces it.
       logger.error(`[ebay.orders] tenant ${tenant._id} poll failed: ${err.message}`);
-      await markConnectionError(tenant._id, { message: err.message });
+      if (!(await flagIfReauthRequired(tenant._id, err))) await markConnectionError(tenant._id, { message: err.message });
     }
   }
 

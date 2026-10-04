@@ -9,11 +9,11 @@ interface ChannelAttentionNoticeProps {
   className?: string;
 }
 
-// Unmet channel prerequisite with its remedy; renders nothing when healthy.
+// Flagged channel status_reason with its remedy; nothing when healthy.
 export function ChannelAttentionNotice({ channel, className }: ChannelAttentionNoticeProps) {
   const { status_reason: reason, status_message: message } = channel.connection;
   if (!reason || !message) return null;
-  const action = CHANNEL_STATUS_REASON_ACTION[reason];
+  const action = CHANNEL_STATUS_REASON_ACTION[reason]?.(channel);
 
   return (
     <div
