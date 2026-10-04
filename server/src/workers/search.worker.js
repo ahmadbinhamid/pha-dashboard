@@ -8,6 +8,7 @@ const { ensureProductsCollection } = require("../services/search/product.search.
 const { indexProduct, deleteProductFromIndex } = require("../services/search/product.search.service");
 const { findProductByIdForIndexing } = require("../services/product.service");
 const { logger } = require("../loaders/logging");
+const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 
 connectMongo().catch((err) => {
   logger.error(`[searchWorker] MongoDB connection failed: ${err.message}`);
@@ -18,7 +19,7 @@ ensureProductsCollection().catch((err) => {
   logger.error(`[searchWorker] failed to ensure Typesense collection: ${err.message}`);
 });
 
-// Re-fetches the product at process time so a job that sat queued for a while still indexes the latest state.
+// Re-fetches at process time so a long-queued job indexes the latest state.
 searchQueue.process("index_product", 4, async (job) => {
   const { productId } = job.data;
   const product = await findProductByIdForIndexing(productId);
@@ -44,3 +45,5 @@ searchQueue.on("completed", (job) =>
 searchQueue.on("failed", (job, err) =>
   logger.error(`[searchQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`),
 );
+
+installGracefulShutdown({ name: "searchWorker", getQueues: () => [searchQueue] });

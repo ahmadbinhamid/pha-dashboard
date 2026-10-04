@@ -1,19 +1,12 @@
 // src/queues/search.queue.js
 
 const Queue = require("bull");
-const config = require("../config");
+const { buildRedisOptions } = require("../utils/redisOptions");
 const { logger } = require("../loaders/logging");
 
-const redisOpts = {
-  ...(config.redis.url
-    ? { url: config.redis.url }
-    : { host: config.redis.host, port: config.redis.port }),
-  maxRetriesPerRequest: 1,
-  connectTimeout: 3000,
-};
+const redisOpts = buildRedisOptions();
 
-// Lazy, same reasoning and getter-based shape as email.queue.js — requiring this module used
-// to open a real, never-closed Redis socket immediately, hanging tests.
+// Lazy, as in email.queue.js: requiring must not open a Redis socket.
 let _searchQueue = null;
 function ensureSearchQueue() {
   if (_searchQueue) return _searchQueue;
@@ -25,7 +18,7 @@ function ensureSearchQueue() {
   return _searchQueue;
 }
 
-// Fire-and-forget from product CRUD; a slow or unreachable Redis/Typesense must never block a save.
+// Fire-and-forget: a slow Redis or Typesense must never block a product save.
 async function enqueueSearchJob(type, payload, opts = {}) {
   const job = ensureSearchQueue().add(type, payload, {
     attempts: 3,

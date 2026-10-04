@@ -1,11 +1,11 @@
 // src/workers/platform.worker.js
-// Merged email + search worker; both are low-volume and don't need a dedicated process each,
-// cutting down always-on worker containers. Processing logic unchanged from the old files.
+// Email + search in one process: both are low-volume, saving a container.
 
 require("dotenv").config();
 const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate()/query
 const { logger } = require("../loaders/logging");
+const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 const config = require("../config");
 
 const { emailQueue } = require("../queues/email.queue");
@@ -27,7 +27,7 @@ ensureProductsCollection().catch((err) => {
   logger.error(`[platformWorker] failed to ensure Typesense collection: ${err.message}`);
 });
 
-// ── email ─────────────────────────────────────────────────────────────────────
+// ── email ──
 
 // NOTE: use the *named* processor: 'send'
 emailQueue.process("send", 5, async (job) => {
@@ -44,9 +44,7 @@ emailQueue.isReady().then(() => logger.info("[emailQueue] ready"));
 emailQueue.on("completed", (job) => logger.info(`[emailQueue] completed ${job.id}`));
 emailQueue.on("failed", (job, err) => logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`));
 
-// ── low stock digest ─────────────────────────────────────────────────────────
-// Reuses the existing emailQueue (a distinct job name) rather than a new queue file, same
-// reasoning channel.worker.js uses putting refresh_stale on the same queue as sync_listing.
+// ── low stock digest: its own job name on emailQueue ──
 
 emailQueue.process("low_stock_digest_sweep", 1, async () => {
   logger.info("[emailQueue] low_stock_digest_sweep starting");
@@ -54,8 +52,7 @@ emailQueue.process("low_stock_digest_sweep", 1, async () => {
 });
 
 emailQueue.isReady().then(async () => {
-  // Bull keys a repeatable job by its interval, not just its jobId — clear any stale schedule
-  // first, or a config change leaves two schedules running side by side in Redis.
+  // Repeatables are keyed by interval too; clear old ones or two would run.
   const existing = await emailQueue.getRepeatableJobs();
   for (const job of existing) {
     if (job.name === "low_stock_digest_sweep") {
@@ -78,9 +75,9 @@ emailQueue.isReady().then(async () => {
   );
 });
 
-// ── search ────────────────────────────────────────────────────────────────────
+// ── search ──
 
-// Re-fetches the product at process time so a job that sat queued for a while still indexes the latest state.
+// Re-fetches at process time so a long-queued job indexes the latest state.
 searchQueue.process("index_product", 4, async (job) => {
   const { productId } = job.data;
   const product = await findProductByIdForIndexing(productId);
@@ -99,3 +96,5 @@ searchQueue.process("delete_product", 4, async (job) => {
 searchQueue.isReady().then(() => logger.info("[searchQueue] ready"));
 searchQueue.on("completed", (job) => logger.info(`[searchQueue] completed job ${job.id} (${job.name})`));
 searchQueue.on("failed", (job, err) => logger.error(`[searchQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`));
+
+installGracefulShutdown({ name: "platformWorker", getQueues: () => [emailQueue, searchQueue] });

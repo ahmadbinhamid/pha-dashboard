@@ -7,6 +7,7 @@ const { stripeQueue } = require("../queues/stripe.queue");
 const { cleanupAbandonedOrders } = require("../services/stripe/stripe.cleanup.service");
 const { reconcileStuckRefunds } = require("../services/refund.reconciliation.service");
 const { logger } = require("../loaders/logging");
+const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 
 connectMongo().catch((err) => {
   logger.error(`[stripeWorker] MongoDB connection failed: ${err.message}`);
@@ -39,8 +40,7 @@ stripeQueue.isReady().then(() => {
     },
   );
 
-  // Every 15 minutes, shorter than RESERVATION_STALE_AFTER_MS (1h), so a newly-stuck refund
-  // gets picked up close to when it crosses that threshold, not left for another hour on top.
+  // 15 min, well under the 1h stale threshold, so stuck refunds surface soon.
   stripeQueue.add(
     "reconcile_stuck_refunds",
     {},
@@ -59,3 +59,5 @@ stripeQueue.on("completed", (job) =>
 stripeQueue.on("failed", (job, err) =>
   logger.error(`[stripeQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`),
 );
+
+installGracefulShutdown({ name: "stripeWorker", getQueues: () => [stripeQueue] });

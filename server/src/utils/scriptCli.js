@@ -14,11 +14,14 @@ function parseScriptArgs(argv = process.argv.slice(2)) {
   return { confirm, dryRun: !confirm, tenantId };
 }
 
+// NOTE: no autoIndex/autoCreate: loading a model must never write to the DB.
+const SCRIPT_CONNECT_OPTIONS = Object.freeze({ autoIndex: false, autoCreate: false });
+
 /** Connects, runs main, always disconnects; never rejects (exit code 1). */
 async function runScript(main, log = console.log) {
   try {
     const args = parseScriptArgs();
-    await mongoose.connect(config.mongoUri);
+    await mongoose.connect(config.mongoUri, SCRIPT_CONNECT_OPTIONS);
     log(`== Mode: ${args.confirm ? "CONFIRM (writing)" : "DRY RUN (read-only)"}${args.tenantId ? ` | tenant ${args.tenantId}` : ""}`);
     await main(args, log);
   } catch (err) {

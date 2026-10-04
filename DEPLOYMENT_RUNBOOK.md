@@ -105,9 +105,12 @@ docker compose up -d
 ## 5. Sync indexes
 
 ```bash
+# Dry run (the default): lists each model's indexes to create and drop, changes nothing.
 docker compose exec backend node scripts/syncIndexes.js
+# Read that output, then apply:
+docker compose exec backend node scripts/syncIndexes.js --confirm
 ```
-Production disables Mongoose `autoIndex` (`loaders/mongoose.js`), so this is the only thing that actually applies index changes there — and it's the one step covering **all** of this session's index changes in one run: `Tenant.stripe_webhook_token` (was `sparse`, now a proper partial-filter unique index — the old one would've blocked ever creating a second tenant), `EbayProcessedOrder` (dedup key now includes SKU), `VehicleModel` (global-unique → per-tenant-unique), plus the new `Location`/`Attachment`/`InventorySettings`/`Product`/`Order` indexes. Safe to re-run any time; it's a no-op for indexes already matching the schema, and drops stale ones automatically.
+Without `--confirm` the script only reports; it never writes. Production disables Mongoose `autoIndex` (`loaders/mongoose.js`), so this is the only thing that actually applies index changes there — and it's the one step covering **all** of this session's index changes in one run: `Tenant.stripe_webhook_token` (was `sparse`, now a proper partial-filter unique index — the old one would've blocked ever creating a second tenant), `EbayProcessedOrder` (dedup key now includes SKU), `VehicleModel` (global-unique → per-tenant-unique), plus the new `Location`/`Attachment`/`InventorySettings`/`Product`/`Order` indexes. Safe to re-run any time; it's a no-op for indexes already matching the schema, and drops stale ones automatically.
 
 ## 6. Data migrations — **run these, in order** (replaces the old "no backfill needed")
 

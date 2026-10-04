@@ -1,54 +1,51 @@
 // scripts/syncIndexes.js
-// Applies schema indexes; production has autoIndex off. Drops unlisted ones.
-// Usage: [--dry-run]  (lists what would be created/dropped, changes nothing)
-
-require("dotenv").config();
+// Schema indexes vs the DB: reports by default, applies with --confirm.
 
 const fs = require("fs");
 const path = require("path");
-const mongoose = require("mongoose");
-const config = require("../src/config");
+const { runScript } = require("../src/utils/scriptCli");
 
 const MODELS_DIR = path.join(__dirname, "../src/models");
 const SKIP_FILES = new Set(["index.js", "base.model.js"]);
 
-function modelFiles() {
+function loadModels() {
   return fs
     .readdirSync(MODELS_DIR)
-    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && !SKIP_FILES.has(f));
+    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && !SKIP_FILES.has(f))
+    .map((f) => require(path.join(MODELS_DIR, f)))
+    // Skips helper exports that aren't Mongoose models.
+    .filter((Model) => typeof Model.diffIndexes === "function");
 }
 
-async function reportDiff(Model) {
-  const { toDrop, toCreate } = await Model.diffIndexes();
-  if (!toDrop.length && !toCreate.length) return;
-  const create = toCreate.map((spec) => JSON.stringify(spec));
-  console.log(`${Model.modelName}: create [${create.join(", ")}] drop [${toDrop.join(", ")}]`);
+// Read-only: diffIndexes only lists both sides.
+async function reportDiff(Model, log) {
+  const { toCreate, toDrop } = await Model.diffIndexes();
+  if (!toCreate.length && !toDrop.length) {
+    log(`  ${Model.modelName}: in sync`);
+  } else {
+    log(`  ${Model.modelName}:`);
+    for (const spec of toCreate) log(`    + create ${JSON.stringify(spec)}`);
+    for (const name of toDrop) log(`    - drop   ${name}`);
+  }
+  return { create: toCreate.length, drop: toDrop.length };
 }
 
-async function applySync(Model) {
+async function applySync(Model, log) {
   const before = Date.now();
   const dropped = await Model.syncIndexes();
-  const note = dropped.length ? ` (dropped stale: ${dropped.join(", ")})` : "";
-  console.log(`${Model.modelName}: synced in ${Date.now() - before}ms${note}`);
+  log(`  ${Model.modelName}: synced in ${Date.now() - before}ms${dropped.length ? `, dropped ${dropped.join(", ")}` : ""}`);
+  return { create: 0, drop: dropped.length };
 }
 
-async function run() {
-  const dryRun = process.argv.includes("--dry-run");
-  await mongoose.connect(config.mongoUri);
-  console.log(`Connected to MongoDB${dryRun ? " (dry run: no changes)" : ""}`);
-
-  for (const file of modelFiles()) {
-    const Model = require(path.join(MODELS_DIR, file));
-    // Skips helper exports that aren't Mongoose models.
-    if (typeof Model.syncIndexes !== "function") continue;
-    await (dryRun ? reportDiff(Model) : applySync(Model));
+void runScript(async ({ confirm, tenantId }, log) => {
+  if (tenantId) throw new Error("--tenant doesn't apply: indexes are per collection, not per tenant.");
+  const totals = { create: 0, drop: 0 };
+  for (const Model of loadModels()) {
+    const result = await (confirm ? applySync(Model, log) : reportDiff(Model, log));
+    totals.create += result.create;
+    totals.drop += result.drop;
   }
-
-  console.log("Done.");
-  await mongoose.disconnect();
-}
-
-run().catch((err) => {
-  console.error("syncIndexes failed:", err);
-  process.exit(1);
+  log(confirm
+    ? `== Applied. Stale indexes dropped: ${totals.drop}`
+    : `== Would create ${totals.create}, drop ${totals.drop}. Re-run with --confirm to apply.`);
 });
