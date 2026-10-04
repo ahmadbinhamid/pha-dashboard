@@ -38,7 +38,7 @@ router.get(
   asyncHandler(ctrl.getProduct),
 );
 
-router.post("/", auth(), requirePermission("products.create"), formFields, asyncHandler(ctrl.createProduct));
+router.post("/", auth(), requirePermission("products.create"), formFields, validate(v.createProduct), asyncHandler(ctrl.createProduct));
 router.put(
   "/:id",
   auth(), requirePermission("products.update"),

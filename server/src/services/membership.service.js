@@ -4,7 +4,12 @@
 const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
 const Role = require("../models/Role");
-const { MEMBERSHIP_STATUS, TENANT_ADMIN_ROLE_NAMES, LAST_ACTIVE_THROTTLE_MS } = require("../constants/access.constants");
+const {
+  MEMBERSHIP_STATUS,
+  TENANT_ADMIN_ROLE_NAMES,
+  LAST_ACTIVE_THROTTLE_MS,
+  OWNER_ACCOUNT_ROLES,
+} = require("../constants/access.constants");
 const { ALL_PERMISSIONS } = require("../config/permissions");
 
 // Admin, or the pre-migration Super Admin name for the same owner role.
@@ -153,17 +158,15 @@ async function hasPermission(userId, tenantId, permission) {
   return (await getPermissions(userId, tenantId)).includes(permission);
 }
 
-// Legacy account roles that owned a tenant before memberships existed.
-const LEGACY_OWNER_ACCOUNT_ROLES = ["admin", "superadmin"];
-
-/** Tenant Admin via membership, else via the legacy account role. */
-function isRequestTenantAdmin({ membership, user }) {
-  return membership ? isAdminRole(membership.role_id) : LEGACY_OWNER_ACCOUNT_ROLES.includes(user?.role);
+// NOTE: legacy owner fallback kept, a test pins it; auth() can't reach it.
+function isRequestTenantAdmin({ membership, user, tenantId }) {
+  if (membership) return isAdminRole(membership.role_id);
+  return Boolean(tenantId) && OWNER_ACCOUNT_ROLES.includes(user?.role);
 }
 
 /** Permissions in the request's tenant; the Admin holds them all. */
-function requestPermissions({ membership, user }) {
-  if (isRequestTenantAdmin({ membership, user })) return ALL_PERMISSIONS;
+function requestPermissions({ membership, user, tenantId }) {
+  if (isRequestTenantAdmin({ membership, user, tenantId })) return ALL_PERMISSIONS;
   return membership?.status === MEMBERSHIP_STATUS.ACTIVE ? membership.role_id?.permissions ?? [] : [];
 }
 

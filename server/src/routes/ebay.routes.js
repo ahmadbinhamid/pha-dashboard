@@ -6,20 +6,21 @@ const { auth, requirePermission } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/ebay.listing.validation");
+const settingsV = require("../validators/ebay.settings.validation");
 const ctrl = require("../controllers/ebay.controller");
 const listingCtrl = require("../controllers/ebay.listing.controller");
 
 // ── eBay account / settings ──
 router.get("/status", auth(), requirePermission("integrations.view"), asyncHandler(ctrl.getStatus));
 router.get("/settings", auth(), requirePermission("integrations.view"), asyncHandler(ctrl.getSettings));
-router.put("/settings", auth(), requirePermission("integrations.update"), asyncHandler(ctrl.updateSettings));
+router.put("/settings", auth(), requirePermission("integrations.update"), validate(settingsV.updateSettings), asyncHandler(ctrl.updateSettings));
 router.get("/category-suggestions", auth(), requirePermission("listings.view"), asyncHandler(ctrl.getCategorySuggestions));
 router.get("/condition-policies", auth(), requirePermission("listings.view"), asyncHandler(ctrl.getConditionPolicies));
 router.get("/business-policies", auth(), requirePermission("listings.view"), asyncHandler(ctrl.getBusinessPolicies));
 router.get("/category-aspects", auth(), requirePermission("listings.view"), asyncHandler(ctrl.getCategoryAspects));
 
 // ── eBay listings CRUD ──
-router.post("/listings", auth(), requirePermission("listings.create"), asyncHandler(listingCtrl.createListing));
+router.post("/listings", auth(), requirePermission("listings.create"), validate(v.createListing), asyncHandler(listingCtrl.createListing));
 router.get(
   "/listings",
   auth(), requirePermission("listings.view"),
@@ -28,7 +29,7 @@ router.get(
   asyncHandler(listingCtrl.getListings),
 );
 router.get("/listings/:id", auth(), requirePermission("listings.view"), asyncHandler(listingCtrl.getListing));
-router.put("/listings/:id", auth(), requirePermission("listings.update"), asyncHandler(listingCtrl.updateListing));
+router.put("/listings/:id", auth(), requirePermission("listings.update"), validate(v.updateListing), asyncHandler(listingCtrl.updateListing));
 router.delete("/listings/:id", auth(), requirePermission("listings.delete"), asyncHandler(listingCtrl.deleteListing));
 router.post("/listings/:id/push", auth(), requirePermission("listings.update"), asyncHandler(listingCtrl.pushListing));
 

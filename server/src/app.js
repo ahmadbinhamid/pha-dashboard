@@ -18,6 +18,7 @@ const { requestLogger, errorLogger } = require("./middlewares/logging");
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");
 const requestId = require("./middlewares/requestId");
+const uploadHeaders = require("./middlewares/uploadHeaders");
 
 const app = express();
 
@@ -79,11 +80,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
-// Cross-origin CORP so the FE on another port can load uploaded images.
-app.use("/uploads", (_req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  next();
-}, express.static(config.uploads.dir));
+app.use("/uploads", uploadHeaders, express.static(config.uploads.dir));
 
 // Auto logging (request/response)
 app.use(requestLogger);

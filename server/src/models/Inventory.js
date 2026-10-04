@@ -5,6 +5,8 @@ const { buildSchema } = require("./base.model");
 
 const inventorySchema = buildSchema(
   {
+    // NOTE: optional until backfillInventoryTenantId runs; reads still use product.
+    tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", default: null },
     product: {
       type: Schema.Types.ObjectId,
       ref: "Product",
@@ -26,10 +28,12 @@ const inventorySchema = buildSchema(
   { softDelete: false },
 );
 
-// Compound unique index: one record per product+variant+location combo
+// One record per product+variant+location.
 inventorySchema.index(
   { product: 1, variant: 1, location: 1 },
   { unique: true },
 );
+// Tenant-wide stock aggregates and product/variant filters, once reads move.
+inventorySchema.index({ tenant_id: 1, product: 1, variant: 1 });
 
 module.exports = model("Inventory", inventorySchema);

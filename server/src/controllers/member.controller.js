@@ -40,6 +40,7 @@ exports.removeMember = async (req, res) => {
 exports.getMyAccess = async (req, res) => {
   try {
     return success(res, {
+      has_organisation: Boolean(req.tenantId),
       is_tenant_admin: membershipService.isRequestTenantAdmin(req),
       role: req.membership?.role_id?.name ?? null,
       permissions: membershipService.requestPermissions(req),

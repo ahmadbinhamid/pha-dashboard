@@ -100,6 +100,7 @@ async function ensureInventoryForProduct(productId, variantId = null, tenantId) 
       { product: productId, variant: variantId, location: loc._id },
       {
         $setOnInsert: {
+          tenant_id: tenantId,
           product: productId,
           variant: variantId,
           location: loc._id,

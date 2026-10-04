@@ -6,6 +6,8 @@ const { ADJUSTMENT_TYPE } = require("../constants/inventory.constants");
 
 const inventoryHistorySchema = buildSchema(
   {
+    // NOTE: optional until backfillInventoryTenantId runs; reads still use product.
+    tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", default: null },
     inventory: {
       type: Schema.Types.ObjectId,
       ref: "Inventory",
@@ -50,7 +52,7 @@ const inventoryHistorySchema = buildSchema(
         message: "stock_after must be a whole number",
       },
     },
-    // Portion of `adjustment` that couldn't apply (would go negative); stock_after clamps at 0 but adjustment keeps the true requested value. See inventory.service.js#adjustStock.
+    // Unapplied part of `adjustment` once stock_after clamps at 0.
     clamped_shortfall: {
       type: Number,
       default: 0,
@@ -76,7 +78,9 @@ const inventoryHistorySchema = buildSchema(
 
 // inventory.service.js#getHistory: { inventory }, sort by created_at desc.
 inventoryHistorySchema.index({ inventory: 1, created_at: -1 });
-// Lets dashboard.service.js's activity-log aggregation range-filter by created_at (pre-$lookup) use an index instead of a full scan.
+// Dashboard activity range-filters by created_at before its $lookup.
 inventoryHistorySchema.index({ created_at: -1 });
+// The same dashboard queries once they filter on tenant_id directly.
+inventoryHistorySchema.index({ tenant_id: 1, created_at: -1 });
 
 module.exports = model("InventoryHistory", inventoryHistorySchema);

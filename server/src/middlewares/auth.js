@@ -27,7 +27,7 @@ const auth =
 
       let decoded;
       try {
-        decoded = verifyJwt(token); // { sub, role, iat, exp, ... }
+        decoded = verifyJwt(token);
       } catch {
         return unauthorized(res, "Invalid or expired token");
       }
@@ -52,16 +52,13 @@ const auth =
         return forbidden(res, "You don't have access to that organisation");
       }
 
+      // NOTE: no active membership means no tenant; User.tenant_id grants nothing.
       if (active) {
         req.membership = active;
         membershipService.touchLastActive(active);
         req.tenantId = active.tenant_id;
         // Full Mongoose doc; SKU/prefix code needs every field.
         req.tenant = await tenantService.findTenantById(req.tenantId);
-      } else {
-        // No membership yet: fall back to User.tenant_id and legacy User.role.
-        req.tenantId = user.tenant_id;
-        if (user.tenant_id) req.tenant = await tenantService.findTenantById(user.tenant_id);
       }
 
       if (req.tenantId && !req.tenant) return forbidden(res, "Tenant not found or disabled");
