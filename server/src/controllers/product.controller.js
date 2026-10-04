@@ -36,6 +36,7 @@ const { toPackage } = require("../utils/packageDimensions");
 const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 const { duplicateKeyMessage } = require("../utils/duplicateKey");
 const { buildProductFilter } = require("../utils/productFilter");
+const { namedFitmentRows, toFitmentRow } = require("../services/marketplace/productFallbacks");
 const {
   parseField,
   parseFormDataArrays,
@@ -56,11 +57,12 @@ const {
   systemfailure,
 } = require("../utils/http/response");
 
-// Best-effort: adds vehicle combo to tenant catalog; never blocks the save.
-async function syncVehicleModelCatalog(vehicle, tenantId) {
-  if (!vehicle) return;
+// Best-effort: adds each vehicle combo to tenant catalog; never blocks saves.
+async function syncVehicleModelCatalog(vehicles, tenantId) {
+  const rows = vehicles.filter(Boolean);
+  if (!rows.length) return;
   try {
-    await vehicleModelService.upsertVehicleModel(vehicle, tenantId);
+    await vehicleModelService.upsertVehicleModelsFromRows(rows, tenantId);
   } catch (err) {
     logger.warn(`[product.controller] failed to sync vehicle model catalog: ${err.message}`);
   }
@@ -96,6 +98,9 @@ const vehicleValue = (v) => ({
 
 const packageValue = (v) => toPackage(v);
 
+// Multipart JSON list of fitments; rows naming no make or model are dropped.
+const parseFitments = (raw) => namedFitmentRows(parseField(raw, [])).map(toFitmentRow);
+
 // NOTE: no sku (channel identity) or tailgate flags (Transdirect only).
 const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
   title: scalar,
@@ -106,6 +111,7 @@ const MARKETPLACE_RELEVANT_PRODUCT_FIELDS = Object.freeze({
   condition: scalar,
   authenticity: scalar,
   vehicle: vehicleValue,
+  additional_fitments: (list) => (list || []).map(vehicleValue),
   // Google's product link is built from the slug.
   slug: scalar,
   // Untracked stock sends no eBay quantity and drops the item from Google.
@@ -310,6 +316,7 @@ exports.createProduct = async (req, res) => {
       digital_file,
       stock_entries,
       vehicle,
+      additional_fitments,
       shipping_cost,
       package: pkg,
       bay,
@@ -323,6 +330,7 @@ exports.createProduct = async (req, res) => {
     const { attachments, categories, tags, related_products, choices } =
       parseFormDataArrays(body);
     const parsedVehicle = parseField(vehicle, null);
+    const parsedFitments = parseFitments(additional_fitments);
 
     const autoSku = await generateNextSku(req.tenant);
 
@@ -351,6 +359,7 @@ exports.createProduct = async (req, res) => {
       condition: condition || PRODUCT_CONDITION.NEW,
       authenticity: authenticity || null,
       vehicle: parsedVehicle,
+      additional_fitments: parsedFitments,
       attachments,
       categories,
       tags,
@@ -359,7 +368,7 @@ exports.createProduct = async (req, res) => {
       digital_file: digital_file || null,
     }, generateSlug(title), req.tenantId);
 
-    await syncVehicleModelCatalog(parsedVehicle, req.tenantId);
+    await syncVehicleModelCatalog([parsedVehicle, ...parsedFitments], req.tenantId);
     await syncSearchIndex(product._id);
 
     const parsedStockEntries = stock_entries
@@ -422,6 +431,7 @@ exports.updateProduct = async (req, res) => {
       authenticity,
       digital_file,
       vehicle,
+      additional_fitments,
       shipping_cost,
       package: pkg,
       bay,
@@ -465,6 +475,7 @@ exports.updateProduct = async (req, res) => {
     if (authenticity !== undefined) product.authenticity = authenticity || null;
     if (digital_file !== undefined) product.digital_file = digital_file || null;
     if (vehicle !== undefined) product.vehicle = parseField(vehicle, null);
+    if (additional_fitments !== undefined) product.additional_fitments = parseFitments(additional_fitments);
     if (pkg !== undefined) product.package = toPackage(pkg);
     if (bay !== undefined) product.bay = bay || null;
     if (shipping_method) product.shipping_method = shipping_method;
@@ -494,7 +505,9 @@ exports.updateProduct = async (req, res) => {
       await saveProduct(product);
     }
 
-    if (vehicle !== undefined) await syncVehicleModelCatalog(product.vehicle, req.tenantId);
+    if (vehicle !== undefined || additional_fitments !== undefined) {
+      await syncVehicleModelCatalog([product.vehicle, ...product.additional_fitments], req.tenantId);
+    }
     await syncSearchIndex(product._id);
 
     // Fan out only when a field a channel payload reads changed (not notes/tags).
@@ -565,6 +578,7 @@ exports.duplicateProduct = async (req, res) => {
       condition: original.condition,
       authenticity: original.authenticity,
       vehicle: original.vehicle,
+      additional_fitments: original.additional_fitments,
       attachments: original.attachments,
       categories: original.categories,
       tags: original.tags,

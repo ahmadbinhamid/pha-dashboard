@@ -1,5 +1,6 @@
 import type { EbayListing, EbayListingFormState, ListingProductDefaults } from "@/types/marketplace";
 import { packageToForm } from "@/lib/products/packageDimensions";
+import { fitmentToForm } from "@/lib/products/fitments";
 import { isGeneratedEbayDescription } from "@/components/listings/platforms/ebay/ebayDescriptionGenerator";
 
 function normaliseSpn(raw: unknown): string[] {
@@ -49,13 +50,7 @@ export function listingToForm(listing: EbayListing): EbayListingFormState {
       authenticity: listing.item_specifics?.authenticity || "",
       warranty: listing.item_specifics?.warranty || "",
     },
-    fitment: fitmentRows.map((r) => ({
-      make: String(r.make ?? ""),
-      model: String(r.model ?? ""),
-      model_code: String(r.model_code ?? ""),
-      year_from: r.year_from != null ? String(r.year_from) : "",
-      year_to: r.year_to != null ? String(r.year_to) : "",
-    })),
+    fitment: fitmentRows.map(fitmentToForm),
     format: listing.format || "FIXED_PRICE",
     quantity_available:
       listing.quantity_available != null ? String(listing.quantity_available) : "",

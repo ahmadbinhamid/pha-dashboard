@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { YearSelect } from "@/components/shared/YearSelect";
 import {
@@ -11,17 +12,14 @@ import { validateVehicleYearRange } from "@/lib/validation/commonFields";
 import type { FitmentRowFormState } from "@/types/marketplace";
 import { Trash2 } from "lucide-react";
 
-export function FitmentRow({
-  row,
-  index,
-  onUpdate,
-  onRemove,
-}: {
+interface FitmentRowProps {
   row: FitmentRowFormState;
-  index: number;
+  label: string;
   onUpdate: (patch: Partial<FitmentRowFormState>) => void;
   onRemove: () => void;
-}) {
+}
+
+export function FitmentRow({ row, label, onUpdate, onRemove }: FitmentRowProps) {
   const { data: makesRes } = useQuery({
     queryKey: ["vehicle-makes"],
     queryFn: getVehicleMakes,
@@ -46,12 +44,10 @@ export function FitmentRow({
   const yearRangeError = validateVehicleYearRange(row.year_from, row.year_to);
 
   function handleMakeChange(make: string) {
-    // Reset everything downstream when make changes
     onUpdate({ make, model: "", model_code: "", year_from: "", year_to: "" });
   }
 
   function handleModelChange(model: string) {
-    // Reset model_code and years when model changes
     onUpdate({ model, model_code: "", year_from: "", year_to: "" });
   }
 
@@ -70,22 +66,13 @@ export function FitmentRow({
 
   return (
     <div className="rounded-xs border border-border bg-bg-2/30 p-3 space-y-3">
-      {/* Row index label */}
       <div className="flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">
-          Vehicle {index + 1}
-        </span>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="flex h-7 w-7 items-center justify-center rounded-xs border border-border text-fg/40 transition-colors hover:border-danger/50 hover:bg-danger/5 hover:text-danger"
-          title="Remove vehicle"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">{label}</span>
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove} title="Remove vehicle" aria-label="Remove vehicle">
+          <Trash2 className="h-3.5 w-3.5 text-danger" />
+        </Button>
       </div>
 
-      {/* Make + Model */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Make</span>
@@ -112,7 +99,6 @@ export function FitmentRow({
         </div>
       </div>
 
-      {/* Model Code + Years */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
           <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">Model Code</span>

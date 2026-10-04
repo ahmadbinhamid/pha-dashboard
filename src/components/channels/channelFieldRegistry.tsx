@@ -65,7 +65,7 @@ export const CHANNEL_FIELD_COMPONENTS: Record<string, ComponentType<ChannelCusto
     );
   },
   "ebay.fitment": ({ form, onChange, product }) => (
-    <EbayVehicleFitmentSection form={form as EbayListingFormState} onChange={onChange} productVehicle={product.vehicle} />
+    <EbayVehicleFitmentSection form={form as EbayListingFormState} onChange={onChange} product={product} />
   ),
   // Inherited field: the wrapper shows the error, so it isn't passed here.
   "ebay.package": ({ form, onChange }) => (

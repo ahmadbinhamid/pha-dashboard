@@ -44,7 +44,7 @@ const fieldSchema = Object.freeze([
     optionsSource: "ebay.categoryAspects",
     group: "specifics",
   },
-  // Description fitment table; empty inherits product.vehicle (aspects always).
+  // Description fitment table; empty inherits the non-default vehicles.
   {
     key: "fitment",
     label: "Vehicle fitment",
@@ -52,7 +52,7 @@ const fieldSchema = Object.freeze([
     required: false,
     helpText: "Listed in the eBay description's compatibility table.",
     group: "fitment",
-    inheritsFrom: "vehicle",
+    inheritsFrom: "additional_fitments",
   },
   {
     key: "fulfillment_policy_id",

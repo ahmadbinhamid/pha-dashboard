@@ -4,6 +4,18 @@ const mongoose = require("mongoose");
 const { escapeRegex, buildWordSearchOr } = require("./regex");
 const { PRODUCT_STATUS } = require("../constants/product.constants");
 
+// Conditions one fitment must meet; `prefix` addresses a subdocument path.
+function fitmentConditions(query, prefix = "") {
+  const conditions = ["make", "model", "model_code"]
+    .filter((key) => query[key])
+    .map((key) => ({ [`${prefix}${key}`]: query[key].trim() }));
+  if (query.year !== undefined) {
+    conditions.push({ $or: [{ [`${prefix}year_from`]: null }, { [`${prefix}year_from`]: { $lte: query.year } }] });
+    conditions.push({ $or: [{ [`${prefix}year_to`]: null }, { [`${prefix}year_to`]: { $gte: query.year } }] });
+  }
+  return conditions;
+}
+
 // Product list and category-count filter; public sees published+active only.
 function buildProductFilter(query = {}, { authenticated = false, tenantId = null } = {}) {
   const filter = {};
@@ -59,19 +71,12 @@ function buildProductFilter(query = {}, { authenticated = false, tenantId = null
     if (query.price_min !== undefined) filter.price.$gte = query.price_min;
     if (query.price_max !== undefined) filter.price.$lte = query.price_max;
   }
-  if (query.make) {
-    filter["vehicle.make"] = query.make.trim();
-  }
-  if (query.model) {
-    filter["vehicle.model"] = query.model.trim();
-  }
-  if (query.model_code) {
-    filter["vehicle.model_code"] = query.model_code.trim();
-  }
-  if (query.year !== undefined) {
-    const year = query.year;
-    and.push({ $or: [{ "vehicle.year_from": null }, { "vehicle.year_from": { $lte: year } }] });
-    and.push({ $or: [{ "vehicle.year_to": null }, { "vehicle.year_to": { $gte: year } }] });
+  // A product fits when its default vehicle or any additional fitment matches.
+  const fitment = fitmentConditions(query);
+  if (fitment.length) {
+    and.push({
+      $or: [{ $and: fitmentConditions(query, "vehicle.") }, { additional_fitments: { $elemMatch: { $and: fitment } } }],
+    });
   }
   if (and.length) filter.$and = and;
 

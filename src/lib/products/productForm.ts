@@ -1,6 +1,8 @@
 import type { ProductFormValues } from "@/lib/validation/product";
 import type { Product } from "@/types/product";
 import { EMPTY_PACKAGE_FORM, packageFromForm, packageToForm } from "@/lib/products/packageDimensions";
+import { fitmentFromForm, isNamedFitment, productFitmentsToForm } from "@/lib/products/fitments";
+import { EMPTY_FITMENT_ROW } from "@/config/fitment";
 
 export type ProductFormMode = "create" | "edit";
 
@@ -19,11 +21,7 @@ export const EMPTY_PRODUCT_FORM: ProductFormValues = {
   mpn: "",
   condition: "NEW",
   authenticity: "",
-  vehicle_make: "",
-  vehicle_model: "",
-  vehicle_model_code: "",
-  vehicle_year: "",
-  vehicle_year_to: "",
+  fitments: [],
   package: EMPTY_PACKAGE_FORM,
   bay: "",
   shipping_method: "standard",
@@ -57,11 +55,7 @@ export function productToForm(p: Product): ProductFormValues {
     mpn: p.mpn ?? "",
     condition: p.condition,
     authenticity: p.authenticity ?? "",
-    vehicle_make: p.vehicle?.make ?? "",
-    vehicle_model: p.vehicle?.model ?? "",
-    vehicle_model_code: p.vehicle?.model_code ?? "",
-    vehicle_year: p.vehicle?.year_from != null ? String(p.vehicle.year_from) : "",
-    vehicle_year_to: p.vehicle?.year_to != null ? String(p.vehicle.year_to) : "",
+    fitments: productFitmentsToForm(p),
     package: packageToForm(p.package),
     bay: p.bay ?? "",
     shipping_method: p.shipping_method ?? "standard",
@@ -98,16 +92,9 @@ export function productFormToFormData(form: ProductFormValues, mode: ProductForm
   optional("mpn", edit ? form.mpn : form.mpn.trim());
   fd.append("condition", form.condition);
   optional("authenticity", form.authenticity);
-  fd.append(
-    "vehicle",
-    JSON.stringify({
-      make: form.vehicle_make || null,
-      model: form.vehicle_model || null,
-      model_code: form.vehicle_model_code || null,
-      year_from: form.vehicle_year ? Number(form.vehicle_year) : null,
-      year_to: form.vehicle_year_to ? Number(form.vehicle_year_to) : null,
-    }),
-  );
+  const [defaultVehicle = EMPTY_FITMENT_ROW, ...additional] = form.fitments.filter(isNamedFitment);
+  fd.append("vehicle", JSON.stringify(fitmentFromForm(defaultVehicle)));
+  fd.append("additional_fitments", JSON.stringify(additional.map(fitmentFromForm)));
   fd.append("package", JSON.stringify(packageFromForm(form.package)));
   optional("bay", form.bay.trim());
   fd.append("shipping_method", form.shipping_method);

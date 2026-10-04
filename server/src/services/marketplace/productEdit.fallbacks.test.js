@@ -128,7 +128,7 @@ test("editing product authenticity reaches eBay's aspects and description", asyn
   assert.ok(ebayItem.product.description.includes("Genuine"), "description template shows it too");
 });
 
-test("editing product vehicle reaches eBay's aspects and the description fitment table", async () => {
+test("editing product vehicle reaches eBay's aspects and Technical Specifications", async () => {
   const fixture = await makeFixture();
   const vehicle = { make: "Toyota", model: "Hilux", model_code: "KUN26", year_from: 2005, year_to: 2015 };
   // Sent as the product form sends it: a JSON string in the multipart body.
@@ -136,6 +136,22 @@ test("editing product vehicle reaches eBay's aspects and the description fitment
   assert.deepEqual(ebayItem.product.aspects.Make, ["Toyota"]);
   assert.deepEqual(ebayItem.product.aspects.Model, ["Hilux"]);
   const html = ebayItem.product.description;
-  assert.ok(html.includes("KUN26") && html.includes("2005"), "fitment table derived from product.vehicle");
-  assert.ok(!html.includes("Please contact us to verify fitment"), "not the empty-fitment placeholder");
+  assert.ok(html.includes("KUN26") && html.includes("2005"), "Technical Specifications shows the default vehicle");
+  assert.ok(!html.includes("Vehicle Fitment"), "a lone default vehicle needs no fitment table");
+});
+
+test("fitment table lists only the non-default vehicles; aspects keep the default", async () => {
+  const fixture = await makeFixture();
+  const vehicle = { make: "Mitsubishi", model: "Outlander", model_code: "GF", year_from: 2015, year_to: 2019 };
+  const extra = { make: "Mitsubishi", model: "ASX", model_code: "XD", year_from: 2016, year_to: 2020 };
+  const { ebayItem } = await editAndSync(fixture, {
+    vehicle: JSON.stringify(vehicle),
+    additional_fitments: JSON.stringify([extra, { make: "", model: "" }]),
+  });
+  assert.deepEqual(ebayItem.product.aspects.Model, ["Outlander"], "default vehicle drives aspects");
+  const html = ebayItem.product.description;
+  const table = html.slice(html.indexOf("Vehicle Fitment"));
+  assert.ok(html.includes("Vehicle Fitment"), "table shown when there are extra vehicles");
+  assert.ok(table.includes("ASX") && table.includes("XD"), "extra vehicle in the table");
+  assert.ok(!table.includes("Outlander"), "default vehicle stays out of the table");
 });

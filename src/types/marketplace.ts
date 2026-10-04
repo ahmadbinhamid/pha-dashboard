@@ -37,6 +37,7 @@ export interface MarketplaceListingProduct {
   price: number;
   // Populated by the backend; Technical Specifications always reads it live.
   vehicle?: import("@/types/product").ProductVehicle | null;
+  additional_fitments?: import("@/types/product").ProductVehicle[];
   // Display fallback when no photo_overrides (as resolvePhotos); never saved.
   attachments?: import("@/types/product").Attachment[];
 }

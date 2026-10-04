@@ -16,6 +16,8 @@
     "worker:ebay": "node --max-old-space-size=256 src/workers/ebay.worker.js",
     "worker:stripe": "node --max-old-space-size=256 src/workers/stripe.worker.js",
     "worker:platform": "node --max-old-space-size=256 src/workers/platform.worker.js",
+    "dev:worker:channels": "nodemon --exec \"node --max-old-space-size=256\" src/workers/channel.worker.js",
+    "dev:worker:platform": "nodemon --exec \"node --max-old-space-size=256\" src/workers/platform.worker.js",
     "seed:superadmin": "node scripts/seedSuperAdmin.js",
     "reindex:products": "node scripts/reindexProducts.js"
   },
