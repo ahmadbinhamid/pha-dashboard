@@ -158,6 +158,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const NO_OP = () => {};
+const EMPTY_CART: CartData = { items: [] };
+
+// Reuses the POS pickers elsewhere: an add goes to onAdd, not the local cart.
+export function CartTargetProvider({ onAdd, children }: { onAdd: (item: AddCartItemInput) => void; children: React.ReactNode }) {
+  const actions = useMemo<CartActions>(
+    () => ({ addItem: onAdd, removeItem: NO_OP, setQuantity: NO_OP, setItemNote: NO_OP, clearCart: NO_OP }),
+    [onAdd],
+  );
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <DataCtx.Provider value={EMPTY_CART}>{children}</DataCtx.Provider>
+    </ActionsCtx.Provider>
+  );
+}
+
 export function useCartData(): CartData {
   const ctx = useContext(DataCtx);
   if (!ctx) throw new Error("useCartData must be used within CartProvider");

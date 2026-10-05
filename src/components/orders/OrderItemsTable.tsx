@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Check, X } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
@@ -10,10 +9,10 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
 import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
-import { useToast } from "@/context";
-import { PERMISSIONS } from "@/config/permissions";
-import { useMyAccess } from "@/hooks/useMyAccess";
-import type { OrderChannel, OrderItem } from "@/types/orders";
+import { useOrderEdit } from "@/hooks/useOrderEdit";
+import { OrderItemQuantityStepper } from "@/components/orders/OrderItemQuantityStepper";
+import { RemoveOrderItemButton } from "@/components/orders/RemoveOrderItemButton";
+import type { OrderItem } from "@/types/orders";
 import {
   editableUnitPriceFormSchema,
   editableDiscountFormSchema,
@@ -21,9 +20,14 @@ import {
   type EditableDiscountFormValues,
 } from "@/lib/validation/editableOrderItem";
 
-function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; itemIndex: number; item: OrderItem }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+interface EditableLineProps {
+  orderId: string;
+  version: number;
+  itemIndex: number;
+  item: OrderItem;
+}
+
+function EditableUnitPrice({ orderId, version, itemIndex, item }: EditableLineProps) {
   const [editing, setEditing] = useState(false);
 
   const { register, handleSubmit, reset } = useForm<EditableUnitPriceFormValues>({
@@ -31,18 +35,11 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
     defaultValues: { amount: String(item.unit_price / 100) },
   });
 
-  const mutation = useMutation({
-    mutationFn: (unitPrice: number) => updateOrderItemPrice(orderId, itemIndex, unitPrice),
-    onSuccess: () => {
-      toast({ title: "Price updated", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setEditing(false);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't update price", description: err.message, tone: "danger" });
-    },
-  });
+  const mutation = useOrderEdit(
+    orderId,
+    (unitPrice: number) => updateOrderItemPrice(orderId, itemIndex, unitPrice, version),
+    { successTitle: "Price updated", errorTitle: "Couldn't update price", onSuccess: () => setEditing(false) },
+  );
 
   const onSubmit = (values: EditableUnitPriceFormValues) => mutation.mutate(Number(values.amount));
 
@@ -102,9 +99,7 @@ function EditableUnitPrice({ orderId, itemIndex, item }: { orderId: string; item
   );
 }
 
-function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemIndex: number; item: OrderItem }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+function EditableDiscount({ orderId, version, itemIndex, item }: EditableLineProps) {
   const [editing, setEditing] = useState(false);
 
   const { register, handleSubmit, reset } = useForm<EditableDiscountFormValues>({
@@ -112,18 +107,11 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
     defaultValues: { amount: String(item.discount_amount / 100) },
   });
 
-  const mutation = useMutation({
-    mutationFn: (discountAmount: number) => updateOrderItemDiscount(orderId, itemIndex, discountAmount),
-    onSuccess: () => {
-      toast({ title: "Discount updated", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setEditing(false);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't update discount", description: err.message, tone: "danger" });
-    },
-  });
+  const mutation = useOrderEdit(
+    orderId,
+    (discountAmount: number) => updateOrderItemDiscount(orderId, itemIndex, discountAmount, version),
+    { successTitle: "Discount updated", errorTitle: "Couldn't update discount", onSuccess: () => setEditing(false) },
+  );
 
   const onSubmit = (values: EditableDiscountFormValues) => mutation.mutate(Number(values.amount));
 
@@ -183,18 +171,15 @@ function EditableDiscount({ orderId, itemIndex, item }: { orderId: string; itemI
   );
 }
 
-export function OrderItemsTable({
-  items,
-  orderId,
-  channel,
-}: {
+interface OrderItemsTableProps {
   items: OrderItem[];
   orderId: string;
-  channel: OrderChannel;
-}) {
-  const { can } = useMyAccess();
-  // Storefront order edits are rejected by the backend, so only offer for others.
-  const editable = (channel === "ebay" || channel === "manual") && can(PERMISSIONS.orders.update);
+  version: number;
+  // Server-decided (edit_block_reason) and the caller's orders.update.
+  editable: boolean;
+}
+
+export function OrderItemsTable({ items, orderId, version, editable }: OrderItemsTableProps) {
   const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 
   return (
@@ -216,6 +201,7 @@ export function OrderItemsTable({
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Discount</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Total (inc GST)</TableHead>
+            {editable && <TableHead className="sticky top-0 z-2 sticky-col-header" aria-label="Remove" />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -237,7 +223,7 @@ export function OrderItemsTable({
               <TableCell className="text-fg/60">{item.sku ?? "—"}</TableCell>
               <TableCell className="text-right text-fg">
                 {editable ? (
-                  <EditableUnitPrice orderId={orderId} itemIndex={i} item={item} />
+                  <EditableUnitPrice orderId={orderId} version={version} itemIndex={i} item={item} />
                 ) : (
                   formatCurrencyFromCents(getExclusiveUnitPrice(item.unit_price))
                 )}
@@ -256,10 +242,12 @@ export function OrderItemsTable({
               <TableCell className="text-right text-fg/60">
                 {formatCurrencyFromCents(getLineGst(item.unit_price))}
               </TableCell>
-              <TableCell className="text-right text-fg">{item.quantity}</TableCell>
+              <TableCell className="text-right text-fg">
+                {editable ? <OrderItemQuantityStepper orderId={orderId} version={version} item={item} /> : item.quantity}
+              </TableCell>
               <TableCell className="text-right text-fg/60">
                 {editable ? (
-                  <EditableDiscount orderId={orderId} itemIndex={i} item={item} />
+                  <EditableDiscount orderId={orderId} version={version} itemIndex={i} item={item} />
                 ) : item.discount_amount > 0 ? (
                   `-${formatCurrencyFromCents(item.discount_amount)}`
                 ) : (
@@ -269,6 +257,11 @@ export function OrderItemsTable({
               <TableCell className="text-right font-medium text-fg">
                 {formatCurrencyFromCents(item.unit_price * item.quantity - item.discount_amount)}
               </TableCell>
+              {editable && (
+                <TableCell className="text-right">
+                  <RemoveOrderItemButton orderId={orderId} version={version} item={item} disabled={items.length === 1} />
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

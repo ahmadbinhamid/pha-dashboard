@@ -1,6 +1,8 @@
 // controllers/order.controller.js
 
 const orderService = require("../services/order.service");
+const orderEditService = require("../services/order-edit.service");
+const { fullName } = require("../utils/user");
 const { createPaymentLinkForOrder } = require("../services/stripe/stripe.payment.service");
 const { created, success, notFound, requestfailure, systemfailure } = require("../utils/http/response");
 
@@ -16,11 +18,7 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrder = async (req, res) => {
   try {
-    const order = await orderService.getOrderForGuest(req.params.id, req.query.token, req.tenantId);
-    // getOrderForGuest re-selects guest_access_token to verify it; strip it before responding.
-    const safeOrder = order.toObject();
-    delete safeOrder.guest_access_token;
-    return success(res, safeOrder);
+    return success(res, await orderService.getGuestOrderView(req.params.id, req.query.token, req.tenantId));
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);
@@ -28,7 +26,7 @@ exports.getOrder = async (req, res) => {
   }
 };
 
-// ── Admin ──────────────────────────────────────────────────────────────────
+// ── Admin ──
 
 exports.listOrders = async (req, res) => {
   try {
@@ -74,7 +72,7 @@ exports.createManualOrder = async (req, res) => {
 
 exports.getOrderDetail = async (req, res) => {
   try {
-    const order = await orderService.getOrderDetailForAdmin(req.params.id, req.tenantId);
+    const order = await orderEditService.getEditableOrderDetail(req.params.id, req.tenantId);
     return success(res, order);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
@@ -163,36 +161,52 @@ exports.updateOrderCustomerDetails = async (req, res) => {
   }
 };
 
-exports.updateOrderItemPrice = async (req, res) => {
-  try {
-    const order = await orderService.updateOrderItemPrice(
-      req.params.id,
-      req.params.itemIndex,
-      { unit_price: req.body.unit_price, userId: req.user?._id },
-      req.tenantId,
-    );
-    return success(res, order, "Price updated");
-  } catch (err) {
-    if (err.status === 404) return notFound(res, err.message);
-    if (err.status) return requestfailure(res, err);
-    return systemfailure(res, err);
-  }
-};
+// Who made an edit, for the audit note.
+const editor = (req) => ({ id: req.user?._id ?? null, name: fullName(req.user ?? {}) || "staff" });
 
-exports.updateOrderShippingCost = async (req, res) => {
+// Runs an edit, then answers with the refreshed detail (server totals).
+async function respondWithEdit(req, res, message, edit) {
   try {
-    const order = await orderService.updateOrderShippingCost(
-      req.params.id,
-      { shipping_cost: req.body.shipping_cost },
-      req.tenantId,
-    );
-    return success(res, order, "Shipping cost updated");
+    await edit(editor(req));
+    return success(res, await orderEditService.getEditableOrderDetail(req.params.id, req.tenantId), message);
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
-    if (err.status) return requestfailure(res, err);
+    // jsonerr.code says which 409 it was, so the client can explain it.
+    if (err.status) return requestfailure(res, err, err.code ? { code: err.code } : null);
     return systemfailure(res, err);
   }
-};
+}
+
+exports.updateOrderItemPrice = (req, res) =>
+  respondWithEdit(req, res, "Price updated", (user) =>
+    orderEditService.updateOrderItemPrice(req.params.id, req.params.itemIndex, req.body, user, req.tenantId),
+  );
+
+exports.updateOrderShippingCost = (req, res) =>
+  respondWithEdit(req, res, "Shipping cost updated", (user) =>
+    orderEditService.updateOrderShippingCost(req.params.id, req.body, user, req.tenantId),
+  );
+
+exports.updateOrderItemDiscount = (req, res) =>
+  respondWithEdit(req, res, "Discount updated", (user) =>
+    orderEditService.updateOrderItemDiscount(req.params.id, req.params.itemIndex, req.body, user, req.tenantId),
+  );
+
+exports.addOrderItem = (req, res) =>
+  respondWithEdit(req, res, "Item added", (user) =>
+    orderEditService.addOrderItem(req.params.id, req.body, user, req.tenantId),
+  );
+
+exports.updateOrderItemQuantity = (req, res) =>
+  respondWithEdit(req, res, "Quantity updated", (user) =>
+    orderEditService.updateOrderItemQuantity(req.params.id, req.params.itemId, req.body, user, req.tenantId),
+  );
+
+exports.removeOrderItem = (req, res) =>
+  respondWithEdit(req, res, "Item removed", (user) =>
+    orderEditService.removeOrderItem(req.params.id, req.params.itemId, req.query, user, req.tenantId),
+  );
+
 
 exports.updateOrderReferenceNumber = async (req, res) => {
   try {
@@ -209,21 +223,6 @@ exports.updateOrderReferenceNumber = async (req, res) => {
   }
 };
 
-exports.updateOrderItemDiscount = async (req, res) => {
-  try {
-    const order = await orderService.updateOrderItemDiscount(
-      req.params.id,
-      req.params.itemIndex,
-      { discount_amount: req.body.discount_amount },
-      req.tenantId,
-    );
-    return success(res, order, "Discount updated");
-  } catch (err) {
-    if (err.status === 404) return notFound(res, err.message);
-    if (err.status) return requestfailure(res, err);
-    return systemfailure(res, err);
-  }
-};
 
 exports.addOrderNote = async (req, res) => {
   try {

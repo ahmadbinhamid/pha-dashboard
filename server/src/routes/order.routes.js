@@ -62,6 +62,22 @@ router.put(
   asyncHandler(ctrl.updateOrderCustomerDetails),
 );
 router.post("/:id/notes", auth(), requirePermission("orders.update"), validate(v.addOrderNote), asyncHandler(ctrl.addOrderNote));
+// Line edits on an unpaid in-store order; each carries the order version.
+router.post("/:id/items", auth(), requirePermission("orders.update"), validate(v.addOrderItem), asyncHandler(ctrl.addOrderItem));
+router.patch(
+  "/:id/items/:itemId/quantity",
+  auth(),
+  requirePermission("orders.update"),
+  validate(v.updateOrderItemQuantity),
+  asyncHandler(ctrl.updateOrderItemQuantity),
+);
+router.delete(
+  "/:id/items/:itemId",
+  auth(),
+  requirePermission("orders.update"),
+  validate(v.removeOrderItem),
+  asyncHandler(ctrl.removeOrderItem),
+);
 router.patch(
   "/:id/items/:itemIndex/price",
   auth(),

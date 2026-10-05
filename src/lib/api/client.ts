@@ -23,7 +23,7 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (res) => res,
   async (err) => {
-    // A responseType: "blob" request (e.g. PDF download) still gets its error body parsed as a Blob — recover the real message instead of a generic status-code string.
+    // A blob request's JSON error body arrives as a Blob; parse it for the message.
     if (err.response?.data instanceof Blob && err.response.data.type?.includes("json")) {
       try {
         err.response.data = JSON.parse(await err.response.data.text());
@@ -49,12 +49,17 @@ apiClient.interceptors.response.use(
       status?: number;
       errors?: Array<{ field: string; message: string }>;
       reason?: string;
+      code?: string;
     };
     error.status = status;
+    // A 409 names its conflict in jsonerr.code so callers can explain it.
+    if (typeof err.response?.data?.jsonerr?.code === "string") {
+      error.code = err.response.data.jsonerr.code;
+    }
     if (status === 422 && Array.isArray(err.response?.data?.errors)) {
       error.errors = err.response.data.errors;
     }
-    // Some 400s carry a machine-readable `reason` alongside `message` (e.g. google.controller.js#completeConnect) so a caller can show a specific friendly message.
+    // Some 400s carry a machine-readable `reason` for a friendlier message.
     if (typeof err.response?.data?.reason === "string") {
       error.reason = err.response.data.reason;
     }

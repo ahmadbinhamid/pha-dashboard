@@ -6,6 +6,7 @@ import type {
   OrderAddress,
   OrderDeliveryMethod,
   OrderDetail,
+  OrderLineInput,
   OrderFulfillmentStatus,
   OrderStats,
 } from "@/types/orders";
@@ -107,17 +108,41 @@ export const addOrderNote = async (orderId: string, text: string) => {
   return data;
 };
 
-// eBay/manual only (storefront rejects it); the backend recomputes totals.
-export const updateOrderItemPrice = async (orderId: string, itemIndex: number, unit_price: number) => {
-  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/price`, {
+// Unpaid in-store orders only; the server recomputes totals, checks version.
+export const updateOrderItemPrice = async (orderId: string, itemIndex: number, unit_price: number, version: number) => {
+  const { data } = await apiClient.patch<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemIndex}/price`, {
     unit_price,
+    version,
   });
   return data;
 };
 
-// Freight fix after the fact (eBay/manual only); the backend recomputes totals.
-export const updateOrderShippingCost = async (orderId: string, shipping_cost: number) => {
-  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/shipping-cost`, { shipping_cost });
+// Freight fix on an unpaid in-store order; the backend recomputes totals.
+export const updateOrderShippingCost = async (orderId: string, shipping_cost: number, version: number) => {
+  const { data } = await apiClient.patch<BeResponse<OrderDetail>>(`/order/${orderId}/shipping-cost`, {
+    shipping_cost,
+    version,
+  });
+  return data;
+};
+
+export const addOrderItem = async (orderId: string, item: OrderLineInput, version: number) => {
+  const { data } = await apiClient.post<BeResponse<OrderDetail>>(`/order/${orderId}/items`, { item, version });
+  return data;
+};
+
+export const updateOrderItemQuantity = async (orderId: string, itemId: string, quantity: number, version: number) => {
+  const { data } = await apiClient.patch<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemId}/quantity`, {
+    quantity,
+    version,
+  });
+  return data;
+};
+
+export const removeOrderItem = async (orderId: string, itemId: string, version: number) => {
+  const { data } = await apiClient.delete<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemId}`, {
+    params: { version },
+  });
   return data;
 };
 
@@ -129,10 +154,11 @@ export const updateOrderReferenceNumber = async (orderId: string, reference_numb
   return data;
 };
 
-// Line discount fix on eBay/manual orders; the backend recomputes totals.
-export const updateOrderItemDiscount = async (orderId: string, itemIndex: number, discount_amount: number) => {
-  const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/items/${itemIndex}/discount`, {
+// Line discount fix on an unpaid in-store order; the backend recomputes totals.
+export const updateOrderItemDiscount = async (orderId: string, itemIndex: number, discount_amount: number, version: number) => {
+  const { data } = await apiClient.patch<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemIndex}/discount`, {
     discount_amount,
+    version,
   });
   return data;
 };

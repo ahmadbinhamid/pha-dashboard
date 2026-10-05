@@ -26,6 +26,9 @@ import { EditOrderDetailsModal } from "@/components/orders/EditOrderDetailsModal
 import { EditableOrderAmount } from "@/components/orders/EditableOrderAmount";
 import { EditableOrderText } from "@/components/orders/EditableOrderText";
 import { InvoicePrintView } from "@/components/orders/InvoicePrintView";
+import { AddOrderItemsButton } from "@/components/orders/AddOrderItemsButton";
+import { OrderEditNotice } from "@/components/orders/OrderEditNotice";
+import { orderEditErrorMessage } from "@/lib/orders/orderEditErrors";
 import { getOrderDetail, downloadInvoicePdf, updateOrderShippingCost, updateOrderReferenceNumber } from "@/lib/api/orders";
 import { useToast } from "@/context";
 import { PERMISSIONS } from "@/config/permissions";
@@ -155,8 +158,8 @@ export default function OrderDetailPage() {
   const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
   // Line discounts plus any legacy order-level discount, shown even at $0.
   const totalDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, order.discount_amount);
-  // Storefront orders are locked server-side (order.service EDITABLE_CHANNELS).
-  const amountsEditable = canUpdate && (order.channel === "ebay" || order.channel === "manual");
+  // The server decides editability; the UI only mirrors edit_block_reason.
+  const lineEditable = canUpdate && order.edit_block_reason === null;
   const totalPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
   // Paid-then-refunded owes $0; never-fully-paid still shows the shortfall.
@@ -239,8 +242,12 @@ export default function OrderDetailPage() {
           {/* min-w-0 lets the items table scroll instead of widening the grid. */}
           <div className="min-w-0 space-y-5 lg:col-span-2">
             <Card>
-              <CardHeader title="Items" description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`} />
-              <OrderItemsTable items={order.items} orderId={order._id} channel={order.channel} />
+              <CardHeader
+                title="Items"
+                description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`}
+                right={lineEditable && <AddOrderItemsButton orderId={order._id} version={order.version} />}
+              />
+              <OrderItemsTable items={order.items} orderId={order._id} version={order.version} editable={lineEditable} />
               <div className="space-y-1.5 border-t border-border px-5 py-4 text-sm">
                 <div className="flex justify-between text-fg/60">
                   <span>Subtotal</span>
@@ -252,14 +259,15 @@ export default function OrderDetailPage() {
                 </div>
                 <div className="flex justify-between text-fg/60">
                   <span>Shipping</span>
-                  {amountsEditable ? (
+                  {lineEditable ? (
                     <EditableOrderAmount
                       orderId={order._id}
                       label="Shipping"
                       amountCents={order.shipping_cost}
-                      mutationFn={updateOrderShippingCost}
+                      mutationFn={(orderId, dollars) => updateOrderShippingCost(orderId, dollars, order.version)}
                       successMessage="Shipping cost updated"
                       errorMessage="Couldn't update shipping cost"
+                      describeError={orderEditErrorMessage}
                     />
                   ) : (
                     <span>{formatCurrencyFromCents(order.shipping_cost)}</span>
@@ -283,6 +291,7 @@ export default function OrderDetailPage() {
                   <span>Total Due</span>
                   <span>{formatCurrencyFromCents(totalDue)}</span>
                 </div>
+                {canUpdate && <OrderEditNotice blockReason={order.edit_block_reason} />}
               </div>
             </Card>
 
