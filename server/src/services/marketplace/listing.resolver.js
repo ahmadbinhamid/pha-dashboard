@@ -151,7 +151,7 @@ function resolveIdentifiers(listing, product) {
 
 // Tenant branding for adapters that render it (eBay description).
 async function resolveBranding(tenantId) {
-  const { getCompanyProfile } = require("../tenantSettings.service");
+  const { getCompanyProfile } = require("../tenant-settings.service");
   const { company_name, logo_url } = await getCompanyProfile(tenantId);
   return { company_name, logo_url };
 }
@@ -203,7 +203,7 @@ async function applyProductUrls(resolvedList, platform, tenantId) {
 async function applyMappedCategories(resolvedList, platform, tenantId) {
   const missing = resolvedList.filter((r) => !r.category?.id && r.product);
   if (!missing.length) return;
-  const { resolveMappedCategories } = require("../categoryMapping.service");
+  const { resolveMappedCategories } = require("../category-mapping.service");
   const byProduct = await resolveMappedCategories(tenantId, platform, missing.map((r) => r.product));
   for (const resolved of missing) resolved.category = byProduct.get(String(resolved.product._id)) || null;
 }

@@ -9,7 +9,7 @@ const { enqueueChannelJob } = require("../../queues/channel.queue");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
 const { LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { withStaticOptions } = require("./fieldSchema");
-const { findUnmetPrerequisite, prerequisiteMessage } = require("./channelPrerequisite.service");
+const { findUnmetPrerequisite, prerequisiteMessage } = require("./channel-prerequisite.service");
 
 function storefrontUnavailableReason(manifestName) {
   return `${manifestName} requires a verified storefront domain — connect and verify one under Settings > Domains before connecting ${manifestName}.`;

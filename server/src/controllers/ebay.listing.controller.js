@@ -7,30 +7,13 @@ const { endListing } = require("../services/marketplace/sync.service");
 const { logger } = require("../loaders/logging");
 const {
   success,
-  created,
   notFound,
-  badRequest,
   systemfailure,
   validationError,
 } = require("../utils/http/response");
 const { validateListingForPush } = require("../validators/ebay.listing.validation");
-const { resolveEffectiveCategoryId } = require("../services/categoryMapping.service");
+const { resolveEffectiveCategoryId } = require("../services/category-mapping.service");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
-
-exports.createListing = async (req, res) => {
-  try {
-    const { product } = req.body;
-    if (!product) return badRequest(res, "product is required");
-
-    const listing = await listingService.createListing(req.body, req.tenantId);
-    return created(res, listing, "Listing created");
-  } catch (err) {
-    if (err.code === 11000) {
-      return badRequest(res, "A listing for this product/variant/platform already exists");
-    }
-    return systemfailure(res, err);
-  }
-};
 
 exports.getListing = async (req, res) => {
   try {
@@ -74,16 +57,6 @@ exports.getListings = async (req, res) => {
       pageSize: limit,
       totalPages: Math.ceil(total / limit),
     });
-  } catch (err) {
-    return systemfailure(res, err);
-  }
-};
-
-exports.updateListing = async (req, res) => {
-  try {
-    const listing = await listingService.updateListing(req.params.id, req.body, req.tenantId);
-    if (!listing) return notFound(res, "Listing not found");
-    return success(res, listing, "Listing updated");
   } catch (err) {
     return systemfailure(res, err);
   }

@@ -4,6 +4,9 @@ import type {
   AnyMarketplaceListing,
   EbayListing,
   EbayListingFormState,
+  GoogleChannelFormState,
+  GoogleListing,
+  GoogleListingFormState,
   MarketplacePlatform,
   ProductListingGroup,
 } from "@/types/marketplace";
@@ -71,15 +74,53 @@ function formStateToPayload(form: EbayListingFormState) {
   };
 }
 
-// eBay-specific fields (category, fitment, policies) keep /ebay/listings.
-export const createListing = async (form: EbayListingFormState) => {
-  const { data } = await apiClient.post<BeResponse<EbayListing>>("/ebay/listings", formStateToPayload(form));
+// One create/update API; the server picks the platform's schema and writer.
+const createChannelListing = async <T>(platform: MarketplacePlatform, payload: object) => {
+  const { data } = await apiClient.post<BeResponse<T>>("/listings", { platform, ...payload });
   return data;
 };
 
-export const updateListing = async (id: string, form: EbayListingFormState) => {
-  const { data } = await apiClient.put<BeResponse<EbayListing>>(`/ebay/listings/${id}`, formStateToPayload(form));
+const updateChannelListing = async <T>(id: string, payload: object) => {
+  const { data } = await apiClient.put<BeResponse<T>>(`/listings/${id}`, payload);
   return data;
+};
+
+export const createEbayListing = (form: EbayListingFormState) =>
+  createChannelListing<EbayListing>("ebay", formStateToPayload(form));
+
+export const updateEbayListing = (id: string, form: EbayListingFormState) =>
+  updateChannelListing<EbayListing>(id, formStateToPayload(form));
+
+// Google's create also queues the first sync server-side.
+export const createGoogleListing = (productId: string, variantId: string | null, form: GoogleListingFormState) =>
+  createChannelListing<GoogleListing>("google", {
+    product: productId,
+    variant: variantId,
+    google_product_category: form.google_product_category || null,
+    gtin: form.gtin || null,
+    mpn: form.mpn || null,
+    condition: form.condition || null,
+    shipping_label: form.shipping_label || null,
+  });
+
+// Overrides only when the form has them; empty means null (product value).
+export const updateGoogleListing = (id: string, form: GoogleListingFormState | GoogleChannelFormState) => {
+  const overrides =
+    "title_override" in form
+      ? {
+          title_override: form.title_override.trim() || null,
+          description_override: form.description_override.trim() || null,
+          price_override: form.price_override !== "" ? Number(form.price_override) : null,
+        }
+      : {};
+  return updateChannelListing<GoogleListing>(id, {
+    google_product_category: form.google_product_category || null,
+    gtin: form.gtin || null,
+    mpn: form.mpn || null,
+    condition: form.condition || null,
+    shipping_label: form.shipping_label || null,
+    ...overrides,
+  });
 };
 
 // Browse/read/delete/push are platform-agnostic; /listings mixes platforms.

@@ -4,21 +4,26 @@ const Payment = require("../models/Payment");
 const Refund = require("../models/Refund");
 const { PAYMENT_STATUS } = require("../constants/payment.constants");
 
-// Sums every succeeded Payment on an order, net of its own refunds — the single source of
-// truth for how much has actually been collected. A refund only reduces its own payment's total.
+// Collected so far: succeeded payments, each net of its own refunds.
 async function getTotalPaidForOrder(orderId) {
-  const payments = await Payment.find({ order: orderId, status: PAYMENT_STATUS.SUCCEEDED });
-  return payments.reduce((sum, p) => sum + Math.max(0, p.amount - p.amount_refunded), 0);
+  const payments = await Payment.find({ order: orderId, status: PAYMENT_STATUS.SUCCEEDED })
+    .select("amount amount_refunded")
+    .lean();
+  return payments.reduce((sum, p) => sum + Math.max(0, p.amount - (p.amount_refunded || 0)), 0);
 }
 
-// Sums every payment's amount_refunded regardless of status — the other half of the figure
-// getTotalPaidForOrder nets out. Distinguishes "still owed" from "already refunded".
+// What a new intent bills; pending or cancelled attempts don't count as paid.
+async function getAmountDueForOrder(order) {
+  return Math.max(0, order.total - (await getTotalPaidForOrder(order._id)));
+}
+
+// Refunded so far, any status; tells "still owed" from "refunded".
 async function getTotalRefundedForOrder(orderId) {
   const payments = await Payment.find({ order: orderId });
   return payments.reduce((sum, p) => sum + (p.amount_refunded || 0), 0);
 }
 
-// Full payment history for an order, newest first, unlike the old single `order.payment` populate.
+// Full payment history for an order, newest first.
 async function getPaymentsForOrder(orderId) {
   return Payment.find({ order: orderId }).sort({ created_at: -1 });
 }
@@ -60,6 +65,7 @@ module.exports = {
   listPayments,
   getPaymentWithRefunds,
   getTotalPaidForOrder,
+  getAmountDueForOrder,
   getTotalRefundedForOrder,
   getPaymentsForOrder,
 };

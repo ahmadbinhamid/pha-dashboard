@@ -5,6 +5,7 @@ const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { EBAY_SCOPES, currencyForMarketplace } = require("../../constants/ebay.constants");
 const { httpError } = require("../../utils/http/httpError");
+const { isInvalidGrant, reauthRequiredError } = require("../../utils/http/oauthError");
 
 // Parsed eBay `errors`; branch on a specific code via `.hasErrorId(code)`.
 class EbayApiError extends Error {
@@ -91,7 +92,8 @@ function credentialsConfigured(settings) {
   return !!(config.ebay.clientId && config.ebay.clientSecret && settings?.refresh_token);
 }
 
-async function getAccessToken(settings) {
+// NOTE: null on failure by default; sync and pollers opt into the reauth throw.
+async function getAccessToken(settings, { throwIfRevoked = false } = {}) {
   if (!credentialsConfigured(settings)) {
     logger.warn("[eBay] Credentials not configured — skipping token fetch");
     return null;
@@ -119,12 +121,22 @@ async function getAccessToken(settings) {
   if (!res.ok) {
     const text = await res.text();
     logger.error(`[eBay] Token fetch failed for tenant ${key}: ${res.status} ${text}`);
+    if (throwIfRevoked && isInvalidGrant(text)) {
+      throw reauthRequiredError(`eBay token refresh failed: ${res.status} ${text}`, res.status);
+    }
     return null;
   }
 
   const data = await res.json();
   _tokenCache.set(key, { token: data.access_token, expiry: now + (data.expires_in || 7200) * 1000 });
   return data.access_token;
+}
+
+// NOTE: 401 because a null token means eBay refused the refresh (auth).
+async function requireUserToken(settings, failMessage) {
+  const token = await getAccessToken(settings, { throwIfRevoked: true });
+  if (!token) throw httpError(failMessage, 401);
+  return token;
 }
 
 async function getAppToken(settings) {
@@ -706,9 +718,7 @@ async function ensureLocation(token, settings) {
 // ── Fulfillment / Orders ──
 
 async function getOrders(settings, { limit = 50, offset = 0 } = {}) {
-  const token = await getAccessToken(settings);
-  // NOTE: 401 because a null token means eBay refused the refresh (auth).
-  if (!token) throw httpError("[eBay] getOrders: could not obtain access token", 401);
+  const token = await requireUserToken(settings, "[eBay] getOrders: could not obtain access token");
 
   const url = `${fulfillmentBaseFor(settings.sandbox)}/order?filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D&limit=${limit}&offset=${offset}`;
 
@@ -751,8 +761,7 @@ async function getAllOpenOrders(settings, { pageSize = 200 } = {}) {
 const MAX_INVENTORY_PAGES = 500; // 500 * 100 = 50,000 items — generous ceiling
 // complete:false = short page; callers skip delete-if-missing that cycle.
 async function getAllInventoryItems(settings, { pageSize = 100 } = {}) {
-  const token = await getAccessToken(settings);
-  if (!token) throw httpError("[eBay] getAllInventoryItems: could not obtain access token", 401);
+  const token = await requireUserToken(settings, "[eBay] getAllInventoryItems: could not obtain access token");
 
   const items = [];
   let offset = 0;

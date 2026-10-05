@@ -47,6 +47,11 @@ const config = {
     resendCooldownSeconds: getNum("USER_INVITE_RESEND_COOLDOWN_SECONDS", 120),
   },
 
+  workers: {
+    // NOTE: under compose's 10s stop_grace_period; raise both together.
+    shutdownTimeoutMs: getNum("WORKER_SHUTDOWN_TIMEOUT_MS", 8000),
+  },
+
   redis: {
     url: get("REDIS_URL", null),
     host: get("REDIS_HOST", "127.0.0.1"),

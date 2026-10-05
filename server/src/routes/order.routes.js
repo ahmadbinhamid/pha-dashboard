@@ -4,6 +4,7 @@ const router = require("express").Router();
 const asyncHandler = require("../middlewares/asyncHandler");
 const { auth, requirePermission } = require("../middlewares/auth");
 const { resolveGuestTenant } = require("../middlewares/tenant");
+const { guestOrderLimiter } = require("../middlewares/rateLimit");
 const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/order.validation");
@@ -12,7 +13,7 @@ const ctrl = require("../controllers/order.controller");
 const refundCtrl = require("../controllers/refund.controller");
 
 // Guest checkout, unauthenticated; GET uses guest_access_token, not a JWT.
-router.post("/", resolveGuestTenant(), validate(v.createOrder), asyncHandler(ctrl.createOrder));
+router.post("/", guestOrderLimiter, resolveGuestTenant(), validate(v.createOrder), asyncHandler(ctrl.createOrder));
 
 // Must precede the guest "/:id" route, which would otherwise swallow it.
 router.get("/stats", auth(), requirePermission("orders.view"), asyncHandler(ctrl.getOrderStats));
@@ -61,6 +62,22 @@ router.put(
   asyncHandler(ctrl.updateOrderCustomerDetails),
 );
 router.post("/:id/notes", auth(), requirePermission("orders.update"), validate(v.addOrderNote), asyncHandler(ctrl.addOrderNote));
+// Line edits on an unpaid in-store order; each carries the order version.
+router.post("/:id/items", auth(), requirePermission("orders.update"), validate(v.addOrderItem), asyncHandler(ctrl.addOrderItem));
+router.patch(
+  "/:id/items/:itemId/quantity",
+  auth(),
+  requirePermission("orders.update"),
+  validate(v.updateOrderItemQuantity),
+  asyncHandler(ctrl.updateOrderItemQuantity),
+);
+router.delete(
+  "/:id/items/:itemId",
+  auth(),
+  requirePermission("orders.update"),
+  validate(v.removeOrderItem),
+  asyncHandler(ctrl.removeOrderItem),
+);
 router.patch(
   "/:id/items/:itemIndex/price",
   auth(),

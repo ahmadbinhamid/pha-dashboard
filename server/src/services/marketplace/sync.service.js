@@ -10,7 +10,7 @@ const config = require("../../config");
 const { getAdapter } = require("./registry");
 const { resolveListing, resolveSku, hydrateResolved } = require("./listing.resolver");
 const circuitBreaker = require("./circuitBreaker");
-const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channelPrerequisite.service");
+const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channel-prerequisite.service");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
 
@@ -48,6 +48,12 @@ async function skipSync(listing, reason) {
     errorCode: reason,
   });
   return { skipped: true, reason };
+}
+
+// Unmet prerequisite or reauth: listing error text plus a skip, no failure row.
+async function skipUnmet(listing, unmet) {
+  await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: unmet.message });
+  return skipSync(listing, unmet.reason);
 }
 
 // Stamps the sync baseline after a push; updateMany keeps duplicates in step.
@@ -112,10 +118,7 @@ async function syncListing(listingId, seq = null) {
   const unmet = await ensurePrerequisites({
     tenantId: listing.tenant_id, platform: listing.platform, manifest: adapter.manifest, connection: settings,
   });
-  if (unmet) {
-    await listing.updateOne({ sync_status: LISTING_SYNC_STATUS.ERROR, sync_error: unmet.message });
-    return skipSync(listing, unmet.reason);
-  }
+  if (unmet) return skipUnmet(listing, unmet);
 
   const isUpdate = !!listing.external_listing_id;
 
@@ -205,13 +208,18 @@ async function syncListing(listingId, seq = null) {
 
     return { ok: true, ...ids };
   } catch (err) {
+    // NOTE: tagged mid-sync errors skip like the pre-flight: no row, no retry.
+    const flagged = await flagIfPrerequisiteError(listing.tenant_id, listing.platform, adapter.manifest, err);
+    if (flagged) {
+      logger.warn(`[marketplace.sync] listing ${listingId}: ${listing.platform} needs attention (${flagged.reason}) — skipping`);
+      return skipUnmet(listing, flagged);
+    }
     logger.error(`[marketplace.sync] listing ${listingId} sync failed: ${err.message}`);
     await listing.updateOne({
       sync_status: LISTING_SYNC_STATUS.ERROR,
       sync_error: err.message,
     });
     await circuitBreaker.recordFailure(listing.tenant_id, listing.platform, err);
-    await flagIfPrerequisiteError(listing.tenant_id, listing.platform, adapter.manifest, err);
     await logSyncEvent({
       tenantId: listing.tenant_id,
       platform: listing.platform,
@@ -265,6 +273,8 @@ async function endListing(listingId) {
     return { ok: true };
   } catch (err) {
     logger.error(`[marketplace.sync] listing ${listingId} end failed: ${err.message}`);
+    // NOTE: still a failure row; the withdrawal really didn't happen.
+    await flagIfPrerequisiteError(listing.tenant_id, listing.platform, adapter.manifest, err);
     await circuitBreaker.recordFailure(listing.tenant_id, listing.platform, err);
     await logSyncEvent({
       tenantId: listing.tenant_id,
@@ -334,6 +344,11 @@ async function syncBatch(platform, tenantId, opts = {}) {
     );
     return { ok: true, ...summary };
   } catch (err) {
+    const flagged = await flagIfPrerequisiteError(tenantId, platform, adapter.manifest, err);
+    if (flagged) {
+      logger.warn(`[marketplace.sync] syncBatch: ${platform}/${tenantId} needs attention (${flagged.reason}) — skipping`);
+      return { skipped: true, reason: flagged.reason };
+    }
     // Only a whole-batch throw counts toward the breaker, not per-item errors.
     logger.error(`[marketplace.sync] syncBatch ${platform}/${tenantId} failed: ${err.message}`);
     await circuitBreaker.recordFailure(tenantId, platform, err);

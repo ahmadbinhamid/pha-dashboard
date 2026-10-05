@@ -7,8 +7,7 @@ import { GuestCheckoutForm } from "@/components/payments/GuestCheckoutForm";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
 
-// Shared, platform-hosted payment page for every tenant's payment-link orders (stripe.payment.service.js#createPaymentLinkForOrder). No login/branding — security is the guest `token` in the URL. Only a real 404 means the link is dead; other failures (rotated token, CORS, transport) shouldn't tell the customer to chase a new link.
-// Reads `.status`, not axios internals: the client's interceptor (lib/api/client.ts) rejects with a plain Error carrying `status`; no status means the request never got a response.
+// Only a 404 means a dead link; no status means the request never got through.
 function payLinkErrorMessage(error: unknown) {
   const status = (error as { status?: number } | null | undefined)?.status;
 
@@ -26,7 +25,7 @@ export default function PayOrderPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["guest-order", orderId, token],
     queryFn: () => getGuestOrder(orderId!, token),
     enabled: !!orderId && !!token,
@@ -37,6 +36,11 @@ export default function PayOrderPage() {
   const intentMutation = useMutation({
     mutationFn: () => createGuestPaymentIntent(orderId!, token),
   });
+
+  const reloadOrder = () => {
+    intentMutation.reset();
+    void refetch();
+  };
 
   if (!orderId || !token) {
     return <StatusShell message="This payment link is missing required information." />;
@@ -54,7 +58,8 @@ export default function PayOrderPage() {
     return <StatusShell message={payLinkErrorMessage(error)} />;
   }
 
-  const amountDue = order.total - (order.payment?.amount ?? 0);
+  // Server value: order.payment is the latest attempt, possibly a cancelled one.
+  const amountDue = order.amount_due;
   const alreadyPaid = order.payment_status === "paid" || order.fulfillment_status === "completed" || amountDue <= 0;
 
   return (
@@ -71,6 +76,7 @@ export default function PayOrderPage() {
             <GuestCheckoutForm
               clientSecret={intentMutation.data.data.client_secret}
               publishableKey={intentMutation.data.data.stripe_publishable_key}
+              onOrderChanged={reloadOrder}
             />
           ) : (
             <div className="flex flex-col gap-3">

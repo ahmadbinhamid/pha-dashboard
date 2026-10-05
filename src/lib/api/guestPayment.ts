@@ -1,11 +1,11 @@
 import { apiClient } from "./client";
 import type { BeResponse } from "./base";
-import type { Order } from "@/types/orders";
+import type { GuestOrder } from "@/types/orders";
 
-// Guest/unauthenticated endpoints for the shared payment-link page (/pay/:orderId) — tenant resolves server-side from the order (middlewares/tenant.js). Security comes entirely from the guest `token` sent with every call.
+// Unauthenticated /pay/:orderId calls; the guest token is the only credential.
 
 export const getGuestOrder = async (orderId: string, token: string) => {
-  const { data } = await apiClient.get<BeResponse<Order>>(`/order/${orderId}`, {
+  const { data } = await apiClient.get<BeResponse<GuestOrder>>(`/order/${orderId}`, {
     params: { token },
   });
   return data;

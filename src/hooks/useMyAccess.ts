@@ -16,5 +16,8 @@ export function useMyAccess({ enabled = true }: { enabled?: boolean } = {}) {
     [isTenantAdmin, granted],
   );
 
-  return { isTenantAdmin, role: access?.role ?? null, permissions, can, isLoading };
+  // NOTE: a missing flag (older API) means an organisation, as before.
+  const hasOrganisation = access?.has_organisation !== false;
+
+  return { isTenantAdmin, hasOrganisation, role: access?.role ?? null, permissions, can, isLoading };
 }

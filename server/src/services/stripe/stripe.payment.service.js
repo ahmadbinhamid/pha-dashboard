@@ -3,7 +3,7 @@
 const Payment = require("../../models/Payment");
 const Tenant = require("../../models/Tenant");
 const stripeKeysService = require("./stripe.keys.service");
-const { getTotalPaidForOrder } = require("../payment.service");
+const { getAmountDueForOrder } = require("../payment.service");
 const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
 const { ORDER_STATUS } = require("../../constants/order.constants");
 const { PAYMENT_DOMAIN_MODE } = require("../../constants/tenant.constants");
@@ -11,9 +11,7 @@ const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { formatOrderNumber } = require("../../utils/orderNumberFormat");
 
-// Creates (or reuses) a PaymentIntent for whatever balance is still outstanding, not necessarily
-// the full order.total. Reuses an existing pending intent so a reloaded payment page doesn't
-// create a fresh Payment doc each time; the idempotency key protects the first call from retries.
+// Bills the balance due; reuses a pending intent so reloads add no Payment.
 async function createPaymentIntentForOrder(order) {
   if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });
@@ -26,8 +24,7 @@ async function createPaymentIntentForOrder(order) {
   const stripe = await stripeKeysService.getStripeClient(order.tenant_id);
   const publishableKey = tenant.stripe_publishable_key;
 
-  const totalPaidCents = await getTotalPaidForOrder(order._id);
-  const remainingCents = order.total - totalPaidCents;
+  const remainingCents = await getAmountDueForOrder(order);
   if (remainingCents <= 0) {
     throw Object.assign(new Error("Order is already paid"), { status: 409 });
   }
@@ -45,8 +42,7 @@ async function createPaymentIntentForOrder(order) {
         return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
       }
     } else {
-      // The outstanding balance changed since this intent was created — cancel it and fall
-      // through to mint a fresh intent for the correct remainder.
+      // Balance changed since this intent; cancel it and mint a fresh one.
       try {
         await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
       } catch (err) {
@@ -68,8 +64,7 @@ async function createPaymentIntentForOrder(order) {
       currency,
       metadata: { order_id: order._id.toString(), order_number: formatOrderNumber(order.order_number_prefix, order.order_number) },
     },
-    // Scoped to the remaining balance so a stale-amount cancel-and-recreate doesn't collide
-    // with the prior attempt's idempotency key.
+    // Keyed by amount so a re-mint doesn't collide with the prior attempt.
     { idempotencyKey: `order_${order._id.toString()}_create_intent_${remainingCents}` },
   );
 
@@ -85,28 +80,24 @@ async function createPaymentIntentForOrder(order) {
     });
   } catch (err) {
     if (err.code !== 11000) throw err;
-    // Lost a race with a concurrent create-intent call; Stripe's idempotency key already
-    // returned the same PaymentIntent to both callers, so reuse the winner's Payment doc.
+    // Lost a create race; the idempotency key gave both the same intent.
     payment = await Payment.findOne({ stripe_payment_intent_id: intent.id });
   }
 
   order.payment = payment._id;
   await order.save();
 
-  // client_secret is returned here only, never persisted. publishableKey lets the caller
-  // init Stripe.js to confirm this intent — BYOK means no Connect account-context is needed.
+  // client_secret is never persisted; BYOK needs no Connect account.
   return { payment, client_secret: intent.client_secret, stripe_publishable_key: publishableKey };
 }
 
-// Same dashboard page either way — only changes the host, per the tenant's payment_domain_mode.
-// VENDOR_SLUG falls back to DEFAULT's shared host if PAYMENT_LINK_DOMAIN or slug is missing.
+// Host follows payment_domain_mode; VENDOR_SLUG falls back to DEFAULT.
 function buildPaymentBaseUrl(tenant) {
   const domain = config.payment.linkDomain;
-  // The payment host only serves the deployed build against the deployed database, so dev/test
-  // keep links on CLIENT_URL instead — PAYMENT_LINK_DOMAIN can stay set locally without side effects.
+  // Outside production the payment host can't serve, so use CLIENT_URL.
   if (!domain || config.env !== "production") return config.emailBrand.clientUrl;
 
-  // Hyphens stripped only here — a subdomain like parts-hub-australia reads worse without them.
+  // Hyphens stripped only here; subdomains read better with them.
   const host =
     tenant?.payment_domain_mode === PAYMENT_DOMAIN_MODE.VENDOR_SLUG && tenant.slug
       ? `${tenant.slug.replace(/-/g, "")}.${domain}`
@@ -114,9 +105,7 @@ function buildPaymentBaseUrl(tenant) {
   return `https://${host}`;
 }
 
-// Builds a link to the shared, platform-hosted payment page (not any tenant's own storefront).
-// No Stripe object is created here — the page itself creates/reuses the PaymentIntent via the
-// same guest endpoint as normal checkout, keyed off guest_access_token.
+// Link to the shared pay page; it creates the intent via the guest token.
 function createPaymentLinkForOrder(order, tenant) {
   if (![ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID].includes(order.status)) {
     throw Object.assign(new Error("This order can no longer be paid"), { status: 409 });

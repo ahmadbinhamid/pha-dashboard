@@ -356,14 +356,20 @@ function assertUpfrontFields(resolved, settings) {
   assertEbayFields(resolved, settings, UPFRONT_KEYS);
 }
 
+// Revoked token throws the reauth error; any other refusal is an auth 401.
+async function requireToken(settings) {
+  const token = await getAccessToken(settings, { throwIfRevoked: true });
+  if (!token) throw httpError("[EbayAdapter] Could not obtain eBay access token", 401);
+  return token;
+}
+
 async function publish(resolved, settings, hooks = {}, _seq = null) {
   resolved = withRenderedDescription(resolved);
   if (!credentialsConfigured(settings)) {
     throw httpError("[EbayAdapter] eBay credentials not configured for this tenant", 422);
   }
 
-  const token = await getAccessToken(settings);
-  if (!token) throw httpError("[EbayAdapter] Could not obtain eBay access token", 401);
+  const token = await requireToken(settings);
 
   const { listing } = resolved;
   assertUpfrontFields(resolved, settings);
@@ -427,8 +433,7 @@ async function update(resolved, settings, hooks = {}, _seq = null) {
     throw httpError("[EbayAdapter] eBay credentials not configured for this tenant", 422);
   }
 
-  const token = await getAccessToken(settings);
-  if (!token) throw httpError("[EbayAdapter] Could not obtain eBay access token", 401);
+  const token = await requireToken(settings);
 
   const { listing } = resolved;
   // NOTE: policies not enforced on update; a live offer may use eBay state.

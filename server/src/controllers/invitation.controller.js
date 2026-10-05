@@ -4,7 +4,7 @@
 const config = require("../config");
 const { signJwt } = require("../utils/auth/jwt");
 const inviteService = require("../services/invite.service");
-const { getCompanyProfile } = require("../services/tenantSettings.service");
+const { getCompanyProfile } = require("../services/tenant-settings.service");
 const { sendTeamInvite, sendTeamSetPassword, sendTeamAdded } = require("../services/email/email.service");
 const { success, created, notFound, systemfailure } = require("../utils/http/response");
 

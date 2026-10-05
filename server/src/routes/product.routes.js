@@ -16,7 +16,7 @@ const formFields = upload.none();
 router.get(
   "/",
   auth(false),
-  resolveGuestTenant(),
+  resolveGuestTenant(), // NOTE: no IP limiter; storefront SSR fetches from one IP.
   pagination(),
   validate(v.listProducts),
   asyncHandler(ctrl.getProducts),
@@ -38,7 +38,7 @@ router.get(
   asyncHandler(ctrl.getProduct),
 );
 
-router.post("/", auth(), requirePermission("products.create"), formFields, asyncHandler(ctrl.createProduct));
+router.post("/", auth(), requirePermission("products.create"), formFields, validate(v.createProduct), asyncHandler(ctrl.createProduct));
 router.put(
   "/:id",
   auth(), requirePermission("products.update"),

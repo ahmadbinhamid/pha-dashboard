@@ -1,7 +1,7 @@
 // Clears listing condition/authenticity/fitment copied from the product.
 // Usage: [--dry-run] [--tenant=<id>]
 
-const { clearCopiedChannelFields, FIELDS } = require("../src/services/marketplace/copiedChannelFields.service");
+const { clearCopiedChannelFields, FIELDS } = require("../src/services/marketplace/copied-channel-fields.service");
 
 function printCounts(log, label, counts) {
   log(`${label}:`);

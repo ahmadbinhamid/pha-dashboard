@@ -1,7 +1,7 @@
 // services/marketplace/adapters/ebay.fieldSchema.js
 // eBay-only listing fields the payload reads. NOTE: unsent ones are omitted.
 
-const { FIELD_TYPE } = require("../../../constants/channelField.constants");
+const { FIELD_TYPE } = require("../../../constants/channel-field.constants");
 const { EBAY_TITLE_MAX_LENGTH } = require("../../../constants/ebay.constants");
 const { resolveCondition } = require("../productFallbacks");
 

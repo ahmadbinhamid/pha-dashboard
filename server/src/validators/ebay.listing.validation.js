@@ -1,4 +1,7 @@
+// validators/ebay.listing.validation.js
+
 const Joi = require("joi");
+const { objectId, optionalText } = require("./fields");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../constants/marketplace.constants");
 const { EBAY_TITLE_MAX_LENGTH } = require("../constants/ebay.constants");
 const { validateFieldValues } = require("../services/marketplace/fieldSchema");
@@ -14,6 +17,71 @@ const listListings = {
     state: Joi.string().valid(...Object.values(LISTING_STATE)),
     sync_status: Joi.string().valid(...Object.values(LISTING_SYNC_STATUS)),
     search: Joi.string().allow(""),
+  }),
+};
+
+const nullableNumber = Joi.number().min(0).allow(null);
+const policyId = optionalText(64);
+
+const itemSpecifics = Joi.object({
+  brand: optionalText(100),
+  mpn: optionalText(100),
+  superseded_part_number: Joi.array().items(Joi.string().max(100)).max(50),
+  authenticity: optionalText(50),
+  warranty: optionalText(200),
+}).unknown(true);
+
+const fitmentRow = Joi.object({
+  make: optionalText(100),
+  model: optionalText(100),
+  model_code: optionalText(100),
+  year_from: Joi.number().integer().min(0).max(9999).allow(null),
+  year_to: Joi.number().integer().min(0).max(9999).allow(null),
+}).unknown(true);
+
+// Fields both create and update accept; title length is checked at push.
+const listingFields = {
+  title_override: optionalText(500),
+  description_override: optionalText(200_000),
+  price_override: nullableNumber,
+  photo_overrides: Joi.array().items(objectId).max(24),
+  ebay_category_id: optionalText(64),
+  store_category_id: optionalText(64),
+  store_sku: optionalText(100),
+  condition: optionalText(50),
+  condition_notes: optionalText(1000),
+  item_specifics: itemSpecifics,
+  fitment: Joi.array().items(fitmentRow).max(500),
+  format: Joi.string().valid("FIXED_PRICE", "AUCTION"),
+  // NOTE: whole-number rule stays at push, so saving a draft never regresses.
+  quantity_available: Joi.number().min(0).allow(null),
+  listing_duration: Joi.string().pattern(/^(GTC|DAYS_\d{1,2})$/),
+  accept_best_offer: Joi.boolean(),
+  min_best_offer: nullableNumber,
+  fulfillment_policy_id: policyId,
+  payment_policy_id: policyId,
+  return_policy_id: policyId,
+  require_immediate_payment: Joi.boolean(),
+  item_location_zip: optionalText(20),
+  package: Joi.object(
+    Object.fromEntries(["length", "width", "height", "weight"].map((k) => [k, nullableNumber])),
+  ).unknown(true),
+};
+
+const createListing = {
+  body: Joi.object({
+    product: objectId.required(),
+    variant: objectId.allow(null, ""),
+    ...listingFields,
+  }),
+};
+
+// product/variant are sent by the form but fixed after create, so stripped.
+const updateListing = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    ...listingFields,
+    state: Joi.string().valid(...Object.values(LISTING_STATE)),
   }),
 };
 
@@ -97,4 +165,4 @@ function validateListingForPush(listing, product, { categoryId = listing.ebay_ca
   return errors;
 }
 
-module.exports = { validateListingForPush, listListings };
+module.exports = { validateListingForPush, listListings, createListing, updateListing };

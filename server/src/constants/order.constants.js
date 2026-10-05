@@ -49,7 +49,16 @@ const UNPAID_ORDER_STATUSES = Object.freeze([ORDER_STATUS.PENDING_PAYMENT, ORDER
 // Title cap for custom (order-only) lines entered at POS.
 const CUSTOM_ORDER_ITEM_NAME_MAX = 200;
 
+// jsonerr.code on a 409 from an order edit, so the client can explain it.
+const ORDER_EDIT_CONFLICT = Object.freeze({
+  NOT_EDITABLE: "not_editable",
+  PAYMENT_IN_FLIGHT: "payment_in_flight",
+  PAYMENT_CHECK_FAILED: "payment_check_failed",
+  VERSION_CONFLICT: "version_conflict",
+});
+
 module.exports = {
+  ORDER_EDIT_CONFLICT,
   ORDER_STATUS,
   CUSTOM_ORDER_ITEM_NAME_MAX,
   UNPAID_ORDER_STATUSES,

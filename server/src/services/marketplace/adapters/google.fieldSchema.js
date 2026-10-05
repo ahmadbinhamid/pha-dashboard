@@ -1,7 +1,7 @@
 // services/marketplace/adapters/google.fieldSchema.js
 // NOTE: feed_label/content_language from connection; custom labels unsettable.
 
-const { FIELD_TYPE, STATIC_FIELD_OPTIONS } = require("../../../constants/channelField.constants");
+const { FIELD_TYPE, STATIC_FIELD_OPTIONS } = require("../../../constants/channel-field.constants");
 
 const fieldSchema = Object.freeze([
   {

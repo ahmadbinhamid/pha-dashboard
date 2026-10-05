@@ -13,7 +13,7 @@ const { buildWordSearchOr } = require("../utils/regex");
 
 // ── List / aggregation ──
 
-// Inventory has no tenant_id; scope via the joined product.tenant_id.
+// Scoped via the joined product until tenant_id is backfilled everywhere.
 async function listInventory(tenantId, { page = 1, limit = 20, search, location, product, variant } = {}) {
   if (!tenantId) throw new Error("[inventory.service] listInventory: tenantId is required");
   const skip = (page - 1) * limit;
@@ -172,7 +172,7 @@ async function fetchPopulatedRecord(id) {
     .populate("location", "name address");
 }
 
-// Inventory has no tenant_id; ownership is checked via its product.
+// Ownership via the product until tenant_id is backfilled everywhere.
 async function findRecord(id, tenantId) {
   const record = await Inventory.findById(id);
   if (!record) return null;
@@ -194,6 +194,7 @@ async function ensureRecord({ product, location, variant }, tenantId) {
     { product, location, variant: variant || null },
     {
       $setOnInsert: {
+        tenant_id: tenantId,
         product,
         location,
         variant: variant || null,
@@ -203,6 +204,11 @@ async function ensureRecord({ product, location, variant }, tenantId) {
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
+}
+
+// Caller's tenant, else the record's own; never guessed when both are absent.
+function historyTenantId(record, tenantId) {
+  return tenantId ?? record.tenant_id ?? null;
 }
 
 // CAS retry: concurrent adjustments must not clobber each other's delta.
@@ -241,6 +247,7 @@ async function adjustStock(record, { adjustment, reason, type, userId, tenantId,
   const clamped_shortfall = stock_before + adjustment < 0 ? Math.abs(stock_before + adjustment) : 0;
 
   await InventoryHistory.create({
+    tenant_id: historyTenantId(record, tenantId),
     inventory: record._id,
     product: record.product,
     variant: record.variant,
@@ -278,6 +285,7 @@ async function setStock(record, { stock_count, reason, userId, tenantId }) {
   record.stock_count = newCount;
 
   await InventoryHistory.create({
+    tenant_id: historyTenantId(record, tenantId),
     inventory: record._id,
     product: record.product,
     variant: record.variant,

@@ -1,9 +1,10 @@
 // validators/listing.validation.js
-// Mirrors ebay.listing.validation.js's listListings query shape, minus platform hardcoding —
-// this generic layer exists alongside, not instead of, each platform's own create/update validators.
+// Generic listing query, plus each platform's own create/update schema by key.
 
 const Joi = require("joi");
 const { LISTING_STATE, LISTING_SYNC_STATUS, MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
+const ebayV = require("./ebay.listing.validation");
+const googleV = require("./google.listing.validation");
 
 const listListings = {
   query: Joi.object({
@@ -15,14 +16,18 @@ const listListings = {
     platform: Joi.string().valid(...Object.values(MARKETPLACE_PLATFORM)),
     state: Joi.string().valid(...Object.values(LISTING_STATE)),
     sync_status: Joi.string().valid(...Object.values(LISTING_SYNC_STATUS)),
-    // "Needs attention" tab; expands server-side to sync_status in [error, price_locked] and
-    // takes precedence over a plain sync_status if both are sent.
+    // Expands to sync_status in [error, price_locked]; beats a plain sync_status.
     needs_attention: Joi.boolean(),
     search: Joi.string().allow(""),
-    // One row per product with listings nested, instead of per listing. A query flag on the
-    // existing endpoint, so callers omitting it keep the unchanged response shape.
+    // One row per product, listings nested; omitting it keeps the old shape.
     group_by: Joi.string().valid("product"),
   }),
 };
 
-module.exports = { listListings };
+// The existing per-platform schemas, reused unchanged.
+const LISTING_WRITE_SCHEMAS = Object.freeze({
+  [MARKETPLACE_PLATFORM.EBAY]: { create: ebayV.createListing, update: ebayV.updateListing },
+  [MARKETPLACE_PLATFORM.GOOGLE]: { create: googleV.createListing, update: googleV.updateListing },
+});
+
+module.exports = { listListings, LISTING_WRITE_SCHEMAS };

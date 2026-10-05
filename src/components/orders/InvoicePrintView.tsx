@@ -98,7 +98,12 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
     month: "short",
     day: "numeric",
   });
-  const billingAddress = order.billing_address ?? order.shipping_address;
+  // NOTE: no billing address entered means no Bill To; contact moves to Ship To.
+  const billingAddress = order.billing_address;
+  const contactLines = [
+    order.customer.phone ? `Phone: ${order.customer.phone}` : null,
+    order.customer.email ? `Email: ${order.customer.email}` : null,
+  ].filter(Boolean);
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
   // Customer's own reference; omitted when blank, never our internal number.
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
@@ -155,24 +160,25 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         ))}
       </div>
 
-      {/* Bill To on the left, Ship To on the right, both left-aligned. */}
+      {/* Bill To left (when present), Ship To always in the right column. */}
       <div className="flex flex-wrap items-start justify-between gap-10 py-6">
-        <div className="max-w-[46%]">
-          <SectionLabel>Bill To</SectionLabel>
-          <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
-          <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed">
-            {billingAddress && <div>{stripEbayAddressPrefix(billingAddress.address)}</div>}
-            {billingAddress && (
+        {billingAddress && (
+          <div className="max-w-[46%]">
+            <SectionLabel>Bill To</SectionLabel>
+            <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
+            <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed">
+              <div>{stripEbayAddressPrefix(billingAddress.address)}</div>
               <div>
                 {billingAddress.suburb} {billingAddress.state} {billingAddress.postcode}, Australia
               </div>
-            )}
-            {order.customer.phone && <div>Phone: {order.customer.phone}</div>}
-            {order.customer.email && <div>Email: {order.customer.email}</div>}
+              {contactLines.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="w-[46%]">
+        <div className="ml-auto w-[46%]">
           <SectionLabel>Ship To</SectionLabel>
           <div className="mt-2 text-[12.5px] font-black uppercase leading-tight tracking-tight">{displayName}</div>
           <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed">
@@ -186,6 +192,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                 </div>
               </>
             )}
+            {!billingAddress && contactLines.map((line) => <div key={line}>{line}</div>)}
           </div>
         </div>
       </div>

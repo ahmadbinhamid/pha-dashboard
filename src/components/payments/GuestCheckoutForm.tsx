@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/Button";
+import { isCancelledIntentError } from "@/lib/payments/stripeErrors";
+import { ORDER_CHANGED_DURING_PAYMENT_MESSAGE } from "@/config/orderEdit";
 
-// BYOK: each tenant has their own Stripe publishable key (stripe.payment.service.js#createPaymentIntentForOrder), returned alongside client_secret rather than a build-time env var. Cached per key so re-rendering doesn't re-init Stripe.js.
+// Per-tenant publishable key; cached so re-renders don't re-init Stripe.js.
 const stripeInstances = new Map<string, ReturnType<typeof loadStripe>>();
 function getStripeForKey(publishableKey: string) {
   if (!stripeInstances.has(publishableKey)) {
@@ -12,22 +14,30 @@ function getStripeForKey(publishableKey: string) {
   return stripeInstances.get(publishableKey)!;
 }
 
-export function GuestCheckoutForm({ clientSecret, publishableKey }: { clientSecret: string; publishableKey: string }) {
+interface GuestCheckoutFormProps {
+  clientSecret: string;
+  publishableKey: string;
+  // Refetches the order; the intent here no longer matches its total.
+  onOrderChanged: () => void;
+}
+
+export function GuestCheckoutForm({ clientSecret, publishableKey, onOrderChanged }: GuestCheckoutFormProps) {
   const options = useMemo(() => ({ clientSecret }), [clientSecret]);
   const stripePromise = useMemo(() => getStripeForKey(publishableKey), [publishableKey]);
   return (
     <Elements stripe={stripePromise} options={options}>
-      <GuestPaymentForm />
+      <GuestPaymentForm onOrderChanged={onOrderChanged} />
     </Elements>
   );
 }
 
-function GuestPaymentForm() {
+function GuestPaymentForm({ onOrderChanged }: Pick<GuestCheckoutFormProps, "onOrderChanged">) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [succeeded, setSucceeded] = useState(false);
+  const [stale, setStale] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +52,9 @@ function GuestPaymentForm() {
     });
 
     setSubmitting(false);
-    if (error) {
+    if (error && isCancelledIntentError(error)) {
+      setStale(true);
+    } else if (error) {
       setErrorMessage(error.message || "Payment failed — please try again.");
     } else {
       setSucceeded(true);
@@ -51,6 +63,15 @@ function GuestPaymentForm() {
 
   if (succeeded) {
     return <p className="text-sm text-ok">Payment received — thank you.</p>;
+  }
+
+  if (stale) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-medium text-warn">{ORDER_CHANGED_DURING_PAYMENT_MESSAGE}</p>
+        <Button onClick={onOrderChanged}>Show updated amount</Button>
+      </div>
+    );
   }
 
   return (

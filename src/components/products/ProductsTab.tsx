@@ -23,7 +23,7 @@ import type { ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
 import { getCategories } from "@/lib/api/categories";
 import { getListings } from "@/lib/api/listings";
-import { createGoogleListing } from "@/lib/api/googleListings";
+import { createGoogleListing } from "@/lib/api/listings";
 import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";

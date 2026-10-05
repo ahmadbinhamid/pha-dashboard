@@ -1,10 +1,36 @@
 // controllers/listing.controller.js
-// Thin HTTP layer over listing.query.service.js, the platform-agnostic browse/read/delete/push
-// counterpart to each platform's own listing controller (which stay platform-specific for CREATE).
+// Platform-agnostic listing HTTP layer; platform comes from validateListing.
 
 const { logger } = require("../loaders/logging");
 const listingQueryService = require("../services/marketplace/listing.query.service");
-const { success, notFound, systemfailure } = require("../utils/http/response");
+const listingWriteService = require("../services/marketplace/listing.write.service");
+const registry = require("../services/marketplace/registry");
+const { success, created, notFound, badRequest, systemfailure } = require("../utils/http/response");
+
+// Same text the per-platform routes sent, so their responses stay identical.
+function createdMessage(platform, pushesOnCreate) {
+  return pushesOnCreate ? `Listing created and queued for ${registry.get(platform).manifest.name} sync` : "Listing created";
+}
+
+exports.createListing = async (req, res) => {
+  try {
+    const { listing, pushesOnCreate } = await listingWriteService.createListing(req.listingPlatform, req.body, req.tenantId);
+    return created(res, listing, createdMessage(req.listingPlatform, pushesOnCreate));
+  } catch (err) {
+    if (err.code === 11000) return badRequest(res, "A listing for this product/variant/platform already exists");
+    return systemfailure(res, err);
+  }
+};
+
+exports.updateListing = async (req, res) => {
+  try {
+    const listing = await listingWriteService.updateListing(req.listingPlatform, req.params.id, req.body, req.tenantId);
+    if (!listing) return notFound(res, "Listing not found");
+    return success(res, listing, "Listing updated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
 
 exports.getListings = async (req, res) => {
   try {
@@ -26,7 +52,7 @@ exports.getListings = async (req, res) => {
       req.tenantId,
     ];
 
-    // ?group_by=product returns one row per product with all listings nested, instead of per listing.
+    // ?group_by=product: one row per product with its listings nested.
     const { items, total } =
       group_by === "product"
         ? await listingQueryService.listListingsGroupedByProduct(...args)

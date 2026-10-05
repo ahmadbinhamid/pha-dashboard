@@ -76,8 +76,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// Self-service signup: creates a brand-new tenant plus its first admin user, active immediately,
-// unlike register() above which joins an existing tenant.
+// Signup: a new tenant plus its active admin; register() joins an existing one.
 exports.registerTenant = async (req, res) => {
   try {
     const { company_name, first_name, last_name, email, password } = req.body || {};
@@ -116,8 +115,7 @@ function issueLoginToken(user) {
   });
 }
 
-// Shared by login() and selectOrganization(): 2FA sends an OTP and defers the token until
-// verifyOTP; everyone else logs straight in.
+// 2FA defers the token to verifyOTP; everyone else logs straight in.
 async function maybeIssueOtpOrToken(res, user) {
   if (user.two_factor_enabled) {
     const otp = generateOTP();
@@ -133,10 +131,7 @@ async function maybeIssueOtpOrToken(res, user) {
   return success(res, toPublicUser(user), "Login successful", issueLoginToken(user));
 }
 
-// email is unique per-tenant, not globally, so a single findOne risked authenticating someone
-// into the wrong tenant's dashboard when the same email existed under two. Found in an audit.
-// Fix: verify the password against every account sharing this email; more than one match
-// authenticates the person, then lets them pick via exports.selectOrganization.
+// Emails repeat across tenants: check every match, then let them pick one.
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -165,8 +160,7 @@ exports.login = async (req, res) => {
     const tenants = await tenantService.findTenantsByIds(active.map((u) => u.tenant_id));
     const tenantById = new Map(tenants.map((t) => [t._id.toString(), t]));
 
-    // Short-lived, carries no access — just proof this email+password pair cleared credential
-    // checks for this set of accounts. selectOrganization only trusts a tenant_id in user_ids.
+    // Grants nothing: proof the credentials matched exactly these accounts.
     const pendingToken = signJwt(
       { purpose: "org_selection", email, user_ids: active.map((u) => u._id.toString()) },
       { expiresIn: "10m" },
@@ -190,8 +184,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// Completes login for a multi-organization account. Trusts tenant_id only if it's in the
-// pending_token's user_ids set; never re-checks a password.
+// Trusts tenant_id only from the pending_token's user_ids; no password recheck.
 exports.selectOrganization = async (req, res) => {
   try {
     const { pending_token, tenant_id } = req.body || {};
@@ -266,8 +259,8 @@ exports.verifyAccount = async (req, res) => {
   try {
     const { email, status } = req.body || {};
 
-    // Scoped to the calling superadmin's own tenant; another tenant's user is not this endpoint's job.
-    const user = await findUserByEmail(email, req.tenantId);
+    // NOTE: platform superadmin may lack a membership; keep its own-tenant scope.
+    const user = await findUserByEmail(email, req.tenantId ?? req.user.tenant_id);
     if (!user) return unauthorized(res, "Invalid email");
 
     user.status = status;
@@ -298,8 +291,7 @@ exports.verifyAccount = async (req, res) => {
   }
 };
 
-// Same email-not-globally-unique reasoning as login(); sends a separate reset link per matching
-// account since there's no password yet to narrow candidates to one.
+// One reset link per matching account; no password here to narrow them down.
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body || {};
@@ -386,8 +378,7 @@ exports.changePassword = async (req, res) => {
     const user = await findUserByIdWithPassword(userId);
     if (!user) return unauthorized(res, "Unauthorized");
 
-    // 400, not 401 — a wrong current password is a validation rejection, not an expired token.
-    // The frontend's interceptor treats 401 as "session expired" and force-logs out.
+    // 400, not 401: the frontend force-logs-out on any 401.
     const ok = await comparePassword(current_password, user.password);
     if (!ok) return badRequest(res, "Current password is incorrect");
 

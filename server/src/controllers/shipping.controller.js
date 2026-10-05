@@ -1,7 +1,7 @@
 // controllers/shipping.controller.js
 
-const shippingQuoteService = require("../services/shipping/shippingQuote.service");
-const shippingSettingsService = require("../services/shipping/shippingSettings.service");
+const shippingQuoteService = require("../services/shipping/shipping-quote.service");
+const shippingSettingsService = require("../services/shipping/shipping-settings.service");
 const { success, systemfailure } = require("../utils/http/response");
 
 exports.quote = async (req, res) => {

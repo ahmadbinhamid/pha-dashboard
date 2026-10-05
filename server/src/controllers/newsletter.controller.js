@@ -1,5 +1,5 @@
 const { sendNewsletterSignupNotification } = require("../services/email/email.service");
-const { getCompanyProfile } = require("../services/tenantSettings.service");
+const { getCompanyProfile } = require("../services/tenant-settings.service");
 const { success, requestfailure, systemfailure } = require("../utils/http/response");
 
 async function subscribe(req, res) {

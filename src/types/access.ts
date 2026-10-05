@@ -87,6 +87,8 @@ export type InviteResult = { mode: "added"; email: string } | ({ mode: "invited"
 
 /** The caller's standing in the current organisation. */
 export interface MyAccess {
+  // False when the user has no active membership in any organisation.
+  has_organisation?: boolean;
   is_tenant_admin: boolean;
   role: string | null;
   /** `group.action` keys; the Admin is sent every one. */

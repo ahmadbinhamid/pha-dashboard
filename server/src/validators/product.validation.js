@@ -11,65 +11,71 @@ const {
   STOCK_STATUS,
 } = require("../constants/product.constants");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
+const { objectId, optionalText, formBool, formNumber, formEnum, formJson } = require("./fields");
 
-// Multipart forms send booleans as "true"/"false" strings.
-const formBool = Joi.boolean().truthy("true").falsy("false");
+const fitmentRow = Joi.object({
+  make: optionalText(100),
+  model: optionalText(100),
+  model_code: optionalText(100),
+  year_from: Joi.number().integer().min(0).max(9999).allow(null),
+  year_to: Joi.number().integer().min(0).max(9999).allow(null),
+}).unknown(true);
 
+const packageShape = Joi.object(
+  Object.fromEntries(["length", "width", "height", "weight"].map((k) => [k, Joi.number().min(0).allow(null)])),
+).unknown(true);
+
+const stockEntry = Joi.object({
+  location_id: objectId.allow(null, ""),
+  location_name: optionalText(200),
+  qty: Joi.number().required(),
+}).unknown(true);
+
+const idList = Joi.array().items(Joi.string().max(64)).max(500);
+
+// NOTE: checks multipart strings uncoerced; the controller still parses.
 const createProduct = {
   body: Joi.object({
-    title: Joi.string().trim().min(1).required().messages({
+    title: Joi.string().max(500).pattern(/\S/).required().messages({
       "string.empty": "Title is required",
+      "string.pattern.base": "Title is required",
       "any.required": "Title is required",
     }),
-    description: Joi.string().allow("").default(""),
-    type: Joi.string()
-      .valid(...Object.values(PRODUCT_TYPE))
-      .default(PRODUCT_TYPE.PHYSICAL),
-    status: Joi.string()
-      .valid(...Object.values(PRODUCT_STATUS))
-      .default(PRODUCT_STATUS.DRAFT),
-    is_published_online: Joi.boolean().default(false),
-    price: Joi.number().min(0).default(0),
-    compare_price: Joi.number().min(0).allow(null).default(null),
-    cost_price: Joi.number().min(0).allow(null).default(null),
-    is_taxable: Joi.boolean().default(false),
-    sku: Joi.string().allow("", null).default(null),
-    barcode: Joi.string().allow("", null).default(null),
-    stock_control: Joi.boolean().default(true),
-    has_variants: Joi.boolean().default(false),
-    brand: Joi.string().allow("", null).default(null),
-    condition: Joi.string()
-      .valid(...Object.values(PRODUCT_CONDITION))
-      .default(PRODUCT_CONDITION.NEW),
-    authenticity: Joi.string()
-      .valid(...Object.values(PRODUCT_AUTHENTICITY))
-      .allow("", null)
-      .default(null),
-    // JSON string: { make, model, model_code, year_from, year_to }
-    vehicle: Joi.string().allow("", null).default(null),
-    additional_fitments: Joi.string().allow("", null),
-    // JSON string: { length, width, height, weight }
-    package: Joi.string().allow("", null).default(null),
-    bay: Joi.string().trim().max(40).allow("", null).default(null),
-    shipping_method: Joi.string().valid(...Object.values(SHIPPING_METHOD)).default(SHIPPING_METHOD.STANDARD),
-    tailgate_pickup: formBool.default(false),
-    tailgate_delivery: formBool.default(false),
+    description: Joi.string().allow("").max(200_000),
+    type: formEnum(Object.values(PRODUCT_TYPE)),
+    status: formEnum(Object.values(PRODUCT_STATUS)),
+    is_published_online: formBool,
+    price: formNumber,
+    compare_price: formNumber,
+    cost_price: formNumber,
+    shipping_cost: formNumber,
+    is_taxable: formBool,
+    sku: optionalText(100),
+    barcode: optionalText(100),
+    stock_control: formBool,
+    has_variants: formBool,
+    brand: optionalText(100),
+    mpn: optionalText(100),
+    condition: formEnum(Object.values(PRODUCT_CONDITION)),
+    authenticity: formEnum(Object.values(PRODUCT_AUTHENTICITY)).allow(null),
+    vehicle: formJson(fitmentRow.allow(null)),
+    additional_fitments: formJson(Joi.array().items(fitmentRow).max(200)),
+    package: formJson(packageShape.allow(null)),
+    bay: Joi.string().trim().max(40).allow("", null),
+    shipping_method: formEnum(Object.values(SHIPPING_METHOD)),
+    tailgate_pickup: formBool,
+    tailgate_delivery: formBool,
     // Queue one tag per unit on create (mobile's "Add to Tag Queue").
-    add_to_tag_queue: Joi.boolean().truthy("true").falsy("false").default(false),
-    attachments: Joi.array().items(Joi.string()).default([]),
-    categories: Joi.array().items(Joi.string()).default([]),
-    tags: Joi.array().items(Joi.string()).default([]),
-    related_products: Joi.array().items(Joi.string()).default([]),
-    choices: Joi.array()
-      .items(
-        Joi.object({
-          name: Joi.string().required(),
-          items: Joi.array().items(Joi.string()).default([]),
-        }),
-      )
-      .default([]),
-    digital_file: Joi.string().allow("", null).default(null),
-    stock_entries: Joi.string().allow("", null).default(null),
+    add_to_tag_queue: formBool,
+    attachments: formJson(idList),
+    categories: formJson(idList),
+    tags: formJson(Joi.array().items(Joi.string().max(100)).max(100)),
+    related_products: formJson(idList),
+    choices: formJson(
+      Joi.array().items(Joi.object({ name: Joi.string().max(100).required(), items: Joi.array().items(Joi.string().max(100)) }).unknown(true)).max(50),
+    ),
+    digital_file: optionalText(1000),
+    stock_entries: formJson(Joi.array().items(stockEntry).max(200)),
   }),
 };
 

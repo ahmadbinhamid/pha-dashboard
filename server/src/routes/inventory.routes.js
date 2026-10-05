@@ -7,8 +7,8 @@ const validate = require("../middlewares/validate");
 const pagination = require("../middlewares/pagination");
 const v = require("../validators/inventory.validation");
 const ctrl = require("../controllers/inventory.controller");
-const reconciliationValidation = require("../validators/pendingReconciliation.validation");
-const reconciliationCtrl = require("../controllers/pendingReconciliation.controller");
+const reconciliationValidation = require("../validators/pending-reconciliation.validation");
+const reconciliationCtrl = require("../controllers/pending-reconciliation.controller");
 
 // All routes require authentication
 router.use(auth());

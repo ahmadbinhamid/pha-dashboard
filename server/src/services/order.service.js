@@ -15,7 +15,12 @@ const { formatCentsAsDollars } = require("../utils/currency");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
 const { syncOrderStock, DIRECTION } = require("./order-stock-sync.service");
-const { getTotalPaidForOrder, getTotalRefundedForOrder, getPaymentsForOrder } = require("./payment.service");
+const {
+  getTotalPaidForOrder,
+  getTotalRefundedForOrder,
+  getPaymentsForOrder,
+  getAmountDueForOrder,
+} = require("./payment.service");
 const {
   UNPAID_ORDER_STATUSES,
   ORDER_STATUS,
@@ -33,12 +38,10 @@ const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service")
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
-const { getCompanyProfile } = require("./tenantSettings.service");
+const { getCompanyProfile } = require("./tenant-settings.service");
 const notificationService = require("./notification.service");
-const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shippingQuote.service");
-
-// AU prices are GST-inclusive: GST = price / 11, never added on top.
-const GST_DIVISOR = 11;
+const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shipping-quote.service");
+const { computeOrderTotals } = require("../utils/orderTotals");
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -238,10 +241,6 @@ async function createManualOrder(
   );
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  const subtotal = resolvedItems.reduce(
-    (sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount),
-    0,
-  );
   // Pickup ships nothing; shippingCostOverride beats the per-item sum.
   const shipping_cost = isPickup
     ? 0
@@ -250,8 +249,7 @@ async function createManualOrder(
       : Math.round(
           resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
         );
-  const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
-  const total = subtotal + shipping_cost;
+  const { subtotal, tax_amount, total } = computeOrderTotals(resolvedItems, { shippingCost: shipping_cost });
 
   // "payment_link" collects nothing now, so any amount_paid is ignored.
   const isPaymentLink = payment_method === ORDER_PAYMENT_CHOICE.PAYMENT_LINK;
@@ -358,14 +356,14 @@ async function recordOrderPayment(orderId, { payment_method, amount }, tenantId)
     paid_at: new Date(),
   });
 
-  order.payment = payment._id;
   // Set payment_status alongside legacy status, not instead of it.
   const derivedStatus = derivePaymentStatus(totalPaidCents + amountCents, order.total);
-  order.status = derivedStatus;
-  order.payment_status = derivedStatus;
-  await order.save();
-
-  return order;
+  // One write that bumps __v, so an in-flight line edit fails its version check.
+  return Order.findOneAndUpdate(
+    { _id: order._id },
+    { $set: { payment: payment._id, status: derivedStatus, payment_status: derivedStatus }, $inc: { __v: 1 } },
+    { new: true },
+  );
 }
 
 // Never updates the linked Customer; orders are a historical snapshot.
@@ -400,98 +398,6 @@ async function updateOrderReferenceNumber(orderId, { reference_number }, tenantI
   }
 
   order.reference_number = reference_number || null;
-
-  await order.save();
-  return order;
-}
-
-// Storefront excluded: editing would desync from what checkout showed.
-const EDITABLE_CHANNELS = [ORDER_CHANNEL.EBAY, ORDER_CHANNEL.MANUAL];
-
-// If already paid, no auto refund/charge; Balance Outstanding shows it.
-async function updateOrderItemPrice(orderId, itemIndex, { unit_price, userId }, tenantId) {
-  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
-  if (!order) {
-    throw httpError("Order not found", 404);
-  }
-  if (!EDITABLE_CHANNELS.includes(order.channel)) {
-    throw httpError("Only eBay and in-store order prices can be edited after the fact", 400);
-  }
-  const item = order.items[itemIndex];
-  if (!item) {
-    throw httpError("Order item not found", 404);
-  }
-  if (!Number.isFinite(unit_price) || unit_price <= 0) {
-    throw httpError("Unit price must be greater than 0", 400);
-  }
-
-  const unitPriceCents = Math.round(unit_price * 100);
-  if (item.original_unit_price === null) {
-    item.original_unit_price = item.unit_price;
-  }
-  item.unit_price = unitPriceCents;
-  item.unit_price_updated_at = new Date();
-  item.unit_price_updated_by = userId || null;
-
-  order.subtotal = order.items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount), 0);
-  order.tax_amount = Math.round(order.subtotal / GST_DIVISOR);
-  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
-
-  await order.save();
-  return order;
-}
-
-// Freight correction; same caveats as updateOrderItemPrice.
-async function updateOrderShippingCost(orderId, { shipping_cost }, tenantId) {
-  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
-  if (!order) {
-    throw httpError("Order not found", 404);
-  }
-  if (!EDITABLE_CHANNELS.includes(order.channel)) {
-    throw httpError("Only eBay and in-store order shipping costs can be edited after the fact", 400);
-  }
-  if (!Number.isFinite(shipping_cost) || shipping_cost < 0) {
-    throw httpError("Shipping cost cannot be negative", 400);
-  }
-
-  order.shipping_cost = Math.round(shipping_cost * 100);
-  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
-  if (order.total < 0) {
-    throw httpError("Shipping cost would make the order total negative", 400);
-  }
-
-  await order.save();
-  return order;
-}
-
-// Per-line discount, not an order-level lump; see updateOrderItemPrice.
-async function updateOrderItemDiscount(orderId, itemIndex, { discount_amount }, tenantId) {
-  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
-  if (!order) {
-    throw httpError("Order not found", 404);
-  }
-  if (!EDITABLE_CHANNELS.includes(order.channel)) {
-    throw httpError("Only eBay and in-store order discounts can be edited after the fact", 400);
-  }
-  const item = order.items[itemIndex];
-  if (!item) {
-    throw httpError("Order item not found", 404);
-  }
-  if (!Number.isFinite(discount_amount) || discount_amount < 0) {
-    throw httpError("Discount cannot be negative", 400);
-  }
-
-  const discountCents = Math.round(discount_amount * 100);
-  const lineSubtotalCents = item.unit_price * item.quantity;
-  if (discountCents > lineSubtotalCents) {
-    throw httpError("Discount cannot exceed the line subtotal", 400);
-  }
-
-  item.discount_amount = discountCents;
-
-  order.subtotal = order.items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount_amount), 0);
-  order.tax_amount = Math.round(order.subtotal / GST_DIVISOR);
-  order.total = order.subtotal - order.discount_amount + order.shipping_cost;
 
   await order.save();
   return order;
@@ -539,11 +445,9 @@ async function createOrder(
     resolvedItems.push(await resolveOrderItem(item, tenant._id));
   }
 
-  const subtotal = resolvedItems.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
   // Pickup ships nothing; otherwise flat rates plus any calculated quote.
   const shipping_cost = isPickup ? 0 : await orderShippingCents(tenant._id, items, resolvedItems, shipping_address);
-  const total = subtotal + shipping_cost;
-  const tax_amount = Math.round(subtotal / GST_DIVISOR); // GST already included in subtotal, display-only
+  const { subtotal, tax_amount, total } = computeOrderTotals(resolvedItems, { shippingCost: shipping_cost });
 
   const order = await Order.create({
     tenant_id: tenant._id,
@@ -739,6 +643,15 @@ async function getOrderForGuest(orderId, token, tenantId) {
   return order;
 }
 
+/** Guest payment page view: no token, plus the amount the intent will bill. */
+async function getGuestOrderView(orderId, token, tenantId) {
+  const order = await getOrderForGuest(orderId, token, tenantId);
+  const view = order.toObject();
+  delete view.guest_access_token;
+  // order.payment is only the latest attempt, which an edit may have cancelled.
+  return { ...view, amount_due: await getAmountDueForOrder(order) };
+}
+
 // guest_access_token is select:false; needed to build the payment link.
 async function getOrderForPaymentLink(orderId, tenantId) {
   return Order.findOne({ _id: orderId, tenant_id: tenantId }).select("+guest_access_token");
@@ -824,7 +737,8 @@ async function getOrderDetailForAdmin(orderId, tenantId) {
   ]);
 
   const { payment, ...orderFields } = order.toObject();
-  return { ...orderFields, payments, refunds };
+  // toObject strips __v; the client sends it back with every edit.
+  return { ...orderFields, version: order.__v, payments, refunds };
 }
 
 // Marks FULFILLED either way; re-send reuses on-file tracking by default.
@@ -965,6 +879,7 @@ module.exports = {
   updateOrderCustomerDetails,
   updateOrderReferenceNumber,
   getOrderForGuest,
+  getGuestOrderView,
   getOrderForPaymentLink,
   createOrderFromEbayOrder,
   updateEbayOrderStatus,
@@ -976,7 +891,7 @@ module.exports = {
   sendPaymentLinkEmail,
   getInvoicePdfForOrder,
   addOrderNote,
-  updateOrderItemPrice,
-  updateOrderShippingCost,
-  updateOrderItemDiscount,
+  // Shared with order-edit.service so an added line resolves like creation.
+  resolveManualOrderItem,
+  resolveCustomOrderItem,
 };

@@ -3,7 +3,7 @@
 
 const { logger } = require("../../../loaders/logging");
 const config = require("../../../config");
-const { findConnection } = require("../channelConnection.service");
+const { findConnection } = require("../channel-connection.service");
 const googleOauthService = require("../../google/google.oauth.service");
 const googleMerchantApi = require("../../google/google.merchant.api.service");
 const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");

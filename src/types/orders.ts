@@ -108,6 +108,11 @@ export interface OrderPaymentSummary {
   paid_at: string | null;
 }
 
+// amount_due is total minus succeeded payments; a cancelled attempt isn't paid.
+export interface GuestOrder extends Order {
+  amount_due: number;
+}
+
 export interface Order {
   _id: string;
   // Bare zero-padded sequence ("00001"); display via formatOrderNumber().
@@ -156,7 +161,19 @@ export interface Order {
 export interface OrderDetail extends Omit<Order, "payment"> {
   payments: OrderPaymentSummary[];
   refunds: Refund[];
+  // Sent back with every edit; a stale one is rejected with a 409.
+  version: number;
+  // Why lines can't be edited, or null when they can.
+  edit_block_reason: string | null;
 }
+
+// jsonerr.code on a 409 from an order edit.
+export type OrderEditConflictCode = "not_editable" | "payment_in_flight" | "payment_check_failed" | "version_conflict";
+
+// A line to add: a catalogue product/variant, or a custom order-only line.
+export type OrderLineInput =
+  | { product: string; variant: string | null; quantity: number }
+  | { is_custom: true; name: string; unit_price: number; shipping_cost: number; quantity: number; discount_amount: number };
 
 export interface OrderStats {
   totalRevenueCents: number;

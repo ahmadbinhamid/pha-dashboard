@@ -8,7 +8,7 @@ const { ADDRESS_TYPE } = require("../constants/shipping.constants");
 const shippingSettingsSchema = buildSchema(
   {
     tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, unique: true },
-    // Packed tokenCipher output; only shippingSettings.service decrypts it.
+    // Packed tokenCipher output; only shipping-settings.service decrypts it.
     transdirect_api_key_ct: { type: String, default: null, select: false },
     sender_postcode: { type: String, default: null, trim: true },
     sender_suburb: { type: String, default: null, trim: true },

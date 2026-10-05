@@ -7,6 +7,7 @@ const { emailQueue } = require("../queues/email.queue");
 const { render } = require("../services/email/templateLoader");
 const { sendEmail } = require("../services/email/mailer");
 const { logger } = require("../loaders/logging");
+const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 
 connectMongo().catch((err) => {
   logger.error(`[emailWorker] MongoDB connection failed: ${err.message}`);
@@ -32,3 +33,5 @@ emailQueue.on("completed", (job) =>
 emailQueue.on("failed", (job, err) =>
   logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`)
 );
+
+installGracefulShutdown({ name: "emailWorker", getQueues: () => [emailQueue] });

@@ -14,7 +14,7 @@ const { withAttachmentUrls, buildAttachmentFilePath } = require("../utils/attach
 const inventoryService = require("./inventory.service");
 const locationService = require("./location.service");
 const { getTotalStockForProduct } = inventoryService;
-const { getCompanyProfile } = require("./tenantSettings.service");
+const { getCompanyProfile } = require("./tenant-settings.service");
 const emailService = require("./email/email.service");
 const { STOCK_STATUS, STOCK_LOW_THRESHOLD } = require("../constants/product.constants");
 const { LISTING_STATE } = require("../constants/marketplace.constants");
@@ -100,6 +100,7 @@ async function ensureInventoryForProduct(productId, variantId = null, tenantId) 
       { product: productId, variant: variantId, location: loc._id },
       {
         $setOnInsert: {
+          tenant_id: tenantId,
           product: productId,
           variant: variantId,
           location: loc._id,

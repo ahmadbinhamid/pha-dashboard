@@ -110,20 +110,19 @@ const customLineSchema = Joi.object({
 });
 
 const isCustomLine = Joi.object({ is_custom: Joi.valid(true).required() }).unknown();
+// Catalogue or custom line, exactly as manual order creation accepts.
+const orderLineSchema = Joi.alternatives().conditional(isCustomLine, {
+  then: customLineSchema,
+  otherwise: catalogueLineSchema,
+});
+// The order __v the client loaded; a mismatch is a 409.
+const orderVersion = Joi.number().integer().min(0);
 
 // Counter sale for a known customer: line discounts and an amount paid.
 const createManualOrder = {
   body: Joi.object({
     customer_id: Joi.string().hex().length(24).required(),
-    items: Joi.array()
-      .items(
-        Joi.alternatives().conditional(isCustomLine, {
-          then: customLineSchema,
-          otherwise: catalogueLineSchema,
-        }),
-      )
-      .min(1)
-      .required(),
+    items: Joi.array().items(orderLineSchema).min(1).required(),
     delivery_method: Joi.string()
       .valid(...Object.values(ORDER_DELIVERY_METHOD))
       .default(ORDER_DELIVERY_METHOD.PICKUP),
@@ -196,6 +195,7 @@ const updateOrderItemPrice = {
   }),
   body: Joi.object({
     unit_price: Joi.number().greater(0).required(), // dollars
+    version: orderVersion,
   }),
 };
 
@@ -204,6 +204,8 @@ const updateOrderShippingCost = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
     shipping_cost: Joi.number().min(0).required(), // dollars
+    // Optional for older clients; when sent, a stale one is a 409.
+    version: orderVersion,
   }),
 };
 
@@ -215,6 +217,7 @@ const updateOrderItemDiscount = {
   }),
   body: Joi.object({
     discount_amount: Joi.number().min(0).required(), // dollars
+    version: orderVersion,
   }),
 };
 
@@ -251,7 +254,32 @@ const updateOrderCustomerDetails = {
   }),
 };
 
+const orderItemParams = Joi.object({
+  id: Joi.string().hex().length(24).required(),
+  itemId: Joi.string().hex().length(24).required(),
+});
+
+// Line edits always carry the version the client loaded.
+const addOrderItem = {
+  params: Joi.object({ id: Joi.string().hex().length(24).required() }),
+  body: Joi.object({ version: orderVersion.required(), item: orderLineSchema.required() }),
+};
+
+const updateOrderItemQuantity = {
+  params: orderItemParams,
+  body: Joi.object({ version: orderVersion.required(), quantity: Joi.number().integer().min(1).required() }),
+};
+
+// DELETE has no body, so the version rides in the query string.
+const removeOrderItem = {
+  params: orderItemParams,
+  query: Joi.object({ version: orderVersion.required() }),
+};
+
 module.exports = {
+  addOrderItem,
+  updateOrderItemQuantity,
+  removeOrderItem,
   createOrder,
   byIdParam,
   listOrders,

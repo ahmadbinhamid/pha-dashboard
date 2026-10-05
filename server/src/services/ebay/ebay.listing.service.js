@@ -1,9 +1,8 @@
 // services/ebay/ebay.listing.service.js
-// CRUD operations for MarketplaceListing documents (eBay discriminator).
+// eBay listing write preparation, plus eBay-shaped list/read/delete.
 
 const mongoose = require("mongoose");
 const MarketplaceListing = require("../../models/MarketplaceListing");
-const Product = require("../../models/Product");
 const { MARKETPLACE_PLATFORM, LISTING_STATE } = require("../../constants/marketplace.constants");
 const vehicleModelService = require("../vehicle-model.service");
 const { logger } = require("../../loaders/logging");
@@ -36,17 +35,15 @@ async function syncFitmentCatalog(fitment, tenantId) {
   }
 }
 
-// ── Create ──
+// ── Write preparation; the writes go through listing.write.service ──
 
-async function createListing(payload, tenantId) {
+/** eBay discriminator fields for a new listing, with eBay's defaults. */
+function buildCreateFields(payload) {
   const {
-    product,
-    variant = null,
     title_override = null,
     description_override = null,
     price_override = null,
     photo_overrides = [],
-    // eBay-specific
     ebay_category_id = null,
     store_category_id = null,
     store_sku = null,
@@ -67,67 +64,37 @@ async function createListing(payload, tenantId) {
     package: pkg = {},
   } = payload;
 
-  const productDoc = await Product.findOne({ _id: product, tenant_id: tenantId }).select("_id");
-  if (!productDoc) throw Object.assign(new Error("Product not found"), { status: 404 });
+  return {
+    title_override,
+    description_override,
+    price_override: price_override != null ? Number(price_override) : null,
+    photo_overrides,
+    state: LISTING_STATE.DRAFT,
+    ebay_category_id,
+    store_category_id,
+    store_sku,
+    // NOTE: "" and null both mean "inherit from product"; stored as null.
+    condition: condition || null,
+    condition_notes,
+    item_specifics: { ...item_specifics, authenticity: item_specifics.authenticity || null },
+    fitment,
+    format,
+    quantity_available: quantity_available != null ? Number(quantity_available) : null,
+    listing_duration,
+    accept_best_offer,
+    min_best_offer: min_best_offer != null ? Number(min_best_offer) : null,
+    fulfillment_policy_id,
+    payment_policy_id,
+    return_policy_id,
+    require_immediate_payment,
+    item_location_zip,
+    package: toPackage(pkg),
+  };
+}
 
-  // Idempotency: a double-click must not create a second listing.
-  const existing = await MarketplaceListing.findOne({
-    tenant_id: tenantId,
-    product,
-    variant,
-    platform: MARKETPLACE_PLATFORM.EBAY,
-  });
-  if (existing) return existing;
-
-  try {
-    const listing = await MarketplaceListing.create({
-      tenant_id: tenantId,
-      platform: MARKETPLACE_PLATFORM.EBAY,
-      product,
-      variant,
-      title_override,
-      description_override,
-      price_override: price_override != null ? Number(price_override) : null,
-      photo_overrides,
-      state: LISTING_STATE.DRAFT,
-      // eBay discriminator fields
-      ebay_category_id,
-      store_category_id,
-      store_sku,
-      // NOTE: "" and null both mean "inherit from product"; stored as null.
-      condition: condition || null,
-      condition_notes,
-      item_specifics: { ...item_specifics, authenticity: item_specifics.authenticity || null },
-      fitment,
-      format,
-      quantity_available: quantity_available != null ? Number(quantity_available) : null,
-      listing_duration,
-      accept_best_offer,
-      min_best_offer: min_best_offer != null ? Number(min_best_offer) : null,
-      fulfillment_policy_id,
-      payment_policy_id,
-      return_policy_id,
-      require_immediate_payment,
-      item_location_zip,
-      package: toPackage(pkg),
-    });
-
-    await syncFitmentCatalog(fitment, tenantId);
-
-    return listing;
-  } catch (err) {
-    // check-then-create isn't atomic; on E11000 return the race winner.
-    if (err.code === 11000 && err.keyPattern?.product) {
-      const winner = await MarketplaceListing.findOne({
-        tenant_id: tenantId,
-        product,
-        variant,
-        platform: MARKETPLACE_PLATFORM.EBAY,
-      });
-      if (winner) return winner;
-    }
-    throw err;
-  }
+/** Runs once after a fresh create. */
+async function afterCreate(listing, payload, tenantId) {
+  await syncFitmentCatalog(payload.fitment ?? [], tenantId);
 }
 
 // ── Read ──
@@ -213,27 +180,30 @@ async function listListings({ skip, limit, product, product_in, state, sync_stat
 
 // ── Update ──
 
-async function updateListing(id, payload, tenantId) {
-  const allowed = [
-    "title_override", "description_override", "price_override", "photo_overrides",
-    "ebay_category_id", "store_category_id", "store_sku",
-    "condition", "condition_notes", "item_specifics",
-    "fitment",
-    "format", "quantity_available", "listing_duration",
-    "accept_best_offer", "min_best_offer",
-    "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
-    "require_immediate_payment", "item_location_zip", "package",
-    "state",
-  ];
+const UPDATE_FIELDS = [
+  "title_override", "description_override", "price_override", "photo_overrides",
+  "ebay_category_id", "store_category_id", "store_sku",
+  "condition", "condition_notes", "item_specifics",
+  "fitment",
+  "format", "quantity_available", "listing_duration",
+  "accept_best_offer", "min_best_offer",
+  "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
+  "require_immediate_payment", "item_location_zip", "package",
+  "state",
+];
 
+// Product fields the update response populates.
+const UPDATE_PRODUCT_FIELDS = "title slug sku price brand mpn attachments vehicle additional_fitments";
+
+/** $set for an update; syncs the fitment catalog first, as before. */
+async function buildUpdate(payload, tenantId) {
   const update = {};
-  for (const key of allowed) {
+  for (const key of UPDATE_FIELDS) {
     if (payload[key] !== undefined) update[key] = payload[key];
   }
 
   if (update.condition !== undefined) update.condition = update.condition || null;
 
-  // Coerce numeric strings
   if (update.price_override != null) update.price_override = Number(update.price_override);
   if (update.quantity_available != null) update.quantity_available = Number(update.quantity_available);
   if (update.min_best_offer != null) update.min_best_offer = Number(update.min_best_offer);
@@ -253,11 +223,7 @@ async function updateListing(id, payload, tenantId) {
   }
 
   if (update.fitment) await syncFitmentCatalog(update.fitment, tenantId);
-
-  return MarketplaceListing.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: update }, { new: true, strict: false })
-    .populate("product", "title slug sku price brand mpn attachments vehicle additional_fitments")
-    .populate("variant", "display_name sku price attachments")
-    .populate("photo_overrides");
+  return update;
 }
 
 // ── Delete ──
@@ -271,10 +237,13 @@ async function deleteListing(id, tenantId) {
 }
 
 module.exports = {
-  createListing,
+  buildCreateFields,
+  afterCreate,
+  buildUpdate,
+  UPDATE_PRODUCT_FIELDS,
+  PUSH_ON_CREATE: false,
   getListingById,
   listListings,
-  updateListing,
   deleteListing,
   buildEbayItemUrl,
 };

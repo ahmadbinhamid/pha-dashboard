@@ -13,14 +13,16 @@ interface EditableOrderAmountProps {
   orderId: string;
   label: string;
   amountCents: number;
-  // Renders with a leading "-" when non-zero (e.g. Discount) — cosmetic only, the stored/submitted value is always non-negative.
+  // A leading "-" when non-zero (e.g. Discount); the value is never negative.
   negative?: boolean;
   mutationFn: (orderId: string, dollars: number) => Promise<unknown>;
   successMessage: string;
   errorMessage: string;
+  // Turns a failure into staff-facing text; defaults to the server message.
+  describeError?: (err: Error) => string;
 }
 
-// Inline click-to-edit amount, same interaction as OrderItemsTable's EditableUnitPrice, generalized for order-level Discount/Shipping rows.
+// Inline click-to-edit order-level amount, like OrderItemsTable's line editors.
 export function EditableOrderAmount({
   orderId,
   label,
@@ -29,6 +31,7 @@ export function EditableOrderAmount({
   mutationFn,
   successMessage,
   errorMessage,
+  describeError = (err) => err.message,
 }: EditableOrderAmountProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -52,7 +55,7 @@ export function EditableOrderAmount({
       setEditing(false);
     },
     onError: (err: Error) => {
-      toast({ title: errorMessage, description: err.message, tone: "danger" });
+      toast({ title: errorMessage, description: describeError(err), tone: "danger" });
     },
   });
 
@@ -108,7 +111,7 @@ export function EditableOrderAmount({
         setEditing(true);
       }}
     >
-      {/* Pencil is absolutely positioned so it never reserves layout space, or this value would sit left of other plain-text rows even at opacity-0. */}
+      {/* Absolute so the hidden pencil reserves no space beside the value. */}
       <span className="relative">
         {negative && amountCents > 0 ? "-" : ""}
         {formatCurrencyFromCents(amountCents)}

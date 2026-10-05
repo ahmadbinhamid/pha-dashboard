@@ -65,6 +65,7 @@ function toLegacyShape(conn) {
     connection_status: statusToLegacy(conn.status),
     connected_at: conn.connected_at ?? null,
     last_error: conn.last_error ?? null,
+    status_reason: conn.status_reason ?? null,
 
     marketplace_id: conn.marketplace_id ?? "EBAY_AU",
     sandbox: conn.sandbox ?? false,
@@ -215,8 +216,8 @@ async function upsertSettings(tenantId, update) {
     setFields.refresh_token_ct = packCiphertext({ ciphertext, iv, tag });
     setFields.status = refresh_token ? CHANNEL_CONNECTION_STATUS.CONNECTED : CHANNEL_CONNECTION_STATUS.DISCONNECTED;
     setFields.connected_at = refresh_token ? new Date() : null;
-    // A fresh login clears the breaker count too, or the next error re-trips it.
-    if (refresh_token) Object.assign(setFields, { last_error: null, consecutive_failures: 0 });
+    // A fresh login clears the breaker count and any reauth flag.
+    if (refresh_token) Object.assign(setFields, { last_error: null, consecutive_failures: 0, status_reason: null });
   }
 
   const conn = await ChannelConnection.findOneAndUpdate(

@@ -1,30 +1,14 @@
 // utils/attachment.js
+// Attachment URLs, disk paths and kinds.
 
 const path = require("path");
 const config = require("../config");
+const { UPLOAD_TYPES, UPLOAD_KIND } = require("../constants/upload.constants");
 
-/** MIME types we treat as images */
-const IMAGE_MIMES = [
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-];
-
-const VIDEO_MIMES = [
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "video/x-msvideo",
-  "video/avi",
-  "video/mov",
-];
+const IMAGE_MIMES = Object.keys(UPLOAD_TYPES).filter((m) => UPLOAD_TYPES[m].kind === UPLOAD_KIND.IMAGE);
 
 function getAttachmentType(mimeType) {
-  if (IMAGE_MIMES.includes(mimeType)) return "image";
-  if (VIDEO_MIMES.includes(mimeType)) return "video";
-  return "file";
+  return UPLOAD_TYPES[mimeType]?.kind ?? UPLOAD_KIND.FILE;
 }
 
 function buildAttachmentUrl(fileName) {
@@ -32,15 +16,13 @@ function buildAttachmentUrl(fileName) {
   return `${config.uploads.url}/${fileName}`;
 }
 
-// Absolute on-disk path for an uploaded file; workers share this volume with the API, so it's
-// also safe to hand straight to nodemailer as an attachment `path`.
+// Workers share the uploads volume, so this path also suits nodemailer.
 function buildAttachmentFilePath(fileName) {
   if (!fileName) return null;
   return path.join(config.uploads.dir, fileName);
 }
 
-// `url` is a Mongoose virtual, only computed when a full document is serialized; a .lean()
-// query or $lookup returns a plain object where it's silently missing, so backfill it explicitly.
+// `url` is a virtual, missing on .lean()/$lookup results, so fill it in.
 function withAttachmentUrl(attachment) {
   if (!attachment) return attachment;
   return { ...attachment, url: attachment.url ?? buildAttachmentUrl(attachment.file_name) };

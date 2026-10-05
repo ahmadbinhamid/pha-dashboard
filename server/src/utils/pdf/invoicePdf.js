@@ -201,30 +201,41 @@ function drawMetaStrip(doc, order, topY) {
   return stripBottom;
 }
 
-// Bill To on the left, Ship To on the right, both left-aligned.
+// NOTE: no billing address entered means no Bill To; contact moves to Ship To.
+function partyBlockLines(order) {
+  const { billing_address: billing, shipping_address: shipping, customer } = order;
+  const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  const contactLines = [
+    customer.phone ? `Phone: ${customer.phone}` : null,
+    customer.email ? `Email: ${customer.email}` : null,
+  ].filter(Boolean);
+  const shipAddress =
+    isPickup || !shipping
+      ? ["Customer collection from the store address above."]
+      : [stripEbayAddressPrefix(shipping.address), `${shipping.suburb} ${shipping.state} ${shipping.postcode}`];
+
+  if (!billing) return { billLines: null, shipLines: [...shipAddress, ...contactLines] };
+  return {
+    billLines: [
+      stripEbayAddressPrefix(billing.address),
+      `${billing.suburb} ${billing.state} ${billing.postcode}, Australia`,
+      ...contactLines,
+    ],
+    shipLines: shipAddress,
+  };
+}
+
+// Bill To left (when present), Ship To always in the right column.
 function drawPartiesBlock(doc, order, topY) {
   const colWidth = 215;
   const startY = topY + 20;
-  const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  const billingAddress = order.billing_address || order.shipping_address;
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
+  const { billLines, shipLines } = partyBlockLines(order);
 
-  const shipLines =
-    isPickup || !order.shipping_address
-      ? ["Customer collection from the store address above."]
-      : [
-          stripEbayAddressPrefix(order.shipping_address.address),
-          `${order.shipping_address.suburb} ${order.shipping_address.state} ${order.shipping_address.postcode}`,
-        ];
-  const billLines = [
-    billingAddress ? stripEbayAddressPrefix(billingAddress.address) : null,
-    billingAddress ? `${billingAddress.suburb} ${billingAddress.state} ${billingAddress.postcode}, Australia` : null,
-    order.customer.phone ? `Phone: ${order.customer.phone}` : null,
-    order.customer.email ? `Email: ${order.customer.email}` : null,
-  ].filter(Boolean);
-
-  const billBottom = drawPartyColumn(doc, "Bill To", displayName, billLines, PAGE_MARGIN, startY, colWidth);
+  const billBottom = billLines
+    ? drawPartyColumn(doc, "Bill To", displayName, billLines, PAGE_MARGIN, startY, colWidth)
+    : startY;
   const shipBottom = drawPartyColumn(doc, "Ship To", displayName, shipLines, CONTENT_RIGHT - colWidth, startY, colWidth);
 
   doc.fillColor(COLORS.text);
@@ -592,4 +603,4 @@ function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents =
   });
 }
 
-module.exports = { buildInvoicePdfBuffer };
+module.exports = { buildInvoicePdfBuffer, partyBlockLines };

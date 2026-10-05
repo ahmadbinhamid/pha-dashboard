@@ -1,7 +1,7 @@
 // controllers/domain.controller.js
 
 const domainService = require("../services/domain.service");
-const { reconcileTenantPrerequisites } = require("../services/marketplace/channelPrerequisite.service");
+const { reconcileTenantPrerequisites } = require("../services/marketplace/channel-prerequisite.service");
 const { logger } = require("../loaders/logging");
 const { success, created, notFound, systemfailure } = require("../utils/http/response");
 

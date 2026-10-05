@@ -297,7 +297,7 @@ function mapStockEvent(h) {
   };
 }
 
-// No tenant_id on InventoryHistory, so scope via a $lookup on Product.
+// Scoped via a $lookup on Product until tenant_id is backfilled.
 async function findRecentStockEvents(tenantId, limit) {
   return InventoryHistory.aggregate([
     { $sort: { created_at: -1 } },

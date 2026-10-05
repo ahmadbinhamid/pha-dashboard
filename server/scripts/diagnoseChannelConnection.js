@@ -1,7 +1,7 @@
 // Read-only connection diagnosis; never writes, retries or prints tokens.
 // Usage: --tenant=<id> --platform=<key> [--recent=5]
 
-const { diagnoseChannelConnection } = require("../src/services/marketplace/connectionDiagnosis.service");
+const { diagnoseChannelConnection } = require("../src/services/marketplace/connection-diagnosis.service");
 
 const iso = (date) => (date ? new Date(date).toISOString() : "never");
 

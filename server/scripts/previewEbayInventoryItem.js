@@ -1,7 +1,7 @@
 // Read-only: prints what a sync would send eBay; --live adds eBay's GET view.
 // Usage: --sku=<product SKU> [--tenant=<id>] [--live]
 
-const { previewEbayInventoryItem } = require("../src/services/marketplace/ebayPayloadPreview.service");
+const { previewEbayInventoryItem } = require("../src/services/ebay/ebay.payload-preview.service");
 
 const DESCRIPTION_PREVIEW_CHARS = 200;
 

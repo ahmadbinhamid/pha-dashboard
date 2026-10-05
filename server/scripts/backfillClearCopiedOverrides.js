@@ -1,7 +1,7 @@
 // Clears listing overrides that just copy the product value; real overrides are kept.
 // Usage: [--dry-run] [--tenant=<id>] [--include-generated-descriptions]
 
-const { clearCopiedOverrides, OVERRIDE_FIELDS } = require("../src/services/marketplace/listingOverride.service");
+const { clearCopiedOverrides, OVERRIDE_FIELDS } = require("../src/services/marketplace/listing-override.service");
 
 function printCounts(log, label, counts) {
   log(`${label}:`);

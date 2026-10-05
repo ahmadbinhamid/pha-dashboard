@@ -12,25 +12,24 @@ const config = require("./config");
 const routes = require("./routes");
 const domainService = require("./services/domain.service");
 
-// Register marketplace adapters, needed by the API process for endListing on delete.
+// The API process needs adapters registered for endListing on delete.
 require("./services/marketplace/registerAdapters").registerAdapters();
 const { requestLogger, errorLogger } = require("./middlewares/logging");
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");
 const requestId = require("./middlewares/requestId");
+const uploadHeaders = require("./middlewares/uploadHeaders");
 
 const app = express();
 
-// Trust exactly one hop (nginx), not `true` (every hop), which would let clients spoof
-// req.ip and bypass IP-keyed rate limiting.
-app.set("trust proxy", 1);
+// Trust private-network hops, not a hop count; client XFF can't spoof req.ip.
+app.set("trust proxy", "loopback, uniquelocal"); // NOTE: Cloudflare/public proxies need their ranges added.
 
 // Core middlewares
 app.use(requestId);
 app.use(helmet());
 const allowedOrigins = config.cors.allowedOrigins;
-// Every tenant gets its own payment host, so a fixed allowedOrigins list can't enumerate
-// them all — accept any subdomain of the configured payment domain too.
+// Per-tenant payment hosts can't be listed; allow any payment subdomain.
 const paymentDomain = config.payment.linkDomain;
 
 async function checkOrigin(origin, cb) {
@@ -44,10 +43,10 @@ async function checkOrigin(origin, cb) {
         return cb(null, true);
       }
     } catch {
-      // malformed Origin header — fall through to rejection.
+      // Malformed Origin header: fall through to rejection.
     }
   }
-  // A tenant's own DNS-verified custom domain; only accepts hostnames that passed TXT verification.
+  // A tenant's own custom domain, only once it passed TXT verification.
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol === "https:") {
@@ -55,7 +54,7 @@ async function checkOrigin(origin, cb) {
       if (activeHostnames.includes(hostname)) return cb(null, true);
     }
   } catch {
-    // malformed Origin header, or the DB lookup failed — fall through to rejection, never fail open.
+    // Bad Origin or failed DB lookup: fall through to rejection, never open.
   }
   cb(new Error(`CORS: origin ${origin} not allowed`));
 }
@@ -64,8 +63,7 @@ app.use(
   cors({
     origin:
       allowedOrigins.length > 0
-        ? // Not async itself — the `cors` package never awaits the return value, only reacts to
-          // cb(). An async origin fn would turn a future uncaught throw into an unhandled rejection.
+        ? // Sync wrapper: cors never awaits, so an async fn would leak rejections.
           (origin, cb) => {
             checkOrigin(origin, cb).catch((err) => cb(err));
           }
@@ -82,11 +80,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
-// Serve uploaded files; override helmet's same-origin CORP so the FE (different port) can load images.
-app.use("/uploads", (_req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  next();
-}, express.static(config.uploads.dir));
+app.use("/uploads", uploadHeaders, express.static(config.uploads.dir));
 
 // Auto logging (request/response)
 app.use(requestLogger);
