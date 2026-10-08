@@ -1,13 +1,13 @@
 // services/search/product.search.service.js
-// All Typesense reads/writes live here; controllers/workers never touch the client directly.
+// All Typesense reads/writes live here; callers never touch the client.
 
 const { getTypesenseClient } = require("./typesense.client");
 const { PRODUCTS_COLLECTION } = require("./product.search.schema");
 
-// SKU/OEM(mpn) matches outrank title/brand, which outrank description (eBay/Amazon-style boost order).
+// SKU/OEM(mpn) outrank title/brand, which outrank description.
 const QUERY_BY = "sku,mpn,title,brand,description,title_flat";
 const QUERY_BY_WEIGHTS = "5,4,3,2,1,3";
-// Positionally aligned with QUERY_BY — infix runs alongside regular token search, never instead of it.
+// Aligned with QUERY_BY; infix runs alongside token search, not instead.
 const INFIX = "always,always,off,off,off,always";
 
 function toSearchDocument(product) {
@@ -54,7 +54,7 @@ async function deleteProductFromIndex(productId) {
   }
 }
 
-// Mirrors buildProductFilter's field names/semantics so callers can pass req.query through untouched.
+// Mirrors buildProductFilter so callers can pass req.query through as-is.
 function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin, priceMax, make, model, publishedOnly }) {
   const clauses = [`tenant_id:=${tenantId}`];
   if (publishedOnly) clauses.push("is_published_online:=true", "status:=active");
@@ -68,16 +68,21 @@ function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin
   return clauses.join(" && ");
 }
 
-// Typesense scores every infix match at the same flat floor, so a real SKU match can tie with an
-// unrelated product's OEM/mpn hit and land in arbitrary order. Fix: search narrower/higher-intent
-// fields first (sku, then mpn, then everything) and stop at the first tier that finds anything.
+// Infix hits all score the same floor, so try sku, then mpn, before all fields.
 const PART_NUMBER_TIERS = [
   { query_by: "sku", query_by_weights: "5", infix: "always" },
   { query_by: "mpn", query_by_weights: "4", infix: "always" },
 ];
 
+// Part numbers carry digits in every token; "JEEP ... BRACKET" is a title.
+function looksLikePartNumber(q) {
+  const tokens = q.trim().split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((t) => /\d/.test(t));
+}
+
 async function runPartNumberFirstSearch(client, { q, filterBy, page, perPage, prefix }) {
-  for (const tier of PART_NUMBER_TIERS) {
+  const tiers = looksLikePartNumber(q) ? PART_NUMBER_TIERS : [];
+  for (const tier of tiers) {
     const result = await client
       .collections(PRODUCTS_COLLECTION)
       .documents()
@@ -86,6 +91,8 @@ async function runPartNumberFirstSearch(client, { q, filterBy, page, perPage, pr
         ...tier,
         prefix: !!prefix,
         num_typos: 2,
+        // NOTE: default token dropping lets a partial match short-circuit tiers.
+        drop_tokens_threshold: 0,
         filter_by: filterBy,
         page,
         per_page: perPage,
@@ -109,13 +116,13 @@ async function runPartNumberFirstSearch(client, { q, filterBy, page, perPage, pr
     });
 }
 
-// Returns ordered product ids + total; callers hydrate full documents from Mongo themselves.
+// Returns ordered ids + total; callers hydrate documents from Mongo.
 async function searchProducts({ q, page = 1, perPage = 20, ...filters }) {
   const client = getTypesenseClient();
   const searchTerm = q || "*";
   const filterBy = buildFilterBy(filters);
 
-  // "*" (browse-all) has no part number to prioritize — skip straight to the normal search.
+  // "*" (browse-all) has no part number to prioritize; use the normal search.
   const result = searchTerm === "*"
     ? await client.collections(PRODUCTS_COLLECTION).documents().search({
         q: searchTerm,
@@ -135,8 +142,7 @@ async function searchProducts({ q, page = 1, perPage = 20, ...filters }) {
   };
 }
 
-// Returns ordered ids only; the controller hydrates full documents so Typesense stays purely
-// the ranking layer and there's one place that shapes a "product card" response.
+// Ranking only; the controller hydrates so one place shapes product cards.
 async function suggestProducts({ tenantId, q, limit = 6 }) {
   const client = getTypesenseClient();
   const result = await runPartNumberFirstSearch(client, {
