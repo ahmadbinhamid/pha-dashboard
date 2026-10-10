@@ -12,6 +12,7 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { getSmtpStatus, updateSmtpCredentials } from "@/lib/api/tenantSettings";
 import type { ConnectionStatus, UpdateSmtpCredentialsPayload } from "@/types/tenantSettings";
 import { smtpSettingsFormSchema, type SmtpSettingsFormValues } from "@/lib/validation/smtpSettings";
+import { InlineNotice } from "@/components/ui/InlineNotice";
 
 export const SMTP_SETTINGS_FORM_ID = "smtp-settings-form";
 
@@ -48,7 +49,7 @@ export function SmtpSettingsCard({
   const status = data?.data;
 
   useEffect(() => {
-    // Never pre-fill the password — the API never returns it, so blank means "unchanged" on save (see onSubmit below).
+    // Never pre-filled: the API never returns it, so blank means "unchanged".
     reset({
       host: status?.host ?? "",
       port: status?.port ? String(status.port) : "",
@@ -78,7 +79,7 @@ export function SmtpSettingsCard({
   }, [mutation.isPending, mutation.isSuccess, mutation.isError]);
 
   const onSubmit = (form: SmtpSettingsFormValues) => {
-    // pass omitted entirely (not sent as "") when blank, so the previously-saved password stays unless deliberately changed.
+    // Blank pass is omitted, not sent as "", so the saved password is kept.
     const payload: UpdateSmtpCredentialsPayload = {
       host: form.host,
       port: form.port ? Number(form.port) : null,
@@ -107,7 +108,7 @@ export function SmtpSettingsCard({
         ) : (
           <>
             {status?.last_error && (
-              <p className="rounded-xs bg-tag-danger-bg px-3 py-2 text-sm text-tag-danger-fg">{status.last_error}</p>
+              <InlineNotice variant="danger">{status.last_error}</InlineNotice>
             )}
 
             {!status?.connected && (

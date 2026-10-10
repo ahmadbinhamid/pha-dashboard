@@ -12,6 +12,8 @@ const { registerAdapters } = require("../services/marketplace/registerAdapters")
 const { getQueue, enqueueChannelJob } = require("../queues/channel.queue");
 const marketplaceSync = require("../services/marketplace/sync.service");
 const refreshService = require("../services/marketplace/refresh.service");
+const asyncPublish = require("../services/marketplace/async-publish.service");
+const { CHANNEL_JOB } = require("../constants/channel.constants");
 
 // eBay stays at 1: fencing alone can't stop two same-listing jobs racing.
 const SYNC_LISTING_CONCURRENCY = { ebay: 1 };
@@ -83,6 +85,15 @@ function attachSyncBatchProcessor(adapter, queue) {
     const { tenantId, listingIds } = job.data;
     logger.info(`[channelWorker:${adapter.key}] sync_batch tenantId=${tenantId}${listingIds ? ` (refresh, ${listingIds.length} listing(s))` : ""}`);
     return marketplaceSync.syncBatch(adapter.key, tenantId, listingIds ? { listingIds } : {});
+  });
+}
+
+// Only for asyncPublish adapters; job data alone resolves the batch.
+function attachCheckBatchStatusProcessor(adapter, queue) {
+  queue.process(CHANNEL_JOB.CHECK_BATCH_STATUS, DEFAULT_BATCH_CONCURRENCY, async (job) => {
+    const { tenantId, handle, attempt, items } = job.data;
+    logger.info(`[channelWorker:${adapter.key}] ${CHANNEL_JOB.CHECK_BATCH_STATUS} tenantId=${tenantId} handle=${handle} attempt=${attempt} items=${items?.length ?? 0}`);
+    return asyncPublish.processCheckBatchStatus({ ...job.data, platform: adapter.key });
   });
 }
 
@@ -190,6 +201,9 @@ async function startChannelWorker({ platforms } = {}) {
     if (adapter.capabilities?.batch === true && typeof adapter.publishBatch === "function") {
       attachSyncBatchProcessor(adapter, queue);
     }
+    if (asyncPublish.isAsyncAdapter(adapter) && typeof adapter.checkBatchStatus === "function") {
+      attachCheckBatchStatusProcessor(adapter, queue);
+    }
     if (adapter.refreshIntervalDays) {
       attachRefreshStaleScheduler(adapter, queue);
     }
@@ -218,5 +232,6 @@ module.exports = {
   attachSyncListingProcessor,
   attachSyncBatchProcessor,
   attachRefreshStaleScheduler,
+  attachCheckBatchStatusProcessor,
   recoverMidFlightChange,
 };

@@ -100,4 +100,15 @@ const googleSchema = new Schema({
 // Same collision as eBay, with MarketplaceListing's "google" discriminator.
 ChannelConnection.discriminator("ChannelConnectionGoogle", googleSchema, MARKETPLACE_PLATFORM.GOOGLE);
 
+// ── Meta (Commerce Catalog) discriminator; expiry is base token_expires_at
+
+const metaSchema = new Schema({
+  business_id: { type: String, default: null },
+  business_name: { type: String, default: null },
+  catalog_id: { type: String, default: null },
+  catalog_name: { type: String, default: null },
+});
+
+ChannelConnection.discriminator("ChannelConnectionMeta", metaSchema, MARKETPLACE_PLATFORM.META);
+
 module.exports = ChannelConnection;

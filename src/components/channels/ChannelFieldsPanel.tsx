@@ -123,6 +123,7 @@ export function ChannelFieldsPanel({
       <div className="space-y-1.5">
         {field}
         <ChannelCategorySource
+          channelKey={channel.key}
           channelName={channel.name}
           listingValue={values[d.key] as string}
           mapped={mappedCategory}

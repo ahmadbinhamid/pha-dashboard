@@ -167,7 +167,23 @@ async function hydrateResolved(resolvedList, adapter, tenantId) {
   if (adapter?.categoryField) await applyMappedCategories(resolvedList, adapter.key, tenantId);
   if (needs.stock) await applyStock(resolvedList);
   if (needs.productUrl) await applyProductUrls(resolvedList, adapter.key, tenantId);
+  if (needs.imageSizes) await applyImageSizes(resolvedList);
   return resolvedList;
+}
+
+// photoSizes[i] is photos[i]'s { width, height, format }, or null if unknown.
+async function applyImageSizes(resolvedList) {
+  const { readImageSize } = require("../../utils/imageDimensions");
+  const { buildAttachmentFilePath } = require("../../utils/attachment");
+  const byFile = new Map();
+  const sizeOf = (fileName) => {
+    if (!fileName) return Promise.resolve(null);
+    if (!byFile.has(fileName)) byFile.set(fileName, readImageSize(buildAttachmentFilePath(fileName)));
+    return byFile.get(fileName);
+  };
+  for (const resolved of resolvedList) {
+    resolved.photoSizes = await Promise.all((resolved.photos || []).map((p) => sizeOf(typeof p === "string" ? null : p?.file_name)));
+  }
 }
 
 // NOTE: only stock_control === false skips lookup; eBay/Google differ on unset.
@@ -199,12 +215,12 @@ async function applyProductUrls(resolvedList, platform, tenantId) {
   }
 }
 
-// Category order: listing value -> tenant mapping -> unset.
+// Category order: listing value -> tenant mapping -> fallback mapping -> unset.
 async function applyMappedCategories(resolvedList, platform, tenantId) {
   const missing = resolvedList.filter((r) => !r.category?.id && r.product);
   if (!missing.length) return;
-  const { resolveMappedCategories } = require("../category-mapping.service");
-  const byProduct = await resolveMappedCategories(tenantId, platform, missing.map((r) => r.product));
+  const { resolvePlatformCategories } = require("../category-mapping.service");
+  const byProduct = await resolvePlatformCategories(tenantId, platform, missing.map((r) => r.product));
   for (const resolved of missing) resolved.category = byProduct.get(String(resolved.product._id)) || null;
 }
 

@@ -2,11 +2,12 @@
 // DB-facing logic behind GET /api/v1/channels* (HTTP in channel.controller.js).
 
 const registry = require("./registry");
+const { logger } = require("../../loaders/logging");
 const ChannelConnection = require("../../models/ChannelConnection");
 const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const { enqueueChannelJob } = require("../../queues/channel.queue");
-const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
+const { CHANNEL_CONNECTION_STATUS, CHANNEL_JOB } = require("../../constants/channel.constants");
 const { LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { withStaticOptions } = require("./fieldSchema");
 const { findUnmetPrerequisite, prerequisiteMessage } = require("./channel-prerequisite.service");
@@ -95,6 +96,8 @@ async function listChannelsForTenant(tenantId) {
         // Unmet prerequisite code plus tenant-facing text with the remedy.
         status_reason: conn?.status_reason || null,
         status_message: conn?.status_reason ? prerequisiteMessage(conn.status_reason, manifest.name) : null,
+        // Additive: a dated token's expiry, so the UI can ask to reconnect early.
+        token_expires_at: conn?.token_expires_at || null,
       },
       health: {
         consecutive_failures: consecutiveFailures,
@@ -136,4 +139,19 @@ async function retryChannelLog(tenantId, platform, logId) {
   return { requeued: true, listingId: log.entity_id.toString() };
 }
 
-module.exports = { listChannelsForTenant, getChannelLogs, retryChannelLog, checkStorefrontRequirement };
+// A full-catalogue push runs well past the queue's 60s default timeout.
+const FULL_SYNC_TIMEOUT_MS = 30 * 60_000;
+
+/** Queues a tenant's full-catalogue push (after connect); best effort. */
+async function enqueueFullSync(platform, tenantId) {
+  try {
+    await enqueueChannelJob(platform, CHANNEL_JOB.SYNC_BATCH, { tenantId: String(tenantId) }, { timeout: FULL_SYNC_TIMEOUT_MS });
+    return true;
+  } catch (err) {
+    // A queue hiccup mustn't turn an already-saved connection into an error.
+    logger.warn(`[channel.service] failed to enqueue full sync for ${platform}/${tenantId}: ${err.message}`);
+    return false;
+  }
+}
+
+module.exports = { listChannelsForTenant, getChannelLogs, retryChannelLog, checkStorefrontRequirement, enqueueFullSync };

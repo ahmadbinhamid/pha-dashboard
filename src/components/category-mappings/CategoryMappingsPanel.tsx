@@ -5,7 +5,7 @@ import { CategoryMappingRow } from "@/components/category-mappings/CategoryMappi
 import { getCategoryMappingOverview } from "@/lib/api/categoryMappings";
 import type { CategoryMapping } from "@/types/categoryMapping";
 
-// Each product category's default channel category (a listing's own value still wins).
+// Each product category's default channel category; a listing's own wins.
 export function CategoryMappingsPanel() {
   const { data, isLoading } = useQuery({ queryKey: ["category-mappings"], queryFn: getCategoryMappingOverview });
   const overview = data?.data;
@@ -23,7 +23,7 @@ export function CategoryMappingsPanel() {
     <Card>
       <CardHeader
         title="Default channel categories"
-        description="eBay and Google use unrelated category systems, so map each of your product categories once. New listings pick these up automatically, a category set on an individual listing still wins. eBay ids must come from eBay's live category search."
+        description="eBay and Google use unrelated category systems, so map each of your product categories once. Meta uses Google's categories, so its column is an optional override. New listings pick these up automatically, a category set on an individual listing still wins. eBay ids must come from eBay's live category search."
       />
       <CardContent className="divide-y divide-border/60 py-0 sm:py-0">
         {overview.categories.length === 0 ? (

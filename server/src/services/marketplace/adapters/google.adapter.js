@@ -9,6 +9,7 @@ const googleMerchantApi = require("../../google/google.merchant.api.service");
 const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");
 const { assertFieldValues } = require("../fieldSchema");
 const { httpError } = require("../../../utils/http/httpError");
+const { isAbsoluteHttpsUrl } = require("../../../utils/url");
 const { fieldSchema, fieldValues, toGoogleCondition } = require("./google.fieldSchema");
 
 // Google disapproves a bad imageLink later, async; 400 keeps the breaker shut.
@@ -18,16 +19,6 @@ class GoogleImageValidationError extends Error {
     this.name = "GoogleImageValidationError";
     this.status = 400;
     this.code = "INVALID_IMAGE_URL";
-  }
-}
-
-// URL parse, not startsWith, so a value merely containing https:// fails.
-function isAbsoluteHttpsUrl(url) {
-  if (typeof url !== "string" || !url) return false;
-  try {
-    return new URL(url).protocol === "https:";
-  } catch {
-    return false;
   }
 }
 

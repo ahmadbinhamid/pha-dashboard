@@ -10,7 +10,7 @@ import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNo
 import { SalesChannelResyncButton } from "@/components/channels/SalesChannelResyncButton";
 import { SalesChannelRowActionsMenu } from "@/components/channels/SalesChannelRowActionsMenu";
 import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
-import { CATEGORY_SOURCE_LABEL } from "@/config/salesChannels";
+import { categorySourceLabel } from "@/config/salesChannels";
 import { ChannelSettingsDrawer } from "@/components/channels/ChannelSettingsDrawer";
 import { SyncBadge } from "@/components/listings/SyncBadge";
 import { useToast } from "@/context";
@@ -214,7 +214,7 @@ export function SalesChannelRow({
                   </span>
                   {(categoryOverridden || mappedCategory) && (
                     <Badge variant={categoryOverridden ? "warn" : "muted"} className="px-1.5 py-0.5 text-2xs font-medium">
-                      {categoryOverridden ? CATEGORY_SOURCE_LABEL.override(channel.name) : CATEGORY_SOURCE_LABEL.mapping}
+                      {categorySourceLabel(channel.key, channel.name, mappedCategory, categoryOverridden)}
                     </Badge>
                   )}
                   {categoryOverridden && mappedCategory && (

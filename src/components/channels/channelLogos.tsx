@@ -1,8 +1,9 @@
 import { useId } from "react";
+import { MetaLogo } from "@/components/channels/MetaLogo";
 
-// Real brand marks shared by every "which channel is this" spot (Integrations, ChannelAvatar, filter pills); official assets in each brand's own hardcoded color, never a theme token.
+// Official brand marks in their own hardcoded colours, never theme tokens.
 
-// eBay's mark is a wordmark (~2.5:1 aspect), so in a square slot it renders "contained" (centered/letterboxed) rather than stretched or distorted.
+// eBay's wordmark is ~2.5:1, so a square slot letterboxes it, never stretches.
 export function EbayLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0.1 0.1 299.8 120.125" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -15,7 +16,7 @@ export function EbayLogo({ className }: { className?: string }) {
   );
 }
 
-// Google Merchant Center's own icon, not the generic "G" mark, since this integration pushes the catalogue to Merchant Center specifically. useId() namespaces the gradient/shadow/shape defs since this renders once per row in a list.
+// Merchant Center icon, not the "G"; useId() scopes defs rendered per row.
 export function GoogleLogo({ className }: { className?: string }) {
   const uid = useId();
   const gradId = `gmc-grad-${uid}`;
@@ -65,9 +66,10 @@ export type BrandLogoComponent = (props: { className?: string }) => React.ReactN
 const CHANNEL_LOGOS: Record<string, BrandLogoComponent> = {
   ebay: (p) => <EbayLogo {...p} />,
   google: (p) => <GoogleLogo {...p} />,
+  meta: (p) => <MetaLogo {...p} />,
 };
 
-// Storefront excluded: it's the tenant's own site, not a fixed third-party brand — callers handle channelKey === "storefront" themselves (ChannelAvatar.tsx, ActiveChannelsCard.tsx).
+// Storefront excluded: it's the tenant's own site; callers handle that key.
 export function getChannelLogo(channelKey: string): BrandLogoComponent | null {
   return CHANNEL_LOGOS[channelKey] ?? null;
 }

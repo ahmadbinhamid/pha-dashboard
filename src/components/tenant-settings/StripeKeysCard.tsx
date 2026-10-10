@@ -18,6 +18,7 @@ import {
   type StripeKeysFormValues,
   type WebhookSecretFormValues,
 } from "@/lib/validation/stripeKeys";
+import { InlineNotice } from "@/components/ui/InlineNotice";
 
 export const STRIPE_KEYS_FORM_ID = "stripe-keys-form";
 
@@ -63,7 +64,7 @@ export function StripeKeysCard({
   const status = data?.data;
 
   useEffect(() => {
-    // Never pre-fill the secret key input — the API never returns it, so blank means "unchanged" on save (see onSubmit below).
+    // Never pre-filled: the API never returns it, so blank means "unchanged".
     reset({ secret_key: "", publishable_key: status?.publishable_key ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.publishable_key]);
@@ -94,7 +95,7 @@ export function StripeKeysCard({
   });
 
   const onSubmit = (form: StripeKeysFormValues) => {
-    // secret_key omitted entirely (not sent as "") when blank, so the previously-saved key stays unless the tenant types a new one.
+    // Blank secret_key is omitted, not sent as "", so the saved key is kept.
     const payload: UpdateStripeKeysPayload = { publishable_key: form.publishable_key };
     if (form.secret_key) payload.secret_key = form.secret_key;
     keysMutation.mutate(payload);
@@ -121,7 +122,7 @@ export function StripeKeysCard({
         ) : (
           <>
             {status?.last_error && (
-              <p className="rounded-xs bg-tag-danger-bg px-3 py-2 text-sm text-tag-danger-fg">{status.last_error}</p>
+              <InlineNotice variant="danger">{status.last_error}</InlineNotice>
             )}
 
             <form id={STRIPE_KEYS_FORM_ID} className="space-y-4" onSubmit={handleSubmit(onSubmit)}>

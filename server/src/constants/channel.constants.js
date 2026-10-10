@@ -30,7 +30,19 @@ const CHANNEL_SYNC_LOG_STATUS = Object.freeze({
   SKIPPED: "skipped",
 });
 
+// Queue job names shared by producers and the channel worker.
+const CHANNEL_JOB = Object.freeze({
+  SYNC_LISTING: "sync_listing",
+  SYNC_BATCH: "sync_batch",
+  CHECK_BATCH_STATUS: "check_batch_status",
+});
+
+// What an async channel batch did: pushed items, or deleted one (end).
+const ASYNC_BATCH_KIND = Object.freeze({ PUSH: "push", END: "end" });
+
 module.exports = {
+  CHANNEL_JOB,
+  ASYNC_BATCH_KIND,
   CHANNEL_CONNECTION_STATUS,
   CHANNEL_SYNC_LOG_STATUS,
   CHANNEL_STATUS_REASON,

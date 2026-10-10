@@ -21,14 +21,16 @@ exports:
   key,            // platform key, e.g. "ebay"
   manifest,       // { key, name, logo, description, status, authType, setupSteps, requiredTenantData,
                   //   requiresStorefront?, fieldSchema, productConstraints? }   — see §13
-  capabilities,   // { publish, inventory, batch, orders, webhooks, inboundInventory, variants }
+  capabilities,   // { publish, inventory, batch, asyncPublish?, orders, webhooks, inboundInventory, variants }
   needs,          // optional { branding?, stock?, productUrl? } — I/O the resolver hydrates (§13)
   categoryField,  // optional listing field holding the channel category (§13)
+  categoryFallbackPlatform, // optional: whose mapping fills an unmapped category (Meta → "google", §14)
   loadSettings(tenantId), // -> resolved connection/settings object, or null if not connected
   publish(resolved, settings, hooks?, seq?),
   update(resolved, settings, hooks?, seq?),
   end(listing, { product, variant, settings, sku }),
   publishBatch(...), // optional — omitted by eBay
+  checkBatchStatus(handle, settings), // required when capabilities.asyncPublish (§14)
   syncBaselineFields(quantity), // optional — extra fields stamped with the sync baseline
 }
 ```
@@ -866,7 +868,7 @@ already generic — `GET /api/v1/channels`, `GET /api/v1/channels/:platform/logs
 with zero Google-specific code, once `registerAdapters.js` registers the
 adapter — that's the entire point of the generic layer built in §1–§8.
 
-## 10. What a third channel (e.g. Meta Shop) would need
+## 10. What a new channel needs (Meta was the third; see §14 for a fourth)
 
 Queues, `ChannelSyncLog`, circuit breaker, generic routes, category mappings,
 the resolver's hydration and the product form's Sales Channels section are all
@@ -1177,3 +1179,140 @@ I/O-backed is resolved beforehand by `sync.service.js` / `listing.resolver.js`:
   while any tenant is unmigrated) gates its deletion.
 - The frontend's `ListingCreatePage` / `ListingEditPage` now redirect to the
   product's Sales Channels section (`/products/:slug/edit?channel=<key>#sales-channels`).
+
+## 14. Meta (third channel) and the async publishing contract
+
+### Async publishing contract (`capabilities.asyncPublish`)
+
+The one shared-layer change for Meta. Absent or `false` means synchronous,
+exactly as before: every new branch in `sync.service.js` and
+`channel.worker.js` is gated on `asyncPublish.isAsyncAdapter(adapter)`, so eBay
+and Google never reach it (covered by the isolation test in
+`async-publish.service.test.js`, plus every pre-existing test passing
+unmodified).
+
+An async adapter's `publish`/`update`/`end` return, and each `publishBatch`
+item may be, `{ pending: true, handle, retailer_id, external_listing_id?,
+quantity? }` instead of a final result. Skips (`{ skipped }`) and per-item
+failures (`{ ok: false }` / thrown 400s) are still synchronous.
+
+On a pending result (`services/marketplace/async-publish.service.js`):
+
+1. `trackPendingBatch` sets `sync_status: pending`, `inflight_seq` (the
+   `push_seq` that was **sent**), `inflight_at`, and `external_listing_id`,
+   in one `bulkWrite`. It does **not** stamp `last_pushed_seq` or `synced_at`.
+2. It enqueues a delayed `check_batch_status` job whose data is the whole
+   state: `{ platform, tenantId, handle, kind: "push" | "end", attempt,
+   items: [{ listingId, retailerId, sentSeq, quantity }] }`. No new
+   collection: Bull persists delayed jobs in Redis, and the job needs nothing
+   in memory, so a worker restart resolves it (tested against real Bull).
+   If the enqueue itself fails, the listings are errored immediately rather
+   than left pending.
+3. `processCheckBatchStatus` calls `adapter.checkBatchStatus(handle,
+   settings)` → `{ done, failures: Map<retailerId, message>,
+   unattributedErrors }`.
+   - Not done, or a transport error: re-enqueue itself with `attempt + 1`
+     and delay `CHANNEL_BATCH_STATUS_POLL_MS × 2^attempt`. After
+     `CHANNEL_BATCH_STATUS_MAX_ATTEMPTS` (default 8, ≈ 2 h at the 30 s
+     default) every item is errored with `batch_status_timeout`. Never
+     pending forever.
+   - A tagged reauth/prerequisite error flags the connection (existing
+     `flagIfPrerequisiteError` path) and errors the items.
+   - Done: a failed item gets a `ChannelSyncLog` failure row and only that
+     listing is errored. If Meta reports errors without naming items, every
+     unnamed item is errored (fail loudly, never "synced" unverified).
+   - Success is **fenced**: `updateOne({ _id, last_pushed_seq <= sentSeq })`
+     with `$max: { last_pushed_seq: sentSeq }`. A stale confirmation matches
+     nothing and is logged as `stale_seq`. `sync_status` is set and the
+     in-flight marker released only if `inflight_seq` still equals `sentSeq`.
+4. **Mid-flight changes**: while a listing has a live `inflight_seq`,
+   `syncListing` and `processBatchChunk` skip it (`batch_in_flight`), so two
+   batches for one listing never race inside Meta. When the batch resolves,
+   any listing whose `push_seq` moved past `sentSeq` gets a fresh
+   `sync_listing` at the new seq. An `inflight_at` older than twice the total
+   poll window is treated as abandoned so a lost job can't block a listing.
+
+`inflight_seq` / `inflight_at` are on the `MarketplaceListing` base schema with
+**no default**, so nothing is ever stored on an eBay or Google document.
+
+`check_batch_status` goes through `enqueueChannelJob`; the debounce `jobId`
+logic is keyed to the literal `"sync_listing"`, so it never applies here
+(`channel.queue.js` is unmodified). The worker attaches the processor only for
+an adapter with `asyncPublish` and a `checkBatchStatus` export.
+
+`logSyncEvent` moved from `sync.service.js` to `sync-log.service.js` (body
+unchanged) so both services can share it without a circular import.
+
+### Meta adapter (`adapters/meta.adapter.js`)
+
+- Website checkout only (Australian tenants; Meta's in-app checkout is US
+  only): `orders: false`, `webhooks: false`, `requiresStorefront: true`.
+- `items_batch` with `method: "UPDATE"` (Meta's `allow_upsert` defaults to
+  `true`, so one verb covers create and update) and `item_type:
+  PRODUCT_ITEM`. The item key is `data.id` = the SKU (Meta calls it
+  `retailer_id` in responses). Variants share `item_group_id = ph-<product
+  _id>`, which never changes.
+- `external_listing_id = meta:<catalog_id>:<retailer_id>`, prefixed because
+  the base unique index on `external_listing_id` spans every platform and
+  tenant. Set at send time so `end()` can withdraw an item whose create was
+  still unconfirmed.
+- Category: listing `meta_product_category` → Meta `CategoryMapping` → Google
+  `CategoryMapping` (`category-mapping.service.js#resolvePlatformCategories`,
+  driven by `adapter.categoryFallbackPlatform`) → unset, which fails the item
+  (the field is `required`).
+- Untracked stock is skipped exactly like Google. Images must be public HTTPS
+  and at least 500×500 JPEG/PNG; sizes are read from the upload's file header
+  by the resolver (`needs.imageSizes` → `resolved.photoSizes`,
+  `utils/imageDimensions.js`) so the adapter stays pure.
+- No `refreshIntervalDays`: Meta's docs name no refresh cadence (only an
+  optional `expiration_date`, which this integration doesn't set).
+
+### Meta errors (`utils/http/graphError.js`)
+
+Graph returns most errors as HTTP 400 with `{ error: { code, error_subcode }
+}`, so classification is by `code`: throttling (4, 17, 32, 613, 80009,
+80014) and transient (1, 2) → status 503 (retry + breaker); permission (10,
+200) → 403 (breaker); 190 → the existing `reauthRequiredError` (status 400,
+off the breaker, shows "Reconnect Meta"); anything else keeps its HTTP status
+(400 = per-item data). `metaCode`/`metaSubcode`/`upstreamStatus` are attached.
+
+### Meta services (`services/meta/`)
+
+- `meta.graph-api.service.js`: base URL built per call from
+  `config.meta.graphHost`/`graphVersion` (`META_GRAPH_VERSION`, default
+  `v25.0`, the one pin). `appsecret_proof` (hex HMAC-SHA256 of the token) on
+  every call; POST bodies carry the token, never a logged URL.
+- `meta.oauth.service.js`: Facebook Login for Business with `config_id`,
+  `response_type=code`, `override_default_response_type=true`, signed state.
+  Business-integration system-user tokens don't expire by default; if the
+  exchange returns `expires_in`, it's stored in `token_expires_at`, an
+  expired token raises reauth before any call, and the connect card warns 7
+  days ahead (`connection.token_expires_at` is now on `GET /channels`).
+- `meta.catalog-api.service.js`: `items_batch`,
+  `check_batch_request_status` (with `load_ids_of_invalid_requests=true`),
+  businesses (`me?fields=client_business_id`, else `me/businesses`) and
+  catalogs (owned + client).
+
+Routes (`routes/meta.routes.js`): `GET /meta/oauth/connect-url`, public
+`GET /meta/oauth/callback`, `GET /meta/oauth/businesses`, `POST
+/meta/oauth/complete` (catalog must be reachable by the token). Listings use
+the generic `/listings` API only.
+
+### What a fourth channel would need
+
+Everything in §10, plus:
+
+1. If its API is fire-and-poll, set `capabilities.asyncPublish: true`, return
+   `{ pending, handle, retailer_id }` from publish/update/end/publishBatch,
+   and export `checkBatchStatus(handle, settings)` returning `{ done,
+   failures, unattributedErrors }`. The queue, fencing, retries, timeouts and
+   mid-flight recovery then come for free.
+2. If its taxonomy is another channel's, set `categoryFallbackPlatform`.
+3. If it has image rules, declare `needs.imageSizes` and read
+   `resolved.photoSizes`.
+4. Classify its API errors into `.status` the breaker understands (see
+   `graphError.js`), and tag token rejections with `reauthRequiredError`.
+5. Register a `LISTING_WRITERS` entry and `LISTING_WRITE_SCHEMAS` pair; no
+   per-platform listing routes are needed any more.
+6. Frontend: a `CHANNEL_CONNECT_PLUGINS` entry, a `CHANNEL_FORM_ADAPTERS`
+   entry, a logo in `channelLogos.tsx` and an `INTEGRATION_CATALOGUE` entry.

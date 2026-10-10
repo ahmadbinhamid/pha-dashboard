@@ -7,6 +7,8 @@ import type {
   GoogleChannelFormState,
   GoogleListing,
   GoogleListingFormState,
+  MetaChannelFormState,
+  MetaListing,
   MarketplacePlatform,
   ProductListingGroup,
 } from "@/types/marketplace";
@@ -122,6 +124,25 @@ export const updateGoogleListing = (id: string, form: GoogleListingFormState | G
     ...overrides,
   });
 };
+
+// Meta's create queues the first sync server-side, like Google's.
+export const createMetaListing = (productId: string, variantId: string | null, form: MetaChannelFormState) =>
+  createChannelListing<MetaListing>("meta", {
+    product: productId,
+    variant: variantId,
+    meta_product_category: form.meta_product_category || null,
+    gtin: form.gtin || null,
+  });
+
+// Empty override means null (product value).
+export const updateMetaListing = (id: string, form: MetaChannelFormState) =>
+  updateChannelListing<MetaListing>(id, {
+    meta_product_category: form.meta_product_category || null,
+    gtin: form.gtin || null,
+    title_override: form.title_override.trim() || null,
+    description_override: form.description_override.trim() || null,
+    price_override: form.price_override !== "" ? Number(form.price_override) : null,
+  });
 
 // Browse/read/delete/push are platform-agnostic; /listings mixes platforms.
 export const getListings = async (params: ListingListParams = {}) => {

@@ -5,6 +5,7 @@ const Joi = require("joi");
 const { LISTING_STATE, LISTING_SYNC_STATUS, MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 const ebayV = require("./ebay.listing.validation");
 const googleV = require("./google.listing.validation");
+const metaV = require("./meta.listing.validation");
 
 const listListings = {
   query: Joi.object({
@@ -28,6 +29,7 @@ const listListings = {
 const LISTING_WRITE_SCHEMAS = Object.freeze({
   [MARKETPLACE_PLATFORM.EBAY]: { create: ebayV.createListing, update: ebayV.updateListing },
   [MARKETPLACE_PLATFORM.GOOGLE]: { create: googleV.createListing, update: googleV.updateListing },
+  [MARKETPLACE_PLATFORM.META]: { create: metaV.createListing, update: metaV.updateListing },
 });
 
 module.exports = { listListings, LISTING_WRITE_SCHEMAS };

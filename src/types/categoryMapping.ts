@@ -27,19 +27,23 @@ export interface MappableCategory {
 }
 
 export interface CategoryMappingOverview {
-  platforms: { key: string; name: string }[];
+  // fallback_platform: whose mapping applies when this one is unset.
+  platforms: { key: string; name: string; fallback_platform?: string }[];
   categories: MappableCategory[];
   mappings: CategoryMapping[];
   google_categories: ChannelCategoryOption[];
 }
 
 // Where a listing's effective category came from.
-export type CategorySource = "listing" | "mapping";
+export type CategorySource = "listing" | "mapping" | "fallback_mapping";
 
 export interface MappedCategory {
   id: string;
   name: string | null;
-  source: "mapping";
+  // fallback_mapping: another platform's mapping (Meta uses Google's).
+  source: "mapping" | "fallback_mapping";
+  // Set with fallback_mapping: whose mapping supplied it.
+  platform?: string;
   product_category_id: string;
 }
 

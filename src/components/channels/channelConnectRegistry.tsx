@@ -2,9 +2,13 @@ import { EbaySandboxSwitch } from "@/components/ebay-settings/EbaySandboxSwitch"
 import { EbayConnectedStatusText } from "@/components/ebay-settings/EbayConnectedStatusText";
 import { EbaySettingsSection } from "@/components/ebay-settings/EbaySettingsSection";
 import { GoogleAccountPicker } from "@/components/google-settings/GoogleAccountPicker";
+import { MetaCatalogPicker } from "@/components/meta-settings/MetaCatalogPicker";
+import { MetaConnectedStatusText } from "@/components/meta-settings/MetaConnectedStatusText";
 import { getEbayConnectUrl } from "@/lib/api/ebay";
 import { getGoogleConnectUrl } from "@/lib/api/google";
+import { getMetaConnectUrl } from "@/lib/api/meta";
 import { googleConnectErrorMessage } from "@/config/googleConnect";
+import { metaConnectErrorMessage } from "@/config/metaConnect";
 import type { ChannelConnectPlugin } from "@/types/channelConnect";
 
 // Platform pieces the manifest can't express; unlisted platforms use defaults.
@@ -38,5 +42,19 @@ export const CHANNEL_CONNECT_PLUGINS: Record<string, ChannelConnectPlugin> = {
     callbackErrorText: googleConnectErrorMessage,
     inlineStepValue: "choose_account",
     InlineStep: GoogleAccountPicker,
+  },
+  meta: {
+    getConnectUrl: async () => (await getMetaConnectUrl()).data.url,
+    description: "Connect a Meta business catalog to sell on Facebook and Instagram Shops, with checkout on your storefront.",
+    connectNoun: "Meta",
+    connectErrorText: "Failed to start Meta connection",
+    disconnectedText:
+      "No Meta catalog connected yet — listings can be created locally but won't sync to Facebook or Instagram.",
+    callbackErrorText: metaConnectErrorMessage,
+    inlineStepValue: "choose_catalog",
+    invalidateQueryKeys: [["meta-businesses"]],
+    statusOverrides: { pending: { variant: "warn", label: "Choose a catalog to finish connecting" } },
+    ConnectedText: MetaConnectedStatusText,
+    InlineStep: MetaCatalogPicker,
   },
 };

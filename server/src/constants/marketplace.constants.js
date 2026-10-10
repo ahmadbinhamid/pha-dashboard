@@ -3,6 +3,7 @@
 const MARKETPLACE_PLATFORM = Object.freeze({
   EBAY: "ebay",
   GOOGLE: "google",
+  META: "meta",
   AMAZON: "amazon",   // future
   SHOPIFY: "shopify", // future
 });

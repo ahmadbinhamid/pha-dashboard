@@ -119,6 +119,19 @@ const config = {
     redirectUri: get("GOOGLE_REDIRECT_URI", null),
   },
 
+  meta: {
+    // Shared Meta app credentials; tenant tokens live on ChannelConnection.
+    appId: get("META_APP_ID", null),
+    appSecret: get("META_APP_SECRET", null),
+    redirectUri: get("META_REDIRECT_URI", null),
+    // Login for Business configuration that issues a system-user token.
+    loginConfigId: get("META_LOGIN_CONFIG_ID", null),
+    // The one place the Graph API version is pinned.
+    graphVersion: get("META_GRAPH_VERSION", "") || "v25.0",
+    graphHost: get("META_GRAPH_HOST", "https://graph.facebook.com"),
+    dialogHost: get("META_DIALOG_HOST", "https://www.facebook.com"),
+  },
+
   channels: {
     syncLogTtlDays: getNum("CHANNEL_SYNC_LOG_TTL_DAYS", 30),
     // Off by default: full syncs would flood the log; failures are always logged.
@@ -140,6 +153,10 @@ const config = {
     refreshSweepIntervalHours: getNum("CHANNEL_REFRESH_SWEEP_INTERVAL_HOURS", 24),
     // Checked at sweep time, so flipping it takes effect without a restart.
     refreshSweepEnabled: get("CHANNEL_REFRESH_SWEEP_ENABLED", "true") === "true",
+    // Async channels: first batch-status check delay, doubled per attempt.
+    batchStatusPollMs: getNum("CHANNEL_BATCH_STATUS_POLL_MS", 30_000),
+    // Checks before an unfinished async batch errors its listings.
+    batchStatusMaxAttempts: getNum("CHANNEL_BATCH_STATUS_MAX_ATTEMPTS", 8),
   },
 
   inventory: {

@@ -1,6 +1,6 @@
 // GET /channels shape (channel.service.js#listChannelsForTenant), per adapter.
 
-// "pending" (Google only): OAuth done but no Merchant Center account picked.
+// "pending" (Google, Meta): OAuth done but no account or catalog picked yet.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
 
 // Why a connection is "error": unmet prerequisite or a refused token.
@@ -22,6 +22,8 @@ export interface ChannelConnectionInfo {
   status_reason: ChannelStatusReason | null;
   // Tenant-facing explanation with the remedy, set with status_reason.
   status_message: string | null;
+  // A dated token's expiry (Meta); null when the token never expires.
+  token_expires_at?: string | null;
 }
 
 export interface ChannelHealthInfo {

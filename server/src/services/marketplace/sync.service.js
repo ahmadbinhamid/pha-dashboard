@@ -3,39 +3,17 @@
 
 const { logger } = require("../../loaders/logging");
 const MarketplaceListing = require("../../models/MarketplaceListing");
-const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const Product = require("../../models/Product");
 const ProductVariant = require("../../models/ProductVariant");
 const config = require("../../config");
 const { getAdapter } = require("./registry");
 const { resolveListing, resolveSku, hydrateResolved } = require("./listing.resolver");
 const circuitBreaker = require("./circuitBreaker");
+const { logSyncEvent } = require("./sync-log.service");
+const asyncPublish = require("./async-publish.service");
 const { ensurePrerequisites, flagIfPrerequisiteError } = require("./channel-prerequisite.service");
 const { LISTING_STATE, LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../../constants/channel.constants");
-
-// Never throws: a log failure mustn't break the job; non-failures are opt-in.
-async function logSyncEvent({ tenantId, platform, jobType, entityId, status, attempt, errorCode, errorMessage, errorStatus, requestSummary, durationMs }) {
-  if (status !== CHANNEL_SYNC_LOG_STATUS.FAILURE && !config.channels.logSuccesses) return;
-  try {
-    await ChannelSyncLog.create({
-      tenant_id: tenantId,
-      platform,
-      job_type: jobType,
-      entity_type: "MarketplaceListing",
-      entity_id: entityId,
-      status,
-      attempt: attempt ?? 1,
-      error_code: errorCode ?? null,
-      error_message: errorMessage ?? null,
-      error_status: Number.isInteger(errorStatus) ? errorStatus : null,
-      request_summary: requestSummary ?? null,
-      duration_ms: durationMs ?? null,
-    });
-  } catch (err) {
-    logger.warn(`[marketplace.sync] failed to write ChannelSyncLog for ${jobType}/${entityId}: ${err.message}`);
-  }
-}
 
 // Logs a sync_listing skip; branch-specific listing updates are the caller's.
 async function skipSync(listing, reason) {
@@ -71,6 +49,16 @@ async function recordQuantityPushed(listing, adapter, quantity, seq) {
     // strict:false, or base-model updates drop discriminator-only ebay_* fields.
     { strict: false },
   );
+}
+
+// Sent, not confirmed: no last_pushed_seq/synced_at until the status check.
+async function recordPendingPush(listing, ids, sentSeq) {
+  await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
+  await asyncPublish.trackPendingBatch(listing.platform, listing.tenant_id, ids.handle, [
+    { listingId: listing._id, retailerId: ids.retailer_id, sentSeq, quantity: ids.quantity, externalListingId: ids.external_listing_id },
+  ]);
+  logger.info(`[marketplace.sync] listing ${listing._id} sent in batch ${ids.handle} (seq ${sentSeq}) — awaiting confirmation`);
+  return { pending: true, handle: ids.handle, sentSeq };
 }
 
 // seq: fencing token from enqueue; null (e.g. manual resync) always applies.
@@ -129,6 +117,12 @@ async function syncListing(listingId, seq = null) {
     return skipSync(listing, "inventory_not_supported");
   }
 
+  // Async channels: one unconfirmed batch per listing; its check re-pushes.
+  if (asyncPublish.isAsyncAdapter(adapter) && asyncPublish.hasLiveInflightBatch(listing)) {
+    logger.info(`[marketplace.sync] listing ${listingId}: batch in flight (seq ${listing.inflight_seq}) — deferring to its status check`);
+    return skipSync(listing, "batch_in_flight");
+  }
+
   const variant = listing.variant
     ? await ProductVariant.findById(listing.variant).populate("attachments")
     : null;
@@ -168,6 +162,10 @@ async function syncListing(listingId, seq = null) {
         durationMs: Date.now() - startedAt,
       });
       return { skipped: true, reason: ids.reason };
+    }
+
+    if (asyncPublish.isAsyncAdapter(adapter) && ids?.pending) {
+      return await recordPendingPush(listing, ids, seq ?? listing.push_seq ?? 0);
     }
 
     await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
@@ -260,7 +258,15 @@ async function endListing(listingId) {
   const adapter = getAdapter(listing.platform);
 
   try {
-    await adapter.end(listing, await loadEndContext(listing, adapter));
+    const ended = await adapter.end(listing, await loadEndContext(listing, adapter));
+    if (asyncPublish.isAsyncAdapter(adapter) && ended?.pending) {
+      await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
+      await asyncPublish.trackPendingEnd(listing.platform, listing.tenant_id, ended.handle, {
+        listingId: listing._id, retailerId: ended.retailer_id, sentSeq: listing.push_seq ?? 0,
+      });
+      logger.info(`[marketplace.sync] listing ${listingId} end sent in batch ${ended.handle} — awaiting confirmation`);
+      return { ok: true, pending: true, handle: ended.handle };
+    }
     logger.info(`[marketplace.sync] listing ${listingId} ended on ${listing.platform}`);
     await circuitBreaker.recordSuccess(listing.tenant_id, listing.platform);
     await logSyncEvent({
@@ -374,9 +380,11 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
   const lastPushedById = new Map(currentSeqs.map((d) => [String(d._id), d.last_pushed_seq ?? 0]));
 
   const toPush = [];
+  const isAsync = asyncPublish.isAsyncAdapter(adapter);
   for (const candidate of candidates) {
     const currentLastPushed = lastPushedById.get(String(candidate.listing._id)) ?? 0;
-    if (candidate.seq < currentLastPushed) {
+    const inFlight = isAsync && asyncPublish.hasLiveInflightBatch(candidate.listing);
+    if (candidate.seq < currentLastPushed || inFlight) {
       summary.processed++;
       summary.skipped++;
       await logSyncEvent({
@@ -385,7 +393,7 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
         jobType: "sync_batch",
         entityId: candidate.listing._id,
         status: CHANNEL_SYNC_LOG_STATUS.SKIPPED,
-        errorCode: "stale_seq",
+        errorCode: inFlight ? "batch_in_flight" : "stale_seq",
       });
       continue;
     }
@@ -401,11 +409,20 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
     for (const resolved of resolvedChunk) resolved.hydrationError = err;
   }
   const results = await adapter.publishBatch(resolvedChunk, settings);
+  const pendingByHandle = new Map();
 
   for (let i = 0; i < toPush.length; i++) {
     const { listing, seq } = toPush[i];
     const result = results[i];
     summary.processed++;
+
+    if (isAsync && result?.pending) {
+      summary.pending = (summary.pending ?? 0) + 1;
+      const group = pendingByHandle.get(result.handle) ?? [];
+      group.push({ listingId: listing._id, retailerId: result.retailer_id, sentSeq: seq, quantity: result.quantity, externalListingId: result.external_listing_id });
+      pendingByHandle.set(result.handle, group);
+      continue;
+    }
 
     if (result?.skipped) {
       summary.skipped++;
@@ -458,6 +475,10 @@ async function processBatchChunk(adapter, settings, chunk, summary) {
       entityId: listing._id,
       status: CHANNEL_SYNC_LOG_STATUS.SUCCESS,
     });
+  }
+
+  for (const [handle, items] of pendingByHandle) {
+    await asyncPublish.trackPendingBatch(adapter.key, toPush[0].listing.tenant_id, handle, items);
   }
 }
 

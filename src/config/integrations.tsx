@@ -1,8 +1,9 @@
 import { CreditCard, FolderTree, Globe, Link2, Mail, Truck } from "lucide-react";
 import { EbayLogo, GoogleLogo } from "@/components/channels/channelLogos";
+import { MetaLogo } from "@/components/channels/MetaLogo";
 
 // In config/ because the id is also the URL segment SettingsPage routes on.
-export type IntegrationId = "ebay" | "google" | "channel-categories" | "stripe" | "email" | "transdirect" | "domains" | "payment-links";
+export type IntegrationId = "ebay" | "google" | "meta" | "channel-categories" | "stripe" | "email" | "transdirect" | "domains" | "payment-links";
 
 export type IntegrationDefinition = {
   id: IntegrationId;
@@ -29,9 +30,16 @@ export const INTEGRATION_CATALOGUE: IntegrationDefinition[] = [
     logoTile: true,
   },
   {
+    id: "meta",
+    name: "Meta",
+    description: "Sell on Facebook and Instagram Shops from a Meta catalog, with checkout on your storefront.",
+    icon: (p) => <MetaLogo {...p} />,
+    logoTile: true,
+  },
+  {
     id: "channel-categories",
     name: "Channel Categories",
-    description: "Map your product categories to eBay and Google categories once, instead of per listing.",
+    description: "Map your product categories to eBay, Google and Meta categories once, instead of per listing.",
     icon: (p) => <FolderTree {...p} />,
   },
   {

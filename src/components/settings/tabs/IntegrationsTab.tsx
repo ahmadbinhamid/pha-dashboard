@@ -137,6 +137,8 @@ export function IntegrationsTab({
   const googleStatus: IntegrationStatus = googleChannel
     ? CHANNEL_STATUS_MAP[googleChannel.connection.status]
     : "unknown";
+  const metaChannel = channelsRes?.data?.find((c) => c.key === "meta");
+  const metaStatus: IntegrationStatus = metaChannel ? CHANNEL_STATUS_MAP[metaChannel.connection.status] : "unknown";
   const domainsStatus: IntegrationStatus = domainsRes?.data
     ? domainsRes.data.some((d) => d.status === "active")
       ? "connected"
@@ -153,6 +155,7 @@ export function IntegrationsTab({
   const statusById: Record<IntegrationId, IntegrationStatus> = {
     ebay: ebayStatus,
     google: googleStatus,
+    meta: metaStatus,
     "channel-categories": "unknown",
     stripe: stripeStatus,
     email: smtpStatus,
@@ -176,7 +179,7 @@ export function IntegrationsTab({
           </div>
         )}
 
-        {providerId === "ebay" || providerId === "google" ? (
+        {providerId === "ebay" || providerId === "google" || providerId === "meta" ? (
           <ChannelConnectCard platform={providerId} />
         ) : providerId === "channel-categories" ? (
           <CategoryMappingsPanel />
