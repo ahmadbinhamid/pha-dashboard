@@ -10,6 +10,8 @@ const {
   getProductSuggestions,
   findProductById,
   addProductNote,
+  updateProductNote,
+  deleteProductNote,
   sendProductInfoEmail,
   getProductBySlugOrId,
   getPopulatedProduct,
@@ -669,6 +671,27 @@ exports.addProductNote = async (req, res) => {
     );
     if (!product) return notFound(res, "Product not found");
     return created(res, product, "Note added");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.updateProductNote = async (req, res) => {
+  try {
+    const { id, noteId } = req.params;
+    const product = await updateProductNote(id, noteId, { text: req.body.text }, req.tenantId);
+    if (!product) return notFound(res, "Note not found");
+    return success(res, product, "Note updated");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.deleteProductNote = async (req, res) => {
+  try {
+    const product = await deleteProductNote(req.params.id, req.params.noteId, req.tenantId);
+    if (!product) return notFound(res, "Note not found");
+    return success(res, product, "Note deleted");
   } catch (err) {
     return systemfailure(res, err);
   }

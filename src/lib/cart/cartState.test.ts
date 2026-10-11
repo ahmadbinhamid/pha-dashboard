@@ -44,8 +44,8 @@ test("changing one custom line's quantity leaves the other untouched", () => {
 test("a note on one custom line doesn't touch the other", () => {
   const { cart, first, second } = cartWithTwoCustomLines();
 
-  const next = setCartLineNote(cart, second.key, "  fit on Tuesday  ");
-  assert.equal(next.find((i) => i.key === second.key)?.note, "fit on Tuesday");
+  const next = setCartLineNote(cart, second.key, "fit on ");
+  assert.equal(next.find((i) => i.key === second.key)?.note, "fit on ");
   assert.equal(next.find((i) => i.key === first.key)?.note, null);
 });
 

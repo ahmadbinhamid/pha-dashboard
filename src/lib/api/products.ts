@@ -79,6 +79,16 @@ export const addProductNote = async (id: string, text: string) => {
   return data;
 };
 
+export const updateProductNote = async (id: string, noteId: string, text: string) => {
+  const { data } = await apiClient.put<BeResponse<Product>>(`/product/${id}/notes/${noteId}`, { text });
+  return data;
+};
+
+export const deleteProductNote = async (id: string, noteId: string) => {
+  const { data } = await apiClient.delete<BeResponse<Product>>(`/product/${id}/notes/${noteId}`);
+  return data;
+};
+
 export interface SendProductEmailPayload {
   name: string;
   email: string;
