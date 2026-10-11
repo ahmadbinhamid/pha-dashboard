@@ -2,8 +2,8 @@
 // Merges Product/Variant content with listing overrides; adapters read this.
 
 const { httpError } = require("../../utils/http/httpError");
-const { resolveCondition, resolveAuthenticity, resolveFitment, resolvePackage, fitmentFromVehicle } = require("./productFallbacks");
-const { CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
+const { resolveCondition, resolveBrand, resolveAuthenticity, resolveFitment, resolvePackage, fitmentFromVehicle } = require("./productFallbacks");
+const { CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_STATUS_REASON, CHANNEL_REMEDY_LOCATION } = require("../../constants/channel.constants");
 
 function resolveSku(listing, product, variant) {
   // eBay discriminator exposes store_sku; fall through for other platforms
@@ -40,7 +40,8 @@ function resolveListingCategory(listing) {
 
 /** Resolved object adapters build their publish payloads from. */
 function resolveListing(listing, product, variant = null) {
-  const brand = listing.item_specifics?.brand || product.brand || null;
+  // No default here: eBay reads this; Meta/Google add it in hydrateResolved.
+  const { brand, source: brandSource } = resolveBrand(listing, product);
 
   return {
     sku: resolveSku(listing, product, variant),
@@ -48,6 +49,8 @@ function resolveListing(listing, product, variant = null) {
     description: listing.description_override || product.description || product.title,
     price: resolvePrice(listing, product, variant),
     brand,
+    // BRAND_SOURCE value or null; drives the panel's "from …" label.
+    brandSource,
     condition: resolveCondition(listing, product),
     authenticity: resolveAuthenticity(listing, product),
     fitment: resolveFitment(listing, product),
@@ -116,7 +119,7 @@ async function resolveStorefrontHost(tenantId, platform) {
       `No verified default domain for tenant ${tenantId} — ${platformName} requires a real, claimed-and-verified ` +
         `storefront domain and cannot fall back to a shared ${config.payment.linkDomain || "PAYMENT_LINK_DOMAIN"} ` +
         `subdomain (that's this platform's own domain, not one the tenant can verify ownership of with ${platformName}). ` +
-        `Connect and verify a domain under Settings > Domains before connecting ${platformName}.`,
+        `Add and verify a domain in ${CHANNEL_REMEDY_LOCATION.DOMAINS.place} before connecting ${platformName}.`,
       422,
       { code: CHANNEL_PREREQUISITE_ERROR_CODE, statusReason: CHANNEL_STATUS_REASON.STOREFRONT_REQUIRED },
     );
@@ -131,7 +134,7 @@ async function resolveStorefrontHost(tenantId, platform) {
     throw httpError(
       `No verified default domain and no PAYMENT_LINK_DOMAIN fallback configured for tenant ${tenantId} — ` +
         `cannot build a public product URL (required for ${platformName}'s "link" field). Set a default ` +
-        `verified domain under Settings > Domains, or configure PAYMENT_LINK_DOMAIN.`,
+        `verified domain in ${CHANNEL_REMEDY_LOCATION.DOMAINS.place}, or configure PAYMENT_LINK_DOMAIN.`,
       422,
     );
   }
@@ -145,7 +148,8 @@ function resolveIdentifiers(listing, product) {
   const gtin = listing.gtin || null;
   // eBay's item_specifics.mpn reused so it needn't be re-entered for Google
   const mpn = listing.mpn || listing.item_specifics?.mpn || product.mpn || null;
-  const brand = listing.item_specifics?.brand || product.brand || null;
+  // NOTE: never the store default: it can't pair with a maker's MPN as an id.
+  const { brand } = resolveBrand(listing, product);
   return { gtin, mpn, brand };
 }
 
@@ -167,8 +171,22 @@ async function hydrateResolved(resolvedList, adapter, tenantId) {
   if (adapter?.categoryField) await applyMappedCategories(resolvedList, adapter.key, tenantId);
   if (needs.stock) await applyStock(resolvedList);
   if (needs.productUrl) await applyProductUrls(resolvedList, adapter.key, tenantId);
+  if (needs.defaultBrand) await applyDefaultBrand(resolvedList, tenantId);
   if (needs.imageSizes) await applyImageSizes(resolvedList);
   return resolvedList;
+}
+
+// Store default for brandless items; one tenant read per chunk, none if unset.
+async function applyDefaultBrand(resolvedList, tenantId) {
+  const { getDefaultBrand } = require("../tenant-settings.service");
+  const defaultBrand = await getDefaultBrand(tenantId);
+  if (!defaultBrand) return;
+  for (const resolved of resolvedList) {
+    if (resolved.brand) continue;
+    const { brand, source } = resolveBrand(resolved.listing, resolved.product, defaultBrand);
+    resolved.brand = brand;
+    resolved.brandSource = source;
+  }
 }
 
 // photoSizes[i] is photos[i]'s { width, height, format }, or null if unknown.

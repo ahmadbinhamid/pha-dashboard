@@ -2,6 +2,7 @@
 // Listing-override-else-product rules shared by resolver, schemas and backfill.
 
 const { toPackage, hasPackage } = require("../../utils/packageDimensions");
+const { BRAND_SOURCE } = require("../../constants/marketplace.constants");
 
 // NOTE: "" counts as unset; older forms saved empty strings for "not chosen".
 function present(value) {
@@ -11,6 +12,16 @@ function present(value) {
 /** Listing override, else the product's condition (vocab mapped later). */
 function resolveCondition(listing, product) {
   return present(listing?.condition) ?? present(product?.condition);
+}
+
+// NOTE: listing, product, then store default; only Meta/Google pass a default.
+function resolveBrand(listing, product, defaultBrand = null) {
+  const own = present(listing?.item_specifics?.brand);
+  if (own) return { brand: own, source: BRAND_SOURCE.LISTING };
+  const fromProduct = present(product?.brand);
+  if (fromProduct) return { brand: fromProduct, source: BRAND_SOURCE.PRODUCT };
+  const fallback = present(typeof defaultBrand === "string" ? defaultBrand.trim() : null);
+  return fallback ? { brand: fallback, source: BRAND_SOURCE.STORE_DEFAULT } : { brand: null, source: null };
 }
 
 function resolveAuthenticity(listing, product) {
@@ -59,6 +70,7 @@ module.exports = {
   present,
   resolvePackage,
   resolveCondition,
+  resolveBrand,
   resolveAuthenticity,
   resolveFitment,
   fitmentFromVehicle,

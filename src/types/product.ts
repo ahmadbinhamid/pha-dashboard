@@ -171,6 +171,7 @@ export interface ProductCreateFormState {
   barcode: string;
   stock_control: boolean;
   stock_entries: StockEntry[];
+  brand: string;
   mpn: string;
   condition: ProductCondition;
   authenticity: ProductAuthenticity | "";

@@ -1,4 +1,4 @@
-// Meta connect flow: consent first, then the business + catalog picker.
+// Meta connect flow: consent first, then a catalog picker if several granted.
 
 export interface MetaConnectUrlResponse {
   url: string;
@@ -9,17 +9,10 @@ export interface MetaCatalog {
   name: string | null;
 }
 
-export interface MetaBusiness {
-  id: string;
-  name: string | null;
+export interface MetaCatalogsResponse {
   catalogs: MetaCatalog[];
 }
 
-export interface MetaBusinessesResponse {
-  businesses: MetaBusiness[];
-}
-
 export interface MetaCompleteConnectPayload {
-  businessId: string;
   catalogId: string;
 }

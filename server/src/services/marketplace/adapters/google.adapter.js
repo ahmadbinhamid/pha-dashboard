@@ -6,10 +6,11 @@ const config = require("../../../config");
 const { findConnection } = require("../channel-connection.service");
 const googleOauthService = require("../../google/google.oauth.service");
 const googleMerchantApi = require("../../google/google.merchant.api.service");
-const { MARKETPLACE_PLATFORM } = require("../../../constants/marketplace.constants");
+const { MARKETPLACE_PLATFORM, BRAND_SOURCE } = require("../../../constants/marketplace.constants");
 const { assertFieldValues } = require("../fieldSchema");
 const { httpError } = require("../../../utils/http/httpError");
 const { isAbsoluteHttpsUrl } = require("../../../utils/url");
+const { devFallbackImageFor } = require("../../../utils/devImageFallback");
 const { fieldSchema, fieldValues, toGoogleCondition } = require("./google.fieldSchema");
 
 // Google disapproves a bad imageLink later, async; 400 keeps the breaker shut.
@@ -57,7 +58,7 @@ const capabilities = {
 const categoryField = "google_product_category";
 
 // I/O the resolver hydrates onto `resolved` before calling us.
-const needs = { stock: true, productUrl: true };
+const needs = { stock: true, productUrl: true, defaultBrand: true };
 
 // Google expires products not refreshed in 30 days; default stays under that.
 const refreshIntervalDays = config.channels.refreshIntervalDays;
@@ -117,7 +118,8 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
   const googleProductCategory = resolved.category?.id || listing.google_product_category;
 
   const rawUrls = (photos || []).map((p) => (typeof p === "string" ? p : p?.url)).filter(Boolean);
-  const primaryImageUrl = rawUrls[0] || null;
+  const fallback = devFallbackImageFor(rawUrls[0], { channel: "GoogleAdapter", sku });
+  const primaryImageUrl = fallback?.url ?? rawUrls[0] ?? null;
 
   if (!isAbsoluteHttpsUrl(primaryImageUrl)) {
     throw new GoogleImageValidationError(
@@ -170,6 +172,8 @@ function buildProductInputFromResolved(resolved, settings, quantity, identifiers
   };
 
   applyIdentifiers(attributes, identifiers, sku);
+  // NOTE: a store default is sent as brand only, never paired with an MPN.
+  if (resolved.brandSource === BRAND_SOURCE.STORE_DEFAULT && !attributes.brand) attributes.brand = resolved.brand;
 
   // v1 removed `channel` from ProductInput; the other keys are unchanged.
   return {

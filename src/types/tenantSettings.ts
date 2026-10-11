@@ -37,6 +37,8 @@ export interface TenantSettings {
   pickup_location: PickupLocation;
   warranty_text: string | null;
   legal_disclaimer_text: string | null;
+  // Opt-in brand for brandless products on Meta/Google; null = none.
+  default_brand: string | null;
   logo_url: string | null;
   favicon_url: string | null;
   brand_colour: string;
@@ -66,6 +68,7 @@ export type UpdateTenantSettingsPayload = Partial<
     | "bank_details"
     | "pickup_location"
     | "warranty_text"
+    | "default_brand"
     | "legal_disclaimer_text"
     | "logo_url"
     | "favicon_url"

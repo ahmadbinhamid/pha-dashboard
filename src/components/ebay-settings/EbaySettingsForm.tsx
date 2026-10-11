@@ -29,7 +29,6 @@ function toFormState(settings: EbaySettings): EbaySettingsFormValues {
     warehouse_postcode: settings.warehouse_postcode ?? "",
     warehouse_country: settings.warehouse_country ?? "AU",
     warehouse_phone: settings.warehouse_phone ?? "",
-    fallback_image_url: settings.fallback_image_url ?? "",
   };
 }
 
@@ -156,15 +155,6 @@ export function EbaySettingsForm({
               <Input {...register("warehouse_phone")} />
             </FormField>
           </div>
-
-          {settings.sandbox && (
-            <FormField
-              label="Sandbox fallback image URL"
-              hint="Used only while 'Use eBay sandbox' is on, when a listing has no public HTTPS image (e.g. your local UPLOADS_URL isn't publicly reachable). Never used in production."
-            >
-              <Input {...register("fallback_image_url")} placeholder="https://example.com/auto-part-placeholder.jpg" />
-            </FormField>
-          )}
         </form>
       </CardContent>
     </Card>

@@ -1,11 +1,19 @@
 // services/marketplace/adapters/google.adapter.image-validation.test.js
-// Regression guard: buildProductInputFromResolved must reject any unusable or missing primary
-// image, since Google otherwise accepts it and disapproves the product later, silently.
-// Pure unit tests, no Mongo/network. Run: node --test src/services/marketplace/adapters/google.adapter.image-validation.test.js
+// Bad primary images must throw; Google would disapprove them later, silently.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const googleAdapter = require("./google.adapter");
+const config = require("../../../config");
+
+// A dev's .env may turn the image placeholder on; these tests assume it's off.
+const savedDevImage = config.channels.devImageFallback;
+test.before(() => {
+  config.channels.devImageFallback = false;
+});
+test.after(() => {
+  config.channels.devImageFallback = savedDevImage;
+});
 
 const BASE_SETTINGS = { target_country: "AU", content_language: "en", feed_label: "AU" };
 const BASE_LISTING = { condition: "new" };

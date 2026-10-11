@@ -1,5 +1,8 @@
 // utils/marketplaceListing.js
 // Public-safe listing subset for the storefront; eBay-shaped for now.
+
+const { resolveBrand } = require("../services/marketplace/productFallbacks");
+
 function toPublicListing(listing) {
   const aspects =
     listing.item_specifics?.aspects instanceof Map
@@ -28,7 +31,7 @@ function fitmentKey(f) {
 }
 
 // Storefront display values: listing override, else product; deduped fitment.
-function buildProductDisplay(product, listings) {
+function buildProductDisplay(product, listings, { defaultBrand = null } = {}) {
   const primaryListing = listings[0] ?? null;
 
   const fitments = [];
@@ -59,6 +62,8 @@ function buildProductDisplay(product, listings) {
     warranty: primaryListing?.item_specifics?.warranty ?? null,
     condition_notes: primaryListing?.condition_notes || null,
     mpn: primaryListing?.item_specifics?.mpn ?? product.mpn ?? null,
+    // NOTE: same brand the Meta/Google feeds send (product, else store default).
+    brand: resolveBrand(null, product, defaultBrand).brand,
     vehicle_fitments: fitments,
   };
 }

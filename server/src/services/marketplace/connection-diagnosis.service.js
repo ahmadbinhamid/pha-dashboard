@@ -6,7 +6,7 @@ const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const circuitBreaker = require("./circuitBreaker");
 const registry = require("./registry");
-const { findUnmetPrerequisite, flaggedReauth } = require("./channel-prerequisite.service");
+const { findUnmetPrerequisite, flaggedReauth, prerequisiteMessage } = require("./channel-prerequisite.service");
 const config = require("../../config");
 const { CHANNEL_SYNC_LOG_STATUS, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
 
@@ -142,7 +142,7 @@ function summarizeDiagnosis(d) {
   } else if (kind === "prerequisite" || kind === "storefront") {
     lines.push(
       `The cause is an unmet channel prerequisite (${d.prerequisite?.reason ?? "storefront_required"}), a configuration problem, not credentials or network. ` +
-        (d.prerequisite?.message ?? "Verify a domain under Settings > Domains."),
+        (d.prerequisite?.message ?? prerequisiteMessage(CHANNEL_STATUS_REASON.STOREFRONT_REQUIRED, "This channel")),
     );
     if (latest) {
       lines.push(

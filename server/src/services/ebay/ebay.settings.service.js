@@ -82,8 +82,6 @@ function toLegacyShape(conn) {
     warehouse_country: conn.warehouse_country ?? "AU",
     warehouse_phone: conn.warehouse_phone ?? null,
 
-    fallback_image_url: conn.fallback_image_url ?? null,
-
     webhook_token: conn.webhook_token ?? null,
     verification_token: conn.verification_token ?? null,
 
@@ -129,7 +127,6 @@ function fieldsFromLegacy(legacy) {
     warehouse_postcode: legacy.warehouse_postcode ?? null,
     warehouse_country: legacy.warehouse_country ?? "AU",
     warehouse_phone: legacy.warehouse_phone ?? null,
-    fallback_image_url: legacy.fallback_image_url ?? null,
     verification_token: legacy.verification_token ?? null,
   };
 }

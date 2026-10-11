@@ -157,6 +157,10 @@ const config = {
     batchStatusPollMs: getNum("CHANNEL_BATCH_STATUS_POLL_MS", 30_000),
     // Checks before an unfinished async batch errors its listings.
     batchStatusMaxAttempts: getNum("CHANNEL_BATCH_STATUS_MAX_ATTEMPTS", 8),
+    // Local testing only; utils/devImageFallback refuses it in production.
+    devImageFallback: get("CHANNEL_DEV_IMAGE_FALLBACK", "false") === "true",
+    // Placeholder for every channel; blank uses DEV_FALLBACK_IMAGE (800x800).
+    devFallbackImageUrl: get("CHANNEL_DEV_FALLBACK_IMAGE_URL", ""),
   },
 
   inventory: {

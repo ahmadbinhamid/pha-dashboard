@@ -24,14 +24,17 @@ const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), "meta-fixtures-"));
 
 /** Points uploads at a temp dir over https and sets fake Meta app creds. */
 function useMetaTestConfig() {
-  const saved = { url: config.uploads.url, dir: config.uploads.dir, meta: { ...config.meta } };
+  const saved = { url: config.uploads.url, dir: config.uploads.dir, meta: { ...config.meta }, devImage: config.channels.devImageFallback };
   config.uploads.url = "https://cdn.example.com/uploads";
+  // A dev's .env may turn the image placeholder on; tests assume it's off.
+  config.channels.devImageFallback = false;
   config.uploads.dir = uploadsDir;
   Object.assign(config.meta, { appId: "app-1", appSecret: "secret-1", redirectUri: "https://api.example.com/cb", loginConfigId: "cfg-1" });
   return () => {
     config.uploads.url = saved.url;
     config.uploads.dir = saved.dir;
     Object.assign(config.meta, saved.meta);
+    config.channels.devImageFallback = saved.devImage;
   };
 }
 

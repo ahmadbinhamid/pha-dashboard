@@ -60,10 +60,9 @@ exports.updateSettings = async (req, res) => {
       warehouse_postcode,
       warehouse_country,
       warehouse_phone,
-      fallback_image_url,
     } = req.body || {};
 
-    // refresh_token is intentionally not accepted here — only set via the OAuth callback below.
+    // No refresh_token here; only the OAuth callback below sets it.
     const update = {};
     if (marketplace_id !== undefined) update.marketplace_id = marketplace_id || "EBAY_AU";
     if (sandbox !== undefined) update.sandbox = !!sandbox;
@@ -77,7 +76,6 @@ exports.updateSettings = async (req, res) => {
     if (warehouse_postcode !== undefined) update.warehouse_postcode = warehouse_postcode || null;
     if (warehouse_country !== undefined) update.warehouse_country = warehouse_country || "AU";
     if (warehouse_phone !== undefined) update.warehouse_phone = warehouse_phone || null;
-    if (fallback_image_url !== undefined) update.fallback_image_url = fallback_image_url || null;
 
     if (!Object.keys(update).length) {
       return badRequest(res, "No fields provided to update");
@@ -90,8 +88,7 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-// Webhook URL carries an opaque `wt` instead of the tenant's real _id, closing off enumeration
-// even though a guessed token still can't forge the HMAC signature checked in handleWebhook.
+// Opaque `wt`, not the tenant _id, so webhook URLs can't be enumerated.
 exports.handleWebhookChallenge = async (req, res) => {
   try {
     const { challenge_code, wt } = req.query;
@@ -101,7 +98,7 @@ exports.handleWebhookChallenge = async (req, res) => {
     const settings = await settingsService.findByWebhookToken(wt);
     if (!settings || !settings.verification_token) return notFound(res, "Webhook not configured");
 
-    // Must byte-for-byte match the URL eBay was given when registering this subscription.
+    // Must match the URL eBay registered for this subscription, byte for byte.
     const endpointUrl = `${req.protocol}://${req.get("host")}/api/v1/ebay/webhook?wt=${wt}`;
 
     const challengeResponse = webhookService.verifyChallenge(
@@ -131,9 +128,7 @@ exports.handleWebhook = async (req, res) => {
       settings.verification_token,
     );
     if (!valid) {
-      // Diagnostic, not a fix: eBay may sign deliveries with an asymmetric scheme (keyId-fetched
-      // public key), not the shared secret verifySignature checks — logging the header lets the
-      // next real delivery confirm or rule that out rather than guessing at a re-implementation.
+      // Diagnostic: eBay may sign with a keyId public key, not our shared secret.
       let decodedPreview = null;
       try {
         decodedPreview = Buffer.from(signatureHeader || "", "base64").toString("utf8").slice(0, 500);
@@ -179,9 +174,9 @@ exports.subscribeWebhook = async (req, res) => {
   }
 };
 
-// ── OAuth consent flow ───────────────────────────────────────────────────────
+// ── OAuth consent flow ──
 
-// Authenticated; returns the URL the dashboard navigates to for eBay's hosted consent screen.
+// Authenticated; the URL of eBay's hosted consent screen for the dashboard.
 exports.getConnectUrl = async (req, res) => {
   try {
     const sandbox = req.query.sandbox === "true";
@@ -192,7 +187,7 @@ exports.getConnectUrl = async (req, res) => {
   }
 };
 
-// Public — eBay redirects here directly after consent, no JWT; trust is in the signed `state`.
+// Public: eBay redirects here after consent; trust is the signed `state`.
 exports.oauthCallback = async (req, res) => {
   const dashboardUrl = config.emailBrand.clientUrl;
   const redirect = (params) => res.redirect(`${dashboardUrl}/settings?${new URLSearchParams(params).toString()}`);
@@ -220,8 +215,7 @@ exports.oauthCallback = async (req, res) => {
   }
 };
 
-// Best-effort: auto-fills the seller's existing eBay merchant location if any. Never throws —
-// a failure shouldn't turn a successful connect into an error redirect.
+// Best-effort fill of the seller's merchant location; never fails the connect.
 async function autoFillMerchantLocationKey(tenantId, settings) {
   try {
     const token = await ebayApiService.getAccessToken(settings);

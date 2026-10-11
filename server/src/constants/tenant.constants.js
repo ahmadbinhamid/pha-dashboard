@@ -5,19 +5,21 @@ const TENANT_STATUS = Object.freeze({
   SUSPENDED: "suspended",
 });
 
-// BYOK: shared by every "tenant supplies their own credentials" integration. Mirrors
-// EBAY_CONNECTION_STATUS, which stays separate since eBay's OAuth flow has extra states.
+// BYOK integrations; eBay keeps its own enum for its extra OAuth states.
 const CONNECTION_STATUS = Object.freeze({
   NOT_CONNECTED: "not_connected",
   CONNECTED: "connected",
   ERROR: "error",
 });
 
-// Which host a tenant's payment/order links go out under: the shared page or a "<slug>.<domain>"
-// subdomain. Both resolve to the same dashboard SPA/API — only the URL bar/email text changes.
+// Host for payment/order links: shared page or "<slug>.<domain>"; same app.
 const PAYMENT_DOMAIN_MODE = Object.freeze({
   DEFAULT: "default",
   VENDOR_SLUG: "vendor_slug",
 });
 
-module.exports = { TENANT_STATUS, CONNECTION_STATUS, PAYMENT_DOMAIN_MODE };
+// NOTE: Google's brand cap (70) is under Meta's (100), so it caps both.
+const TENANT_DEFAULT_BRAND_MAX = 70;
+
+module.exports = {
+  TENANT_DEFAULT_BRAND_MAX, TENANT_STATUS, CONNECTION_STATUS, PAYMENT_DOMAIN_MODE };

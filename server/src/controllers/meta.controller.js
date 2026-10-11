@@ -29,6 +29,18 @@ exports.getConnectUrl = async (req, res) => {
   }
 };
 
+// NOTE: lookup errors fall to the picker, which shows them with a reconnect.
+async function connectIfSingleCatalog(tenantId) {
+  try {
+    const conn = await oauthService.connectSingleGrantedCatalog(tenantId);
+    if (conn) await channelService.enqueueFullSync(META, tenantId);
+    return !!conn;
+  } catch (err) {
+    logger.warn("[meta.controller] catalog auto-select skipped", { tenantId: String(tenantId), code: err.code, metaCode: err.metaCode });
+    return false;
+  }
+}
+
 // Public redirect target; trust comes from the signed `state`, not a JWT.
 exports.oauthCallback = async (req, res) => {
   const redirect = (params) =>
@@ -39,17 +51,19 @@ exports.oauthCallback = async (req, res) => {
     if (!code || !state) return redirect({ meta_connect: "error", reason: "missing_code_or_state" });
     const { tenantId } = oauthService.resolveState(state);
     await oauthService.savePendingConnection({ tenantId, code });
-    return redirect({ meta_connect: "choose_catalog" });
+    return redirect({ meta_connect: (await connectIfSingleCatalog(tenantId)) ? "success" : "choose_catalog" });
   } catch (err) {
     logger.error("[meta.controller] oauthCallback error", { error: err.message, cause: err.cause ? String(err.cause) : undefined, code: err.code });
-    return redirect({ meta_connect: "error", reason: "exchange_failed" });
+    // NOTE: an expired signed state means the sign-in took over 10 minutes.
+    const reason = err.name === "TokenExpiredError" ? META_CONNECT_ERROR_REASON.STATE_EXPIRED : "exchange_failed";
+    return redirect({ meta_connect: "error", reason });
   }
 };
 
-// Businesses (with catalogs) for the picker; a failure here is loud.
-exports.getBusinesses = async (req, res) => {
+// Granted catalogs for the picker; a Graph error surfaces with Meta's code.
+exports.getCatalogs = async (req, res) => {
   try {
-    return success(res, { businesses: await oauthService.listBusinessCatalogs(req.tenantId) });
+    return success(res, { catalogs: await oauthService.listGrantedCatalogs(req.tenantId) });
   } catch (err) {
     return failWithReason(res, err) ?? systemfailure(res, err);
   }
@@ -59,7 +73,6 @@ exports.completeConnect = async (req, res) => {
   try {
     const conn = await oauthService.completeConnection({
       tenantId: req.tenantId,
-      businessId: req.body.businessId,
       catalogId: req.body.catalogId,
     });
     if (!conn) return badRequest(res, "No pending Meta sign-in found for this tenant — start the connect flow again.");

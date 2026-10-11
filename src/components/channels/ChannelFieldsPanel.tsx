@@ -1,5 +1,6 @@
 import { ChannelFieldInput } from "@/components/channels/ChannelFieldInput";
 import { ChannelCategorySource } from "@/components/channels/ChannelCategorySource";
+import { ChannelBrandSource } from "@/components/channels/ChannelBrandSource";
 import { ChannelOverridesSection, type OverrideValues } from "@/components/channels/ChannelOverridesSection";
 import { CHANNEL_FIELD_COMPONENTS } from "@/components/channels/channelFieldRegistry";
 import type { ChannelFieldSources } from "@/hooks/useChannelFieldSources";
@@ -136,6 +137,11 @@ export function ChannelFieldsPanel({
 
   return (
     <div className="divide-y divide-border">
+      {channel.uses_default_brand && (
+        <section className="px-6 py-5">
+          <ChannelBrandSource channel={channel} product={product} />
+        </section>
+      )}
       {schema.length === 0 && <p className="px-6 py-5 text-sm text-fg/55">{channel.name} needs nothing beyond the product itself.</p>}
       {groupSchema(schema).map(([group, fields]) => (
         <section key={group} id={channelSectionId(channel.key, group)} className="scroll-mt-4 space-y-3 px-6 py-5">

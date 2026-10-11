@@ -83,39 +83,136 @@ test("a dated token stores its expiry and is flagged near expiry", async () => {
   assert.equal(oauth.isTokenNearExpiry(conn), true);
 });
 
-test("complete: only a catalog the token reaches is accepted, then CONNECTED", async () => {
+const debugToken = (grants) => () => jsonResponse(200, { data: { type: "SYSTEM_USER", is_valid: true, scopes: ["catalog_management"], ...grants } });
+const catalogNode = (url) => {
+  const id = new URL(url).pathname.split("/").pop();
+  return jsonResponse(200, { id, name: `Catalog ${id}` });
+};
+
+test("debug_token with one catalog: auto-selected, named, saved as CONNECTED", async () => {
+  const tenantId = fixtureId();
+  const seen = stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
+    [/debug_token/, debugToken({ granular_scopes: [{ scope: "catalog_management", target_ids: ["555"] }] })],
+    [/\/me\?/, () => jsonResponse(200, { id: "su1", client_business_id: "111" })],
+    [/\/555\?/, catalogNode],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  await oauth.connectSingleGrantedCatalog(tenantId);
+  const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: "meta" }).lean();
+  assert.equal(conn.status, "connected");
+  assert.equal(conn.catalog_id, "555");
+  assert.equal(conn.catalog_name, "Catalog 555");
+  assert.equal(conn.business_id, "111");
+  const debugCall = new URL(seen.find((c) => /debug_token/.test(c.url)).url);
+  assert.equal(debugCall.searchParams.get("access_token"), "app-1|secret-1", "debug_token uses the app access token");
+  assert.ok(!seen.some((c) => /owned_product_catalogs|client_product_catalogs|me\/businesses|\/111\?/.test(c.url)), "no business_management call");
+});
+
+test("debug_token with several catalogs: listed with names, nothing auto-selected", async () => {
   const tenantId = fixtureId();
   stubFetch([
     [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
-    [/\/me\?/, () => jsonResponse(200, { id: "su1", client_business_id: "111" })],
-    [/\/111\?/, () => jsonResponse(200, { id: "111", name: "Parts Co" })],
-    [/owned_product_catalogs/, () => jsonResponse(200, { data: [{ id: "222", name: "Main" }] })],
-    [/client_product_catalogs/, () => jsonResponse(200, { data: [] })],
+    [/debug_token/, debugToken({ granular_scopes: [{ scope: "catalog_management", target_ids: ["555", "666"] }] })],
+    [/\/(555|666)\?/, catalogNode],
   ]);
   await oauth.savePendingConnection({ tenantId, code: "abc" });
-  const businesses = await oauth.listBusinessCatalogs(tenantId);
-  assert.deepEqual(businesses, [{ id: "111", name: "Parts Co", catalogs: [{ id: "222", name: "Main" }] }]);
+  assert.equal(await oauth.connectSingleGrantedCatalog(tenantId), null);
+  assert.deepEqual(await oauth.listGrantedCatalogs(tenantId), [{ id: "555", name: "Catalog 555" }, { id: "666", name: "Catalog 666" }]);
+  assert.equal((await ChannelConnection.findOne({ tenant_id: tenantId, platform: "meta" }).lean()).status, "pending");
+});
 
-  await assert.rejects(oauth.completeConnection({ tenantId, businessId: "111", catalogId: "999" }), { code: "CATALOG_NOT_ACCESSIBLE" });
-  await oauth.completeConnection({ tenantId, businessId: "111", catalogId: "222" });
+test("no granular_scopes (system-user token): the assigned-catalogs edge is used", async () => {
+  const tenantId = fixtureId();
+  const seen = stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
+    [/debug_token/, debugToken({})],
+    [/assigned_product_catalogs/, () => jsonResponse(200, { data: [{ id: "777", name: "Granted" }] })],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  assert.deepEqual(await oauth.listGrantedCatalogs(tenantId), [{ id: "777", name: "Granted" }]);
+  const fields = new URL(seen.find((c) => /assigned_product_catalogs/.test(c.url)).url).searchParams.get("fields");
+  assert.equal(fields, "id,name", "a business{} sub-field would need business_management");
+});
+
+for (const [label, grants] of [
+  ["no catalog_management entry", { granular_scopes: [{ scope: "public_profile" }] }],
+  ["empty target_ids", { granular_scopes: [{ scope: "catalog_management", target_ids: [] }] }],
+]) {
+  test(`${label} and nothing assigned: the no-catalog message`, async () => {
+    const tenantId = fixtureId();
+    stubFetch([
+      [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
+      [/debug_token/, debugToken(grants)],
+      [/assigned_product_catalogs/, () => jsonResponse(200, { data: [] })],
+    ]);
+    await oauth.savePendingConnection({ tenantId, code: "abc" });
+    await assert.rejects(oauth.listGrantedCatalogs(tenantId), (err) => {
+      assert.equal(err.code, "NO_CATALOG_GRANTED");
+      assert.match(err.message, /didn't give this app access to any catalog/);
+      return true;
+    });
+  });
+}
+
+test("a Graph permission error is an error with Meta's code, never 'no catalogs'", async () => {
+  const tenantId = fixtureId();
+  stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
+    [/debug_token/, debugToken({})],
+    [/assigned_product_catalogs/, () => jsonResponse(400, { error: { code: 100, message: "(#100) Missing Permission" } })],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  await assert.rejects(oauth.listGrantedCatalogs(tenantId), (err) => {
+    assert.equal(err.metaCode, 100);
+    assert.match(err.message, /\(code 100\)/);
+    assert.notEqual(err.code, "NO_CATALOG_GRANTED");
+    assert.doesNotMatch(err.message, /didn't give this app access/);
+    return true;
+  });
+});
+
+test("complete: only a granted catalog is accepted", async () => {
+  const tenantId = fixtureId();
+  stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "t" })],
+    [/debug_token/, debugToken({ granular_scopes: [{ scope: "catalog_management", target_ids: ["555", "666"] }] })],
+    [/\/(555|666)\?/, catalogNode],
+    [/\/me\?/, () => jsonResponse(200, { id: "su1", client_business_id: "111" })],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  await assert.rejects(oauth.completeConnection({ tenantId, catalogId: "999" }), { code: "CATALOG_NOT_ACCESSIBLE" });
+  await oauth.completeConnection({ tenantId, catalogId: "666" });
   const conn = await ChannelConnection.findOne({ tenant_id: tenantId, platform: "meta" }).lean();
   assert.equal(conn.status, "connected");
-  assert.equal(conn.catalog_id, "222");
-  assert.equal(conn.business_id, "111");
+  assert.equal(conn.catalog_id, "666");
 });
 
 test("tokens, app secret and appsecret_proof never reach the logs", async () => {
   const lines = [];
   for (const level of ["info", "warn", "error", "debug"]) mock.method(logger, level, (...args) => lines.push(JSON.stringify(args)));
-  const tenantId = fixtureId();
+  const connected = fixtureId();
   stubFetch([
     [/oauth\/access_token/, () => jsonResponse(200, { access_token: "very-secret-token" })],
-    [/\/me\?/, () => jsonResponse(400, { error: { code: 190, message: "Invalid token" } })],
+    [/debug_token/, debugToken({ granular_scopes: [{ scope: "catalog_management", target_ids: ["555"] }] })],
+    [/\/555\?/, catalogNode],
+    [/\/me\?/, () => jsonResponse(200, { id: "su1", client_business_id: "111" })],
   ]);
-  await oauth.savePendingConnection({ tenantId, code: "abc" });
-  await assert.rejects(oauth.listBusinessCatalogs(tenantId));
+  await oauth.savePendingConnection({ tenantId: connected, code: "abc" });
+  await oauth.connectSingleGrantedCatalog(connected);
+  mock.restoreAll();
+  for (const level of ["info", "warn", "error", "debug"]) mock.method(logger, level, (...args) => lines.push(JSON.stringify(args)));
+
+  const failed = fixtureId();
+  stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "very-secret-token" })],
+    [/debug_token/, () => jsonResponse(400, { error: { code: 190, message: "Invalid OAuth access token" } })],
+  ]);
+  await oauth.savePendingConnection({ tenantId: failed, code: "abc" });
+  await assert.rejects(oauth.listGrantedCatalogs(failed));
   const all = lines.join("\n");
-  for (const secret of ["very-secret-token", "secret-1", appSecretProof("very-secret-token")]) assert.ok(!all.includes(secret), secret);
+  assert.ok(lines.length > 0, "the flow logged something to check");
+  for (const secret of ["very-secret-token", "secret-1", "app-1|secret-1", appSecretProof("very-secret-token")]) assert.ok(!all.includes(secret), secret);
 });
 
 test("environment invariants: no module-level token cache in Meta services", () => {

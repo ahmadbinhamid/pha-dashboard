@@ -73,7 +73,7 @@ test("a missing storefront flags the connection and skips sync without a failure
   const conn = await connectionOf(tenantId);
   assert.equal(conn.status, "error");
   assert.equal(conn.status_reason, "storefront_required");
-  assert.match(conn.last_error, /Settings > Domains/);
+  assert.match(conn.last_error, /Settings › Integrations › Custom Domains/);
   assert.equal(conn.consecutive_failures, 0, "a prerequisite is not a transport failure");
   const listing = await MarketplaceListing.collection.findOne({ _id: listingId });
   assert.equal(listing.sync_status, "error");
@@ -93,7 +93,8 @@ test("GET /channels surfaces the reason and its remedy", async () => {
   const channel = (await listChannelsForTenant(tenantId)).find((c) => c.key === PLATFORM);
   assert.equal(channel.connection.status, "error");
   assert.equal(channel.connection.status_reason, "storefront_required");
-  assert.match(channel.connection.status_message, /Verify a domain under Settings > Domains/);
+  assert.match(channel.connection.status_message, /Verify a domain in Settings › Integrations › Custom Domains/);
+  assert.deepEqual(channel.connection.status_action, { label: "Open Custom Domains", href: "/settings/integrations/domains" });
   assert.equal(channel.health_status, "needs_attention");
 });
 

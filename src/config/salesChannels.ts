@@ -18,6 +18,13 @@ export const CATEGORY_SOURCE_LABEL = {
   mapping: "From category mapping",
 } as const;
 
+// Where a channel's brand comes from (Sales Channels panel).
+export const BRAND_SOURCE_LABEL = {
+  product: "from product",
+  store_default: "from store default",
+  listing: (channelName: string) => `overridden for ${channelName}`,
+} as const;
+
 // Per-channel wording; Meta's own mapping is an override of Google's.
 const CHANNEL_CATEGORY_SOURCE_LABEL: Record<string, { listing: string; mapping: string; fallback: string }> = {
   meta: { listing: "Set on this product", mapping: "Meta override", fallback: "From Google mapping" },

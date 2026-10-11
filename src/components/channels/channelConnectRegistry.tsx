@@ -52,7 +52,9 @@ export const CHANNEL_CONNECT_PLUGINS: Record<string, ChannelConnectPlugin> = {
       "No Meta catalog connected yet — listings can be created locally but won't sync to Facebook or Instagram.",
     callbackErrorText: metaConnectErrorMessage,
     inlineStepValue: "choose_catalog",
-    invalidateQueryKeys: [["meta-businesses"]],
+    // Exactly one granted catalog connects straight from the callback.
+    callbackSuccessText: "Meta catalog connected. Your first sync has started.",
+    invalidateQueryKeys: [["meta-catalogs"]],
     statusOverrides: { pending: { variant: "warn", label: "Choose a catalog to finish connecting" } },
     ConnectedText: MetaConnectedStatusText,
     InlineStep: MetaCatalogPicker,

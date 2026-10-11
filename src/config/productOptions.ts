@@ -14,3 +14,6 @@ export const WARRANTY_OPTIONS = [
   { value: "6 Months", label: "6 Months" },
   { value: "12 Months", label: "12 Months" },
 ];
+
+// Same cap the server's create validator puts on brand.
+export const PRODUCT_BRAND_MAX_LENGTH = 100;

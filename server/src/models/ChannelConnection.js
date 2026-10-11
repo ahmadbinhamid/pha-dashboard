@@ -78,8 +78,6 @@ const ebaySchema = new Schema({
   warehouse_country: { type: String, default: "AU" },
   warehouse_phone: { type: String, default: null },
 
-  fallback_image_url: { type: String, default: null },
-
   // HMAC secret for eBay webhook signatures; not the base URL `webhook_token`.
   verification_token: { type: String, default: null },
 });

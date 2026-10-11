@@ -19,6 +19,7 @@ const {
 const { assertFieldValues, assertProductConstraints } = require("../fieldSchema");
 const { httpError } = require("../../../utils/http/httpError");
 const { isAbsoluteHttpsUrl } = require("../../../utils/url");
+const { devFallbackImageFor } = require("../../../utils/devImageFallback");
 const { richTextToLines } = require("../../../utils/richText");
 const { fieldSchema, fieldValues, toMetaCondition } = require("./meta.fieldSchema");
 
@@ -69,7 +70,7 @@ const categoryField = "meta_product_category";
 // Meta accepts google_product_category, so the Google mapping is the default.
 const categoryFallbackPlatform = MARKETPLACE_PLATFORM.GOOGLE;
 
-const needs = { stock: true, productUrl: true, imageSizes: true };
+const needs = { stock: true, productUrl: true, imageSizes: true, defaultBrand: true };
 
 // Generic contract: no row returns null, which sync treats as not connected.
 async function loadSettings(tenantId) {
@@ -128,7 +129,10 @@ function resolveImages(resolved) {
   const urls = (resolved.photos || []).map((p) => (typeof p === "string" ? p : p?.url));
   const sizes = resolved.photoSizes || [];
   if (!urls[0]) throw new MetaItemValidationError(`[MetaAdapter] ${resolved.sku}: product has no images`, "INVALID_IMAGE");
-  const primaryProblem = imageProblem(urls[0], sizes[0]);
+  const fallback = devFallbackImageFor(urls[0], { channel: "MetaAdapter", sku: resolved.sku });
+  // NOTE: no header to read for the placeholder; a .env URL's size is trusted.
+  const primary = fallback ? { url: fallback.url, size: fallback.width ? fallback : null } : { url: urls[0], size: sizes[0] };
+  const primaryProblem = fallback && !primary.size ? null : imageProblem(primary.url, primary.size);
   if (primaryProblem) {
     throw new MetaItemValidationError(`[MetaAdapter] ${resolved.sku}: primary image ${primaryProblem}`, "INVALID_IMAGE");
   }
@@ -138,7 +142,7 @@ function resolveImages(resolved) {
     if (problem) logger.warn(`[MetaAdapter] ${resolved.sku}: dropping additional image ${i}: ${problem}`);
     else additional.push(urls[i]);
   }
-  return { imageLink: urls[0], additional };
+  return { imageLink: primary.url, additional };
 }
 
 function effectiveCategoryId(resolved) {

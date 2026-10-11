@@ -53,6 +53,21 @@ async function graphGet(token, path, params = {}, action = `GET ${path}`) {
   return res.json();
 }
 
+// App access token (<app id>|<app secret>) for app calls like debug_token.
+function appAccessToken() {
+  assertAppSecret();
+  if (!config.meta.appId) throw new Error("Meta is not configured — set META_APP_ID");
+  return `${config.meta.appId}|${config.meta.appSecret}`;
+}
+
+/** GET {graph}/{path} as the app itself; never logs the URL or token. */
+async function graphGetAsApp(path, params = {}, action = `GET ${path}`) {
+  const query = toSearchParams({ ...params, access_token: appAccessToken() });
+  const res = await fetch(`${graphBaseUrl()}/${path}?${query.toString()}`, { method: "GET" });
+  if (!res.ok) await throwForResponse(res, action, path);
+  return res.json();
+}
+
 /** POST {graph}/{path} as a form body, so the token never sits in a URL. */
 async function graphPost(token, path, params = {}, action = `POST ${path}`) {
   const body = toSearchParams({ ...params, ...authParams(token) });
@@ -65,4 +80,4 @@ async function graphPost(token, path, params = {}, action = `POST ${path}`) {
   return res.json();
 }
 
-module.exports = { graphBaseUrl, appSecretProof, graphGet, graphPost, throwForResponse };
+module.exports = { graphBaseUrl, appSecretProof, graphGet, graphGetAsApp, graphPost, throwForResponse };

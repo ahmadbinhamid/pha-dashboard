@@ -11,6 +11,8 @@ const META_TOKEN_CODE = 190;
 const META_PERMISSION_CODES = Object.freeze([10, 200]);
 
 const META_ITEM_TYPE = "PRODUCT_ITEM";
+// The only permission the app holds; also the debug_token grant to read.
+const META_CATALOG_SCOPE = "catalog_management";
 // UPDATE with allow_upsert (default true) creates or updates in one verb.
 const META_BATCH_METHOD = Object.freeze({ UPSERT: "UPDATE", DELETE: "DELETE" });
 // Only "finished" is documented; anything else is treated as still running.
@@ -33,6 +35,8 @@ const META_TOKEN_RENEW_WARNING_DAYS = 7;
 const META_CONNECT_ERROR_REASON = Object.freeze({
   CATALOG_NOT_ACCESSIBLE: "catalog_not_accessible",
   NO_PENDING_CONNECTION: "no_pending_connection",
+  NO_CATALOG_GRANTED: "no_catalog_granted",
+  STATE_EXPIRED: "state_expired",
 });
 
 // external_listing_id prefix; the base unique index spans every platform.
@@ -44,6 +48,7 @@ module.exports = {
   META_TOKEN_CODE,
   META_PERMISSION_CODES,
   META_ITEM_TYPE,
+  META_CATALOG_SCOPE,
   META_BATCH_METHOD,
   META_BATCH_DONE_STATUS,
   META_BATCH_MAX_ITEMS,

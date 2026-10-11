@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 import type { BeResponse } from "./base";
-import type { MetaBusinessesResponse, MetaCompleteConnectPayload, MetaConnectUrlResponse } from "@/types/metaSettings";
+import type { MetaCatalogsResponse, MetaCompleteConnectPayload, MetaConnectUrlResponse } from "@/types/metaSettings";
 
 // Facebook Login for Business URL; navigated to directly.
 export const getMetaConnectUrl = async () => {
@@ -8,9 +8,9 @@ export const getMetaConnectUrl = async () => {
   return data;
 };
 
-// After ?meta_connect=choose_catalog: businesses this sign-in reaches.
-export const getMetaBusinesses = async () => {
-  const { data } = await apiClient.get<BeResponse<MetaBusinessesResponse>>("/meta/oauth/businesses");
+// After ?meta_connect=choose_catalog: catalogs this sign-in was granted.
+export const getMetaCatalogs = async () => {
+  const { data } = await apiClient.get<BeResponse<MetaCatalogsResponse>>("/meta/oauth/catalogs");
   return data;
 };
 

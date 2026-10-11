@@ -115,23 +115,27 @@ async function loadTokenForTenant(tenantId) {
   return token;
 }
 
-/** Businesses the token reaches, each with its catalogs. */
-async function listBusinessCatalogs(tenantId) {
-  const token = await loadTokenForTenant(tenantId);
-  const businesses = await metaCatalogApi.listBusinesses(token);
-  return Promise.all(businesses.map(async (b) => ({ ...b, catalogs: await metaCatalogApi.listCatalogs(token, b.id) })));
+// Matches the "no catalog" copy the connect page shows.
+function noCatalogGrantedError() {
+  return httpError(
+    "Meta didn't give this app access to any catalog. Reconnect Meta and, when asked, select your catalog and allow catalog access.",
+    400,
+    { code: "NO_CATALOG_GRANTED" },
+  );
 }
 
-// Step 2 of 2: the catalog must be one this token can actually reach.
-async function completeConnection({ tenantId, businessId, catalogId }) {
-  const businesses = await listBusinessCatalogs(tenantId);
-  const business = businesses.find((b) => b.id === String(businessId));
-  const catalog = business?.catalogs.find((c) => c.id === String(catalogId));
-  if (!catalog) {
-    throw httpError(`This Meta sign-in can't reach catalog ${catalogId} in business ${businessId}.`, 400, {
-      code: "CATALOG_NOT_ACCESSIBLE",
-    });
-  }
+async function grantedCatalogsFor(token) {
+  const catalogs = await metaCatalogApi.listGrantedCatalogs(token);
+  if (!catalogs.length) throw noCatalogGrantedError();
+  return catalogs;
+}
+
+/** Catalogs granted at login; throws NO_CATALOG_GRANTED when there are none. */
+async function listGrantedCatalogs(tenantId) {
+  return grantedCatalogsFor(await loadTokenForTenant(tenantId));
+}
+
+async function saveConnectedCatalog(tenantId, catalog, businessId) {
   const conn = await ChannelConnection.findOneAndUpdate(
     { tenant_id: tenantId, platform: PLATFORM },
     {
@@ -140,9 +144,10 @@ async function completeConnection({ tenantId, businessId, catalogId }) {
         connected_at: new Date(),
         last_error: null,
         consecutive_failures: 0,
-        external_account_id: business.id,
-        business_id: business.id,
-        business_name: business.name,
+        external_account_id: businessId,
+        business_id: businessId,
+        // NOTE: business name needs business_management, so it isn't stored.
+        business_name: null,
         catalog_id: catalog.id,
         catalog_name: catalog.name,
       },
@@ -150,8 +155,25 @@ async function completeConnection({ tenantId, businessId, catalogId }) {
     // strict:false keeps discriminator fields; no upsert, a missing row is null.
     { new: true, strict: false },
   );
-  logger.info("[meta.oauth] tenant connected", { tenantId: String(tenantId), businessId: business.id, catalogId: catalog.id });
+  logger.info("[meta.oauth] tenant connected", { tenantId: String(tenantId), businessId, catalogId: catalog.id });
   return conn;
+}
+
+// Step 2 of 2: the catalog must be one this sign-in was granted.
+async function completeConnection({ tenantId, catalogId }) {
+  const token = await loadTokenForTenant(tenantId);
+  const catalog = (await grantedCatalogsFor(token)).find((c) => c.id === String(catalogId));
+  if (!catalog) {
+    throw httpError(`This Meta sign-in wasn't granted catalog ${catalogId}.`, 400, { code: "CATALOG_NOT_ACCESSIBLE" });
+  }
+  return saveConnectedCatalog(tenantId, catalog, await metaCatalogApi.getClientBusinessId(token));
+}
+
+/** After consent: connects outright when exactly one catalog was granted. */
+async function connectSingleGrantedCatalog(tenantId) {
+  const catalogs = await listGrantedCatalogs(tenantId);
+  if (catalogs.length !== 1) return null;
+  return completeConnection({ tenantId, catalogId: catalogs[0].id });
 }
 
 module.exports = {
@@ -161,6 +183,7 @@ module.exports = {
   getAccessToken,
   isTokenNearExpiry,
   savePendingConnection,
-  listBusinessCatalogs,
+  listGrantedCatalogs,
   completeConnection,
+  connectSingleGrantedCatalog,
 };

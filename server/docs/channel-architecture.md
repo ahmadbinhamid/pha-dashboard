@@ -112,7 +112,8 @@ resolvable on its own — see §3).
 The eBay discriminator carries every eBay-specific field from
 `EbaySettings.js` verbatim: `marketplace_id`, `sandbox`,
 `merchant_location_key`, the three business policy ids, the warehouse
-address fields, `fallback_image_url`, `verification_token`.
+address fields, `verification_token`. (The sandbox image fallback is now
+the shared `CHANNEL_DEV_FALLBACK_IMAGE_URL`, see `utils/devImageFallback.js`.)
 
 It's registered under the Mongoose model name `ChannelConnectionEbay`, not
 `ebay` — `MarketplaceListing` already has a discriminator model literally
@@ -1290,12 +1291,21 @@ off the breaker, shows "Reconnect Meta"); anything else keeps its HTTP status
   days ahead (`connection.token_expires_at` is now on `GET /channels`).
 - `meta.catalog-api.service.js`: `items_batch`,
   `check_batch_request_status` (with `load_ids_of_invalid_requests=true`),
-  businesses (`me?fields=client_business_id`, else `me/businesses`) and
-  catalogs (owned + client).
+  and the catalogs granted at login, with `catalog_management` only (the app
+  never holds `business_management`): `debug_token` (app access token) →
+  `granular_scopes` → `catalog_management` → `target_ids`, each named via
+  `GET /{catalog_id}?fields=id,name`. Business-integration system-user tokens
+  were observed to return no `granular_scopes`, so the documented
+  `me/assigned_product_catalogs?fields=id,name` edge is the fallback (a
+  `business{}` sub-field there needs `business_management` and fails the
+  whole call). The business id comes from `me?fields=client_business_id`.
+  Graph errors propagate with Meta's code; only a genuinely empty result is
+  "no catalog granted". One granted catalog connects straight from the
+  callback; several show the picker.
 
 Routes (`routes/meta.routes.js`): `GET /meta/oauth/connect-url`, public
-`GET /meta/oauth/callback`, `GET /meta/oauth/businesses`, `POST
-/meta/oauth/complete` (catalog must be reachable by the token). Listings use
+`GET /meta/oauth/callback`, `GET /meta/oauth/catalogs`, `POST
+/meta/oauth/complete` (`{ catalogId }`, which must be one the token was granted). Listings use
 the generic `/listings` API only.
 
 ### What a fourth channel would need

@@ -104,11 +104,15 @@ test("PUT /ebay/settings: the settings form's payload passes; bad fields don't",
   const form = {
     marketplace_id: "EBAY_AU", merchant_location_key: "", fulfillment_policy_id: "", payment_policy_id: "", return_policy_id: "",
     warehouse_street: "1 Main St", warehouse_city: "Sydney", warehouse_state: "NSW", warehouse_postcode: "2000",
-    warehouse_country: "AU", warehouse_phone: "", fallback_image_url: "",
+    warehouse_country: "AU", warehouse_phone: "",
   };
   const ok = await send("PUT", "/ebay/settings", form);
   assert.equal(ok.status, 200, JSON.stringify(ok.body));
   assert.equal(ok.body.data.warehouse_city, "Sydney");
+  // A tab still open on the old form sends the removed field; it's dropped.
+  const stale = await send("PUT", "/ebay/settings", { ...form, fallback_image_url: "https://x.example/p.png" });
+  assert.equal(stale.status, 200, JSON.stringify(stale.body));
+  assert.equal(stale.body.data.fallback_image_url, undefined);
 
   await assertRejected("PUT", "/ebay/settings", { ...form, warehouse_street: LONG }, /warehouse_street/);
   await assertRejected("PUT", "/ebay/settings", { ...form, sandbox: "maybe" }, /sandbox/);

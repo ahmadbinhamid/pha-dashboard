@@ -5,6 +5,7 @@ const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { EBAY_SCOPES, currencyForMarketplace } = require("../../constants/ebay.constants");
 const { httpError } = require("../../utils/http/httpError");
+const { devFallbackImage } = require("../../utils/devImageFallback");
 const { isInvalidGrant, reauthRequiredError } = require("../../utils/http/oauthError");
 
 // Parsed eBay `errors`; branch on a specific code via `.hasErrorId(code)`.
@@ -301,15 +302,16 @@ function resolveImageUrls(photos, settings) {
 
   if (httpsUrls.length > 0) return httpsUrls;
 
-  // Sandbox uses the tenant fallback image so sync works without public HTTPS.
-  if (settings?.sandbox && settings?.fallback_image_url) {
+  // Sandbox listings aren't real, so the shared dev placeholder is safe there.
+  const fallback = settings?.sandbox ? devFallbackImage() : null;
+  if (fallback) {
     if (allUrls.length > 0) {
       logger.warn(
         `[eBay] resolveImageUrls: ${allUrls.length} image(s) found but none are HTTPS — ` +
         `using fallback image for sandbox. In production set UPLOADS_URL to your public HTTPS URL.`,
       );
     }
-    return [settings.fallback_image_url];
+    return [fallback.url];
   }
 
   if (allUrls.length > 0) {

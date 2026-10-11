@@ -9,7 +9,7 @@ import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
 import { SalesChannelResyncButton } from "@/components/channels/SalesChannelResyncButton";
 import { SalesChannelRowActionsMenu } from "@/components/channels/SalesChannelRowActionsMenu";
-import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
+import { channelRemedy } from "@/lib/marketplace/channelRemedy";
 import { categorySourceLabel } from "@/config/salesChannels";
 import { ChannelSettingsDrawer } from "@/components/channels/ChannelSettingsDrawer";
 import { SyncBadge } from "@/components/listings/SyncBadge";
@@ -44,11 +44,9 @@ function fieldErrorsFrom(err: unknown): Record<string, string> {
   return Object.fromEntries((source?.errors ?? []).map(({ field, message }) => [field, message]));
 }
 
-// Where to fix a channel that can't be used yet.
+// Server-sent remedy link, else the channel's own connect page.
 function fixLink(channel: ChannelSummary) {
-  const reason = channel.connection.status_reason;
-  if (reason) return CHANNEL_STATUS_REASON_ACTION[reason](channel).href;
-  return channel.available ? `/settings/integrations/${channel.key}` : "/settings/integrations/domains";
+  return channelRemedy(channel)?.action ?? { label: "Connect", href: `/settings/integrations/${channel.key}` };
 }
 
 // Sales channels row: tick to list, untick to end, "Edit listing" for settings.
@@ -232,8 +230,8 @@ export function SalesChannelRow({
         </div>
 
         {blocked ? (
-          <Link href={fixLink(channel)} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
-            {!channel.available ? "Verify domain in Settings › Domains" : "Connect"}
+          <Link href={fixLink(channel).href} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+            {fixLink(channel).label}
             <ExternalLink className="h-3 w-3" />
           </Link>
         ) : (

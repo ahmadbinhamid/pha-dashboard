@@ -119,7 +119,8 @@ export function ChannelConnectCard({ platform }: ChannelConnectCardProps) {
               )}
 
               {unavailable ? (
-                <InlineNotice variant="warn">{channel?.unavailable_reason}</InlineNotice>
+                // NOTE: rendered once; above already shows it when status_reason is set.
+                !channel?.connection.status_reason && channel && <ChannelAttentionNotice channel={channel} />
               ) : inInlineStep && InlineStep && channel ? (
                 <InlineStep channel={channel} onComplete={onInlineStepComplete} />
               ) : (

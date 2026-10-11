@@ -12,7 +12,6 @@ export const ebaySettingsFormSchema = z.object({
   warehouse_postcode: z.string(),
   warehouse_country: z.string(),
   warehouse_phone: z.string(),
-  fallback_image_url: z.string(),
 });
 
 export type EbaySettingsFormValues = z.infer<typeof ebaySettingsFormSchema>;
