@@ -331,6 +331,28 @@ async function addProductNote(productId, { text, userId }, tenantId) {
   return product;
 }
 
+// Matches the product and the note in one filter, so a stale noteId is a 404.
+function productNoteFilter(productId, noteId, tenantId) {
+  return { _id: productId, tenant_id: tenantId, "internal_notes._id": noteId };
+}
+
+// Atomic positional update; avoids loading and re-saving the whole product.
+async function updateProductNote(productId, noteId, { text }, tenantId) {
+  return Product.findOneAndUpdate(
+    productNoteFilter(productId, noteId, tenantId),
+    { $set: { "internal_notes.$.text": text, "internal_notes.$.updated_at": new Date() } },
+    { new: true, runValidators: true },
+  );
+}
+
+async function deleteProductNote(productId, noteId, tenantId) {
+  return Product.findOneAndUpdate(
+    productNoteFilter(productId, noteId, tenantId),
+    { $pull: { internal_notes: { _id: noteId } } },
+    { new: true },
+  );
+}
+
 // Attachments go to nodemailer by disk path, not base64.
 async function sendProductInfoEmail(productId, { name, email }, tenantId) {
   const product = await getPopulatedProduct(productId, tenantId);
@@ -523,6 +545,8 @@ module.exports = {
   findProductById,
   findProductByIdForIndexing,
   addProductNote,
+  updateProductNote,
+  deleteProductNote,
   sendProductInfoEmail,
   getProductBySlugOrId,
   getPopulatedProduct,

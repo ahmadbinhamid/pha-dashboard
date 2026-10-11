@@ -77,6 +77,18 @@ router.post(
   validate(v.addProductNote),
   asyncHandler(ctrl.addProductNote),
 );
+router.put(
+  "/:id/notes/:noteId",
+  auth(), requirePermission("products.update"),
+  validate(v.updateProductNote),
+  asyncHandler(ctrl.updateProductNote),
+);
+router.delete(
+  "/:id/notes/:noteId",
+  auth(), requirePermission("products.update"),
+  validate(v.byNoteParam),
+  asyncHandler(ctrl.deleteProductNote),
+);
 router.post(
   "/:id/send-email",
   auth(), requirePermission("products.view"),

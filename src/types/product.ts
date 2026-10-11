@@ -58,6 +58,7 @@ export interface ProductInternalNote {
   text: string;
   author: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface ProductVariant {
