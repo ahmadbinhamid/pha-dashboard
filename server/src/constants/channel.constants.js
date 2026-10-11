@@ -35,6 +35,9 @@ const CHANNEL_REMEDY_LOCATION = Object.freeze({
   DOMAINS: Object.freeze({ place: "Settings › Integrations › Custom Domains", href: "/settings/integrations/domains" }),
 });
 
+// Manifest `status`; the UI shows COMING_SOON channels but can't connect them.
+const CHANNEL_RELEASE_STATUS = Object.freeze({ ACTIVE: "active", COMING_SOON: "coming_soon" });
+
 // Queue job names shared by producers and the channel worker.
 const CHANNEL_JOB = Object.freeze({
   SYNC_LISTING: "sync_listing",
@@ -51,6 +54,7 @@ const DEV_FALLBACK_IMAGE = Object.freeze({ url: "https://placehold.co/800x800.pn
 module.exports = {
   CHANNEL_REMEDY_LOCATION,
   CHANNEL_JOB,
+  CHANNEL_RELEASE_STATUS,
   ASYNC_BATCH_KIND,
   DEV_FALLBACK_IMAGE,
   CHANNEL_CONNECTION_STATUS,

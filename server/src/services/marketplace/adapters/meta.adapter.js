@@ -17,6 +17,7 @@ const {
   META_EXTERNAL_ID_PREFIX,
 } = require("../../../constants/meta.constants");
 const { assertFieldValues, assertProductConstraints } = require("../fieldSchema");
+const { CHANNEL_RELEASE_STATUS } = require("../../../constants/channel.constants");
 const { httpError } = require("../../../utils/http/httpError");
 const { isAbsoluteHttpsUrl } = require("../../../utils/url");
 const { devFallbackImageFor } = require("../../../utils/devImageFallback");
@@ -40,7 +41,8 @@ const manifest = {
   name: "Meta",
   logo: null,
   description: "Publish your catalogue to Facebook and Instagram Shops via a Meta Commerce catalog.",
-  status: "active",
+  // NOTE: hidden behind "Coming soon" until launch; set ACTIVE to enable it.
+  status: CHANNEL_RELEASE_STATUS.COMING_SOON,
   authType: "oauth",
   setupSteps: [
     "Sign in with Facebook Login for Business",

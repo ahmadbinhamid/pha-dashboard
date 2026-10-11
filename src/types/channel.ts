@@ -1,5 +1,8 @@
 // GET /channels shape (channel.service.js#listChannelsForTenant), per adapter.
 
+// Mirrors the server's CHANNEL_RELEASE_STATUS (adapter manifest `status`).
+export type ChannelReleaseStatus = "active" | "coming_soon";
+
 // "pending" (Google, Meta): OAuth done but no account or catalog picked yet.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
 
@@ -70,7 +73,7 @@ export interface ChannelSummary {
   name: string;
   logo: string | null;
   description: string;
-  status: string;
+  status: ChannelReleaseStatus;
   authType: string;
   setupSteps: string[];
   requiredTenantData: string[];

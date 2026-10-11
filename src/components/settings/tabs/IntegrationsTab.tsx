@@ -24,6 +24,7 @@ import { INTEGRATION_CATALOGUE, findIntegration, type IntegrationId } from "@/co
 import type { TenantSettings, SettingsMutationState } from "@/types/tenantSettings";
 import type { EbayConnectionStatus } from "@/types/ebaySettings";
 import type { ChannelConnectionStatus } from "@/types/channel";
+import { isChannelComingSoon } from "@/lib/marketplace/channelRelease";
 
 const IDLE: SettingsMutationState = { isPending: false, isSuccess: false, error: null };
 
@@ -138,7 +139,11 @@ export function IntegrationsTab({
     ? CHANNEL_STATUS_MAP[googleChannel.connection.status]
     : "unknown";
   const metaChannel = channelsRes?.data?.find((c) => c.key === "meta");
-  const metaStatus: IntegrationStatus = metaChannel ? CHANNEL_STATUS_MAP[metaChannel.connection.status] : "unknown";
+  const metaStatus: IntegrationStatus = isChannelComingSoon(metaChannel)
+    ? "coming_soon"
+    : metaChannel
+      ? CHANNEL_STATUS_MAP[metaChannel.connection.status]
+      : "unknown";
   const domainsStatus: IntegrationStatus = domainsRes?.data
     ? domainsRes.data.some((d) => d.status === "active")
       ? "connected"

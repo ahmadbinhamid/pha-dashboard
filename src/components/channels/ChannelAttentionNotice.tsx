@@ -1,6 +1,7 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import Link from "@/components/ui/Link";
 import { channelRemedy } from "@/lib/marketplace/channelRemedy";
+import { isChannelComingSoon } from "@/lib/marketplace/channelRelease";
 import { cn } from "@/utils/cn";
 import type { ChannelSummary } from "@/types/channel";
 
@@ -11,7 +12,8 @@ interface ChannelAttentionNoticeProps {
 
 // Flagged or unavailable channel with its remedy link; nothing when healthy.
 export function ChannelAttentionNotice({ channel, className }: ChannelAttentionNoticeProps) {
-  const remedy = channelRemedy(channel);
+  // A coming-soon channel has nothing for the tenant to fix yet.
+  const remedy = isChannelComingSoon(channel) ? null : channelRemedy(channel);
   if (!remedy) return null;
   const { message, action } = remedy;
 

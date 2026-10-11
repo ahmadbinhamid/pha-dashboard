@@ -12,3 +12,4 @@ export const CHANNEL_STATUS_DISPLAY: Record<ChannelConnectionStatus, ChannelStat
 
 export const CHANNEL_NEEDS_ATTENTION_LABEL = "Needs attention";
 export const CHANNEL_UNAVAILABLE_LABEL = "Unavailable";
+export const CHANNEL_COMING_SOON_LABEL = "Coming soon";

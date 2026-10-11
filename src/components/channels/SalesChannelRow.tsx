@@ -22,6 +22,8 @@ import { validateChannelFields } from "@/lib/validation/channelFields";
 import { formatRelativeTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
 import type { ChannelSummary } from "@/types/channel";
+import { isChannelComingSoon } from "@/lib/marketplace/channelRelease";
+import { CHANNEL_COMING_SOON_LABEL } from "@/config/channelConnect";
 import type { MappedCategory } from "@/types/categoryMapping";
 import type { AnyMarketplaceListing, ListingProductDefaults } from "@/types/marketplace";
 import type { Product } from "@/types/product";
@@ -166,15 +168,18 @@ export function SalesChannelRow({
   }
 
   const connected = channel.connection.status === "connected";
+  const comingSoon = isChannelComingSoon(channel);
   // NOTE: not-connected only blocks NEW listings; existing ones stay manageable.
-  const blocked = !channel.available || !adapter || (!connected && !listed);
-  const blockedReason = channel.connection.status_reason
-    ? "Needs attention"
-    : !channel.available
-      ? "Needs a verified storefront domain"
-      : !adapter
-        ? `${channel.name} can't be managed from the product form yet`
-        : "Not connected";
+  const blocked = comingSoon || !channel.available || !adapter || (!connected && !listed);
+  const blockedReason = comingSoon
+    ? "Not available yet"
+    : channel.connection.status_reason
+      ? "Needs attention"
+      : !channel.available
+        ? "Needs a verified storefront domain"
+        : !adapter
+          ? `${channel.name} can't be managed from the product form yet`
+          : "Not connected";
   const busy = createMutation.isPending || saveMutation.isPending || endMutation.isPending;
   const awaiting = !!listingSummary && isAwaitingSync(listingSummary, syncingSince);
 
@@ -229,7 +234,9 @@ export function SalesChannelRow({
           ) : null}
         </div>
 
-        {blocked ? (
+        {comingSoon ? (
+          <Badge variant="muted">{CHANNEL_COMING_SOON_LABEL}</Badge>
+        ) : blocked ? (
           <Link href={fixLink(channel).href} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
             {fixLink(channel).label}
             <ExternalLink className="h-3 w-3" />

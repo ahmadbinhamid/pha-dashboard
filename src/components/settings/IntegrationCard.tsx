@@ -3,26 +3,24 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/utils/cn";
+import { CHANNEL_COMING_SOON_LABEL } from "@/config/channelConnect";
 
-export type IntegrationStatus = "connected" | "not_connected" | "error" | "unknown";
+export type IntegrationStatus = "connected" | "not_connected" | "error" | "unknown" | "coming_soon";
 
 const STATUS_BADGE: Record<IntegrationStatus, { label: string; variant: "ok" | "danger" | "muted" }> = {
   connected: { label: "Connected", variant: "ok" },
   error: { label: "Needs attention", variant: "danger" },
   not_connected: { label: "Not connected", variant: "muted" },
   unknown: { label: "Configure", variant: "muted" },
+  coming_soon: { label: CHANNEL_COMING_SOON_LABEL, variant: "muted" },
 };
 
-// One tile in the Integrations catalogue. Status comes from the caller —
-// each provider knows its own connection state through a different endpoint,
-// so this component never fetches.
+// Integrations tile; status comes from the caller, so it never fetches.
 export function IntegrationCard({
   name,
   description,
   icon,
-  // Brand logos (eBay/Google/a tenant's own uploaded storefront logo) sit on
-  // a neutral chip instead of the accent-tinted circle — a partner's logo
-  // (or a tenant's own) tinted orange would read as broken branding, not "on theme".
+  // Brand logos sit on a neutral chip; tinted orange they'd look broken.
   logoTile = false,
   status = "unknown",
   onManage,
@@ -53,9 +51,9 @@ export function IntegrationCard({
       <h3 className="mt-4 text-sm font-bold text-fg">{name}</h3>
       <p className="mt-1 flex-1 text-xs leading-relaxed text-fg/55">{description}</p>
 
-      <Button variant="outline" size="sm" className="mt-4 w-full gap-1.5" onClick={onManage}>
-        {status === "connected" ? "Manage" : "Set up"}
-        <ArrowRight className="h-3.5 w-3.5" />
+      <Button variant="outline" size="sm" className="mt-4 w-full gap-1.5" onClick={onManage} disabled={status === "coming_soon"}>
+        {status === "coming_soon" ? CHANNEL_COMING_SOON_LABEL : status === "connected" ? "Manage" : "Set up"}
+        {status !== "coming_soon" && <ArrowRight className="h-3.5 w-3.5" />}
       </Button>
     </Card>
   );

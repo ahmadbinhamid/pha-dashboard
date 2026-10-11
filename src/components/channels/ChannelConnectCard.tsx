@@ -9,7 +9,13 @@ import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNo
 import { CHANNEL_CONNECT_PLUGINS } from "@/components/channels/channelConnectRegistry";
 import { getChannels } from "@/lib/api/channels";
 import { formatRelativeTime } from "@/utils/formatRelativeTime";
-import { CHANNEL_STATUS_DISPLAY, CHANNEL_NEEDS_ATTENTION_LABEL, CHANNEL_UNAVAILABLE_LABEL } from "@/config/channelConnect";
+import {
+  CHANNEL_STATUS_DISPLAY,
+  CHANNEL_NEEDS_ATTENTION_LABEL,
+  CHANNEL_UNAVAILABLE_LABEL,
+  CHANNEL_COMING_SOON_LABEL,
+} from "@/config/channelConnect";
+import { comingSoonText, isChannelComingSoon } from "@/lib/marketplace/channelRelease";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import type { ChannelConnectOptions, ChannelConnectPlugin, ChannelStatusDisplay } from "@/types/channelConnect";
 import type { ChannelSummary } from "@/types/channel";
@@ -22,6 +28,7 @@ interface ChannelConnectCardProps {
 const NO_PLUGIN: Partial<ChannelConnectPlugin> = {};
 
 function badgeFor(channel: ChannelSummary | undefined, plugin: Partial<ChannelConnectPlugin>): ChannelStatusDisplay {
+  if (isChannelComingSoon(channel)) return { variant: "muted", label: CHANNEL_COMING_SOON_LABEL };
   if (channel && !channel.available) return { variant: "muted", label: CHANNEL_UNAVAILABLE_LABEL };
   const status = channel?.connection.status ?? "disconnected";
   const display = plugin.statusOverrides?.[status] ?? CHANNEL_STATUS_DISPLAY[status];
@@ -118,7 +125,9 @@ export function ChannelConnectCard({ platform }: ChannelConnectCardProps) {
                 !connected && <p className="text-xs font-medium text-danger">{channel.connection.last_error}</p>
               )}
 
-              {unavailable ? (
+              {isChannelComingSoon(channel) ? (
+                <p className="text-sm text-fg/65">{comingSoonText(name)}</p>
+              ) : unavailable ? (
                 // NOTE: rendered once; above already shows it when status_reason is set.
                 !channel?.connection.status_reason && channel && <ChannelAttentionNotice channel={channel} />
               ) : inInlineStep && InlineStep && channel ? (
