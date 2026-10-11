@@ -145,14 +145,14 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
             shipping_cost: item.shipping_cost,
             quantity: item.quantity,
             discount_amount: discount,
-            note: item.note,
+            note: item.note?.trim() || null,
           }
         : {
             product: item.product_id,
             variant: item.variant_id,
             quantity: item.quantity,
             discount_amount: discount,
-            note: item.note,
+            note: item.note?.trim() || null,
           },
     );
 

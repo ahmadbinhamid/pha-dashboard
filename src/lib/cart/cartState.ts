@@ -47,6 +47,7 @@ export function setCartLineQuantity(prev: CartItem[], key: string, quantity: num
   return prev.map((i) => (i.key === key ? { ...i, quantity: clamp(quantity, i.max_quantity) } : i));
 }
 
+// Kept raw so spaces survive typing; trimmed when the order is submitted.
 export function setCartLineNote(prev: CartItem[], key: string, note: string): CartItem[] {
-  return prev.map((i) => (i.key === key ? { ...i, note: note.trim() || null } : i));
+  return prev.map((i) => (i.key === key ? { ...i, note: note || null } : i));
 }

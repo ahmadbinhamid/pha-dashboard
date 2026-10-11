@@ -35,6 +35,7 @@ const internalNoteSchema = new Schema(
     text: { type: String, required: true, trim: true },
     author: { type: Schema.Types.ObjectId, ref: "User", default: null },
     created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: null },
   },
   { _id: true },
 );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ProductNoteItem } from "@/components/products/ProductNoteItem";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 
@@ -7,7 +8,7 @@ interface CreateProductNotesSectionProps {
   onChange: (notes: string[]) => void;
 }
 
-// Draft-only note thread for the create flow — no productId to post against yet, so held in form state and posted for real right after creation.
+// No productId yet, so notes live in form state and post after create.
 export function CreateProductNotesSection({ notes, onChange }: CreateProductNotesSectionProps) {
   const [text, setText] = useState("");
 
@@ -18,6 +19,7 @@ export function CreateProductNotesSection({ notes, onChange }: CreateProductNote
   };
 
   const handleRemove = (idx: number) => onChange(notes.filter((_, i) => i !== idx));
+  const handleUpdate = (idx: number, next: string) => onChange(notes.map((n, i) => (i === idx ? next : n)));
 
   return (
     <div className="space-y-3">
@@ -36,19 +38,12 @@ export function CreateProductNotesSection({ notes, onChange }: CreateProductNote
       {notes.length > 0 && (
         <div className="space-y-2">
           {notes.map((note, idx) => (
-            <div
+            <ProductNoteItem
               key={idx}
-              className="flex items-start justify-between gap-3 rounded-xs border border-border bg-bg-2/40 p-3"
-            >
-              <p className="text-sm text-fg/80">{note}</p>
-              <button
-                type="button"
-                onClick={() => handleRemove(idx)}
-                className="shrink-0 text-xs text-fg/40 transition hover:text-danger"
-              >
-                Remove
-              </button>
-            </div>
+              text={note}
+              onSave={(next) => handleUpdate(idx, next)}
+              onDelete={() => handleRemove(idx)}
+            />
           ))}
         </div>
       )}
