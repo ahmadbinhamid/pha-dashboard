@@ -19,7 +19,6 @@ const updateSettings = {
     // NOTE: free-text inputs re-send stored values, so only length is capped.
     warehouse_country: optionalText(60),
     warehouse_phone: optionalText(40),
-    fallback_image_url: optionalText(2000),
   }),
 };
 

@@ -13,6 +13,7 @@ import { CHANNEL_STATUS_DISPLAY, CHANNEL_NEEDS_ATTENTION_LABEL, CHANNEL_UNAVAILA
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import type { ChannelConnectOptions, ChannelConnectPlugin, ChannelStatusDisplay } from "@/types/channelConnect";
 import type { ChannelSummary } from "@/types/channel";
+import { InlineNotice } from "@/components/ui/InlineNotice";
 
 interface ChannelConnectCardProps {
   platform: string;
@@ -101,13 +102,13 @@ export function ChannelConnectCard({ platform }: ChannelConnectCardProps) {
           ) : (
             <div className="flex flex-col gap-4">
               {callbackResult === "success" && plugin.callbackSuccessText && (
-                <p className="rounded-xs bg-tag-success-bg px-3 py-2 text-sm text-tag-success-fg">{plugin.callbackSuccessText}</p>
+                <InlineNotice variant="ok">{plugin.callbackSuccessText}</InlineNotice>
               )}
               {callbackResult === "error" && (
-                <p className="rounded-xs bg-tag-danger-bg px-3 py-2 text-sm text-tag-danger-fg">{callbackErrorText}</p>
+                <InlineNotice variant="danger">{callbackErrorText}</InlineNotice>
               )}
               {completedText && (
-                <p className="rounded-xs bg-tag-success-bg px-3 py-2 text-sm text-tag-success-fg">{completedText}</p>
+                <InlineNotice variant="ok">{completedText}</InlineNotice>
               )}
 
               {channel?.connection.status_reason ? (
@@ -118,7 +119,8 @@ export function ChannelConnectCard({ platform }: ChannelConnectCardProps) {
               )}
 
               {unavailable ? (
-                <p className="rounded-xs bg-tag-warn-bg px-3 py-2 text-sm text-tag-warn-fg">{channel?.unavailable_reason}</p>
+                // NOTE: rendered once; above already shows it when status_reason is set.
+                !channel?.connection.status_reason && channel && <ChannelAttentionNotice channel={channel} />
               ) : inInlineStep && InlineStep && channel ? (
                 <InlineStep channel={channel} onComplete={onInlineStepComplete} />
               ) : (

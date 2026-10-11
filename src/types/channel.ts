@@ -1,13 +1,10 @@
 // GET /channels shape (channel.service.js#listChannelsForTenant), per adapter.
 
-// "pending" (Google only): OAuth done but no Merchant Center account picked.
+// "pending" (Google, Meta): OAuth done but no account or catalog picked yet.
 export type ChannelConnectionStatus = "connected" | "disconnected" | "degraded" | "error" | "pending";
 
 // Why a connection is "error": unmet prerequisite or a refused token.
 export type ChannelStatusReason = "storefront_required" | "reauthentication_required";
-
-// Channel identity a status_reason action is built from.
-export type ChannelRef = Pick<ChannelSummary, "key" | "name">;
 
 // Link to where the tenant fixes a status_reason.
 export interface ChannelStatusAction {
@@ -22,6 +19,10 @@ export interface ChannelConnectionInfo {
   status_reason: ChannelStatusReason | null;
   // Tenant-facing explanation with the remedy, set with status_reason.
   status_message: string | null;
+  // Where to fix status_reason, from the server (single source of truth).
+  status_action: ChannelStatusAction | null;
+  // A dated token's expiry (Meta); null when the token never expires.
+  token_expires_at?: string | null;
 }
 
 export interface ChannelHealthInfo {
@@ -80,7 +81,11 @@ export interface ChannelSummary {
   requiresStorefront?: boolean;
   available: boolean;
   unavailable_reason: string | null;
+  // Where to fix it (e.g. Custom Domains), from the server.
+  unavailable_action: ChannelStatusAction | null;
   capabilities: ChannelCapabilities;
+  // Brandless products fall back to the store default brand on this channel.
+  uses_default_brand?: boolean;
   connection: ChannelConnectionInfo;
   health: ChannelHealthInfo;
   listing_counts: Record<string, number>;

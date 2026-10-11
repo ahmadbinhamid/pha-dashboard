@@ -7,7 +7,15 @@ const {
   CHANNEL_STATUS_REASON,
   CHANNEL_PREREQUISITE_ERROR_CODE,
   CHANNEL_REAUTH_ERROR_CODE,
+  CHANNEL_REMEDY_LOCATION,
 } = require("../../constants/channel.constants");
+
+const DOMAINS = CHANNEL_REMEDY_LOCATION.DOMAINS;
+
+// Settings page where a channel is connected or reconnected.
+function channelIntegrationHref(platform) {
+  return `/settings/integrations/${platform}`;
+}
 
 // Only channel-level needs belong here; per-item data problems never do.
 const PREREQUISITES = [
@@ -17,8 +25,12 @@ const PREREQUISITES = [
     // Lazy: domain.service is heavier and unrelated to most channel paths.
     isMet: (tenantId) => require("../domain.service").hasVerifiedDefaultDomain(tenantId),
     message: (name) =>
-      `${name} needs a verified default storefront domain. Verify a domain under Settings > Domains ` +
+      `${name} needs a verified default storefront domain. Verify a domain in ${DOMAINS.place} ` +
       "and set it as default; syncing resumes on its own.",
+    // Shown before connecting, when the channel is unavailable.
+    unavailableMessage: (name) =>
+      `${name} requires a verified storefront domain — add and verify one in ${DOMAINS.place} before connecting ${name}.`,
+    action: () => ({ label: "Open Custom Domains", href: DOMAINS.href }),
   },
 ];
 
@@ -26,6 +38,7 @@ const PREREQUISITES = [
 const REAUTH = {
   reason: CHANNEL_STATUS_REASON.REAUTHENTICATION_REQUIRED,
   message: (name) => `${name} access was revoked or has expired. Reconnect ${name} to resume syncing.`,
+  action: (manifest) => ({ label: `Reconnect ${manifest?.name ?? "channel"}`, href: channelIntegrationHref(manifest?.key) }),
 };
 
 const byReason = new Map([...PREREQUISITES, REAUTH].map((p) => [p.reason, p]));
@@ -34,6 +47,19 @@ const TAGGED_ERROR_CODES = new Set([CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_REA
 /** Tenant-facing text (with remedy) for a CHANNEL_STATUS_REASON. */
 function prerequisiteMessage(reason, channelName) {
   return byReason.get(reason)?.message(channelName) ?? null;
+}
+
+/** { label, href } where the tenant fixes a CHANNEL_STATUS_REASON, or null. */
+function prerequisiteAction(reason, manifest) {
+  return byReason.get(reason)?.action(manifest) ?? null;
+}
+
+/** Pre-connect notice for an unmet prerequisite: { message, action }. */
+function unavailableNotice(reason, manifest) {
+  const prerequisite = byReason.get(reason);
+  if (!prerequisite?.unavailableMessage) return null;
+  const name = manifest?.name ?? "This channel";
+  return { message: prerequisite.unavailableMessage(name), action: prerequisite.action(manifest) };
 }
 
 /** First declared prerequisite this tenant doesn't meet, or null. */
@@ -127,5 +153,7 @@ module.exports = {
   flagIfPrerequisiteError,
   isPrerequisiteError,
   prerequisiteMessage,
+  prerequisiteAction,
+  unavailableNotice,
   reconcileTenantPrerequisites,
 };

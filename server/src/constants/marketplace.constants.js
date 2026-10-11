@@ -3,6 +3,7 @@
 const MARKETPLACE_PLATFORM = Object.freeze({
   EBAY: "ebay",
   GOOGLE: "google",
+  META: "meta",
   AMAZON: "amazon",   // future
   SHOPIFY: "shopify", // future
 });
@@ -30,7 +31,15 @@ const LISTING_SUCCESS_STATUSES = Object.freeze([LISTING_SYNC_STATUS.SYNCED, LIST
 // What the Channel sync page counts as "Needs Attention".
 const LISTING_NEEDS_ATTENTION_STATUSES = Object.freeze([LISTING_SYNC_STATUS.ERROR, LISTING_SYNC_STATUS.PRICE_LOCKED]);
 
+// Where a listing's effective brand came from (productFallbacks#resolveBrand).
+const BRAND_SOURCE = Object.freeze({
+  LISTING: "listing",
+  PRODUCT: "product",
+  STORE_DEFAULT: "store_default",
+});
+
 module.exports = {
+  BRAND_SOURCE,
   MARKETPLACE_PLATFORM,
   LISTING_STATE,
   LISTING_SYNC_STATUS,

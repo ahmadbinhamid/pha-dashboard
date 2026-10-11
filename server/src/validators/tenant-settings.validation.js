@@ -1,6 +1,7 @@
 // validators/tenant-settings.validation.js
 
 const Joi = require("joi");
+const { TENANT_DEFAULT_BRAND_MAX } = require("../constants/tenant.constants");
 
 const bankDetailsSchema = Joi.object({
   bank_name: Joi.string().trim().allow("", null),
@@ -27,19 +28,20 @@ const updateSettings = {
     bank_details: bankDetailsSchema,
     pickup_location: pickupLocationSchema,
     warranty_text: Joi.string().trim().allow("", null),
+    default_brand: Joi.string().trim().max(TENANT_DEFAULT_BRAND_MAX).allow("", null),
     legal_disclaimer_text: Joi.string().trim().allow("", null),
     logo_url: Joi.string().trim().uri().allow("", null),
     favicon_url: Joi.string().trim().uri().allow("", null),
     brand_colour: hexColour.allow("", null),
     accent_colour: hexColour.allow("", null),
     payment_domain_mode: Joi.string().valid("default", "vendor_slug"),
-    // Letters/digits only; the "-" is added at format time, never part of the stored prefix.
+    // Letters/digits only; the "-" is added at format time, never stored.
     order_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
     invoice_number_prefix: Joi.string().trim().pattern(/^[A-Za-z0-9]{1,10}$/).allow("", null),
   }),
 };
 
-// secret_key/publishable_key are each independently optional; "" clears a previously-saved secret key.
+// Each key is optional; "" clears the saved secret key.
 const updateStripeKeys = {
   body: Joi.object({
     secret_key: Joi.string().trim().allow(""),
@@ -53,7 +55,7 @@ const updateStripeWebhookSecret = {
   }),
 };
 
-// Each field is independently optional; pass: "" clears previously-saved credentials entirely.
+// Each field is optional; pass: "" clears the saved credentials.
 const updateSmtpCredentials = {
   body: Joi.object({
     host: Joi.string().trim().allow("", null),

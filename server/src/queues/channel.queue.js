@@ -87,4 +87,19 @@ async function enqueueChannelJob(platform, jobName, payload, opts = {}) {
   return enqueueChannelJobDirect(platform, jobName, payload, opts);
 }
 
-module.exports = { queues, getQueue, enqueueChannelJob, enqueueChannelJobDirect };
+// NOTE: a real PING; Bull's isReady() resolves before Redis is reachable.
+async function assertQueueReachable(platform, ms = 5000) {
+  let timer;
+  const deadline = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new Error(`no PING reply in ${ms}ms`)), ms);
+  });
+  try {
+    await Promise.race([getQueue(platform).client.ping(), deadline]);
+  } catch (err) {
+    throw new Error(`${nameFor(platform)} queue unavailable, Redis not reachable: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { queues, getQueue, enqueueChannelJob, enqueueChannelJobDirect, assertQueueReachable };

@@ -1,5 +1,5 @@
 // services/category-mapping.service.js
-// Tenant category -> channel category defaults (listing value > mapping > unset).
+// Tenant category -> channel category defaults (listing > mapping > unset).
 
 const CategoryMapping = require("../models/CategoryMapping");
 const Product = require("../models/Product");
@@ -11,6 +11,9 @@ const {
 } = require("../constants/google-product-category.constants");
 const { MARKETPLACE_PLATFORM } = require("../constants/marketplace.constants");
 
+// Category source when another platform's mapping filled the gap.
+const FALLBACK_MAPPING_SOURCE = "fallback_mapping";
+
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
@@ -20,7 +23,11 @@ function mappablePlatforms() {
   return registry
     .getAll()
     .filter((adapter) => adapter.categoryField)
-    .map((adapter) => ({ key: adapter.key, name: adapter.manifest?.name || adapter.key }));
+    .map((adapter) => ({
+      key: adapter.key,
+      name: adapter.manifest?.name || adapter.key,
+      ...(adapter.categoryFallbackPlatform ? { fallback_platform: adapter.categoryFallbackPlatform } : {}),
+    }));
 }
 
 function assertMappablePlatform(platform) {
@@ -106,11 +113,30 @@ async function resolveMappedCategories(tenantId, platform, products) {
   return new Map(products.map((p) => [String(p._id), toResolvedCategory(pickMapping(p.categories, mappings))]));
 }
 
-/** Listing value if set, else the product's mapped default for `platform`, else null. */
+// Platform whose mappings fill gaps for `platform` (Meta reuses Google's).
+function fallbackPlatformFor(platform) {
+  return registry.has(platform) ? registry.get(platform).categoryFallbackPlatform || null : null;
+}
+
+/** Own mapping, else the adapter's fallback platform's (source marked). */
+async function resolvePlatformCategories(tenantId, platform, products) {
+  const own = await resolveMappedCategories(tenantId, platform, products);
+  const fallback = fallbackPlatformFor(platform);
+  const missing = fallback ? products.filter((p) => !own.get(String(p._id))) : [];
+  if (!missing.length) return own;
+  const borrowed = await resolveMappedCategories(tenantId, fallback, missing);
+  for (const product of missing) {
+    const row = borrowed.get(String(product._id));
+    if (row) own.set(String(product._id), { ...row, source: FALLBACK_MAPPING_SOURCE, platform: fallback });
+  }
+  return own;
+}
+
+/** Listing value, else the product's mapped default for `platform`, or null. */
 async function resolveEffectiveCategoryId(tenantId, platform, listingValue, product) {
   if (listingValue) return listingValue;
   if (!product) return null;
-  return (await resolveMappedCategories(tenantId, platform, [product])).get(String(product._id))?.id || null;
+  return (await resolvePlatformCategories(tenantId, platform, [product])).get(String(product._id))?.id || null;
 }
 
 /** Per-platform category default for one product. */
@@ -118,7 +144,7 @@ async function getMappedCategoriesForProduct(tenantId, productId) {
   const product = await Product.findOne({ _id: productId, tenant_id: tenantId }).select("categories").lean();
   if (!product) return null;
   const entries = await Promise.all(
-    mappablePlatforms().map(async ({ key }) => [key, (await resolveMappedCategories(tenantId, key, [product])).get(String(product._id))]),
+    mappablePlatforms().map(async ({ key }) => [key, (await resolvePlatformCategories(tenantId, key, [product])).get(String(product._id))]),
   );
   return Object.fromEntries(entries);
 }
@@ -128,6 +154,7 @@ module.exports = {
   upsertMapping,
   deleteMapping,
   resolveMappedCategories,
+  resolvePlatformCategories,
   resolveEffectiveCategoryId,
   getMappedCategoriesForProduct,
   suggestGoogleCategory,

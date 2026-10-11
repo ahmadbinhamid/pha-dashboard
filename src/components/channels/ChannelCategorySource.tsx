@@ -2,10 +2,11 @@ import { RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import Link from "@/components/ui/Link";
-import { CATEGORY_SOURCE_LABEL } from "@/config/salesChannels";
+import { categorySourceLabel } from "@/config/salesChannels";
 import type { MappedCategory } from "@/types/categoryMapping";
 
 interface Props {
+  channelKey: string;
   channelName: string;
   // The listing's own category, if set.
   listingValue: string | null | undefined;
@@ -16,11 +17,11 @@ interface Props {
 }
 
 // Shows where the effective category comes from (listing, mapping or unset).
-export function ChannelCategorySource({ channelName, listingValue, mapped, required, onReset }: Props) {
+export function ChannelCategorySource({ channelKey, channelName, listingValue, mapped, required, onReset }: Props) {
   if (listingValue) {
     return (
       <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg/60">
-        <Badge variant="warn">{CATEGORY_SOURCE_LABEL.override(channelName)}</Badge>
+        <Badge variant="warn">{categorySourceLabel(channelKey, channelName, mapped, true)}</Badge>
         {mapped && onReset && (
           <Button type="button" variant="ghost" size="sm" onClick={onReset} className="h-7 gap-1 px-2 text-xs">
             <RotateCcw className="h-3 w-3" />
@@ -33,7 +34,7 @@ export function ChannelCategorySource({ channelName, listingValue, mapped, requi
   if (mapped) {
     return (
       <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg/60">
-        <Badge variant="muted">{CATEGORY_SOURCE_LABEL.mapping}</Badge>
+        <Badge variant="muted">{categorySourceLabel(channelKey, channelName, mapped, false)}</Badge>
         <span>
           {mapped.name ?? "Category"} ({mapped.id})
         </span>

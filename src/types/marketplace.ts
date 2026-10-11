@@ -1,6 +1,6 @@
 import type { PackageDimensions, PackageFormState } from "./product";
 
-export type MarketplacePlatform = "ebay" | "google" | "amazon" | "shopify";
+export type MarketplacePlatform = "ebay" | "google" | "meta" | "amazon" | "shopify";
 export type ListingState = "draft" | "active" | "ended";
 export type ListingSyncStatus = "not_listed" | "pending" | "synced" | "out_of_stock" | "price_locked" | "error";
 
@@ -108,8 +108,15 @@ export interface GoogleListing extends MarketplaceListing {
   shipping_label: string | null;
 }
 
+// Business and catalog are per connection; category uses Google's taxonomy.
+export interface MetaListing extends MarketplaceListing {
+  platform: "meta";
+  meta_product_category: string | null;
+  gtin: string | null;
+}
+
 // Any-platform Listings row; narrow on `listing.platform` for platform fields.
-export type AnyMarketplaceListing = EbayListing | GoogleListing;
+export type AnyMarketplaceListing = EbayListing | GoogleListing | MetaListing;
 
 // GET /listings?group_by=product row; edit-only fields load via getListing(id).
 export interface GroupedListingSummary {
@@ -158,6 +165,23 @@ export interface GoogleChannelFormState extends GoogleListingFormState {
 
 export const GOOGLE_CHANNEL_FORM_INITIAL: GoogleChannelFormState = {
   ...GOOGLE_LISTING_FORM_INITIAL,
+  title_override: "",
+  description_override: "",
+  price_override: "",
+};
+
+// Meta panel state: its two fields plus overrides (no photo overrides).
+export interface MetaChannelFormState {
+  meta_product_category: string;
+  gtin: string;
+  title_override: string;
+  description_override: string;
+  price_override: string;
+}
+
+export const META_CHANNEL_FORM_INITIAL: MetaChannelFormState = {
+  meta_product_category: "",
+  gtin: "",
   title_override: "",
   description_override: "",
   price_override: "",

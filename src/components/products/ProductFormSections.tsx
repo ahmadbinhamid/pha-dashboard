@@ -67,10 +67,14 @@ export function ProductFormSections({
           <Input {...register("title")} placeholder="e.g. Front brake pad set, ceramic" autoFocus={autoFocusTitle} />
         </FormField>
 
-        <div className={cn("grid grid-cols-1 gap-3", skuField && "sm:grid-cols-2")}>
+        {/* NOTE: brand sits with MPN; edit's SKU makes it 3 across on wide screens. */}
+        <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2", skuField && "lg:grid-cols-3")}>
           {skuField && <FormField label="SKU">{skuField}</FormField>}
           <FormField label="Manufacturer part number">
             <Input {...register("mpn")} placeholder="e.g. 45022-TBC-A01" />
+          </FormField>
+          <FormField label="Brand" error={errors.brand?.message}>
+            <Input {...register("brand")} placeholder="e.g. Bosch" />
           </FormField>
         </div>
 

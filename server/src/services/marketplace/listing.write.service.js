@@ -13,6 +13,7 @@ const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants"
 const LISTING_WRITERS = Object.freeze({
   [MARKETPLACE_PLATFORM.EBAY]: require("../ebay/ebay.listing.service"),
   [MARKETPLACE_PLATFORM.GOOGLE]: require("../google/google.listing.service"),
+  [MARKETPLACE_PLATFORM.META]: require("../meta/meta.listing.service"),
 });
 
 const VARIANT_POPULATE = "display_name sku price attachments";
@@ -27,7 +28,7 @@ async function findListingPlatform(id, tenantId) {
   return listing?.platform ?? null;
 }
 
-// NOTE: variant ownership is new; a foreign variant used to be accepted.
+// NOTE: the variant must belong to this product and tenant, not just exist.
 async function assertOwnership(product, variant, tenantId) {
   const [ownsProduct, ownsVariant] = await Promise.all([
     Product.exists({ _id: product, tenant_id: tenantId }),

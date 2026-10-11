@@ -3,6 +3,7 @@ import { priceSchema, optionalNonNegativePriceSchema } from "@/lib/validation/co
 import { vehicleYearRangeSchema } from "@/lib/validation/commonFields";
 import type { PackageFormState, StockEntry } from "@/types/product";
 import { missingPackageFields } from "@/lib/products/packageDimensions";
+import { PRODUCT_BRAND_MAX_LENGTH } from "@/config/productOptions";
 import type { Attachment } from "@/types/product";
 import type { FitmentRowFormState } from "@/types/marketplace";
 
@@ -17,6 +18,7 @@ const productFormShape = {
   is_taxable: z.boolean(),
   barcode: z.string(),
   mpn: z.string(),
+  brand: z.string().trim().max(PRODUCT_BRAND_MAX_LENGTH, `Brand must be ${PRODUCT_BRAND_MAX_LENGTH} characters or fewer`),
   condition: z.string(),
   authenticity: z.string(),
   // First row is the default vehicle; the rest are additional fitments.
@@ -89,7 +91,6 @@ function withPriceAndYearChecks<T extends z.ZodRawShape>(shape: T) {
 export const productFormSchema = withPriceAndYearChecks({
   ...productFormShape,
   sku: z.string(),
-  brand: z.string(),
   has_variants: z.boolean(),
   choices: z.custom<import("@/types/product").Choice[]>(),
   stock_entries: z.custom<StockEntry[]>(),

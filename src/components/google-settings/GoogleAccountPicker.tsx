@@ -15,6 +15,7 @@ import {
 } from "@/lib/validation/googleConnectForm";
 import { googleConnectErrorMessage } from "@/config/googleConnect";
 import type { ChannelInlineStepProps } from "@/types/channelConnect";
+import { InlineNotice } from "@/components/ui/InlineNotice";
 
 const DEFAULT_VALUES: GoogleCompleteConnectFormValues = {
   merchantId: "",
@@ -63,10 +64,10 @@ export function GoogleAccountPicker({ onComplete }: ChannelInlineStepProps) {
   return (
     <>
       {completeMutation.isError && (
-        <p className="rounded-xs bg-tag-danger-bg px-3 py-2 text-sm text-tag-danger-fg">
+        <InlineNotice variant="danger">
           {googleConnectErrorMessage((completeMutation.error as Error & { reason?: string })?.reason) ||
             (completeMutation.error as Error)?.message}
-        </p>
+        </InlineNotice>
       )}
       <p className="text-sm text-fg/65">
         You've granted Google access — pick which Merchant Center account this store should publish to.

@@ -2,23 +2,27 @@ import type { Product } from "@/types/product";
 import {
   EBAY_LISTING_FORM_INITIAL,
   GOOGLE_CHANNEL_FORM_INITIAL,
+  META_CHANNEL_FORM_INITIAL,
   type AnyMarketplaceListing,
   type EbayListing,
   type EbayListingFormState,
   type GoogleChannelFormState,
+  type MetaChannelFormState,
 } from "@/types/marketplace";
 import {
   createEbayListing,
   createGoogleListing,
+  createMetaListing,
   pushListing,
   updateEbayListing,
   updateGoogleListing,
+  updateMetaListing,
 } from "@/lib/api/listings";
 import { listingToForm } from "@/lib/marketplace/listingToForm";
 
 // Per-channel create/save glue for the product form (no generic create route).
 
-export type ChannelFormState = EbayListingFormState | GoogleChannelFormState;
+export type ChannelFormState = EbayListingFormState | GoogleChannelFormState | MetaChannelFormState;
 
 export interface ChannelFormAdapter {
   // First-listing seed; overrides stay empty so product fields stay live.
@@ -74,7 +78,7 @@ const ebayAdapter: ChannelFormAdapter = {
   supportsPhotoOverrides: true,
 };
 
-function hasOverrides(form: GoogleChannelFormState) {
+function hasOverrides(form: GoogleChannelFormState | MetaChannelFormState) {
   return !!(form.title_override.trim() || form.description_override.trim() || form.price_override !== "");
 }
 
@@ -110,7 +114,37 @@ const googleAdapter: ChannelFormAdapter = {
   supportsPhotoOverrides: false,
 };
 
+const metaAdapter: ChannelFormAdapter = {
+  initialForm: () => ({ ...META_CHANNEL_FORM_INITIAL }),
+  fromListing: (listing) =>
+    listing.platform === "meta"
+      ? {
+          meta_product_category: listing.meta_product_category ?? "",
+          gtin: listing.gtin ?? "",
+          title_override: listing.title_override ?? "",
+          description_override: listing.description_override ?? "",
+          price_override: listing.price_override != null ? String(listing.price_override) : "",
+        }
+      : { ...META_CHANNEL_FORM_INITIAL },
+  // Create queues a sync too; overrides aren't accepted on create, so save after.
+  create: async (product, form) => {
+    const metaForm = form as MetaChannelFormState;
+    const { data } = await createMetaListing(product._id, null, metaForm);
+    if (hasOverrides(metaForm)) {
+      await updateMetaListing(data._id, metaForm);
+      await pushOrThrow(data._id);
+    }
+    return data._id;
+  },
+  saveAndSync: async (listingId, form) => {
+    await updateMetaListing(listingId, form as MetaChannelFormState);
+    await pushOrThrow(listingId);
+  },
+  supportsPhotoOverrides: false,
+};
+
 export const CHANNEL_FORM_ADAPTERS: Record<string, ChannelFormAdapter> = {
   ebay: ebayAdapter,
   google: googleAdapter,
+  meta: metaAdapter,
 };

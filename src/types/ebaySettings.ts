@@ -13,13 +13,12 @@ export interface EbaySettings {
   warehouse_postcode: string | null;
   warehouse_country: string | null;
   warehouse_phone: string | null;
-  fallback_image_url: string | null;
   connection_status: EbayConnectionStatus;
   connected_at: string | null;
   last_error: string | null;
 }
 
-// refresh_token excluded — only set via the OAuth consent flow, never sent from the frontend.
+// No refresh_token: only the OAuth consent flow sets it, never the frontend.
 export type UpdateEbaySettingsPayload = Partial<
   Omit<EbaySettings, "connection_status" | "connected_at" | "last_error">
 >;

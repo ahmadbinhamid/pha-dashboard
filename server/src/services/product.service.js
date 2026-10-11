@@ -10,6 +10,7 @@ const { createWithUniqueSlug, saveWithUniqueSlug } = require("../utils/slug");
 const { logger } = require("../loaders/logging");
 const { getStockStatus } = require("../utils/stock");
 const { toPublicListing, buildProductDisplay } = require("../utils/marketplaceListing");
+const { getDefaultBrand } = require("./tenant-settings.service");
 const { withAttachmentUrls, buildAttachmentFilePath } = require("../utils/attachment");
 const inventoryService = require("./inventory.service");
 const locationService = require("./location.service");
@@ -420,7 +421,7 @@ async function getProductBySlugOrId(key, tenantId) {
   });
 
   // `display` resolves listing vs product precedence for the frontend.
-  product.display = buildProductDisplay(product, listings);
+  product.display = buildProductDisplay(product, listings, { defaultBrand: await getDefaultBrand(tenantId) });
   product.listings = listings.map(toPublicListing);
 
   return product;

@@ -57,6 +57,10 @@ const baseSchema = new Schema(
     // Loop-prevention qty baseline. TODO(dual-write): drop ebay_synced_quantity.
     synced_quantity: { type: Number, default: null },
 
+    // Async channels only: seq of the unconfirmed batch; no default, so unset.
+    inflight_seq: { type: Number },
+    inflight_at: { type: Date },
+
     // Generic external identifiers (eBay listingId/offerId, Amazon ASIN, etc.)
     external_listing_id: { type: String, default: null },
     external_offer_id: { type: String, default: null },
@@ -192,5 +196,14 @@ const googleSchema = new Schema({
 });
 
 MarketplaceListing.discriminator(MARKETPLACE_PLATFORM.GOOGLE, googleSchema);
+
+// -- Meta: external_listing_id = meta:<catalog>:<retailer id>; no offer id --
+const metaSchema = new Schema({
+  // Google taxonomy id override; else Meta mapping, else Google mapping.
+  meta_product_category: { type: String, default: null },
+  gtin: { type: String, default: null },
+});
+
+MarketplaceListing.discriminator(MARKETPLACE_PLATFORM.META, metaSchema);
 
 module.exports = MarketplaceListing;

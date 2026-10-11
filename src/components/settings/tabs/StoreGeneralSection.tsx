@@ -12,11 +12,13 @@ import { StringListField } from "@/components/ui/StringListField";
 import { SettingsSection, SettingsFieldGrid } from "@/components/settings/SettingsSection";
 import { useToast } from "@/context";
 import { updateTenantSettings } from "@/lib/api/tenantSettings";
+import { DEFAULT_BRAND_HINT, DEFAULT_BRAND_MAX_LENGTH } from "@/config/storeProfile";
 import type { TenantSettings } from "@/types/tenantSettings";
 
 // Each card PATCHes only its own fields, so saves can't clobber each other.
 type GeneralState = {
   company_name: string;
+  default_brand: string;
   abn: string;
   email: string;
   phone: string;
@@ -26,6 +28,7 @@ type GeneralState = {
 function toState(settings: TenantSettings): GeneralState {
   return {
     company_name: settings.company_name ?? "",
+    default_brand: settings.default_brand ?? "",
     abn: settings.abn ?? "",
     email: settings.email ?? "",
     phone: settings.phone ?? "",
@@ -104,6 +107,14 @@ export function StoreGeneralSection({ settings, loading }: { settings?: TenantSe
           </FormField>
           <FormField label="Australian Business Number (ABN)" hint="Printed on every tax invoice.">
             <Input value={form.abn} onChange={(e) => set("abn", e.target.value)} placeholder="12 345 678 901" />
+          </FormField>
+          <FormField label="Default brand" htmlFor="store-default-brand" hint={DEFAULT_BRAND_HINT}>
+            <Input
+              id="store-default-brand"
+              value={form.default_brand}
+              maxLength={DEFAULT_BRAND_MAX_LENGTH}
+              onChange={(e) => set("default_brand", e.target.value)}
+            />
           </FormField>
         </SettingsFieldGrid>
       </SettingsSection>

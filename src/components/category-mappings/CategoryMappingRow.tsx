@@ -8,11 +8,11 @@ import { SingleSelect } from "@/components/ui/SingleSelect";
 import { EbayCategoryInput } from "@/components/listings/platforms/ebay/EbayCategoryInput";
 import { useToast } from "@/context";
 import { deleteCategoryMapping, saveCategoryMapping } from "@/lib/api/categoryMappings";
-import type { CategoryMapping, ChannelCategoryOption, MappableCategory } from "@/types/categoryMapping";
+import type { CategoryMapping, CategoryMappingOverview, ChannelCategoryOption, MappableCategory } from "@/types/categoryMapping";
 
 interface Props {
   category: MappableCategory;
-  platforms: { key: string; name: string }[];
+  platforms: CategoryMappingOverview["platforms"];
   // Current saved mapping per platform key.
   mappings: Record<string, CategoryMapping | undefined>;
   googleCategories: ChannelCategoryOption[];
@@ -57,6 +57,9 @@ export function CategoryMappingRow({ category, platforms, mappings, googleCatego
 
   function renderInput(key: string, label: string) {
     const value = draft[key]?.id ?? "";
+    // Meta reuses Google's taxonomy; unset means the Google mapping applies.
+    const fallback = platforms.find((p) => p.key === key)?.fallback_platform;
+    const fallbackName = platforms.find((p) => p.key === fallback)?.name ?? fallback;
     if (key === "ebay") {
       return (
         <EbayCategoryInput
@@ -66,13 +69,13 @@ export function CategoryMappingRow({ category, platforms, mappings, googleCatego
         />
       );
     }
-    if (key === "google") {
-      const suggestion = category.suggestions.google;
+    if (key === "google" || fallback === "google") {
+      const suggestion = key === "google" ? category.suggestions.google : undefined;
       return (
         <FormField label={label}>
           <SingleSelect
             options={[
-              { value: "", label: "Not mapped" },
+              { value: "", label: fallback ? `Use ${fallbackName} mapping` : "Not mapped" },
               // Keep a saved id outside the list selectable instead of blank.
               ...(value && !googleCategories.some((c) => c.id === value)
                 ? [{ value, label: draft[key]?.name || `Category ${value}` }]

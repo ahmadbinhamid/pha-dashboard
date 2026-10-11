@@ -20,6 +20,7 @@ router.use("/refund", require("./refund.routes"));
 router.use("/payment", require("./payment.routes"));
 router.use("/ebay", require("./ebay.routes"));
 router.use("/google", require("./google.routes"));
+router.use("/meta", require("./meta.routes"));
 router.use("/listings", require("./listing.routes"));
 router.use("/channels", require("./channel.routes"));
 router.use("/category-mappings", require("./category-mapping.routes"));

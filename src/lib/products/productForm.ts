@@ -90,6 +90,7 @@ export function productFormToFormData(form: ProductFormValues, mode: ProductForm
   fd.append("is_taxable", String(form.is_taxable));
   fd.append("barcode", form.barcode);
   optional("mpn", edit ? form.mpn : form.mpn.trim());
+  optional("brand", edit ? form.brand : form.brand.trim());
   fd.append("condition", form.condition);
   optional("authenticity", form.authenticity);
   const [defaultVehicle = EMPTY_FITMENT_ROW, ...additional] = form.fitments.filter(isNamedFitment);
@@ -111,7 +112,6 @@ export function productFormToFormData(form: ProductFormValues, mode: ProductForm
 
   if (edit) {
     fd.append("sku", form.sku);
-    fd.append("brand", form.brand);
     fd.append("has_variants", String(form.has_variants));
     fd.append("choices", JSON.stringify(form.choices));
   } else if (form.stock_entries.length > 0) {

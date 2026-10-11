@@ -2,24 +2,28 @@
 // DB-facing logic behind GET /api/v1/channels* (HTTP in channel.controller.js).
 
 const registry = require("./registry");
+const { logger } = require("../../loaders/logging");
 const ChannelConnection = require("../../models/ChannelConnection");
 const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const { enqueueChannelJob } = require("../../queues/channel.queue");
-const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
+const { CHANNEL_CONNECTION_STATUS, CHANNEL_JOB, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
 const { LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
 const { withStaticOptions } = require("./fieldSchema");
-const { findUnmetPrerequisite, prerequisiteMessage } = require("./channel-prerequisite.service");
+const {
+  findUnmetPrerequisite,
+  prerequisiteMessage,
+  prerequisiteAction,
+  unavailableNotice,
+} = require("./channel-prerequisite.service");
 
-function storefrontUnavailableReason(manifestName) {
-  return `${manifestName} requires a verified storefront domain — connect and verify one under Settings > Domains before connecting ${manifestName}.`;
-}
+const STOREFRONT_REQUIRED = CHANNEL_STATUS_REASON.STOREFRONT_REQUIRED;
 
 // Driven by manifest.requiresStorefront, so new adapters need no code here.
 async function checkStorefrontRequirement(tenantId, platform) {
   const { manifest } = registry.get(platform);
   const unmet = await findUnmetPrerequisite(tenantId, manifest);
-  return unmet ? { ok: false, reason: storefrontUnavailableReason(manifest.name) } : { ok: true };
+  return unmet ? { ok: false, reason: unavailableNotice(unmet.reason, manifest).message } : { ok: true };
 }
 
 // All adapter manifests plus tenant status; unconnected ones can show Connect.
@@ -64,6 +68,7 @@ async function listChannelsForTenant(tenantId) {
 
     // Missing storefront requirement: mark unavailable with a readable reason.
     const storefrontOk = !manifest.requiresStorefront || hasVerifiedDomain;
+    const unavailable = storefrontOk ? null : unavailableNotice(STOREFRONT_REQUIRED, manifest);
     const listingCountsForPlatform = countsByPlatform.get(manifest.key) || {};
     const consecutiveFailures = conn?.consecutive_failures || 0;
 
@@ -86,8 +91,12 @@ async function listChannelsForTenant(tenantId) {
       // Additive: channel-only form fields with static options.
       fieldSchema: withStaticOptions(manifest.fieldSchema),
       capabilities: adapter.capabilities,
+      // Additive: brandless products fall back to the store default here.
+      uses_default_brand: adapter.needs?.defaultBrand === true,
       available: storefrontOk,
-      unavailable_reason: storefrontOk ? null : storefrontUnavailableReason(manifest.name),
+      unavailable_reason: storefrontOk ? null : unavailable.message,
+      // Additive: where the tenant fixes it, so the UI links there.
+      unavailable_action: storefrontOk ? null : unavailable.action,
       connection: {
         status: conn?.status || CHANNEL_CONNECTION_STATUS.DISCONNECTED,
         connected_at: conn?.connected_at || null,
@@ -95,6 +104,9 @@ async function listChannelsForTenant(tenantId) {
         // Unmet prerequisite code plus tenant-facing text with the remedy.
         status_reason: conn?.status_reason || null,
         status_message: conn?.status_reason ? prerequisiteMessage(conn.status_reason, manifest.name) : null,
+        status_action: conn?.status_reason ? prerequisiteAction(conn.status_reason, manifest) : null,
+        // Additive: a dated token's expiry, so the UI can ask to reconnect early.
+        token_expires_at: conn?.token_expires_at || null,
       },
       health: {
         consecutive_failures: consecutiveFailures,
@@ -136,4 +148,19 @@ async function retryChannelLog(tenantId, platform, logId) {
   return { requeued: true, listingId: log.entity_id.toString() };
 }
 
-module.exports = { listChannelsForTenant, getChannelLogs, retryChannelLog, checkStorefrontRequirement };
+// A full-catalogue push runs well past the queue's 60s default timeout.
+const FULL_SYNC_TIMEOUT_MS = 30 * 60_000;
+
+/** Queues a tenant's full-catalogue push (after connect); best effort. */
+async function enqueueFullSync(platform, tenantId) {
+  try {
+    await enqueueChannelJob(platform, CHANNEL_JOB.SYNC_BATCH, { tenantId: String(tenantId) }, { timeout: FULL_SYNC_TIMEOUT_MS });
+    return true;
+  } catch (err) {
+    // A queue hiccup mustn't turn an already-saved connection into an error.
+    logger.warn(`[channel.service] failed to enqueue full sync for ${platform}/${tenantId}: ${err.message}`);
+    return false;
+  }
+}
+
+module.exports = { listChannelsForTenant, getChannelLogs, retryChannelLog, checkStorefrontRequirement, enqueueFullSync };

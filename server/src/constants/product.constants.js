@@ -20,6 +20,15 @@ const PRODUCT_AUTHENTICITY = Object.freeze({
   AFTERMARKET: "Aftermarket",
 });
 
+// Brand-from-make backfill buckets; only SET is written, the rest are skips.
+const BRAND_BACKFILL_OUTCOME = Object.freeze({
+  SET: "set",
+  ALREADY_BRANDED: "already_branded",
+  AFTERMARKET: "aftermarket",
+  UNRECOGNISED_AUTHENTICITY: "unrecognised_authenticity",
+  NO_MAKE: "no_make",
+});
+
 const PRODUCT_SORT = Object.freeze({
   PRICE_LOW_HIGH: "price_low_high",
   PRICE_HIGH_LOW: "price_high_low",
@@ -41,8 +50,7 @@ const STOCK_STATUS = Object.freeze({
   OUT_OF_STOCK: "out_of_stock",
 });
 
-// Display-only stock_status threshold; separate from InventorySettings.low_stock_threshold,
-// which only drives restock email alerts.
+// Display-only; InventorySettings.low_stock_threshold drives restock emails.
 const STOCK_LOW_THRESHOLD = 3;
 
 module.exports = {
@@ -50,6 +58,7 @@ module.exports = {
   PRODUCT_STATUS,
   PRODUCT_CONDITION,
   PRODUCT_AUTHENTICITY,
+  BRAND_BACKFILL_OUTCOME,
   PRODUCT_SORT,
   PRODUCT_SORT_OPTIONS,
   STOCK_STATUS,

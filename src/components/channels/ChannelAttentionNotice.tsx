@@ -1,6 +1,6 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import Link from "@/components/ui/Link";
-import { CHANNEL_STATUS_REASON_ACTION } from "@/config/channelStatusReasons";
+import { channelRemedy } from "@/lib/marketplace/channelRemedy";
 import { cn } from "@/utils/cn";
 import type { ChannelSummary } from "@/types/channel";
 
@@ -9,11 +9,11 @@ interface ChannelAttentionNoticeProps {
   className?: string;
 }
 
-// Flagged channel status_reason with its remedy; nothing when healthy.
+// Flagged or unavailable channel with its remedy link; nothing when healthy.
 export function ChannelAttentionNotice({ channel, className }: ChannelAttentionNoticeProps) {
-  const { status_reason: reason, status_message: message } = channel.connection;
-  if (!reason || !message) return null;
-  const action = CHANNEL_STATUS_REASON_ACTION[reason]?.(channel);
+  const remedy = channelRemedy(channel);
+  if (!remedy) return null;
+  const { message, action } = remedy;
 
   return (
     <div
