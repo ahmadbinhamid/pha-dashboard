@@ -18,9 +18,12 @@ interface FitmentRowProps {
   onUpdate: (patch: Partial<FitmentRowFormState>) => void;
   onRemove: () => void;
   removeLabel?: string;
+  // Off for filtering: only values already in the vehicle catalog are offered.
+  allowCustom?: boolean;
 }
 
-export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remove vehicle" }: FitmentRowProps) {
+export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remove vehicle", allowCustom = true }: FitmentRowProps) {
+  const searchText = (noun: string) => (allowCustom ? `Search or add a ${noun}…` : `Search ${noun}s…`);
   const { data: makesRes } = useQuery({
     queryKey: ["vehicle-makes"],
     queryFn: getVehicleMakes,
@@ -82,8 +85,8 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.make}
             onChange={handleMakeChange}
             placeholder="Select make…"
-            searchPlaceholder="Search or add a make…"
-            allowCustom
+            searchPlaceholder={searchText("make")}
+            allowCustom={allowCustom}
           />
         </div>
         <div className="space-y-1">
@@ -93,9 +96,9 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.model}
             onChange={handleModelChange}
             placeholder={row.make ? "Select model…" : "Select make first"}
-            searchPlaceholder="Search or add a model…"
+            searchPlaceholder={searchText("model")}
             disabled={!row.make}
-            allowCustom
+            allowCustom={allowCustom}
           />
         </div>
       </div>
@@ -108,9 +111,9 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.model_code}
             onChange={handleModelCodeChange}
             placeholder={row.model ? "Select code…" : "Select model first"}
-            searchPlaceholder="Search or add a code…"
+            searchPlaceholder={searchText("code")}
             disabled={!row.model}
-            allowCustom
+            allowCustom={allowCustom}
           />
         </div>
         <div className="space-y-1">

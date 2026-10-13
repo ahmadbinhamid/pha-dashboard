@@ -59,6 +59,7 @@ export function ProductSearchField({ value, onChange, vehicle, onVehicleChange }
             onUpdate={(patch) => onVehicleChange({ ...vehicle, ...patch })}
             onRemove={clearVehicle}
             removeLabel="Clear vehicle"
+            allowCustom={false}
           />
         </PopoverContent>
       </Popover>
