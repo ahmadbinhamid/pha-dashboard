@@ -290,13 +290,13 @@ async function getProductStats(tenantId) {
   };
 }
 
-// Re-sorts to Typesense relevance order; $in doesn't preserve order.
-async function getProductsByIds(ids, { stockFilter, channelFilter } = {}) {
+// Keeps Typesense order ($in loses it); `match` adds filters Typesense lacks.
+async function getProductsByIds(ids, { stockFilter, channelFilter, match = null } = {}) {
   if (!ids.length) return { items: [] };
 
   const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
   const pipeline = [
-    { $match: { _id: { $in: objectIds } } },
+    { $match: { _id: { $in: objectIds }, ...match } },
     ...buildStockStages(stockFilter),
     ...buildChannelStages(channelFilter),
     ...HYDRATION_STAGES,

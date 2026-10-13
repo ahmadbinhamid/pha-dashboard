@@ -17,9 +17,10 @@ interface FitmentRowProps {
   label: string;
   onUpdate: (patch: Partial<FitmentRowFormState>) => void;
   onRemove: () => void;
+  removeLabel?: string;
 }
 
-export function FitmentRow({ row, label, onUpdate, onRemove }: FitmentRowProps) {
+export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remove vehicle" }: FitmentRowProps) {
   const { data: makesRes } = useQuery({
     queryKey: ["vehicle-makes"],
     queryFn: getVehicleMakes,
@@ -68,7 +69,7 @@ export function FitmentRow({ row, label, onUpdate, onRemove }: FitmentRowProps) 
     <div className="rounded-xs border border-border bg-bg-2/30 p-3 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">{label}</span>
-        <Button type="button" variant="ghost" size="icon" onClick={onRemove} title="Remove vehicle" aria-label="Remove vehicle">
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove} title={removeLabel} aria-label={removeLabel}>
           <Trash2 className="h-3.5 w-3.5 text-danger" />
         </Button>
       </div>

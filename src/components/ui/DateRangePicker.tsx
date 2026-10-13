@@ -1,5 +1,5 @@
 import { useState } from "react";
-import * as Popover from "@radix-ui/react-popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { Calendar as CalendarIcon } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/Calendar";
@@ -10,7 +10,7 @@ import type { DateRangeValue } from "@/utils/dateRange";
 
 const DEFAULT_PRESET_DAYS = [7, 14, 30, 90] as const;
 
-// Generic date-range filter: a preset "last N days" list plus a calendar-based custom range (react-day-picker). Used by the Dashboard charts and Activity Log, replacing each one's own hand-rolled native date-input pair.
+// Date-range filter: "last N days" presets plus a custom calendar range.
 export function DateRangePicker({
   value,
   onChange,
@@ -23,9 +23,9 @@ export function DateRangePicker({
   value: DateRangeValue;
   onChange: (next: DateRangeValue) => void;
   presetDays?: readonly number[];
-  // Shown as the trigger label when no range is applied — only reachable when `allowClear` is true.
+  // Trigger label with no range applied; only reachable with `allowClear`.
   placeholder?: string;
-  // Whether a "Clear" action returns to an unfiltered state — Dashboard charts always need a concrete range so they leave this off; Activity Log's filter is optional.
+  // Offers "Clear"; Dashboard charts always need a range, so they leave it off.
   allowClear?: boolean;
   align?: "start" | "end";
   className?: string;
@@ -64,15 +64,15 @@ export function DateRangePicker({
   }
 
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        // Discard an in-progress, un-applied custom pick on close so reopening doesn't show a stale half-made selection.
+        // Drop an unapplied pick on close, so reopening shows no stale half-range.
         if (!next) resetDraftToValue();
       }}
     >
-      <Popover.Trigger asChild>
+      <PopoverTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -83,66 +83,56 @@ export function DateRangePicker({
           <CalendarIcon className="h-3.5 w-3.5 text-fg/45" />
           {label}
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align={align}
-          sideOffset={8}
-          className={cn(
-            "z-50 w-[min(92vw,320px)] overflow-hidden rounded-xl border border-border bg-card shadow-lg",
-            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
-            "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+      </PopoverTrigger>
+      <PopoverContent align={align} className="w-[min(92vw,320px)]">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border p-2">
+          {presetDays.map((days) => (
+            <button
+              key={days}
+              type="button"
+              onClick={() => choosePreset(days)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                activePresetDays === days ? "bg-accent/10 text-accent" : "text-fg/60 hover:bg-muted/60",
+              )}
+            >
+              {days}D
+            </button>
+          ))}
+          {allowClear && (value.from || value.to || draftRange?.from) && (
+            <button
+              type="button"
+              onClick={clearRange}
+              className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-fg/45 transition-colors hover:bg-muted/60 hover:text-fg"
+            >
+              Clear
+            </button>
           )}
-        >
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-border p-2">
-            {presetDays.map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => choosePreset(days)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                  activePresetDays === days ? "bg-accent/10 text-accent" : "text-fg/60 hover:bg-muted/60",
-                )}
-              >
-                {days}D
-              </button>
-            ))}
-            {allowClear && (value.from || value.to || draftRange?.from) && (
-              <button
-                type="button"
-                onClick={clearRange}
-                className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-fg/45 transition-colors hover:bg-muted/60 hover:text-fg"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+        </div>
 
-          <Calendar
-            mode="range"
-            selected={draftRange}
-            onSelect={setDraftRange}
-            numberOfMonths={1}
-            defaultMonth={draftRange?.to ?? draftRange?.from}
-            disabled={{ after: new Date() }}
-            className="w-full"
-          />
+        <Calendar
+          mode="range"
+          selected={draftRange}
+          onSelect={setDraftRange}
+          numberOfMonths={1}
+          defaultMonth={draftRange?.to ?? draftRange?.from}
+          disabled={{ after: new Date() }}
+          className="w-full"
+        />
 
-          <div className="flex items-center justify-between gap-2 border-t border-border p-2.5">
-            <span className="min-w-0 truncate text-xs text-fg/45">
-              {draftRange?.from
-                ? draftRange.to
-                  ? `${formatIsoLabel(toIsoDate(draftRange.from))} – ${formatIsoLabel(toIsoDate(draftRange.to))}`
-                  : "Pick an end date…"
-                : "Pick a start date…"}
-            </span>
-            <Button type="button" size="sm" disabled={!draftRange?.from || !draftRange?.to} onClick={applyCustomRange}>
-              Apply
-            </Button>
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        <div className="flex items-center justify-between gap-2 border-t border-border p-2.5">
+          <span className="min-w-0 truncate text-xs text-fg/45">
+            {draftRange?.from
+              ? draftRange.to
+                ? `${formatIsoLabel(toIsoDate(draftRange.from))} – ${formatIsoLabel(toIsoDate(draftRange.to))}`
+                : "Pick an end date…"
+              : "Pick a start date…"}
+          </span>
+          <Button type="button" size="sm" disabled={!draftRange?.from || !draftRange?.to} onClick={applyCustomRange}>
+            Apply
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

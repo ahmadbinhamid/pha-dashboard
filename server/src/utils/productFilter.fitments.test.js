@@ -9,7 +9,7 @@ const mongoose = require("mongoose");
 const config = require("../config");
 const { fixtureId } = require("../testUtils/fixtureTenants");
 const Product = require("../models/Product");
-const { buildProductFilter } = require("./productFilter");
+const { buildProductFilter, buildFitmentFilter } = require("./productFilter");
 
 before(() => mongoose.connect(config.mongoUri));
 after(() => mongoose.disconnect());
@@ -31,4 +31,16 @@ test("make/model/year match default vehicle or an additional fitment", async () 
   assert.deepEqual(await find({ model: "ASX", year: 2022 }), [String(both._id)], "open-ended year_to");
   assert.deepEqual(await find({ model: "ASX", year: 2014 }), [], "before year_from");
   assert.deepEqual(await find({ model: "Outlander", year: 2021 }), [], "after the default's year_to");
+});
+
+test("vehicle match ignores case and surrounding spaces; blank values filter nothing", async () => {
+  const tenantId = fixtureId();
+  const civic = await product(tenantId, { vehicle: { make: "honda", model: "Civic", year_from: 2012, year_to: 2015 } });
+  const find = async (query) =>
+    (await Product.find(buildProductFilter(query, { authenticated: true, tenantId })).select("_id").lean()).map((p) => String(p._id));
+
+  assert.deepEqual(await find({ make: " Honda ", model: "CIVIC" }), [String(civic._id)]);
+  assert.deepEqual(await find({ make: "Hond" }), [], "whole value only, not a prefix");
+  assert.deepEqual(await find({ make: "h.nda" }), [], "regex characters are literal");
+  assert.equal(buildFitmentFilter({ make: "  ", model: "" }), null);
 });

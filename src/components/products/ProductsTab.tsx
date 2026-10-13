@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/Table";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/Tooltip";
 import { StickyTableHead } from "@/components/ui/StickyTableColumn";
@@ -18,6 +17,7 @@ import {
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ProductRow } from "@/components/products/ProductRow";
+import { ProductSearchField } from "@/components/products/ProductSearchField";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
 import type { ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
@@ -27,12 +27,13 @@ import { createGoogleListing } from "@/lib/api/listings";
 import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
 import type { Product } from "@/types/product";
+import type { FitmentRowFormState } from "@/types/marketplace";
 import type { AnyMarketplaceListing } from "@/types/marketplace";
 import type { ChannelSummary } from "@/types/channel";
 import { Pagination } from "@/components/ui/Pagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_GRID, PER_PAGE_OPTIONS_GRID } from "@/config/pagination";
 import { GOOGLE_LISTING_FORM_INITIAL } from "@/types/marketplace";
-import { Plus, Search, Package, Trash2, AlertTriangle, Info } from "lucide-react";
+import { Plus, Package, Trash2, AlertTriangle, Info } from "lucide-react";
 import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
 
@@ -41,6 +42,9 @@ const STATUS_FILTERS = [
   { label: "Active", value: "active" },
   { label: "Draft", value: "draft" },
 ];
+
+// URL params for the vehicle search, same fields as a product's fitment row.
+const VEHICLE_PARAMS = ["make", "model", "model_code", "year_from", "year_to"] as const;
 
 const STOCK_FILTERS = [
   { label: "All Stock", value: "" },
@@ -61,6 +65,17 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const stock = searchParams.get("stock") ?? "";
   const channelFilter = searchParams.get("p_channel") ?? "";
   const categories = searchParams.get("categories") ?? "";
+  const param = (key: string) => searchParams.get(key) ?? "";
+  const vehicle: FitmentRowFormState = {
+    make: param("make"),
+    model: param("model"),
+    model_code: param("model_code"),
+    year_from: param("year_from"),
+    year_to: param("year_to"),
+  };
+  // Blank fields are left out of the request, so they never filter.
+  const vehicleQuery = Object.fromEntries(VEHICLE_PARAMS.filter((key) => vehicle[key]).map((key) => [key, vehicle[key]]));
+  const filtered = !!search || Object.keys(vehicleQuery).length > 0;
   const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
   const page = parseInt(searchParams.get("p_page") ?? "1", 10);
   const limit = parseInt(
@@ -122,6 +137,21 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     [setSearchParams],
   );
 
+  const setVehicle = useCallback(
+    (next: FitmentRowFormState) => {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        for (const key of VEHICLE_PARAMS) {
+          if (next[key]) params.set(key, next[key]);
+          else params.delete(key);
+        }
+        params.set("p_page", "1");
+        return params;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
@@ -159,8 +189,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   );
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", { search, status, stock, channel: channelFilter, categories, page, limit }],
-    queryFn: () => getProducts({ search, status, stock, channel: channelFilter, categories, page, limit }),
+    queryKey: ["products", { search, status, stock, channel: channelFilter, categories, ...vehicleQuery, page, limit }],
+    queryFn: () => getProducts({ search, status, stock, channel: channelFilter, categories, ...vehicleQuery, page, limit }),
   });
 
   const { data: categoriesRes } = useQuery({
@@ -252,15 +282,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     <div className="space-y-4">
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40 pointer-events-none" />
-            <Input
-              placeholder="Search products…"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <ProductSearchField value={inputValue} onChange={setInputValue} vehicle={vehicle} onVehicleChange={setVehicle} />
 
           <div className="flex flex-wrap items-center gap-3">
             {isFetching && !isLoading && (
@@ -282,7 +304,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
         {isLoading ? (
           view === "grid" ? <ProductGridSkeleton /> : <ProductsLoadingSkeleton />
         ) : products.length === 0 ? (
-          <ProductsEmptyState search={search} onNew={() => navigate("/products/new")} />
+          <ProductsEmptyState search={search} filtered={filtered} onNew={() => navigate("/products/new")} />
         ) : view === "grid" ? (
           <ProductGrid
             products={products}
@@ -453,7 +475,7 @@ function ProductsLoadingSkeleton() {
   );
 }
 
-function ProductsEmptyState({ search, onNew }: { search: string; onNew: () => void }) {
+function ProductsEmptyState({ search, filtered, onNew }: { search: string; filtered: boolean; onNew: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
@@ -461,15 +483,17 @@ function ProductsEmptyState({ search, onNew }: { search: string; onNew: () => vo
       </div>
       <div>
         <p className="font-medium text-fg">
-          {search ? "No products found" : "No products yet"}
+          {filtered ? "No products found" : "No products yet"}
         </p>
         <p className="mt-1 text-sm text-fg/50">
           {search
-            ? `No results for "${search}" — try a different term`
-            : "Create your first product to get started"}
+            ? `No results for "${search}" — try a different term or vehicle`
+            : filtered
+              ? "No products fit this vehicle — try a different make, model or years"
+              : "Create your first product to get started"}
         </p>
       </div>
-      {!search && (
+      {!filtered && (
         <Can permission={PERMISSIONS.products.create}>
           <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
             <Plus className="h-3.5 w-3.5" />

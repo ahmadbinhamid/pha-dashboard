@@ -54,14 +54,12 @@ async function deleteProductFromIndex(productId) {
   }
 }
 
-// Mirrors buildProductFilter so callers can pass req.query through as-is.
-function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin, priceMax, make, model, publishedOnly }) {
+// Typesense half of buildProductFilter; vehicle fit is matched in Mongo.
+function buildFilterBy({ tenantId, categories, condition, authenticity, priceMin, priceMax, publishedOnly }) {
   const clauses = [`tenant_id:=${tenantId}`];
   if (publishedOnly) clauses.push("is_published_online:=true", "status:=active");
   if (condition) clauses.push(`condition:=${condition}`);
   if (authenticity) clauses.push(`authenticity:=${authenticity}`);
-  if (make) clauses.push(`vehicle_make:=${make}`);
-  if (model) clauses.push(`vehicle_model:=${model}`);
   if (categories?.length) clauses.push(`categories:=[${categories.join(",")}]`);
   if (priceMin !== undefined) clauses.push(`price:>=${priceMin}`);
   if (priceMax !== undefined) clauses.push(`price:<=${priceMax}`);

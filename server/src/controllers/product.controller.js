@@ -37,7 +37,7 @@ const { generateSlug } = require("../utils/slug");
 const { toPackage } = require("../utils/packageDimensions");
 const { SHIPPING_METHOD } = require("../constants/shipping.constants");
 const { duplicateKeyMessage } = require("../utils/duplicateKey");
-const { buildProductFilter } = require("../utils/productFilter");
+const { buildProductFilter, buildFitmentFilter } = require("../utils/productFilter");
 const { namedFitmentRows, toFitmentRow } = require("../services/marketplace/productFallbacks");
 const {
   parseField,
@@ -207,13 +207,13 @@ async function typesenseProductPage(req, { page, limit, skip, stockFilter, chann
     authenticity: req.query.authenticity || undefined,
     priceMin: req.query.price_min,
     priceMax: req.query.price_max,
-    make: req.query.make || undefined,
-    model: req.query.model || undefined,
     page: 1,
     perPage: SEARCH_CANDIDATE_LIMIT,
   });
 
-  const { items } = await getProductsByIds(ids, { stockFilter, channelFilter });
+  // NOTE: vehicle filter applied in Mongo; Typesense only indexes vehicle 1.
+  const match = buildFitmentFilter(req.query);
+  const { items } = await getProductsByIds(ids, { stockFilter, channelFilter, match });
   // Only override Typesense's relevance order if the caller asked for a sort.
   const sortSpec = req.query.sort ? PRODUCT_SORT_OPTIONS[req.query.sort] : null;
   const ordered = sortSpec ? sortByFields(items, sortSpec) : items;

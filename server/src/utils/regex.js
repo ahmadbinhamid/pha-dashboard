@@ -1,17 +1,17 @@
 // utils/regex.js
 
-// Escapes regex metachars so untrusted input can't inject patterns or trigger ReDoS.
+// Escapes metachars so untrusted input can't inject patterns or trigger ReDoS.
 function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Matches a word ignoring internal spacing either direction (e.g. "taillight" ~ "Tail Light").
+// Ignores internal spacing either way, e.g. "taillight" ~ "Tail Light".
 function buildSpacingFlexibleRegex(word) {
   const chars = Array.from(String(word).replace(/\s+/g, ""));
   return new RegExp(chars.map((c) => escapeRegex(c)).join("\\s*"), "i");
 }
 
-// "Any word matches" OR search across fields; Mongo regex scan, not indexed — Typesense handles product search at scale.
+// Any-word OR search over fields; an unindexed scan, Typesense covers scale.
 function buildWordSearchOr(fields, searchText) {
   const words = String(searchText || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
@@ -26,4 +26,9 @@ function buildWordSearchOr(fields, searchText) {
   return conditions;
 }
 
-module.exports = { escapeRegex, buildWordSearchOr };
+// Whole-value, case-insensitive match, e.g. "honda" matches "Honda".
+function exactMatchRegex(value) {
+  return new RegExp(`^${escapeRegex(String(value).trim())}$`, "i");
+}
+
+module.exports = { escapeRegex, buildWordSearchOr, exactMatchRegex };
