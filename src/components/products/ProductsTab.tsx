@@ -19,8 +19,9 @@ import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductSearchField } from "@/components/products/ProductSearchField";
 import { ProductVehicleChips } from "@/components/products/ProductVehicleChips";
+import { ProductVehicleFilterModal } from "@/components/products/ProductVehicleFilterModal";
 import { VEHICLE_SEARCH_FIELDS } from "@/config/fitment";
-import { vehicleSearchFromParams, vehicleSearchToQuery } from "@/lib/products/vehicleSearch";
+import { vehicleFilterCount, vehicleSearchFromParams, vehicleSearchToQuery } from "@/lib/products/vehicleSearch";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
 import type { ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
@@ -76,6 +77,7 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const selectedCategories = categories ? categories.split(",") : [];
 
   const [inputValue, setInputValue] = useState(search);
+  const [vehicleFiltersOpen, setVehicleFiltersOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [productColWidth, setProductColWidth] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -274,7 +276,12 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
     <div className="space-y-4">
       <Card>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <ProductSearchField value={inputValue} onChange={setInputValue} vehicle={vehicle} onVehicleChange={setVehicle} />
+          <ProductSearchField
+            value={inputValue}
+            onChange={setInputValue}
+            activeFilterCount={vehicleFilterCount(vehicle)}
+            onOpenFilters={() => setVehicleFiltersOpen(true)}
+          />
 
           <div className="flex flex-wrap items-center gap-3">
             {isFetching && !isLoading && (
@@ -293,7 +300,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
           </div>
         </div>
 
-        <ProductVehicleChips value={vehicle} onChange={setVehicle} />
+        <ProductVehicleChips value={vehicle} onChange={setVehicle} onEdit={() => setVehicleFiltersOpen(true)} />
+        <ProductVehicleFilterModal open={vehicleFiltersOpen} onOpenChange={setVehicleFiltersOpen} value={vehicle} onApply={setVehicle} />
 
         {isLoading ? (
           view === "grid" ? <ProductGridSkeleton /> : <ProductsLoadingSkeleton />

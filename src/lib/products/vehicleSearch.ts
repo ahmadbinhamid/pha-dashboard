@@ -28,3 +28,12 @@ export function withVehicleList(search: ProductVehicleSearch, key: keyof Product
   if (key === "models") return { ...next, modelCodes: [] };
   return next;
 }
+
+// "AION, Audi +1": first `shown` values, then how many more.
+export function summarizeList(values: string[], shown = 2): string {
+  const head = values.slice(0, shown).join(", ");
+  return values.length > shown ? `${head} +${values.length - shown}` : head;
+}
+
+export const vehicleFilterCount = (search: ProductVehicleSearch) =>
+  VEHICLE_SEARCH_FIELDS.reduce((sum, { key }) => sum + search[key].length, 0);

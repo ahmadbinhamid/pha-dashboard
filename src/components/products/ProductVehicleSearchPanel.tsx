@@ -1,12 +1,9 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Car } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { MultiSelect } from "@/components/ui/MultiSelect";
-import { EMPTY_VEHICLE_SEARCH } from "@/config/fitment";
 import { VEHICLE_YEAR_OPTIONS } from "@/config/vehicleYears";
 import { getVehicleMakes, getVehicleModelCodes, getVehicleModels } from "@/lib/api/vehicleModels";
-import { isVehicleSearchEmpty, withVehicleList } from "@/lib/products/vehicleSearch";
+import { withVehicleList } from "@/lib/products/vehicleSearch";
 import type { ProductVehicleSearch } from "@/types/product";
 
 interface ProductVehicleSearchPanelProps {
@@ -46,17 +43,7 @@ export function ProductVehicleSearchPanel({ value, onChange }: ProductVehicleSea
   const set = (key: keyof ProductVehicleSearch) => (values: string[]) => onChange(withVehicleList(value, key, values));
 
   return (
-    <div className="space-y-3 p-3">
-      <div className="flex items-center gap-2">
-        <Car className="h-3.5 w-3.5 text-fg/45" />
-        <span className="text-2xs font-semibold uppercase tracking-wider text-fg/45">Search by vehicle</span>
-        {!isVehicleSearchEmpty(value) && (
-          <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 px-2 text-xs" onClick={() => onChange(EMPTY_VEHICLE_SEARCH)}>
-            Clear
-          </Button>
-        )}
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Make">
           <MultiSelect options={makeOptions} value={value.makes} onChange={set("makes")} placeholder="Any make" searchPlaceholder="Search makes…" />
         </FormField>
@@ -89,7 +76,6 @@ export function ProductVehicleSearchPanel({ value, onChange }: ProductVehicleSea
             searchPlaceholder="Search years…"
           />
         </FormField>
-      </div>
     </div>
   );
 }
