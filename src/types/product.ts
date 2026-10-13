@@ -82,6 +82,14 @@ export interface ProductVariant {
 export type ProductCondition = "NEW" | "USED";
 export type ProductAuthenticity = "Genuine" | "Aftermarket";
 
+// Product-list vehicle filter; each list is "any of", an empty list is any.
+export interface ProductVehicleSearch {
+  makes: string[];
+  models: string[];
+  modelCodes: string[];
+  years: string[];
+}
+
 export interface ProductVehicle {
   make: string | null;
   model: string | null;

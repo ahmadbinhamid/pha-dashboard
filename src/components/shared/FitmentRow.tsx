@@ -17,13 +17,9 @@ interface FitmentRowProps {
   label: string;
   onUpdate: (patch: Partial<FitmentRowFormState>) => void;
   onRemove: () => void;
-  removeLabel?: string;
-  // Off for filtering: only values already in the vehicle catalog are offered.
-  allowCustom?: boolean;
 }
 
-export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remove vehicle", allowCustom = true }: FitmentRowProps) {
-  const searchText = (noun: string) => (allowCustom ? `Search or add a ${noun}…` : `Search ${noun}s…`);
+export function FitmentRow({ row, label, onUpdate, onRemove }: FitmentRowProps) {
   const { data: makesRes } = useQuery({
     queryKey: ["vehicle-makes"],
     queryFn: getVehicleMakes,
@@ -72,7 +68,7 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
     <div className="rounded-xs border border-border bg-bg-2/30 p-3 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wider text-fg/40">{label}</span>
-        <Button type="button" variant="ghost" size="icon" onClick={onRemove} title={removeLabel} aria-label={removeLabel}>
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove} title="Remove vehicle" aria-label="Remove vehicle">
           <Trash2 className="h-3.5 w-3.5 text-danger" />
         </Button>
       </div>
@@ -85,8 +81,8 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.make}
             onChange={handleMakeChange}
             placeholder="Select make…"
-            searchPlaceholder={searchText("make")}
-            allowCustom={allowCustom}
+            searchPlaceholder="Search or add a make…"
+            allowCustom
           />
         </div>
         <div className="space-y-1">
@@ -96,9 +92,9 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.model}
             onChange={handleModelChange}
             placeholder={row.make ? "Select model…" : "Select make first"}
-            searchPlaceholder={searchText("model")}
+            searchPlaceholder="Search or add a model…"
             disabled={!row.make}
-            allowCustom={allowCustom}
+            allowCustom
           />
         </div>
       </div>
@@ -111,9 +107,9 @@ export function FitmentRow({ row, label, onUpdate, onRemove, removeLabel = "Remo
             value={row.model_code}
             onChange={handleModelCodeChange}
             placeholder={row.model ? "Select code…" : "Select model first"}
-            searchPlaceholder={searchText("code")}
+            searchPlaceholder="Search or add a code…"
             disabled={!row.model}
-            allowCustom={allowCustom}
+            allowCustom
           />
         </div>
         <div className="space-y-1">

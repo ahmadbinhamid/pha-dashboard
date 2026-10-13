@@ -20,12 +20,11 @@ export interface ProductListParams {
   type?: string;
   stock?: string;
   channel?: string;
-  // Fits when vehicle 1 or any additional fitment matches; years overlap.
-  make?: string;
-  model?: string;
-  model_code?: string;
-  year_from?: string;
-  year_to?: string;
+  // Comma lists; a product with a fitment matching each list is returned.
+  makes?: string;
+  models?: string;
+  model_codes?: string;
+  years?: string;
 }
 
 export const getProducts = async (params: ProductListParams = {}) => {

@@ -85,3 +85,12 @@ test("search without a vehicle is unchanged, and Typesense never gets make/model
   assert.equal(filtered.typesenseArgs.make, undefined);
   assert.equal(filtered.typesenseArgs.model, undefined);
 });
+
+test("search + multi-select lists narrow the text hits", async () => {
+  const tenantId = fixtureId();
+  const camry = await makeProduct(tenantId, { vehicle: { make: "Toyota", model: "Camry", year_from: 2012, year_to: 2017 } });
+  const civic = await makeProduct(tenantId, { vehicle: { make: "Honda", model: "Civic", year_from: 2016 } });
+  const mazda = await makeProduct(tenantId, { vehicle: { make: "Mazda", model: "3" } });
+  const { ids } = await searchWith(tenantId, [camry, civic, mazda], { makes: "toyota,Honda", years: "2017" });
+  assert.deepEqual(ids, [camry, civic].map((p) => String(p._id)).sort());
+});

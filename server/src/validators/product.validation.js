@@ -161,9 +161,11 @@ const listProducts = {
     model_code: Joi.string().allow("").default(""),
     // NOTE: "" means no filter; the list page sends every param, blank or not.
     year: Joi.number().integer().empty(""),
-    // A fitment fits when its years overlap this range (open ends allowed).
-    year_from: Joi.number().integer().min(0).max(9999).empty(""),
-    year_to: Joi.number().integer().min(0).max(9999).empty(""),
+    // Comma lists; a fitment matching any value of each list fits.
+    makes: Joi.string().allow("").max(2000),
+    models: Joi.string().allow("").max(2000),
+    model_codes: Joi.string().allow("").max(2000),
+    years: Joi.string().allow("").pattern(/^\d{4}(,\d{4})*$/).max(2000),
     sort: Joi.string()
       .valid(...Object.values(PRODUCT_SORT), "")
       .default(""),

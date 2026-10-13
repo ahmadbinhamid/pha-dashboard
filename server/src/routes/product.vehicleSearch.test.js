@@ -59,7 +59,7 @@ async function list(token, query) {
 
 // The list page's exact request shape: every filter param, blank when unset.
 const PAGE_PARAMS = { search: "", status: "", stock: "", channel: "", categories: "", page: "1", limit: "15" };
-const BLANK_VEHICLE = { make: "", model: "", model_code: "", year_from: "", year_to: "", year: "" };
+const BLANK_VEHICLE = { makes: "", models: "", model_codes: "", years: "", make: "", model: "", model_code: "", year: "" };
 
 test("GET /product with blank vehicle params returns every product, not a 400", async () => {
   const { tenantId, token } = await makeTenantUser();
@@ -69,30 +69,33 @@ test("GET /product with blank vehicle params returns every product, not a 400", 
   assert.deepEqual(res.ids, products.map((p) => String(p._id)).sort());
 });
 
-test("make/model plus a year range: any fitment whose years overlap", async () => {
+test("multi-select: any chosen make, model, code and year; any fitment", async () => {
   const { tenantId, token } = await makeTenantUser();
-  const camry = await makeProduct(tenantId, { vehicle: { make: "Toyota", model: "Camry", year_from: 2012, year_to: 2017 } });
-  const extra = await makeProduct(tenantId, {
+  const camry = await makeProduct(tenantId, { vehicle: { make: "Toyota", model: "Camry", model_code: "XV50", year_from: 2012, year_to: 2017 } });
+  const civic = await makeProduct(tenantId, {
     vehicle: { make: "Lexus", model: "ES" },
-    additional_fitments: [{ make: "toyota", model: "camry", year_from: 2015, year_to: null }],
+    additional_fitments: [{ make: "honda", model: "civic", model_code: "FK", year_from: 2016, year_to: null }],
   });
+  const mazda = await makeProduct(tenantId, { vehicle: { make: "Mazda", model: "3", year_from: 2010, year_to: 2013 } });
   await makeProduct(tenantId, {});
   const id = (p) => String(p._id);
-  const find = async (vehicle) => {
-    const res = await list(token, { ...PAGE_PARAMS, ...BLANK_VEHICLE, ...vehicle });
+  const find = async (filters) => {
+    const res = await list(token, { ...PAGE_PARAMS, ...BLANK_VEHICLE, ...filters });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     return res.ids;
   };
 
-  assert.deepEqual(await find({ make: "Toyota", model: "Camry" }), [id(camry), id(extra)].sort());
-  assert.deepEqual(await find({ make: "Toyota", year_from: "2019" }), [id(extra)], "2015+ overlaps; 2012-2017 doesn't");
-  assert.deepEqual(await find({ make: "Toyota", year_to: "2013" }), [id(camry)], "2012-2017 overlaps; 2015+ doesn't");
-  assert.deepEqual(await find({ make: "Toyota", year_from: "2016", year_to: "2016" }), [id(camry), id(extra)].sort());
-  assert.deepEqual(await find({ year_from: "2018" }), [id(extra)], "years alone skip vehicle-less products");
+  assert.deepEqual(await find({ makes: "Toyota,Honda" }), [id(camry), id(civic)].sort(), "any make, any fitment");
+  assert.deepEqual(await find({ makes: "Toyota,Honda", models: "Civic" }), [id(civic)]);
+  assert.deepEqual(await find({ model_codes: "XV50,FK" }), [id(camry), id(civic)].sort());
+  assert.deepEqual(await find({ years: "2011,2020" }), [id(civic), id(mazda)].sort(), "any listed year inside the range");
+  assert.deepEqual(await find({ makes: "Toyota,Mazda", years: "2015" }), [id(camry)], "fields combine on one fitment");
+  // Lexus ES has no years, so fits any; the vehicle-less product never does.
+  assert.deepEqual(await find({ years: "1990" }), [id(civic)], "years alone skip vehicle-less products");
 });
 
 test("a non-numeric year is still rejected", async () => {
   const { token } = await makeTenantUser();
-  const res = await list(token, { ...PAGE_PARAMS, year_from: "soon" });
+  const res = await list(token, { ...PAGE_PARAMS, years: "2015,soon" });
   assert.equal(res.status, 400);
 });

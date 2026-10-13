@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +18,9 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SingleSelect } from "@/components/ui/SingleSelect";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductSearchField } from "@/components/products/ProductSearchField";
+import { ProductVehicleChips } from "@/components/products/ProductVehicleChips";
+import { VEHICLE_SEARCH_FIELDS } from "@/config/fitment";
+import { vehicleSearchFromParams, vehicleSearchToQuery } from "@/lib/products/vehicleSearch";
 import { ProductGrid, ProductGridSkeleton } from "@/components/products/ProductGrid";
 import type { ViewMode } from "@/components/ui/ViewToggle";
 import { getProducts, deleteProduct, updateProduct } from "@/lib/api/products";
@@ -26,8 +29,7 @@ import { getListings } from "@/lib/api/listings";
 import { createGoogleListing } from "@/lib/api/listings";
 import { productChannelsPath } from "@/config/salesChannels";
 import { useToast } from "@/context";
-import type { Product } from "@/types/product";
-import type { FitmentRowFormState } from "@/types/marketplace";
+import type { Product, ProductVehicleSearch } from "@/types/product";
 import type { AnyMarketplaceListing } from "@/types/marketplace";
 import type { ChannelSummary } from "@/types/channel";
 import { Pagination } from "@/components/ui/Pagination";
@@ -42,9 +44,6 @@ const STATUS_FILTERS = [
   { label: "Active", value: "active" },
   { label: "Draft", value: "draft" },
 ];
-
-// URL params for the vehicle search, same fields as a product's fitment row.
-const VEHICLE_PARAMS = ["make", "model", "model_code", "year_from", "year_to"] as const;
 
 const STOCK_FILTERS = [
   { label: "All Stock", value: "" },
@@ -65,16 +64,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const stock = searchParams.get("stock") ?? "";
   const channelFilter = searchParams.get("p_channel") ?? "";
   const categories = searchParams.get("categories") ?? "";
-  const param = (key: string) => searchParams.get(key) ?? "";
-  const vehicle: FitmentRowFormState = {
-    make: param("make"),
-    model: param("model"),
-    model_code: param("model_code"),
-    year_from: param("year_from"),
-    year_to: param("year_to"),
-  };
-  // Blank fields are left out of the request, so they never filter.
-  const vehicleQuery = Object.fromEntries(VEHICLE_PARAMS.filter((key) => vehicle[key]).map((key) => [key, vehicle[key]]));
+  const vehicle = useMemo(() => vehicleSearchFromParams(searchParams), [searchParams]);
+  const vehicleQuery = vehicleSearchToQuery(vehicle);
   const filtered = !!search || Object.keys(vehicleQuery).length > 0;
   const view: ViewMode = searchParams.get("view") === "grid" ? "grid" : "list";
   const page = parseInt(searchParams.get("p_page") ?? "1", 10);
@@ -138,12 +129,13 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   );
 
   const setVehicle = useCallback(
-    (next: FitmentRowFormState) => {
+    (next: ProductVehicleSearch) => {
       setSearchParams((prev) => {
         const params = new URLSearchParams(prev);
-        for (const key of VEHICLE_PARAMS) {
-          if (next[key]) params.set(key, next[key]);
-          else params.delete(key);
+        const query = vehicleSearchToQuery(next);
+        for (const { param } of VEHICLE_SEARCH_FIELDS) {
+          if (query[param]) params.set(param, query[param]);
+          else params.delete(param);
         }
         params.set("p_page", "1");
         return params;
@@ -300,6 +292,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
             />
           </div>
         </div>
+
+        <ProductVehicleChips value={vehicle} onChange={setVehicle} />
 
         {isLoading ? (
           view === "grid" ? <ProductGridSkeleton /> : <ProductsLoadingSkeleton />
