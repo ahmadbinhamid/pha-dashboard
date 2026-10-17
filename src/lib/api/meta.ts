@@ -18,3 +18,9 @@ export const completeMetaConnect = async (payload: MetaCompleteConnectPayload) =
   const { data } = await apiClient.post<BeResponse<{ connected: boolean }>>("/meta/oauth/complete", payload);
   return data;
 };
+
+// Revokes Meta's token and deletes the stored connection.
+export const disconnectMeta = async () => {
+  const { data } = await apiClient.post<BeResponse<{ disconnected: boolean }>>("/meta/oauth/disconnect");
+  return data;
+};

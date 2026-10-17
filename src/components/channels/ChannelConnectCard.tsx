@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { ChannelAttentionNotice } from "@/components/channels/ChannelAttentionNotice";
+import { ChannelDisconnectButton } from "@/components/channels/ChannelDisconnectButton";
 import { CHANNEL_CONNECT_PLUGINS } from "@/components/channels/channelConnectRegistry";
 import { getChannels } from "@/lib/api/channels";
 import { formatRelativeTime } from "@/utils/formatRelativeTime";
@@ -146,11 +147,19 @@ export function ChannelConnectCard({ platform }: ChannelConnectCardProps) {
                   )}
                   {lastSynced && <p className="text-xs text-fg/55">Last synced {lastSynced}</p>}
                   {ConnectOptions && <ConnectOptions value={connectOptions} onChange={setConnectOptions} />}
-                  {/* NOTE: no disconnect: neither channel has a disconnect API yet. */}
-                  <div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending}>
                       {connectMutation.isPending ? "Redirecting…" : `${connected ? "Reconnect" : "Connect"} ${connectNoun}`}
                     </Button>
+                    {/* NOTE: only plugins with a disconnect API (Meta) get the button. */}
+                    {plugin.disconnect && status !== "disconnected" && (
+                      <ChannelDisconnectButton
+                        name={name}
+                        disconnect={plugin.disconnect}
+                        warning={plugin.disconnectWarning}
+                        invalidateQueryKeys={plugin.invalidateQueryKeys}
+                      />
+                    )}
                   </div>
                   {connectMutation.isError && (
                     <p className="text-xs font-medium text-danger">

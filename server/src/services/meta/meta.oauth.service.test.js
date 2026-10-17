@@ -188,6 +188,31 @@ test("complete: only a granted catalog is accepted", async () => {
   assert.equal(conn.catalog_id, "666");
 });
 
+test("disconnect revokes the token at Meta and deletes the connection row", async () => {
+  const tenantId = fixtureId();
+  const seen = stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "sys-user-token" })],
+    [/me\/permissions/, () => jsonResponse(200, { success: true })],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  assert.equal(await oauth.disconnect(tenantId), true);
+  const revoke = seen.find((c) => /me\/permissions/.test(c.url));
+  assert.equal(revoke?.opts?.method, "DELETE");
+  assert.equal(await ChannelConnection.countDocuments({ tenant_id: tenantId, platform: "meta" }), 0);
+  assert.equal(await oauth.disconnect(tenantId), false, "nothing left to disconnect");
+});
+
+test("disconnect still deletes the row when Meta refuses the revoke", async () => {
+  const tenantId = fixtureId();
+  stubFetch([
+    [/oauth\/access_token/, () => jsonResponse(200, { access_token: "sys-user-token" })],
+    [/me\/permissions/, () => jsonResponse(400, { error: { code: 200, message: "Permissions error" } })],
+  ]);
+  await oauth.savePendingConnection({ tenantId, code: "abc" });
+  assert.equal(await oauth.disconnect(tenantId), true);
+  assert.equal(await ChannelConnection.countDocuments({ tenant_id: tenantId, platform: "meta" }), 0);
+});
+
 test("tokens, app secret and appsecret_proof never reach the logs", async () => {
   const lines = [];
   for (const level of ["info", "warn", "error", "debug"]) mock.method(logger, level, (...args) => lines.push(JSON.stringify(args)));

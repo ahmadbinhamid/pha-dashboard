@@ -85,3 +85,12 @@ exports.completeConnect = async (req, res) => {
     return systemfailure(res, err);
   }
 };
+
+exports.disconnect = async (req, res) => {
+  try {
+    return success(res, { disconnected: await oauthService.disconnect(req.tenantId) });
+  } catch (err) {
+    logger.error("[meta.controller] disconnect error", { error: err.message });
+    return systemfailure(res, err);
+  }
+};

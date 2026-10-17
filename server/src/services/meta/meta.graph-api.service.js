@@ -80,4 +80,12 @@ async function graphPost(token, path, params = {}, action = `POST ${path}`) {
   return res.json();
 }
 
-module.exports = { graphBaseUrl, appSecretProof, graphGet, graphGetAsApp, graphPost, throwForResponse };
+/** DELETE {graph}/{path}; resolves to the parsed JSON body. */
+async function graphDelete(token, path, params = {}, action = `DELETE ${path}`) {
+  const query = toSearchParams({ ...params, ...authParams(token) });
+  const res = await fetch(`${graphBaseUrl()}/${path}?${query.toString()}`, { method: "DELETE" });
+  if (!res.ok) await throwForResponse(res, action, path);
+  return res.json();
+}
+
+module.exports = { graphBaseUrl, appSecretProof, graphGet, graphGetAsApp, graphPost, graphDelete, throwForResponse };

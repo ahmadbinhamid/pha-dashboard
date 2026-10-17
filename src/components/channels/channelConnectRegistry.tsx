@@ -6,7 +6,7 @@ import { MetaCatalogPicker } from "@/components/meta-settings/MetaCatalogPicker"
 import { MetaConnectedStatusText } from "@/components/meta-settings/MetaConnectedStatusText";
 import { getEbayConnectUrl } from "@/lib/api/ebay";
 import { getGoogleConnectUrl } from "@/lib/api/google";
-import { getMetaConnectUrl } from "@/lib/api/meta";
+import { disconnectMeta, getMetaConnectUrl } from "@/lib/api/meta";
 import { googleConnectErrorMessage } from "@/config/googleConnect";
 import { metaConnectErrorMessage } from "@/config/metaConnect";
 import type { ChannelConnectPlugin } from "@/types/channelConnect";
@@ -45,6 +45,9 @@ export const CHANNEL_CONNECT_PLUGINS: Record<string, ChannelConnectPlugin> = {
   },
   meta: {
     getConnectUrl: async () => (await getMetaConnectUrl()).data.url,
+    disconnect: disconnectMeta,
+    disconnectWarning:
+      "Syncing to Facebook and Instagram stops and the stored Meta access token is deleted. Products already in your Meta catalog stay there until you remove them in Commerce Manager.",
     description: "Connect a Meta business catalog to sell on Facebook and Instagram Shops, with checkout on your storefront.",
     connectNoun: "Meta",
     connectErrorText: "Failed to start Meta connection",

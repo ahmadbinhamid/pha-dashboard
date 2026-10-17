@@ -12,6 +12,7 @@ router.get("/oauth/connect-url", auth(), requirePermission("integrations.update"
 // Public: Meta redirects the browser here directly, no JWT available.
 router.get("/oauth/callback", asyncHandler(ctrl.oauthCallback));
 router.get("/oauth/catalogs", auth(), requirePermission("integrations.update"), asyncHandler(ctrl.getCatalogs));
+router.post("/oauth/disconnect", auth(), requirePermission("integrations.update"), asyncHandler(ctrl.disconnect));
 router.post("/oauth/complete", auth(), requirePermission("integrations.update"), validate(oauthV.completeConnect), asyncHandler(ctrl.completeConnect));
 
 module.exports = router;

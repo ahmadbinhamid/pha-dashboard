@@ -31,6 +31,9 @@ export interface ChannelSectionProps {
 // Per-platform pieces; every field is optional except how to start OAuth.
 export interface ChannelConnectPlugin {
   getConnectUrl: (options: ChannelConnectOptions) => Promise<string>;
+  // Removes the stored connection; no Disconnect button when absent.
+  disconnect?: () => Promise<unknown>;
+  disconnectWarning?: string;
   description?: string;
   // Noun on the button: "Connect <connectNoun>" / "Reconnect <connectNoun>".
   connectNoun?: string;

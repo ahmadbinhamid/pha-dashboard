@@ -8,7 +8,8 @@ const { encrypt, decrypt, packCiphertext, unpackCiphertext } = require("../../ut
 const { httpError } = require("../../utils/http/httpError");
 const { reauthRequiredError } = require("../../utils/http/oauthError");
 const ChannelConnection = require("../../models/ChannelConnection");
-const { graphBaseUrl, throwForResponse } = require("./meta.graph-api.service");
+const { graphBaseUrl, graphDelete, throwForResponse } = require("./meta.graph-api.service");
+const { findConnection } = require("../marketplace/channel-connection.service");
 const metaCatalogApi = require("./meta.catalog-api.service");
 const { MARKETPLACE_PLATFORM } = require("../../constants/marketplace.constants");
 const { CHANNEL_CONNECTION_STATUS } = require("../../constants/channel.constants");
@@ -176,6 +177,27 @@ async function connectSingleGrantedCatalog(tenantId) {
   return completeConnection({ tenantId, catalogId: catalogs[0].id });
 }
 
+// NOTE: best effort; an expired or unrevocable token must not block deletion.
+async function revokeToken(connection) {
+  try {
+    const token = getAccessToken(connection);
+    if (token) await graphDelete(token, "me/permissions", {}, "revoke permissions");
+  } catch (err) {
+    logger.warn("[meta.oauth] token revoke skipped", { tenantId: String(connection.tenant_id), code: err.code, metaCode: err.metaCode });
+  }
+}
+
+/** Revokes the token, then hard-deletes the row; false when none existed. */
+async function disconnect(tenantId) {
+  const conn = await findConnection(tenantId, PLATFORM, { withTokens: true });
+  if (!conn) return false;
+  await revokeToken(conn);
+  // Hard delete: a null loadSettings is what every sync path reads as unlinked.
+  await ChannelConnection.deleteOne({ _id: conn._id });
+  logger.info("[meta.oauth] tenant disconnected", { tenantId: String(tenantId) });
+  return true;
+}
+
 module.exports = {
   buildConsentUrl,
   resolveState,
@@ -186,4 +208,5 @@ module.exports = {
   listGrantedCatalogs,
   completeConnection,
   connectSingleGrantedCatalog,
+  disconnect,
 };
