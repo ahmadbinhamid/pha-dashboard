@@ -23,7 +23,7 @@ const orderItemSchema = new Schema(
         return !this.is_custom;
       },
     },
-    // NOTE: revert breaks saves once custom lines exist; docs/custom-order-lines.md
+    // NOTE: revert breaks saves once custom lines exist, docs/custom-order-lines.md
     is_custom: { type: Boolean, default: false },
     variant: { type: Schema.Types.ObjectId, ref: "ProductVariant", default: null },
     // Snapshot at order time, so later product edits don't rewrite history.
@@ -31,17 +31,17 @@ const orderItemSchema = new Schema(
     sku: { type: String, default: null },
     unit_price: { type: Number, required: true }, // cents, GST-inclusive
     quantity: { type: Number, required: true, min: 1 },
-    // Per-line discount (cents); editable later on eBay/manual orders.
+    // Per-line discount (cents), editable later on eBay/manual orders.
     discount_amount: { type: Number, default: 0 },
     // Customer-facing line note, added by staff on manual orders.
     note: { type: String, default: null },
 
-    // Price-edit audit; original_unit_price is set once, on the first edit.
+    // Price-edit audit, original_unit_price is set once, on the first edit.
     original_unit_price: { type: Number, default: null },
     unit_price_updated_at: { type: Date, default: null },
     unit_price_updated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
 
-    // eBay quantity push state; a failure stays visible for reconciliation.
+    // eBay quantity push state, a failure stays visible for reconciliation.
     ebay_sync_status: {
       type: String,
       enum: ["not_applicable", "pending", "synced", "failed"],
@@ -56,14 +56,14 @@ const orderItemSchema = new Schema(
     quantity_restocked: { type: Number, default: 0, min: 0 },
   },
   {
-    // Stable ids for refund lines; old items rely on item_ids_migrated_at.
+    // Stable ids for refund lines, old items rely on item_ids_migrated_at.
     _id: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   },
 );
 
-// One definition of what's left to refund; refund-calculator has the rules.
+// One definition of what's left to refund, refund-calculator has the rules.
 orderItemSchema.virtual("refundable_quantity").get(function () {
   return this.quantity - this.quantity_refunded;
 });
@@ -74,7 +74,7 @@ const addressSchema = new Schema(
     suburb: { type: String, required: true },
     state: { type: String, required: true },
     postcode: { type: String, required: true },
-    // Residential or business; what calculated shipping was quoted for.
+    // Residential or business, what calculated shipping was quoted for.
     address_type: { type: String, enum: [...Object.values(ADDRESS_TYPE), null], default: null },
   },
   { _id: false },
@@ -93,7 +93,7 @@ const internalNoteSchema = new Schema(
 const orderSchema = buildSchema({
   // Unique indexes below are per tenant.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
-  // Bare sequence; the prefix is snapshotted so old orders never relabel.
+  // Bare sequence, the prefix is snapshotted so old orders never relabel.
   order_number: { type: String, required: true },
   order_number_prefix: { type: String, required: true, default: "ORD" },
   // Own sequence: invoices will diverge from orders (credit notes etc.).
@@ -109,15 +109,15 @@ const orderSchema = buildSchema({
     email: { type: String, lowercase: true, trim: true, default: null },
     phone: { type: String, trim: true, default: null },
   },
-  // Null for guests; `customer` above stays what was shown and emailed.
+  // Null for guests, `customer` above stays what was shown and emailed.
   customer_id: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
-  // eBay orders are always delivery; only the storefront offers pickup.
+  // eBay orders are always delivery, only the storefront offers pickup.
   delivery_method: {
     type: String,
     enum: Object.values(ORDER_DELIVERY_METHOD),
     default: ORDER_DELIVERY_METHOD.DELIVERY,
   },
-  // Required for DELIVERY, null for PICKUP — there's nowhere to ship.
+  // Required for DELIVERY, null for PICKUP (there's nowhere to ship).
   shipping_address: {
     type: addressSchema,
     default: null,
@@ -127,7 +127,7 @@ const orderSchema = buildSchema({
   },
   billing_address: { type: addressSchema, default: null }, // null => same as shipping
 
-  // Customer-facing order note, set once; staff notes live below.
+  // Customer-facing order note, set once, staff notes live below.
   note: { type: String, default: null },
   internal_notes: { type: [internalNoteSchema], default: [] },
 
@@ -135,6 +135,9 @@ const orderSchema = buildSchema({
   subtotal: { type: Number, required: true },
   // Legacy order-level discount, kept so old orders still add up.
   discount_amount: { type: Number, required: true, default: 0 },
+  // Storefront discount applied as line discounts, code null if automatic.
+  discount_id: { type: Schema.Types.ObjectId, ref: "Discount", default: null },
+  promo_code: { type: String, default: null },
   shipping_cost: { type: Number, required: true, default: 0 },
   tax_amount: { type: Number, required: true }, // GST extracted from subtotal, display-only
   total: { type: Number, required: true },
@@ -157,21 +160,21 @@ const orderSchema = buildSchema({
     default: ORDER_FULFILLMENT_STATUS.PENDING,
   },
 
-  // Item ids are persisted; Mongoose invents in-memory ids, so check this.
+  // Item ids are persisted, Mongoose invents in-memory ids, so check this.
   item_ids_migrated_at: { type: Date, default: null },
 
-  // Per-order refund lock; validation is read-then-act, so it must serialise.
+  // Per-order refund lock, validation is read-then-act, so it must serialise.
   refund_lock_at: { type: Date, default: null },
   // Fencing token: a stale holder's release can't free someone else's lock.
   refund_lock_token: { type: String, default: null },
 
-  // Origin channel; every channel's orders share this collection.
+  // Origin channel, every channel's orders share this collection.
   channel: {
     type: String,
     enum: Object.values(ORDER_CHANNEL),
     default: ORDER_CHANNEL.STOREFRONT,
   },
-  // Channel's own order id (null for storefront); stops duplicate imports.
+  // Channel's own order id (null for storefront), stops duplicate imports.
   external_order_id: { type: String },
   // The channel's buyer identifier when it doesn't expose a real name/email.
   external_buyer_username: { type: String, default: null },
@@ -180,14 +183,14 @@ const orderSchema = buildSchema({
 
   payment: { type: Schema.Types.ObjectId, ref: "Payment", default: null },
 
-  // Guest access to GET /orders/:id; returned only in the create response.
+  // Guest access to GET /orders/:id, returned only in the create response.
   guest_access_token: { type: String, required: true, select: false },
 
   // Set by the payment webhook when stock ran short at decrement.
   has_stock_issue: { type: Boolean, default: false },
   stock_issue_note: { type: String, default: null },
 
-  // Set on fulfilling a delivery order; always null for pickup.
+  // Set on fulfilling a delivery order, always null for pickup.
   tracking_number: { type: String, default: null },
   carrier_name: { type: String, default: null },
   // Free-form customer/staff reference, not the order or invoice number.

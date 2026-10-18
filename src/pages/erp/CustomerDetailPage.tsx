@@ -82,7 +82,7 @@ export default function CustomerDetailPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-semibold tracking-tight">{customer.name}</h1>
-            <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} />
+            <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} source={customer.source} />
           </div>
           <p className="mt-1 text-sm text-fg/55">
             Customer since {new Date(customer.created_at).toLocaleDateString()}
@@ -105,7 +105,7 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* min-w-0 — see the matching comment in OrderDetailPage.tsx; without
+        {/* min-w-0: see the matching comment in OrderDetailPage.tsx, without
             it the order-history table's own min-w forces this grid track
             (and the whole page) wider than the viewport on mobile. */}
         <div className="min-w-0 space-y-5 lg:col-span-2">

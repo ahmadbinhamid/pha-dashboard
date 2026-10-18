@@ -1,4 +1,4 @@
-// models/index.js — central export for all models
+// models/index.js: central export for all models
 
 module.exports = {
   User: require("./User"),
@@ -22,4 +22,7 @@ module.exports = {
   TagPrintLog: require("./TagPrintLog"),
   TagSettings: require("./TagSettings"),
   ShippingSettings: require("./ShippingSettings"),
+  StorefrontSettings: require("./StorefrontSettings"),
+  Discount: require("./Discount"),
+  DiscountRedemption: require("./DiscountRedemption"),
 };

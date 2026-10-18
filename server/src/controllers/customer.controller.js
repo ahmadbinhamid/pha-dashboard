@@ -16,7 +16,7 @@ exports.getCustomers = async (req, res) => {
     const { page, limit, skip } = req.pagination;
 
     const { items, total } = await customerService.listCustomers(
-      { skip, limit, search: req.query.search },
+      { skip, limit, search: req.query.search, includeStorefront: req.query.include_storefront },
       req.tenantId,
     );
 

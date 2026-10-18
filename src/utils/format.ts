@@ -14,7 +14,7 @@ export function formatCompactNumber(n: number) {
   return _compactFmt.format(n);
 }
 
-// Payment/refund amounts are integer cents; Product.price is dollars.
+// Payment/refund amounts are integer cents, Product.price is dollars.
 export function formatCurrencyFromCents(cents: number, currency: string = "AUD") {
   return formatCurrency(cents / 100, currency);
 }
@@ -57,7 +57,7 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-AU");
 }
 
-/** "1 tag" / "3 tags"; for regular plurals only. */
+/** "1 tag" / "3 tags", for regular plurals only. */
 export function pluralize(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
@@ -67,4 +67,10 @@ export function formatOrdinal(n: number) {
   const teen = n % 100 >= 11 && n % 100 <= 13;
   const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
   return `${n}${suffix}`;
+}
+
+/** "850 KB", "4.2 MB". */
+export function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} MB`;
 }

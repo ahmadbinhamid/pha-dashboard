@@ -50,6 +50,13 @@ export const PERMISSIONS = {
     delete: "locations.delete",
   },
   shipping: { view: "shipping.view", update: "shipping.update" },
+  storefront: { view: "storefront.view", update: "storefront.update" },
+  discounts: {
+    view: "discounts.view",
+    create: "discounts.create",
+    update: "discounts.update",
+    delete: "discounts.delete",
+  },
   settings: { view: "settings.view", update: "settings.update" },
   integrations: { view: "integrations.view", update: "integrations.update" },
   users: { view: "users.view", create: "users.create", update: "users.update", delete: "users.delete" },

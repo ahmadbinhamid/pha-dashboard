@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { CUSTOMER_SOURCE } = require("../constants/customer.constants");
 
 const addressSchema = new Schema(
   {
@@ -14,27 +15,31 @@ const addressSchema = new Schema(
 );
 
 const customerSchema = buildSchema({
-  // tenant_id backfilled via scripts/backfillTenantId.js; email's partial unique index below is compound with it.
+  // Backfilled by scripts/backfillTenantId.js, email's unique index includes it.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   name: { type: String, required: true, trim: true },
-  // Shown on invoices instead of `name` when present (see order.service.js#createManualOrder, invoicePdf.js).
+  // Shown on invoices instead of `name` when present.
   company_name: { type: String, trim: true, default: null },
   email: { type: String, lowercase: true, trim: true, default: null },
   phone: { type: String, trim: true, default: null },
-  // True once customer has a real storefront login (vs. walk-in/POS record); informational only for now.
+  // True once the customer has a storefront login, informational for now.
   has_online_account: { type: Boolean, default: false },
   registered_at: { type: Date, default: null },
   shipping_address: { type: addressSchema, default: null },
   billing_address: { type: addressSchema, default: null }, // null => same as shipping
+  source: { type: String, enum: Object.values(CUSTOMER_SOURCE), default: CUSTOMER_SOURCE.STAFF },
+  // Consent from the checkout box, campaigns may only email opted-in customers.
+  marketing_opt_in: { type: Boolean, default: false },
+  marketing_opt_in_at: { type: Date, default: null },
 });
 
-// Partial index: only enforces uniqueness where email exists, so emailless walk-ins never collide.
+// Partial: unique only where email exists, so emailless walk-ins never collide.
 customerSchema.index(
   { tenant_id: 1, email: 1 },
   { unique: true, partialFilterExpression: { deleted_at: null, email: { $type: "string" } } },
 );
 customerSchema.index({ name: 1 });
-// Covers customer.service.js#listCustomers: filter by tenant_id, sort by created_at desc.
+// Covers listCustomers: filter by tenant_id, newest first.
 customerSchema.index({ tenant_id: 1, created_at: -1 });
 
 module.exports = model("Customer", customerSchema);

@@ -4,6 +4,7 @@ const Customer = require("../models/Customer");
 const Order = require("../models/Order");
 const { UNPAID_ORDER_STATUSES } = require("../constants/order.constants");
 const { buildWordSearchOr } = require("../utils/regex");
+const { CUSTOMER_SOURCE } = require("../constants/customer.constants");
 
 // Computed on demand, not denormalized, so counts track the Order collection.
 async function getOrderStatsByCustomer(customerIds) {
@@ -31,7 +32,7 @@ async function getOrderStatsByCustomer(customerIds) {
   return new Map(stats.map((s) => [s._id.toString(), s]));
 }
 
-/** Headline counts for the customers page; unpaid matches the list's rule. */
+/** Headline counts for the customers page, unpaid matches the list's rule. */
 async function getCustomerStats(tenantId) {
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -62,8 +63,9 @@ async function getCustomerStats(tenantId) {
   };
 }
 
-async function listCustomers({ skip = 0, limit = 20, search = "" } = {}, tenantId) {
+async function listCustomers({ skip = 0, limit = 20, search = "", includeStorefront = false } = {}, tenantId) {
   const filter = { tenant_id: tenantId };
+  if (!includeStorefront) filter.source = { $ne: CUSTOMER_SOURCE.STOREFRONT };
   if (search) {
     filter.$or = buildWordSearchOr(["name", "email", "phone"], search);
   }
@@ -86,6 +88,23 @@ async function listCustomers({ skip = 0, limit = 20, search = "" } = {}, tenantI
   return { items: withStats, total };
 }
 
+/** Captures a website shopper by email, staff records keep their source. */
+async function upsertStorefrontCustomer(tenantId, { name, email, phone, marketing_opt_in = false }) {
+  const filter = { tenant_id: tenantId, email: String(email).trim().toLowerCase() };
+  const update = {
+    $setOnInsert: { name, phone, source: CUSTOMER_SOURCE.STOREFRONT },
+    // NOTE: an unticked box never revokes consent, unsubscribing is separate.
+    ...(marketing_opt_in && { $set: { marketing_opt_in: true, marketing_opt_in_at: new Date() } }),
+  };
+  try {
+    return await Customer.findOneAndUpdate(filter, update, { upsert: true, new: true }).lean();
+  } catch (err) {
+    // Two first orders racing on one email: the loser reads the winner's row.
+    if (err?.code !== 11000) throw err;
+    return Customer.findOneAndUpdate(filter, update.$set ? { $set: update.$set } : {}, { new: true }).lean();
+  }
+}
+
 async function getCustomerById(id, tenantId) {
   const customer = await Customer.findOne({ _id: id, tenant_id: tenantId });
   if (!customer) return null;
@@ -98,7 +117,7 @@ async function getCustomerById(id, tenantId) {
   ]);
 
   const stats = statsMap.get(customer._id.toString());
-  // Outstanding invoices = unpaid or part-paid orders; no Invoice model exists.
+  // Outstanding invoices = unpaid or part-paid orders, no Invoice model exists.
   const outstandingInvoices = orders.filter((order) => UNPAID_ORDER_STATUSES.includes(order.status));
 
   return {
@@ -155,6 +174,7 @@ async function deleteCustomer(id, tenantId) {
 module.exports = {
   getCustomerStats,
   listCustomers,
+  upsertStorefrontCustomer,
   getCustomerById,
   createCustomer,
   updateCustomer,

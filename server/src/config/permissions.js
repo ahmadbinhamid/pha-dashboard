@@ -1,5 +1,5 @@
 // config/permissions.js
-// Every grantable `group.action`; roles validate against it, the UI reads it.
+// Every grantable `group.action`, roles validate against it, the UI reads it.
 
 const PERMISSION_GROUPS = [
   {
@@ -87,6 +87,18 @@ const PERMISSION_GROUPS = [
     actions: { view: "View shipping settings", update: "Configure shipping" },
   },
   {
+    key: "discounts",
+    label: "Discounts",
+    description: "Promo codes and automatic discounts for the online store.",
+    actions: { view: "View discounts", create: "Create discounts", update: "Edit and pause discounts", delete: "Delete discounts" },
+  },
+  {
+    key: "storefront",
+    label: "Storefront",
+    description: "The online store's hero slides, announcement strip and flash sales.",
+    actions: { view: "View storefront content", update: "Edit storefront content and launch sales" },
+  },
+  {
     key: "settings",
     label: "Store Settings",
     description: "Trading identity, invoice setup, policies and branding.",
@@ -112,7 +124,7 @@ const PERMISSION_GROUPS = [
   {
     key: "roles",
     label: "Roles & Permissions",
-    description: "What each role is allowed to do. Grant with care — it implies every other permission.",
+    description: "What each role is allowed to do. Grant with care: it implies every other permission.",
     actions: { view: "View roles", create: "Create roles", update: "Edit roles", delete: "Delete roles" },
   },
   {
@@ -134,7 +146,7 @@ function isValidPermission(permission) {
   return PERMISSION_SET.has(permission);
 }
 
-/** Entries of `permissions` missing from the catalogue; [] when all valid. */
+/** Entries of `permissions` missing from the catalogue, [] when all valid. */
 function unknownPermissions(permissions = []) {
   return permissions.filter((p) => !PERMISSION_SET.has(p));
 }

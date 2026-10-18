@@ -64,6 +64,38 @@ async function listCategoryOptions(tenantId) {
   return Category.find({ tenant_id: tenantId }).select("name parent sort_order").sort({ sort_order: 1, name: 1 }).lean();
 }
 
+/** Ids among categoryIds that aren't this tenant's categories. */
+async function findUnknownCategoryIds(categoryIds, tenantId) {
+  if (!categoryIds?.length) return [];
+  const owned = new Set((await listCategoryOptions(tenantId)).map((c) => String(c._id)));
+  return categoryIds.filter((id) => !owned.has(String(id)));
+}
+
+/** One category read, returns ids => Set of those ids plus descendants. */
+async function buildCategoryExpander(tenantId) {
+  const childrenOf = new Map();
+  for (const c of await listCategoryOptions(tenantId)) {
+    const parent = c.parent ? String(c.parent) : null;
+    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+    childrenOf.get(parent).push(String(c._id));
+  }
+  return (categoryIds = []) => {
+    const result = new Set();
+    const queue = categoryIds.map(String);
+    for (let i = 0; i < queue.length; i += 1) {
+      if (result.has(queue[i])) continue;
+      result.add(queue[i]);
+      queue.push(...(childrenOf.get(queue[i]) ?? []));
+    }
+    return result;
+  };
+}
+
+/** categoryIds plus every descendant, as a Set of id strings. */
+async function expandCategoryIds(categoryIds, tenantId) {
+  return (await buildCategoryExpander(tenantId))(categoryIds);
+}
+
 async function getCategoryById(id, tenantId) {
   return Category.findOne({ _id: id, tenant_id: tenantId }).populate("parent").populate("thumbnail");
 }
@@ -134,4 +166,14 @@ async function deleteCategory(id, tenantId) {
   return category;
 }
 
-module.exports = { listCategories, listCategoryOptions, getCategoryById, createCategory, updateCategory, deleteCategory };
+module.exports = {
+  listCategories,
+  listCategoryOptions,
+  findUnknownCategoryIds,
+  expandCategoryIds,
+  buildCategoryExpander,
+  getCategoryById,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+};

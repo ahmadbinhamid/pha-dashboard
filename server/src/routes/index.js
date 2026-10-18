@@ -38,5 +38,7 @@ router.use("/roles", require("./role.routes"));
 router.use("/invitations", require("./invitation.routes"));
 router.use("/tags", require("./tag.routes"));
 router.use("/shipping", require("./shipping.routes"));
+router.use("/storefront", require("./storefront.routes"));
+router.use("/discounts", require("./discount.routes"));
 
 module.exports = router;

@@ -1,11 +1,11 @@
 import { LayoutGrid, List } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 
 export type ViewMode = "list" | "grid";
 
-const OPTIONS: { value: ViewMode; label: string; icon: typeof List }[] = [
-  { value: "list", label: "List view", icon: List },
-  { value: "grid", label: "Grid view", icon: LayoutGrid },
+const OPTIONS: SegmentedOption<ViewMode>[] = [
+  { value: "list", label: "List view", icon: List, iconOnly: true },
+  { value: "grid", label: "Grid view", icon: LayoutGrid, iconOnly: true },
 ];
 
 export function ViewToggle({
@@ -17,34 +17,5 @@ export function ViewToggle({
   onChange: (value: ViewMode) => void;
   className?: string;
 }) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Layout"
-      className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg bg-bg-2 p-0.5 ring-1 ring-inset ring-border",
-        className,
-      )}
-    >
-      {OPTIONS.map(({ value: option, label, icon: Icon }) => {
-        const active = value === option;
-        return (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            title={label}
-            onClick={() => onChange(option)}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-              active ? "bg-card text-fg shadow-card ring-1 ring-inset ring-border" : "text-fg/45 hover:text-fg/70",
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        );
-      })}
-    </div>
-  );
+  return <SegmentedControl options={OPTIONS} value={value} onChange={onChange} ariaLabel="Layout" className={className} />;
 }

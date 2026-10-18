@@ -194,7 +194,7 @@ const HYDRATION_STAGES = [
       localField: "attachments",
       foreignField: "_id",
       as: "attachments",
-      // `url` is a virtual; projecting it is a no-op, see withAttachmentUrls.
+      // `url` is a virtual, projecting it is a no-op, see withAttachmentUrls.
       pipeline: [
         { $project: { original_name: 1, mime_type: 1, type: 1, uid: 1, file_name: 1 } },
       ],
@@ -214,7 +214,7 @@ const HYDRATION_STAGES = [
 function withComputedFields(p) {
   return {
     ...p,
-    // $lookup bypasses the `url` virtual; backfilled explicitly.
+    // $lookup bypasses the `url` virtual, backfilled explicitly.
     attachments: withAttachmentUrls(p.attachments),
     stock_status: getStockStatus(p.stock_count, p.stock_control),
   };
@@ -247,7 +247,7 @@ async function getProducts(filter, { skip, limit, sort = { created_at: -1 }, sto
   };
 }
 
-// Header tiles; reuses buildStockStages so counts match the filter.
+// Header tiles, reuses buildStockStages so counts match the filter.
 async function getProductStats(tenantId) {
   const [result] = await Product.aggregate([
     { $match: { tenant_id: tenantId } },
@@ -290,7 +290,13 @@ async function getProductStats(tenantId) {
   };
 }
 
-// Keeps Typesense order ($in loses it); `match` adds filters Typesense lacks.
+// Keeps Typesense order ($in loses it), `match` adds filters Typesense lacks.
+/** Lean { _id, categories } for the given products, tenant-scoped. */
+async function getProductCategories(productIds, tenantId) {
+  if (!productIds.length) return [];
+  return Product.find({ _id: { $in: productIds }, tenant_id: tenantId }).select("categories").lean();
+}
+
 async function getProductsByIds(ids, { stockFilter, channelFilter, match = null } = {}) {
   if (!ids.length) return { items: [] };
 
@@ -317,12 +323,12 @@ async function findProductById(id, tenantId) {
   return Product.findOne({ _id: id, tenant_id: tenantId });
 }
 
-// Index workers have no tenantId; null = deleted since enqueued.
+// Index workers have no tenantId, null = deleted since enqueued.
 async function findProductByIdForIndexing(id) {
   return Product.findById(id);
 }
 
-// Staff-only note; mirrors order.service.js#addOrderNote.
+// Staff-only note, mirrors order.service.js#addOrderNote.
 async function addProductNote(productId, { text, userId }, tenantId) {
   const product = await Product.findOne({ _id: productId, tenant_id: tenantId });
   if (!product) return null;
@@ -337,7 +343,7 @@ function productNoteFilter(productId, noteId, tenantId) {
   return { _id: productId, tenant_id: tenantId, "internal_notes._id": noteId };
 }
 
-// Atomic positional update; avoids loading and re-saving the whole product.
+// Atomic positional update, avoids loading and re-saving the whole product.
 async function updateProductNote(productId, noteId, { text }, tenantId) {
   return Product.findOneAndUpdate(
     productNoteFilter(productId, noteId, tenantId),
@@ -397,7 +403,7 @@ async function getProductBySlugOrId(key, tenantId) {
     .lean();
   if (!product) return null;
 
-  // .lean() skips the `url` virtual; backfill as the list does.
+  // .lean() skips the `url` virtual, backfill as the list does.
   product.attachments = withAttachmentUrls(product.attachments);
 
   product.stock_count = product.stock_control
@@ -405,10 +411,10 @@ async function getProductBySlugOrId(key, tenantId) {
     : null;
   product.stock_status = getStockStatus(product.stock_count, product.stock_control);
 
-  // .lean() skips defaults; products older than this field lack it.
+  // .lean() skips defaults, products older than this field lack it.
   product.internal_notes = product.internal_notes ?? [];
 
-  // Active listings add warranty/fitment content; always an array.
+  // Active listings add warranty/fitment content, always an array.
   const listings = await MarketplaceListing.find({
     product: product._id,
     state: LISTING_STATE.ACTIVE,
@@ -452,7 +458,7 @@ async function findVariant(variantId, productId, tenantId) {
   return ProductVariant.findOne({ _id: variantId, product: productId, tenant_id: tenantId });
 }
 
-// Id-only variant lookup for marketplace fan-out; no populate needed.
+// Id-only variant lookup for marketplace fan-out, no populate needed.
 async function listVariantIdsForProduct(productId, tenantId) {
   const variants = await ProductVariant.find({ product: productId, tenant_id: tenantId })
     .select("_id")
@@ -542,6 +548,7 @@ module.exports = {
   getProducts,
   getProductStats,
   getProductsByIds,
+  getProductCategories,
   getProductSuggestions,
   findProductById,
   findProductByIdForIndexing,

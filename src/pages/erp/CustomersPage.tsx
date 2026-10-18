@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
 import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { FieldDensityProvider } from "@/components/ui/FieldDensity";
+import { Switch } from "@/components/ui/Switch";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
@@ -25,6 +28,7 @@ export default function CustomersPage() {
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE), 10);
   const search = searchParams.get("search") ?? "";
+  const showStorefront = searchParams.get("storefront") === "1";
 
   const [inputValue, setInputValue] = useState(search);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -35,6 +39,16 @@ export default function CustomersPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("page", String(p));
+      return next;
+    }, { replace: true });
+  };
+
+  const setShowStorefront = (on: boolean) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (on) next.set("storefront", "1");
+      else next.delete("storefront");
+      next.set("page", "1");
       return next;
     }, { replace: true });
   };
@@ -64,8 +78,8 @@ export default function CustomersPage() {
   }, [inputValue, setSearchParams]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["customers", { page, search, limit }],
-    queryFn: () => getCustomers({ page, search, limit }),
+    queryKey: ["customers", { page, search, limit, showStorefront }],
+    queryFn: () => getCustomers({ page, search, limit, include_storefront: showStorefront }),
   });
 
   const customers: Customer[] = data?.data?.items ?? [];
@@ -109,7 +123,17 @@ export default function CustomersPage() {
               className="pl-9"
             />
           </div>
-          {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
+          <div className="flex items-center gap-3">
+            {isFetching && !isLoading && <span className="text-xs text-fg/40">Updating…</span>}
+            <FieldDensityProvider density="compact">
+              <Switch
+                checked={showStorefront}
+                onCheckedChange={setShowStorefront}
+                label="Storefront customers"
+                className="sm:w-60"
+              />
+            </FieldDensityProvider>
+          </div>
         </div>
 
         {isLoading ? (
@@ -153,7 +177,10 @@ export default function CustomersPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} />
+                      <div className="flex flex-wrap gap-1">
+                        <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} source={customer.source} />
+                        {customer.marketing_opt_in ? <Badge variant="ok">Subscribed</Badge> : null}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right text-fg/60">
                       {new Date(customer.created_at).toLocaleDateString()}
@@ -219,7 +246,7 @@ function EmptyState({ search, onNew }: { search: string; onNew: () => void }) {
       <div>
         <p className="font-medium text-fg">{search ? "No customers found" : "No customers yet"}</p>
         <p className="mt-1 text-sm text-fg/50">
-          {search ? `No results for "${search}" — try a different term` : "Create your first customer to get started"}
+          {search ? `No results for "${search}". Try a different term` : "Create your first customer to get started"}
         </p>
       </div>
       {!search && (

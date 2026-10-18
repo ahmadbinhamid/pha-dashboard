@@ -1,9 +1,6 @@
-import { useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { Upload, X, Loader2 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useToast } from "@/context";
-import { uploadAttachments } from "@/lib/api/products";
+import { useImageUpload } from "@/hooks/useImageUpload";
 
 export function LogoUploadField({
   shape = "circle",
@@ -20,41 +17,23 @@ export function LogoUploadField({
   onChange: (url: string) => void;
   onRemove?: () => void;
 }) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadAttachments([file]),
-    onSuccess: (res) => {
-      const uploaded = res.data?.[0];
-      if (uploaded) onChange(uploaded.url);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Upload failed", description: err.message, tone: "danger" });
-    },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadMutation.mutate(file);
-    e.target.value = "";
-  };
+  const upload = useImageUpload({ onUploaded: onChange });
 
   return (
     <div className="flex items-start gap-4">
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+      <input {...upload.inputProps} />
 
       <button
         type="button"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={uploadMutation.isPending}
+        onClick={upload.open}
+        disabled={upload.isUploading}
         title={`Upload ${title.toLowerCase()}`}
         className={cn(
           "flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden border-2 border-dashed border-border bg-bg-2/40 text-fg/40 transition-colors hover:border-accent/40 hover:bg-bg-2 hover:text-fg/60 disabled:opacity-50",
           shape === "circle" ? "rounded-full" : "rounded-md",
         )}
       >
-        {uploadMutation.isPending ? (
+        {upload.isUploading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : value ? (
           <img src={value} alt={title} className="h-full w-full object-cover" />

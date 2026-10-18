@@ -16,6 +16,15 @@ exports.createOrder = async (req, res) => {
   }
 };
 
+exports.quoteDiscount = async (req, res) => {
+  try {
+    return success(res, await orderService.quoteOrderDiscount(req.body, req.tenant));
+  } catch (err) {
+    if (err.status) return requestfailure(res, err);
+    return systemfailure(res, err);
+  }
+};
+
 exports.getOrder = async (req, res) => {
   try {
     return success(res, await orderService.getGuestOrderView(req.params.id, req.query.token, req.tenantId));

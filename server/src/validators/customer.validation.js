@@ -2,7 +2,7 @@
 
 const Joi = require("joi");
 
-// Digits plus common phone punctuation, no letters — not a full format check, just keeps out junk.
+// Digits and phone punctuation only, keeps out junk, not a format check.
 const PHONE_PATTERN = /^[\d\s\-()+]*$/;
 const phoneMessages = { "string.pattern.base": "Phone number cannot contain letters" };
 
@@ -51,6 +51,8 @@ const listCustomers = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
     search: Joi.string().allow("").default(""),
+    // Website shoppers are hidden unless asked for.
+    include_storefront: Joi.boolean().default(false),
   }),
 };
 

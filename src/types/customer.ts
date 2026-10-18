@@ -1,5 +1,8 @@
 import type { Order, OrderAddress } from "./orders";
 
+// staff: added in the dashboard, storefront: captured from a website order.
+export type CustomerSource = "staff" | "storefront";
+
 export interface Customer {
   _id: string;
   name: string;
@@ -11,6 +14,9 @@ export interface Customer {
   registered_at: string | null;
   orders_count: number;
   outstanding_invoices_count: number;
+  source: CustomerSource;
+  // Ticked "email me offers" at checkout, campaigns only email these.
+  marketing_opt_in: boolean;
   shipping_address: OrderAddress | null;
   // null => same as shipping
   billing_address: OrderAddress | null;

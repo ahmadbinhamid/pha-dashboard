@@ -11,13 +11,14 @@ const {
 } = require("../constants/order.constants");
 const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
+const { promoCode } = require("./discount.validation");
 
 const addressSchema = Joi.object({
   address: Joi.string().trim().min(1).required(),
   suburb: Joi.string().trim().min(1).required(),
   state: Joi.string().trim().min(1).required(),
   postcode: Joi.string().trim().min(1).required(),
-  // Residential or business; prices calculated shipping at checkout.
+  // Residential or business, prices calculated shipping at checkout.
   address_type: Joi.string().valid(...Object.values(ADDRESS_TYPE)).allow(null),
 });
 
@@ -41,7 +42,7 @@ const createOrder = {
     delivery_method: Joi.string()
       .valid(...Object.values(ORDER_DELIVERY_METHOD))
       .default(ORDER_DELIVERY_METHOD.DELIVERY),
-    // Pickup has no address; forbid both rather than ignore stale form data.
+    // Pickup has no address, forbid both rather than ignore stale form data.
     shipping_address: Joi.when("delivery_method", {
       is: ORDER_DELIVERY_METHOD.PICKUP,
       then: Joi.forbidden(),
@@ -52,6 +53,30 @@ const createOrder = {
       then: Joi.forbidden(),
       otherwise: addressSchema.allow(null).default(null),
     }),
+    // Any discount code, priced server-side, never trusted.
+    promo_code: promoCode.allow("", null),
+    // The checkout's "email me offers" box.
+    marketing_opt_in: Joi.boolean().default(false),
+  }),
+};
+
+// Storefront cart preview: which discount applies and how much it takes off.
+const discountQuote = {
+  body: Joi.object({
+    items: Joi.array()
+      .items(
+        Joi.object({
+          product: Joi.string().hex().length(24).required(),
+          variant: Joi.string().hex().length(24).allow(null).default(null),
+          quantity: Joi.number().integer().min(1).required(),
+        }),
+      )
+      .min(1)
+      .max(100)
+      .required(),
+    promo_code: promoCode.allow("", null),
+    shipping_cents: Joi.number().integer().min(0).default(0),
+    customer_email: Joi.string().trim().email().allow("", null),
   }),
 };
 
@@ -98,7 +123,7 @@ const catalogueLineSchema = Joi.object({
   note: lineNoteSchema,
 });
 
-// Order-only line typed in at POS; prices are dollars, shipping is per unit.
+// Order-only line typed in at POS, prices are dollars, shipping is per unit.
 const customLineSchema = Joi.object({
   is_custom: Joi.valid(true).required(),
   name: Joi.string().trim().min(1).max(CUSTOM_ORDER_ITEM_NAME_MAX).required(),
@@ -115,7 +140,7 @@ const orderLineSchema = Joi.alternatives().conditional(isCustomLine, {
   then: customLineSchema,
   otherwise: catalogueLineSchema,
 });
-// The order __v the client loaded; a mismatch is a 409.
+// The order __v the client loaded, a mismatch is a 409.
 const orderVersion = Joi.number().integer().min(0);
 
 // Counter sale for a known customer: line discounts and an amount paid.
@@ -138,13 +163,13 @@ const createManualOrder = {
     }),
     // Customer-facing note for the whole order.
     note: Joi.string().trim().allow("", null).default(null),
-    // payment_link collects nothing now; cash/transfer may record an amount.
+    // payment_link collects nothing now, cash/transfer may record an amount.
     payment_method: Joi.string()
       .valid(...Object.values(ORDER_PAYMENT_CHOICE))
       .required(),
-    // Dollars collected now; omitted or 0 leaves the whole invoice owing.
+    // Dollars collected now, omitted or 0 leaves the whole invoice owing.
     amount_paid: Joi.number().min(0).default(0),
-    // Dollars; overrides the per-item shipping sum. Ignored for pickup.
+    // Dollars, overrides the per-item shipping sum. Ignored for pickup.
     shipping_cost: Joi.number().min(0),
   }),
 };
@@ -166,7 +191,7 @@ const sendPaymentLinkEmail = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
 };
 
-// Fulfilment only; payment_status is always derived from payments.
+// Fulfilment only, payment_status is always derived from payments.
 const updateOrderStatus = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -176,7 +201,7 @@ const updateOrderStatus = {
   }),
 };
 
-// Follow-up cash/transfer payment; the service checks the balance.
+// Follow-up cash/transfer payment, the service checks the balance.
 const recordPayment = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -187,7 +212,7 @@ const recordPayment = {
   }),
 };
 
-// Line price fix on eBay/manual orders; the service rejects storefront.
+// Line price fix on eBay/manual orders, the service rejects storefront.
 const updateOrderItemPrice = {
   params: Joi.object({
     id: Joi.string().hex().length(24).required(),
@@ -204,12 +229,12 @@ const updateOrderShippingCost = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
     shipping_cost: Joi.number().min(0).required(), // dollars
-    // Optional for older clients; when sent, a stale one is a 409.
+    // Optional for older clients, when sent, a stale one is a 409.
     version: orderVersion,
   }),
 };
 
-// Line discount fix; the service checks it against the line subtotal.
+// Line discount fix, the service checks it against the line subtotal.
 const updateOrderItemDiscount = {
   params: Joi.object({
     id: Joi.string().hex().length(24).required(),
@@ -221,7 +246,7 @@ const updateOrderItemDiscount = {
   }),
 };
 
-// Optional — blank/null clears it.
+// Optional: blank or null clears it.
 const updateOrderReferenceNumber = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -248,7 +273,7 @@ const updateOrderCustomerDetails = {
       email: Joi.string().trim().email().allow("", null),
       phone: Joi.string().trim().allow("", null),
     }),
-    // Pickup has no address; the service knows the method, so just omit.
+    // Pickup has no address, the service knows the method, so just omit.
     shipping_address: addressSchema,
     billing_address: addressSchema.allow(null),
   }),
@@ -281,6 +306,7 @@ module.exports = {
   updateOrderItemQuantity,
   removeOrderItem,
   createOrder,
+  discountQuote,
   byIdParam,
   listOrders,
   adminByIdParam,

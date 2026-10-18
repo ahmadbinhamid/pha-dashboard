@@ -1,7 +1,7 @@
 // middlewares/rateLimit.js
 // Abuse guards for free-to-call endpoints, keyed by client IP by default.
 
-// NOTE: MemoryStore is per process; two API instances need a shared store.
+// NOTE: MemoryStore is per process, two API instances need a shared store.
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
 const tooManyRequests = (message) => (req, res) =>
@@ -12,7 +12,7 @@ const TRY_LATER = "Too many attempts. Please try again in 15 minutes.";
 
 const ipKey = (req) => ipKeyGenerator(req.ip);
 
-// IP + normalised email so a shared shop IP isn't one bucket; IP if no email.
+// IP + normalised email so a shared shop IP isn't one bucket, IP if no email.
 function ipEmailKey(req) {
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   return email ? `${ipKey(req)}|${email}` : ipKey(req);
@@ -42,9 +42,9 @@ const loginNetworkLimiter = authLimiter({
 const otpVerifyLimiter = authLimiter({ max: 5, keyGenerator: ipEmailKey });
 // Every request counts: each one sends an email, success or not.
 const otpResendLimiter = authLimiter({ max: 5, keyGenerator: ipEmailKey, failuresOnly: false });
-// NOTE: counts every request; forgot-password answers 200 for unknown emails.
+// NOTE: counts every request, forgot-password answers 200 for unknown emails.
 const forgotPasswordLimiter = authLimiter({ max: 5, keyGenerator: ipEmailKey, failuresOnly: false });
-// Token guessing; the body carries no email, so per IP.
+// Token guessing, the body carries no email, so per IP.
 const passwordResetLimiter = authLimiter({ max: 10 });
 // Account creation and invite activation keep login's old per-IP limits.
 const signupLimiter = authLimiter({ max: 5 });
@@ -78,6 +78,15 @@ const guestOrderLimiter = rateLimit({
   handler: tooManyRequests("Too many orders. Please try again in 15 minutes."),
 });
 
+// Cart previews re-quote as the shopper edits, looser than order creation.
+const discountQuoteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: tooManyRequests("Too many promo code checks. Please try again shortly."),
+});
+
 module.exports = {
   loginAccountLimiter,
   loginNetworkLimiter,
@@ -90,4 +99,5 @@ module.exports = {
   paymentLimiter,
   publicFormLimiter,
   guestOrderLimiter,
+  discountQuoteLimiter,
 };

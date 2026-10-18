@@ -38,6 +38,14 @@ const { createPaymentLinkForOrder } = require("./stripe/stripe.payment.service")
 const { logger } = require("../loaders/logging");
 const emailService = require("./email/email.service");
 const { buildInvoicePdfBuffer } = require("../utils/pdf/invoicePdf");
+const {
+  resolveCheckoutDiscount,
+  reserveRedemption,
+  attachRedemptionOrder,
+  releaseRedemption,
+  releaseOrderRedemption,
+} = require("./discount-pricing.service");
+const { upsertStorefrontCustomer } = require("./customer.service");
 const { getCompanyProfile } = require("./tenant-settings.service");
 const notificationService = require("./notification.service");
 const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shipping-quote.service");
@@ -71,7 +79,7 @@ function generateGuestAccessToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// Re-derives price/availability from the DB; cart totals are never trusted.
+// Re-derives price/availability from the DB, cart totals are never trusted.
 async function resolveOrderItem({ product: productId, variant: variantId, quantity }, tenantId) {
   if (!Number.isInteger(quantity) || quantity < 1) {
     throw httpError("Invalid quantity", 400);
@@ -94,13 +102,13 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
     }
     unitPriceDollars = variant.price ?? unitPriceDollars;
     sku = variant.sku || sku;
-    name = `${product.title} — ${variant.display_name}`;
+    name = `${product.title} (${variant.display_name})`;
   }
 
   if (product.stock_control) {
     const available = await getTotalStockForProductVariant(productId, variantId || null);
     if (available < quantity) {
-      throw httpError(`Insufficient stock for "${name}" — only ${available} left`, 400);
+      throw httpError(`Insufficient stock for "${name}". Only ${available} left`, 400);
     }
   }
 
@@ -115,7 +123,7 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
   };
 }
 
-// Manual sale line: skips is_published_online check; allows line discount.
+// Manual sale line: skips is_published_online check, allows line discount.
 async function resolveManualOrderItem(
   { product: productId, variant: variantId, quantity, discount_amount = 0, note = null },
   tenantId,
@@ -145,13 +153,13 @@ async function resolveManualOrderItem(
   if (variant) {
     unitPriceDollars = variant.price ?? unitPriceDollars;
     sku = variant.sku || sku;
-    name = `${product.title} — ${variant.display_name}`;
+    name = `${product.title} (${variant.display_name})`;
   }
 
   if (product.stock_control) {
     const available = await getTotalStockForProductVariant(productId, variantId || null);
     if (available < quantity) {
-      throw httpError(`Insufficient stock for "${name}" — only ${available} left`, 400);
+      throw httpError(`Insufficient stock for "${name}". Only ${available} left`, 400);
     }
   }
 
@@ -241,7 +249,7 @@ async function createManualOrder(
   );
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  // Pickup ships nothing; shippingCostOverride beats the per-item sum.
+  // Pickup ships nothing, shippingCostOverride beats the per-item sum.
   const shipping_cost = isPickup
     ? 0
     : shippingCostOverride != null
@@ -297,7 +305,7 @@ async function createManualOrder(
     order.stock_issue_note = stockIssueNote;
   }
 
-  // No Payment when nothing was collected; a Payment means money received.
+  // No Payment when nothing was collected, a Payment means money received.
   if (amountPaidCents > 0) {
     const payment = await Payment.create({
       tenant_id: tenant._id,
@@ -324,13 +332,13 @@ async function createManualOrder(
   return order;
 }
 
-// Never touches stock; createManualOrder already deducted it in full.
+// Never touches stock, createManualOrder already deducted it in full.
 async function recordOrderPayment(orderId, { payment_method, amount }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
     throw httpError("Order not found", 404);
   }
-  // Only manual sales take staff payments; storefront/eBay settle via Stripe.
+  // Only manual sales take staff payments, storefront/eBay settle via Stripe.
   if (order.channel !== ORDER_CHANNEL.MANUAL) {
     throw httpError("Only manual orders can have a payment recorded against them", 400);
   }
@@ -366,7 +374,7 @@ async function recordOrderPayment(orderId, { payment_method, amount }, tenantId)
   );
 }
 
-// Never updates the linked Customer; orders are a historical snapshot.
+// Never updates the linked Customer, orders are a historical snapshot.
 async function updateOrderCustomerDetails(orderId, { customer, shipping_address, billing_address }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) {
@@ -428,9 +436,17 @@ async function assertDeliverable(tenantId, items) {
   if (titles.length) throw httpError(`In-store pickup only: ${titles.join(", ")}`, 400);
 }
 
-// `tenant` comes from the storefront identifier, not a JWT; no staff user.
+// `tenant` comes from the storefront identifier, not a JWT, no staff user.
 async function createOrder(
-  { items, customer, shipping_address, billing_address, delivery_method = ORDER_DELIVERY_METHOD.DELIVERY },
+  {
+    items,
+    customer,
+    shipping_address,
+    billing_address,
+    delivery_method = ORDER_DELIVERY_METHOD.DELIVERY,
+    promo_code,
+    marketing_opt_in = false,
+  },
   tenant,
 ) {
   if (!Array.isArray(items) || !items.length) {
@@ -440,23 +456,36 @@ async function createOrder(
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   if (!isPickup) await assertDeliverable(tenant._id, items);
 
-  const resolvedItems = [];
-  for (const item of items) {
-    resolvedItems.push(await resolveOrderItem(item, tenant._id));
-  }
+  const resolvedItems = await resolveGuestItems(items, tenant._id);
 
-  // Pickup ships nothing; otherwise flat rates plus any calculated quote.
-  const shipping_cost = isPickup ? 0 : await orderShippingCents(tenant._id, items, resolvedItems, shipping_address);
-  const { subtotal, tax_amount, total } = computeOrderTotals(resolvedItems, { shippingCost: shipping_cost });
+  // Pickup ships nothing, otherwise flat rates plus any calculated quote.
+  const baseShipping = isPickup ? 0 : await orderShippingCents(tenant._id, items, resolvedItems, shipping_address);
+  const [priorOrders, savedCustomer] = await Promise.all([
+    countPaidStorefrontOrders(tenant._id, customer.email),
+    upsertStorefrontCustomer(tenant._id, { ...customer, marketing_opt_in }),
+  ]);
+  const priced = await resolveCheckoutDiscount(tenant._id, {
+    code: promo_code,
+    items: resolvedItems,
+    shippingCents: baseShipping,
+    customerEmail: customer.email,
+    priorOrders,
+  });
+  const { shipping_cost, discount } = priced;
+  const { subtotal, tax_amount, total } = computeOrderTotals(priced.items, { shippingCost: shipping_cost });
 
-  const order = await Order.create({
+  return createWithRedemption(discount, { tenantId: tenant._id, customerEmail: customer.email, amount: priced.amount, orderTotal: total }, async () =>
+    Order.create({
     tenant_id: tenant._id,
     order_number: await nextOrderNumber(tenant._id),
     order_number_prefix: tenant.order_number_prefix,
     invoice_number: await nextInvoiceNumber(tenant._id),
     invoice_number_prefix: tenant.invoice_number_prefix,
-    items: resolvedItems,
+    items: priced.items,
+    discount_id: discount?._id ?? null,
+    promo_code: discount?.code ?? null,
     customer,
+    customer_id: savedCustomer._id,
     delivery_method,
     shipping_address: isPickup ? null : shipping_address,
     billing_address: isPickup ? null : billing_address || null,
@@ -467,12 +496,68 @@ async function createOrder(
     currency: "aud",
     status: ORDER_STATUS.PENDING_PAYMENT,
     guest_access_token: generateGuestAccessToken(),
-  });
-
-  return order;
+    }),
+  );
 }
 
-// Trusts eBay's price/title (what buyer paid); null for an unknown SKU.
+// Paid or part-refunded counts, cancelled or fully refunded never does.
+const COUNTED_PAYMENT_STATUSES = [ORDER_PAYMENT_STATUS.PAID, ORDER_PAYMENT_STATUS.PARTIALLY_REFUNDED];
+
+/** Prior paid, uncancelled website orders on this email (returning check). */
+async function countPaidStorefrontOrders(tenantId, email) {
+  if (!email) return null;
+  return Order.countDocuments({
+    tenant_id: tenantId,
+    channel: ORDER_CHANNEL.STOREFRONT,
+    "customer.email": String(email).trim().toLowerCase(),
+    payment_status: { $in: COUNTED_PAYMENT_STATUSES },
+    fulfillment_status: { $ne: ORDER_FULFILLMENT_STATUS.CANCELLED },
+  });
+}
+
+async function resolveGuestItems(items, tenantId) {
+  const resolved = [];
+  for (const item of items) resolved.push(await resolveOrderItem(item, tenantId));
+  return resolved;
+}
+
+// Claims the discount use before the order exists, released if create fails.
+async function createWithRedemption(discount, reservation, createOrderDoc) {
+  if (!discount) return createOrderDoc();
+  const redemption = await reserveRedemption(discount, reservation);
+  try {
+    const order = await createOrderDoc();
+    await attachRedemptionOrder(redemption._id, order._id);
+    return order;
+  } catch (err) {
+    await releaseRedemption(redemption);
+    throw err;
+  }
+}
+
+/** Storefront cart preview of the order's discount, prices nothing for real. */
+async function quoteOrderDiscount({ items, promo_code, shipping_cents = 0, customer_email }, tenant) {
+  const [resolvedItems, priorOrders] = await Promise.all([
+    resolveGuestItems(items, tenant._id),
+    countPaidStorefrontOrders(tenant._id, customer_email),
+  ]);
+  const { discount, amount, shipping_cost } = await resolveCheckoutDiscount(tenant._id, {
+    code: promo_code,
+    items: resolvedItems,
+    shippingCents: shipping_cents,
+    customerEmail: customer_email,
+    priorOrders,
+  });
+  if (!discount) return { discount: null, amount: 0, shipping_waived: false };
+  const { name, code, is_automatic, discount_type, discount_value, min_order_number, max_order_number } = discount;
+  return {
+    discount: { name, code, is_automatic, discount_type, discount_value, min_order_number, max_order_number },
+    amount,
+    shipping_waived: shipping_cents > 0 && shipping_cost === 0,
+  };
+}
+
+// Trusts eBay's price/title (what buyer paid), null for an unknown SKU.
 async function resolveEbayLineItem(lineItem, tenantId) {
   if (!lineItem.sku) return null;
 
@@ -499,11 +584,11 @@ async function resolveEbayLineItem(lineItem, tenantId) {
   };
 }
 
-// Idempotent on external_order_id; null if imported or no SKU matches.
+// Idempotent on external_order_id, null if imported or no SKU matches.
 async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
   const mapped = mapEbayOrder(rawEbayOrder, { ORDER_STATUS });
   if (!mapped.externalOrderId) {
-    logger.warn("[order.service] eBay order payload missing orderId — skipping import");
+    logger.warn("[order.service] eBay order payload missing orderId, skipping import");
     return null;
   }
 
@@ -522,7 +607,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
 
   if (!resolvedItems.length) {
     logger.warn(
-      `[order.service] eBay order ${mapped.externalOrderId} has no line items matching a known product — skipping import`,
+      `[order.service] eBay order ${mapped.externalOrderId} has no line items matching a known product, skipping import`,
     );
     return null;
   }
@@ -541,7 +626,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     shipping_cost: mapped.shippingCents,
     tax_amount: mapped.taxCents,
     total: mapped.totalCents,
-    // Prefer eBay's currency; tenant marketplace currency only if absent.
+    // Prefer eBay's currency, tenant marketplace currency only if absent.
     currency: (mapped.currency || currencyForMarketplace(settings?.marketplace_id)).toLowerCase(),
     status: mapped.status,
     // eBay Managed Payments settles before import, so payment is always PAID.
@@ -593,7 +678,7 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
     order.items.length === 1 && order.items[0].sku === sku && order.items[0].quantity === quantity;
   if (!isFullOrderCancellation) {
     logger.warn(
-      `[order.service] eBay order ${externalOrderId}: partial cancellation/return (${sku} x${quantity}) — leaving status "${order.status}" as-is for manual review`,
+      `[order.service] eBay order ${externalOrderId}: partial cancellation/return (${sku} x${quantity}), leaving status "${order.status}" as is for manual review`,
     );
     return order;
   }
@@ -607,7 +692,7 @@ async function updateEbayOrderStatus(externalOrderId, { sku, quantity, status },
   return order;
 }
 
-// payment_status derives from payments; legacy status is derived too.
+// payment_status derives from payments, legacy status is derived too.
 async function updateOrderStatus(orderId, { status }, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
   if (!order) throw httpError("Order not found", 404);
@@ -615,6 +700,8 @@ async function updateOrderStatus(orderId, { status }, tenantId) {
   // Restock only on the transition into cancelled, to avoid double-restocking.
   if (status === ORDER_FULFILLMENT_STATUS.CANCELLED && order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.CANCELLED) {
     await syncOrderStock(order, DIRECTION.RESTOCK, { reasonPrefix: "Order cancelled" });
+    // A cancelled order gives its discount use back (usage limits, per-customer).
+    if (order.discount_id) await releaseOrderRedemption(order._id, tenantId);
   }
 
   order.fulfillment_status = status;
@@ -652,7 +739,7 @@ async function getGuestOrderView(orderId, token, tenantId) {
   return { ...view, amount_due: await getAmountDueForOrder(order) };
 }
 
-// guest_access_token is select:false; needed to build the payment link.
+// guest_access_token is select:false, needed to build the payment link.
 async function getOrderForPaymentLink(orderId, tenantId) {
   return Order.findOne({ _id: orderId, tenant_id: tenantId }).select("+guest_access_token");
 }
@@ -693,7 +780,7 @@ async function listOrders(
   };
 }
 
-// One $facet round-trip; revenue excludes cancelled orders.
+// One $facet round-trip, revenue excludes cancelled orders.
 async function getOrderStats(tenantId) {
   const [result] = await Order.aggregate([
     { $match: { tenant_id: tenantId } },
@@ -737,16 +824,16 @@ async function getOrderDetailForAdmin(orderId, tenantId) {
   ]);
 
   const { payment, ...orderFields } = order.toObject();
-  // toObject strips __v; the client sends it back with every edit.
+  // toObject strips __v, the client sends it back with every edit.
   return { ...orderFields, version: order.__v, payments, refunds };
 }
 
-// Marks FULFILLED either way; re-send reuses on-file tracking by default.
+// Marks FULFILLED either way, re-send reuses on-file tracking by default.
 async function sendOrderNotification(orderId, { tracking_number, carrier_name } = {}, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  // Sums all succeeded Payments; a manual sale may have deposit + follow-up.
+  // Sums all succeeded Payments, a manual sale may have deposit + follow-up.
   const [totalPaidCents, totalRefundedCents, companyProfile] = await Promise.all([
     getTotalPaidForOrder(order._id),
     getTotalRefundedForOrder(order._id),
@@ -756,7 +843,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   // In-person sales are complete: invoice/receipt only, no shipping framing.
   if (order.channel === ORDER_CHANNEL.MANUAL) {
     if (!order.customer.email) {
-      throw httpError("This customer has no email on file — add one before sending an invoice", 400);
+      throw httpError("This customer has no email on file. Add one before sending an invoice", 400);
     }
     const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
     const amountDueCents = order.total - totalPaidCents;
@@ -828,12 +915,12 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
 
 // Emails the same URL createPaymentLinkForOrder builds for staff.
 async function sendPaymentLinkEmail(orderId, tenant) {
-  // +guest_access_token: select:false by default; needed to build the link.
+  // +guest_access_token: select:false by default, needed to build the link.
   const order = await Order.findOne({ _id: orderId, tenant_id: tenant._id }).select("+guest_access_token");
   if (!order) throw httpError("Order not found", 404);
 
   if (!order.customer.email) {
-    throw httpError("This customer has no email on file — add one before sending a payment link.", 400);
+    throw httpError("This customer has no email on file. Add one before sending a payment link.", 400);
   }
 
   const { url } = createPaymentLinkForOrder(order, tenant);
@@ -874,6 +961,7 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
 
 module.exports = {
   createOrder,
+  quoteOrderDiscount,
   createManualOrder,
   recordOrderPayment,
   updateOrderCustomerDetails,

@@ -36,6 +36,8 @@ import TagManagerPage from "@/pages/erp/TagManagerPage";
 import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import ProfilePage from "@/pages/erp/ProfilePage";
 import SettingsPage from "@/pages/erp/SettingsPage";
+import StorefrontPage from "@/pages/erp/StorefrontPage";
+import DiscountEditorPage from "@/pages/erp/DiscountEditorPage";
 import InvitePage from "@/pages/InvitePage";
 import PayOrderPage from "@/pages/PayOrderPage";
 
@@ -58,7 +60,7 @@ export default function App() {
     >
       <AppProviders>
         <Routes>
-          {/* Public: order id + guest token only; shared by every tenant's pay links. */}
+          {/* Public: order id + guest token only, shared by every tenant's pay links. */}
           <Route path="/pay/:orderId" element={<PayOrderPage />} />
 
           {/* Not behind GuestRoute: signed-in users accept, new users sign up. */}
@@ -75,7 +77,7 @@ export default function App() {
             }
           />
 
-          {/* Self-signup disabled (invite-only); kept for a one-line re-enable.
+          {/* Self-signup disabled (invite-only), kept for a one-line re-enable.
           <Route
             path="/register"
             element={
@@ -121,13 +123,18 @@ export default function App() {
             <Route path="/orders" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrdersPage /></RequirePermission>} />
             <Route path="/orders/:id" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrderDetailPage /></RequirePermission>} />
             <Route path="/payments" element={<RequirePermission permission={PERMISSIONS.payments.view}><PaymentsPage /></RequirePermission>} />
+            {/* Discounts moved under Storefront. */}
+            <Route path="/discounts" element={<Navigate to="/storefront?tab=discounts" replace />} />
+            <Route path="/storefront/discounts/new" element={<RequirePermission permission={PERMISSIONS.discounts.create}><DiscountEditorPage /></RequirePermission>} />
+            <Route path="/storefront/discounts/:id" element={<RequirePermission permission={PERMISSIONS.discounts.view}><DiscountEditorPage /></RequirePermission>} />
+            <Route path="/storefront" element={<RequirePermission permission={PERMISSIONS.storefront.view}><StorefrontPage /></RequirePermission>} />
             <Route path="/reports" element={<RequirePermission permission={PERMISSIONS.reports.view}><ReportsPage /></RequirePermission>} />
             <Route path="/listings/new" element={<RequirePermission permission={PERMISSIONS.listings.create}><ListingCreatePage /></RequirePermission>} />
             <Route path="/listings/:id/edit" element={<RequirePermission permission={PERMISSIONS.listings.update}><ListingEditPage /></RequirePermission>} />
             <Route path="/activity-log" element={<RequirePermission permission={PERMISSIONS.activity.view}><ActivityLogPage /></RequirePermission>} />
             <Route path="/profile" element={<ProfilePage />} />
 
-            {/* URL-driven settings tabs; pre-redesign URLs redirect to their new tab. */}
+            {/* URL-driven settings tabs, pre-redesign URLs redirect to their new tab. */}
             <Route path="/settings" element={<Navigate to="/settings/store" replace />} />
             <Route path="/settings/business-info" element={<Navigate to="/settings/store/general" replace />} />
             <Route path="/settings/payment-account" element={<Navigate to="/settings/integrations/stripe" replace />} />

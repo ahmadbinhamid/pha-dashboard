@@ -7,6 +7,8 @@ export interface CustomerListParams {
   page?: number;
   limit?: number;
   search?: string;
+  // Website shoppers are hidden unless true.
+  include_storefront?: boolean;
 }
 
 export interface CustomerPayload {
