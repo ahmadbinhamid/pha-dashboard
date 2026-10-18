@@ -32,20 +32,23 @@ export function PromotionStatusCard({ discount, active, live, canToggle, togglin
   return (
     <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
       <div className="flex min-w-0 flex-1 items-center gap-4">
-        <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", live ? "bg-accent/15 text-accent" : "bg-bg-2 text-fg/40")}>
-          <Zap className="h-6 w-6" />
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", live ? "bg-accent/10 text-accent" : "bg-bg-2 text-fg/40")}>
+          <Zap className="h-5 w-5" />
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-base font-semibold text-fg">
+            <span className="truncate text-sm font-semibold text-fg">
               {discount ? `${discountHeadline(discount)} · ${discount.code ?? "Automatic"}` : "Nothing promoted yet"}
             </span>
             <Badge variant={live ? "ok" : "muted"}>{live ? "Live on storefront" : active ? "Not live" : "Off"}</Badge>
           </div>
-          <p className="mt-0.5 text-sm text-fg/60">
+          <p className="mt-0.5 text-xs text-fg/55">
             {line ?? (
               <>
-                {discount?.name} · <SaleCountdown endsAt={discount?.ends_at ?? null} className="text-accent" />
+                {discount?.name} · <SaleCountdown
+                  endsAt={discount?.ends_at ?? null}
+                  className="font-medium normal-case tracking-normal text-accent"
+                />
               </>
             )}
           </p>
