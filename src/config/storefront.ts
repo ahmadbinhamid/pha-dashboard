@@ -33,7 +33,7 @@ import type {
   SimulatorDevice,
   StorefrontTab,
   TickerSpeed,
-  TickerTheme,
+  PromoTheme,
 } from "@/types/storefront";
 
 export const STOREFRONT_TABS: readonly StorefrontTab[] = ["hero", "announcement", "flash-sale", "discounts"];
@@ -118,6 +118,12 @@ export const DEFAULT_PROMOTION_DISPLAY: PromotionDisplay = {
   ticker_theme: "brand",
   ticker_bg_color: "#dc2626",
   ticker_text_color: "#ffffff",
+  card_theme: "brand",
+  card_bg_color: "#dc2626",
+  card_text_color: "#ffffff",
+  badge_theme: "brand",
+  badge_bg_color: "#dc2626",
+  badge_text_color: "#ffffff",
   show_countdown: true,
   show_hero_card: true,
   show_product_badges: true,
@@ -133,7 +139,7 @@ export const TICKER_SPEED_OPTIONS: SegmentedOption<TickerSpeed>[] = [
 export const TICKER_DURATION_SECONDS: Record<TickerSpeed, number> = { slow: 60, normal: 35, fast: 18 };
 
 // Background + text classes per preset, "custom" uses the picked colours.
-export const TICKER_THEMES: { value: TickerTheme; label: string; className: string }[] = [
+export const PROMO_THEMES: { value: PromoTheme; label: string; className: string }[] = [
   { value: "brand", label: "Brand gradient", className: "bg-gradient-to-r from-danger via-accent to-danger text-danger-fg" },
   { value: "crimson", label: "Crimson", className: "bg-danger text-danger-fg" },
   { value: "carbon", label: "Carbon", className: "bg-luxury-ink text-accent-fg" },
@@ -211,17 +217,6 @@ export const ANNOUNCEMENT_THEMES: { value: AnnouncementTheme; label: string; cla
   { value: "custom", label: "Custom", className: "" },
 ];
 
-/** Class + inline colours for a strip, custom themes use the picked hex. */
-export function announcementThemeStyle(a: Pick<Announcement, "theme" | "bg_color" | "text_color">) {
-  if (a.theme === "custom") return { className: "", style: { backgroundColor: a.bg_color, color: a.text_color } };
-  return { className: (ANNOUNCEMENT_THEMES.find((t) => t.value === a.theme) ?? ANNOUNCEMENT_THEMES[0]).className, style: undefined };
-}
-
-/** Same for the sale ticker. */
-export function tickerThemeStyle(d: Pick<PromotionDisplay, "ticker_theme" | "ticker_bg_color" | "ticker_text_color">) {
-  if (d.ticker_theme === "custom") return { className: "", style: { backgroundColor: d.ticker_bg_color, color: d.ticker_text_color } };
-  return { className: (TICKER_THEMES.find((t) => t.value === d.ticker_theme) ?? TICKER_THEMES[0]).className, style: undefined };
-}
 
 export const FLASH_SALE_PRESETS: FlashSalePreset[] = [
   {

@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, Trash2, UserX, Mail, Phone } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableColumn";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { Can } from "@/components/auth/Can";
 import { PERMISSIONS } from "@/config/permissions";
@@ -14,48 +13,12 @@ import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadge";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
+import { BusinessRepresentativesCard } from "@/components/customers/BusinessRepresentativesCard";
 import { CustomerDeleteModal } from "@/components/customers/CustomerDeleteModal";
+import { CustomerDetailSkeleton } from "@/components/customers/CustomerDetailSkeleton";
+import { CustomerNotFoundState } from "@/components/customers/CustomerNotFoundState";
 import { getCustomer } from "@/lib/api/customers";
 import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
-
-function CustomerDetailSkeleton() {
-  return (
-    <div className="space-y-5 pb-24">
-      <Skeleton className="h-3 w-32" />
-      <div className="flex items-center justify-between">
-        <div className="space-y-1.5">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-3 w-32" />
-        </div>
-        <Skeleton className="h-9 w-32" />
-      </div>
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          <div className="rounded-xs border border-border bg-card p-5 space-y-4">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-32 w-full" />
-          </div>
-        </div>
-        <div className="rounded-xs border border-border bg-card p-5 space-y-3">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NotFoundState() {
-  return (
-    <div className="py-20 text-center">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
-        <UserX className="h-8 w-8 text-fg/30" />
-      </div>
-      <p className="font-medium text-fg">Customer not found</p>
-      <p className="mt-1 text-sm text-fg/50">This customer may have been removed, or the link is incorrect.</p>
-    </div>
-  );
-}
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -72,7 +35,7 @@ export default function CustomerDetailPage() {
   const customer = data?.data;
 
   if (isLoading) return <CustomerDetailSkeleton />;
-  if (isError || !customer) return <NotFoundState />;
+  if (isError || !customer) return <CustomerNotFoundState />;
 
   return (
     <div className="space-y-5 pb-24">
@@ -85,6 +48,7 @@ export default function CustomerDetailPage() {
             <CustomerAccountBadge hasOnlineAccount={customer.has_online_account} source={customer.source} />
           </div>
           <p className="mt-1 text-sm text-fg/55">
+            {customer.business ? `${customer.business.name} · ` : ""}
             Customer since {new Date(customer.created_at).toLocaleDateString()}
           </p>
         </div>
@@ -105,11 +69,9 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* min-w-0: see the matching comment in OrderDetailPage.tsx, without
-            it the order-history table's own min-w forces this grid track
-            (and the whole page) wider than the viewport on mobile. */}
+        {/* min-w-0: the table's own min-w would widen the page on mobile. */}
         <div className="min-w-0 space-y-5 lg:col-span-2">
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader
               title="Order History"
               description={`${customer.orders.length} order${customer.orders.length !== 1 ? "s" : ""}`}
@@ -195,6 +157,8 @@ export default function CustomerDetailPage() {
         </div>
 
         <div className="space-y-5">
+          <BusinessRepresentativesCard customer={customer} />
+
           <Card>
             <CardHeader title="Contact" />
             <CardContent className="space-y-3 text-sm">

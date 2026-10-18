@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
+import { User, Building2, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -89,7 +89,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
   // Pickup has no freight, matching order.service.js#createManualOrder.
   const computedShipping = deliveryMethod === "delivery" ? totalShipping : 0;
-  // Staff may override freight; empty input falls back to the computed sum.
+  // Staff may override freight, an empty input falls back to the sum.
   const shippingTotal =
     deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
       ? Math.max(Number(shippingCostInput) || 0, 0)
@@ -115,9 +115,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
         description: `Invoice ${formatInvoiceNumber(res.data.invoice_number_prefix, res.data.invoice_number)} generated.`,
         tone: "success",
       });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       clearCart();
       onOrderCreated(res.data);
     },
@@ -300,7 +300,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
           </Card>
         </div>
 
-        {/* Read-only; sticky so it stays visible while the edit column scrolls. */}
+        {/* Read-only and sticky, so it stays visible as the edit column scrolls. */}
         <div className="space-y-6 lg:sticky lg:top-44 lg:self-start">
           <Card>
             <CardHeader title="Customer" />
@@ -309,6 +309,12 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <User className="h-4 w-4 text-fg/40" />
                 {customer.name}
               </div>
+              {customer.business && (
+                <div className="flex items-center gap-2 text-fg/60">
+                  <Building2 className="h-4 w-4 text-fg/40" />
+                  {customer.business.name}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-fg/60">
                 <ShoppingBag className="h-4 w-4 text-fg/40" />
                 {customer.orders_count ?? 0} orders

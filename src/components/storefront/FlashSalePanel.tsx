@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UnsavedChangesBar } from "@/components/shared/UnsavedChangesBar";
 import { PromotionDiscountCard } from "@/components/storefront/PromotionDiscountCard";
 import { PromotionStatusCard } from "@/components/storefront/PromotionStatusCard";
+import { PromotionStyleCard } from "@/components/storefront/PromotionStyleCard";
 import { PromotionTickerCard } from "@/components/storefront/PromotionTickerCard";
 import { PromotionVisibilityCard } from "@/components/storefront/PromotionVisibilityCard";
 import { PERMISSIONS } from "@/config/permissions";
@@ -120,6 +121,7 @@ export function FlashSalePanel({ sale, featuredDiscount, categories, canEdit, on
               <PromotionVisibilityCard canEdit={canEdit} />
             </div>
             <PromotionTickerCard preview={preview} canEdit={canEdit} />
+            <PromotionStyleCard discount={selected} canEdit={canEdit} />
           </fieldset>
         </form>
       </FormProvider>

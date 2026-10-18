@@ -1,5 +1,5 @@
 // utils/pdf/invoicePdf.test.js
-// Bill To shows only for an entered billing address; contact lines never drop.
+// Bill To shows only for an entered billing address, contact never drops.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -47,4 +47,10 @@ test("the PDF renders with and without a billing address", async () => {
     const pdf = await buildInvoicePdfBuffer(order({ billing_address }));
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
   }
+});
+
+test("a business invoice names the billed rep under the business", () => {
+  const customer = { ...CUSTOMER, company_name: "ABC Motors" };
+  const { shipLines } = partyBlockLines(order({ customer }));
+  assert.deepEqual(shipLines, ["1 Dock Rd", "Botany NSW 2019", "Attn: Jo Fix", ...CONTACT]);
 });

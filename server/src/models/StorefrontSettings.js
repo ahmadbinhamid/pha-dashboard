@@ -6,6 +6,7 @@ const { buildSchema } = require("./base.model");
 const c = require("../constants/storefront.constants");
 
 const hex = (fallback) => ({ type: String, default: fallback, match: c.HEX_COLOR_PATTERN });
+const promoTheme = () => ({ type: String, enum: Object.values(c.PROMO_THEME), default: c.PROMO_THEME.BRAND });
 
 const heroSlideSchema = new Schema({
   title: { type: String, required: true, trim: true },
@@ -71,9 +72,17 @@ const flashSaleSchema = new Schema(
     discount_id: { type: Schema.Types.ObjectId, ref: "Discount", default: null },
     ticker_text: { type: String, default: "", trim: true },
     ticker_speed: { type: String, enum: Object.values(c.TICKER_SPEED), default: c.TICKER_SPEED.NORMAL },
-    ticker_theme: { type: String, enum: Object.values(c.TICKER_THEME), default: c.TICKER_THEME.BRAND },
+    ticker_theme: promoTheme(),
     ticker_bg_color: hex("#dc2626"),
     ticker_text_color: hex("#ffffff"),
+    // The sale card on product pages (and its hero version's accent).
+    card_theme: promoTheme(),
+    card_bg_color: hex("#dc2626"),
+    card_text_color: hex("#ffffff"),
+    // "-20%" tags on product cards and the "Save" pill on product pages.
+    badge_theme: promoTheme(),
+    badge_bg_color: hex("#dc2626"),
+    badge_text_color: hex("#ffffff"),
     show_countdown: { type: Boolean, default: true },
     show_hero_card: { type: Boolean, default: true },
     show_product_badges: { type: Boolean, default: true },

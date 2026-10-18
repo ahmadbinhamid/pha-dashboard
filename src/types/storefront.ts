@@ -10,7 +10,8 @@ export type AnnouncementTheme = "indigo" | "crimson" | "amber" | "emerald" | "ca
 export type AnnouncementIcon = "none" | "sparkles" | "truck" | "tag" | "zap" | "gift";
 export type BannerPlacement = "all_pages" | "home_only";
 export type TickerSpeed = "slow" | "normal" | "fast";
-export type TickerTheme = "brand" | "crimson" | "carbon" | "custom";
+// Shared by the ticker, sale card and sale badge.
+export type PromoTheme = "brand" | "crimson" | "carbon" | "custom";
 export type SimulatorDevice = "desktop" | "tablet" | "mobile";
 
 export interface HeroSlide {
@@ -64,10 +65,18 @@ export interface Announcement {
 // How the promoted discount is shown, pricing lives on the discount.
 export interface PromotionDisplay {
   ticker_speed: TickerSpeed;
-  ticker_theme: TickerTheme;
+  ticker_theme: PromoTheme;
   // Used when ticker_theme is "custom".
   ticker_bg_color: string;
   ticker_text_color: string;
+  // Sale card on product pages, colours used when card_theme is "custom".
+  card_theme: PromoTheme;
+  card_bg_color: string;
+  card_text_color: string;
+  // "-20%" tags and the "Save" pill, colours used when badge_theme is "custom".
+  badge_theme: PromoTheme;
+  badge_bg_color: string;
+  badge_text_color: string;
   show_countdown: boolean;
   show_hero_card: boolean;
   show_product_badges: boolean;

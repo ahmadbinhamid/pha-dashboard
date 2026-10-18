@@ -1,4 +1,5 @@
 import type { Order, OrderAddress } from "./orders";
+import type { Business } from "./business";
 
 // staff: added in the dashboard, storefront: captured from a website order.
 export type CustomerSource = "staff" | "storefront";
@@ -6,8 +7,9 @@ export type CustomerSource = "staff" | "storefront";
 export interface Customer {
   _id: string;
   name: string;
-  // Shown on invoices instead of `name` when present.
-  company_name: string | null;
+  // Reps of one business are separate customers sharing this id.
+  business_id: string | null;
+  business: Business | null;
   email: string | null;
   phone: string | null;
   has_online_account: boolean;
@@ -24,9 +26,13 @@ export interface Customer {
   updated_at: string;
 }
 
+// Another customer of the same business, as listed on a profile.
+export type CustomerRepresentative = Pick<Customer, "_id" | "name" | "email" | "phone">;
+
 export interface CustomerDetail extends Customer {
   orders: Order[];
   outstanding_invoices: Order[];
+  representatives: CustomerRepresentative[];
 }
 
 // GET /customer/stats.

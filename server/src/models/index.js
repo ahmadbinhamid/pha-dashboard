@@ -5,6 +5,7 @@ module.exports = {
   Tenant: require("./Tenant"),
   Attachment: require("./Attachment"),
   Category: require("./Category"),
+  Business: require("./Business"),
   Customer: require("./Customer"),
   Location: require("./Location"),
   Product: require("./Product"),

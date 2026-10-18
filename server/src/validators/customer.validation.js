@@ -19,7 +19,7 @@ const createCustomer = {
       "string.empty": "Customer name is required",
       "any.required": "Customer name is required",
     }),
-    company_name: Joi.string().trim().allow("", null).default(null),
+    business_name: Joi.string().trim().max(200).allow("", null).default(null),
     email: Joi.string().trim().lowercase().email().allow("", null).default(null),
     phone: Joi.string().trim().allow("", null).pattern(PHONE_PATTERN).messages(phoneMessages).default(null),
     has_online_account: Joi.boolean().default(false),
@@ -31,7 +31,7 @@ const createCustomer = {
 const updateCustomer = {
   body: Joi.object({
     name: Joi.string().trim().min(1),
-    company_name: Joi.string().trim().allow("", null),
+    business_name: Joi.string().trim().max(200).allow("", null),
     email: Joi.string().trim().lowercase().email().allow("", null),
     phone: Joi.string().trim().allow("", null).pattern(PHONE_PATTERN).messages(phoneMessages),
     has_online_account: Joi.boolean(),
@@ -56,4 +56,4 @@ const listCustomers = {
   }),
 };
 
-module.exports = { createCustomer, updateCustomer, byIdParam, listCustomers };
+module.exports = { createCustomer, updateCustomer, byIdParam, listCustomers, PHONE_PATTERN, phoneMessages };

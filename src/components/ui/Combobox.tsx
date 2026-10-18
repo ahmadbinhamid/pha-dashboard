@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown, Plus, Search } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 interface ComboboxProps {
@@ -13,6 +13,8 @@ interface ComboboxProps {
   className?: string;
   /** Allow the user to enter a value that isn't in `options`. */
   allowCustom?: boolean;
+  /** Label for a row that resets the value to "", shown only when set. */
+  clearLabel?: string;
 }
 
 export function Combobox({
@@ -24,6 +26,7 @@ export function Combobox({
   disabled = false,
   className,
   allowCustom = false,
+  clearLabel,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -109,6 +112,19 @@ export function Combobox({
           </div>
 
           <div className="max-h-60 overflow-y-auto p-1">
+            {clearLabel && value && !trimmedQuery && (
+              <button
+                type="button"
+                onClick={() => handleSelect("")}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                  "text-fg/60 hover:bg-accent/10 hover:text-fg",
+                )}
+              >
+                <X className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1 truncate text-left">{clearLabel}</span>
+              </button>
+            )}
             {showCustomOption && (
               <button
                 type="button"

@@ -1,5 +1,5 @@
 // utils/pdf/invoicePdf.js
-// Tax Invoice PDF via pdfkit; kept in lockstep with InvoicePrintView.tsx.
+// Tax Invoice PDF via pdfkit, kept in lockstep with InvoicePrintView.tsx.
 
 const path = require("path");
 const PDFDocument = require("pdfkit");
@@ -28,10 +28,10 @@ const FONT = "Helvetica";
 const FONT_ITALIC = "Helvetica-Oblique";
 const FONT_BOLD_ITALIC = "Helvetica-BoldOblique";
 
-// U+2022 is in WinAnsi; markers outside it would print blank.
+// U+2022 is in WinAnsi, markers outside it would print blank.
 const markerRun = (marker) => ({ text: `${marker} `, bold: false, italic: false });
 
-// Matches InvoicePrintView.tsx; goldOnInk is readable on the ink bar.
+// Matches InvoicePrintView.tsx, goldOnInk is readable on the ink bar.
 const COLORS = {
   text: "#000000",
   accent: "#c2790b",
@@ -94,7 +94,7 @@ function drawVerticalRule(doc, x, top, bottom, color = COLORS.border) {
   doc.save().strokeColor(color).lineWidth(0.75).moveTo(x, top).lineTo(x, bottom).stroke().restore();
 }
 
-// Caps section label; returns the y content starts at.
+// Caps section label, returns the y content starts at.
 function drawSectionLabel(doc, label, x, y, { width = CONTENT_WIDTH, align = "left", color = COLORS.text } = {}) {
   doc
     .font(FONT_BOLD)
@@ -104,7 +104,7 @@ function drawSectionLabel(doc, label, x, y, { width = CONTENT_WIDTH, align = "le
   return y + 11;
 }
 
-// Caps label over a value; returns the y below the value.
+// Caps label over a value, returns the y below the value.
 function drawLabelledValue(doc, label, value, x, y, width, { labelSize = 6, valueSize = 8, valueFont = FONT } = {}) {
   doc
     .font(FONT_BOLD)
@@ -172,7 +172,7 @@ function drawLetterhead(doc, order, companyProfile) {
   return ruleY;
 }
 
-// Order Number is the customer's reference; dropped when blank.
+// Order Number is the customer's reference, dropped when blank.
 function drawMetaStrip(doc, order, topY) {
   const cells = [
     ["Invoice Date", formatDate(order.created_at)],
@@ -201,11 +201,13 @@ function drawMetaStrip(doc, order, topY) {
   return stripBottom;
 }
 
-// NOTE: no billing address entered means no Bill To; contact moves to Ship To.
+// NOTE: no billing address means no Bill To, contact moves to Ship To.
 function partyBlockLines(order) {
   const { billing_address: billing, shipping_address: shipping, customer } = order;
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
+  // The business heads the block, Attn names which of its reps was billed.
   const contactLines = [
+    customer.company_name ? `Attn: ${customer.name}` : null,
     customer.phone ? `Phone: ${customer.phone}` : null,
     customer.email ? `Email: ${customer.email}` : null,
   ].filter(Boolean);
@@ -316,7 +318,7 @@ function drawItemRow(doc, item, index, y) {
   drawRightAligned(doc, formatMoney(lineExclusiveUnitPrice(item.unit_price)), PAGE_MARGIN + COLUMNS.unitPrice + COLUMN_WIDTHS.unitPrice, textY);
   drawRightAligned(doc, formatMoney(lineGst(lineTotal)), PAGE_MARGIN + COLUMNS.gst + COLUMN_WIDTHS.gst, textY);
   drawRightAligned(doc, String(item.quantity), PAGE_MARGIN + COLUMNS.qty + COLUMN_WIDTHS.qty, textY);
-  // A real discount is signed; zero stays unsigned, as on screen.
+  // A real discount is signed, zero stays unsigned, as on screen.
   doc.fillColor(COLORS.text);
   drawRightAligned(doc, discount > 0 ? `-${formatMoney(discount)}` : formatMoney(0), PAGE_MARGIN + COLUMNS.discount + COLUMN_WIDTHS.discount, textY);
   doc.font(FONT_BOLD).fillColor(COLORS.text);
@@ -342,7 +344,7 @@ function drawItemsTable(doc, order, topY) {
   return y;
 }
 
-// Absolute-y draws past the margin each spawn a blank page; pre-check fit.
+// Absolute-y draws past the margin spawn blank pages, so pre-check fit.
 const PAYMENT_AND_TOTALS_HEIGHT_ESTIMATE = 250;
 const TOTALS_WIDTH = 190;
 
@@ -357,7 +359,7 @@ function drawPaymentDetails(doc, order, companyProfile, totalPaidCents, x, y, wi
     ["BSB", bankDetails.bsb || "—"],
     ["Account No", bankDetails.account_number || "—"],
   ];
-  // Each row starts below the measured one above; account names can wrap.
+  // Each row starts below the measured one above, account names can wrap.
   const gridColWidth = width / 2;
   let rowY = cursor;
   for (let row = 0; row * 2 < bankRows.length; row += 1) {
@@ -405,10 +407,10 @@ function drawTotalRow(doc, label, value, x, y, width) {
 
 function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width) {
   const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  // Includes legacy order-level discount; order.subtotal already nets it out.
+  // Includes legacy order-level discount, order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
   const totalDiscount = itemDiscount + (order.discount_amount || 0);
-  // order.tax_amount is the stored GST; reused so totals never disagree.
+  // order.tax_amount is the stored GST, reused so totals never disagree.
   const gstAmount = order.tax_amount || 0;
   const exGstSubtotal = order.subtotal - gstAmount;
 
@@ -422,7 +424,7 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
   cursor = drawTotalRow(doc, "GST (11%)", formatMoney(gstAmount), x, cursor, width);
   cursor = drawTotalRow(doc, isPickup ? "Pickup" : "Freight", formatMoney(order.shipping_cost), x, cursor, width);
 
-  // Solid ink bar — the one piece of heavy emphasis on the sheet.
+  // Solid ink bar, the one piece of heavy emphasis on the sheet.
   const barY = cursor + 8;
   const barHeight = 30;
   doc.rect(x, barY, width, barHeight).fill(COLORS.text);
@@ -435,7 +437,7 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
   drawRightAligned(doc, formatMoney(order.total), x + width - 12, barY + 10);
   cursor = barY + barHeight + 10;
 
-  // Paid-then-refunded is $0 due; partial-then-refunded still owes.
+  // Paid-then-refunded is $0 due, partial-then-refunded still owes.
   const grossPaidCents = (totalPaidCents || 0) + (totalRefundedCents || 0);
   const wasEverPaidInFull = grossPaidCents >= order.total;
   const isFullyRefunded = order.status === "refunded";
@@ -524,7 +526,7 @@ function drawRichText(doc, blocks, x, y, { width, size, lineGap, color }) {
 
 // Warranty / disclaimer columns flow after totals, not pinned to the foot.
 function drawFooter(doc, companyProfile, topY) {
-  // pdfkit auto-paginates below the bottom margin; disabled during this draw.
+  // pdfkit auto-paginates below the bottom margin, off during this draw.
   const originalBottomMargin = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
 
@@ -565,7 +567,7 @@ function drawFooter(doc, companyProfile, topY) {
   doc.page.margins.bottom = originalBottomMargin;
 }
 
-// Page-count rule drawn last; zero bottom margin stops a stray addPage.
+// Page-count rule drawn last, zero bottom margin stops a stray addPage.
 function drawPageRule(doc, pageIndex, pageCount) {
   const originalBottomMargin = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
@@ -576,7 +578,7 @@ function drawPageRule(doc, pageIndex, pageCount) {
   doc.page.margins.bottom = originalBottomMargin;
 }
 
-// Paid/refunded totals come from the caller; this renderer never hits the DB.
+// Paid/refunded totals come from the caller, this never hits the DB.
 function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents = 0, companyProfile = {} } = {}) {
   return new Promise((resolve, reject) => {
     // bufferPages lets the page-count pass revisit earlier pages.

@@ -17,8 +17,8 @@ import { PERMISSIONS } from "@/config/permissions";
 import { useToast } from "@/context";
 import { DISCOUNTS_QUERY_KEY, deleteDiscount, getDiscounts, updateDiscount } from "@/lib/api/discounts";
 import { duplicateFormValues, templateFormValues } from "@/lib/discounts/discountForm";
-import { filterDiscounts, overlappingAutomaticCount, type DiscountListFilter } from "@/lib/discounts/discountFilters";
-import type { Discount } from "@/types/discount";
+import { filterDiscounts, overlappingAutomaticCount } from "@/lib/discounts/discountFilters";
+import type { Discount, DiscountListFilter } from "@/types/discount";
 
 /** Storefront › Discounts: every promo code and automatic deal, one list. */
 export function DiscountsPanel({ promotedId }: { promotedId: string | null }) {

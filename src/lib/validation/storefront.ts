@@ -10,6 +10,7 @@ const link = z
 const imageUrl = z.string().trim().regex(/^https?:\/\/\S+$/, "Use an https:// image link or upload a photo");
 const hexColor = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a #RRGGBB colour");
 const optionalDate = z.string().nullable();
+const promoTheme = z.enum(["brand", "crimson", "carbon", "custom"]);
 const endsAfterStart = (v: { starts_at: string | null; ends_at: string | null }) =>
   !v.starts_at || !v.ends_at || new Date(v.ends_at) > new Date(v.starts_at);
 
@@ -70,9 +71,15 @@ export const flashSaleFormSchema = z.object({
   discount_id: z.string().nullable(),
   ticker_text: z.string().trim().max(160),
   ticker_speed: z.enum(["slow", "normal", "fast"]),
-  ticker_theme: z.enum(["brand", "crimson", "carbon", "custom"]),
+  ticker_theme: promoTheme,
   ticker_bg_color: hexColor,
   ticker_text_color: hexColor,
+  card_theme: promoTheme,
+  card_bg_color: hexColor,
+  card_text_color: hexColor,
+  badge_theme: promoTheme,
+  badge_bg_color: hexColor,
+  badge_text_color: hexColor,
   show_countdown: z.boolean(),
   show_hero_card: z.boolean(),
   show_product_badges: z.boolean(),

@@ -13,7 +13,8 @@ export interface CustomerListParams {
 
 export interface CustomerPayload {
   name: string;
-  company_name?: string | null;
+  // Matched case-insensitively, an unknown name creates the business.
+  business_name?: string | null;
   email?: string | null;
   phone?: string | null;
   shipping_address?: OrderAddress | null;
@@ -35,7 +36,7 @@ export const createCustomer = async (payload: CustomerPayload) => {
   return data;
 };
 
-export const updateCustomer = async (id: string, payload: CustomerPayload) => {
+export const updateCustomer = async (id: string, payload: Partial<CustomerPayload>) => {
   const { data } = await apiClient.put<BeResponse<Customer>>(`/customer/${id}`, payload);
   return data;
 };

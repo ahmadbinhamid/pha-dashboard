@@ -36,7 +36,8 @@ const ANNOUNCEMENT_ICON = Object.freeze({
 const BANNER_PLACEMENT = Object.freeze({ ALL_PAGES: "all_pages", HOME_ONLY: "home_only" });
 
 const TICKER_SPEED = Object.freeze({ SLOW: "slow", NORMAL: "normal", FAST: "fast" });
-const TICKER_THEME = Object.freeze({ BRAND: "brand", CRIMSON: "crimson", CARBON: "carbon", CUSTOM: "custom" });
+// Shared by the ticker, sale card and sale badge, "custom" uses picked hex.
+const PROMO_THEME = Object.freeze({ BRAND: "brand", CRIMSON: "crimson", CARBON: "carbon", CUSTOM: "custom" });
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
@@ -53,6 +54,6 @@ module.exports = {
   ANNOUNCEMENT_ICON,
   BANNER_PLACEMENT,
   TICKER_SPEED,
-  TICKER_THEME,
+  PROMO_THEME,
   HEX_COLOR_PATTERN,
 };

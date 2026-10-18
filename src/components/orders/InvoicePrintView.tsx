@@ -12,7 +12,7 @@ import {
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import type { OrderDetail } from "@/types/orders";
 
-// Print invoice mirroring invoicePdf.js; fixed print colours ignore dark mode.
+// Print invoice mirroring invoicePdf.js, fixed colours ignore dark mode.
 
 const INK = "#000000";
 const ACCENT = "#c2790b";
@@ -85,7 +85,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const isPickup = order.delivery_method === "pickup";
   const amountPaid = getTotalPaid(order.payments);
   const totalRefunded = getTotalRefunded(order.payments);
-  // Includes legacy order-level discount; order.subtotal already nets it out.
+  // Includes legacy order-level discount, order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
   const totalDiscount = itemDiscount + order.discount_amount;
   // order.tax_amount is the authoritative GST, same as invoicePdf.js.
@@ -98,14 +98,16 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
     month: "short",
     day: "numeric",
   });
-  // NOTE: no billing address entered means no Bill To; contact moves to Ship To.
+  // NOTE: no billing address means no Bill To, contact moves to Ship To.
   const billingAddress = order.billing_address;
+  // The business heads the block, Attn names which of its reps was billed.
   const contactLines = [
+    order.customer.company_name ? `Attn: ${order.customer.name}` : null,
     order.customer.phone ? `Phone: ${order.customer.phone}` : null,
     order.customer.email ? `Email: ${order.customer.email}` : null,
   ].filter(Boolean);
   const channelLabel = order.channel === "ebay" ? "eBay" : order.channel === "manual" ? "In-Store" : "Storefront";
-  // Customer's own reference; omitted when blank, never our internal number.
+  // Customer's own reference, omitted when blank, never our internal number.
   const invoiceNumberValue = formatInvoiceNumber(order.invoice_number_prefix, order.invoice_number);
   // Company name takes over the customer's name slot on the invoice when set.
   const displayName = order.customer.company_name || order.customer.name;
@@ -233,7 +235,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               <tr
                 key={i}
                 className="border-b"
-                // Stops print pagination slicing a row; pageBreakInside for old engines.
+                // Stops print pagination slicing a row (pageBreakInside for old engines).
                 style={{ borderColor: BORDER, breakInside: "avoid", pageBreakInside: "avoid" }}
               >
                 <td className="py-3 align-top">
@@ -341,7 +343,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
       </div>
 
       <div
-        // mt-auto pins the footer to the sheet foot; pt-8 is the minimum gap.
+        // mt-auto pins the footer to the sheet foot, pt-8 is the minimum gap.
         className="mt-auto pt-8"
       >
         <div
@@ -372,7 +374,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           </div>
         </div>
 
-        {/* Closing rule under the footer columns — the sheet's bottom edge. */}
+        {/* Closing rule under the footer columns: the sheet's bottom edge. */}
         <div className="mt-5 border-t" style={{ borderColor: BORDER }} />
       </div>
     </div>

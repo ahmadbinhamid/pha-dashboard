@@ -1,6 +1,7 @@
 import { Zap } from "lucide-react";
 import { SaleCountdown } from "@/components/storefront/SaleCountdown";
-import { TICKER_DURATION_SECONDS, tickerThemeStyle } from "@/config/storefront";
+import { TICKER_DURATION_SECONDS } from "@/config/storefront";
+import { promoThemeStyle } from "@/lib/storefront/themeStyle";
 import { saleTickerText } from "@/lib/storefront/salePricing";
 import type { PromotedSale } from "@/types/storefront";
 import { cn } from "@/utils/cn";
@@ -11,7 +12,7 @@ const REPEATS = 6;
 // Mirrors pha-storefront's SaleTicker so the preview matches the live site.
 export function SaleTicker({ sale }: { sale: PromotedSale }) {
   const text = saleTickerText(sale);
-  const theme = tickerThemeStyle(sale);
+  const theme = promoThemeStyle(sale.ticker_theme, sale.ticker_bg_color, sale.ticker_text_color);
   return (
     <div className={cn("flex items-stretch overflow-hidden", theme.className)} style={theme.style}>
       <div className="z-10 flex shrink-0 items-center gap-2 bg-luxury-ink px-3 text-2xs text-accent-fg">

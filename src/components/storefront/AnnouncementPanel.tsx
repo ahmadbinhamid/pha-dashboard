@@ -160,7 +160,7 @@ export function AnnouncementPanel({ announcement, canEdit, onDraftChange }: Anno
                     onCheckedChange={field.onChange}
                     disabled={!canEdit}
                     label="Let shoppers close it"
-                    description="Adds an ×; it stays closed for the rest of their visit."
+                    description="Adds an ×, it stays closed for the rest of their visit."
                   />
                 )}
               />

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ColorThemePicker } from "@/components/storefront/ColorThemePicker";
 import { SaleTicker } from "@/components/storefront/SaleTicker";
-import { TICKER_SPEED_OPTIONS, TICKER_THEMES } from "@/config/storefront";
+import { PROMO_THEMES, TICKER_SPEED_OPTIONS } from "@/config/storefront";
 import { saleTickerText } from "@/lib/storefront/salePricing";
 import type { FlashSaleFormValues } from "@/lib/validation/storefront";
 import type { PromotedSale } from "@/types/storefront";
@@ -63,7 +63,7 @@ export function PromotionTickerCard({ preview, canEdit }: PromotionTickerCardPro
               name="ticker_theme"
               render={({ field }) => (
                 <ColorThemePicker
-                  options={TICKER_THEMES}
+                  options={PROMO_THEMES}
                   value={field.value}
                   onChange={field.onChange}
                   customColor={bgColor}

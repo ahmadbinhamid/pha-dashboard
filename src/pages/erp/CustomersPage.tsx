@@ -17,10 +17,12 @@ import { CustomerAccountBadge } from "@/components/customers/CustomerAccountBadg
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { CustomerDeleteModal } from "@/components/customers/CustomerDeleteModal";
 import { CustomerStatCards } from "@/components/customers/CustomerStatCards";
+import { CustomersEmptyState } from "@/components/customers/CustomersEmptyState";
+import { CustomersTableSkeleton } from "@/components/customers/CustomersTableSkeleton";
 import { getCustomers } from "@/lib/api/customers";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { Customer } from "@/types/customer";
-import { Plus, Users, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search } from "lucide-react";
 
 export default function CustomersPage() {
   const navigate = useNavigate();
@@ -117,7 +119,7 @@ export default function CustomersPage() {
           <div className="relative w-full max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 pointer-events-none text-fg/40" />
             <Input
-              placeholder="Search name, email, phone…"
+              placeholder="Search name, business, email, phone…"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               className="pl-9"
@@ -137,9 +139,9 @@ export default function CustomersPage() {
         </div>
 
         {isLoading ? (
-          <LoadingSkeleton />
+          <CustomersTableSkeleton />
         ) : customers.length === 0 ? (
-          <EmptyState search={search} onNew={openCreate} />
+          <CustomersEmptyState search={search} onNew={openCreate} />
         ) : (
           <div className="overflow-x-auto">
             <Table className="min-w-200">
@@ -165,7 +167,9 @@ export default function CustomersPage() {
                   >
                     <StickyTableCell size={52}>
                       <div className="truncate font-medium text-fg">{customer.name}</div>
-                      <div className="truncate text-xs text-fg/50">{customer.email || "—"}</div>
+                      <div className="truncate text-xs text-fg/50">
+                        {[customer.business?.name, customer.email].filter(Boolean).join(" · ") || "—"}
+                      </div>
                     </StickyTableCell>
                     <TableCell className="text-fg/60">{customer.phone || "—"}</TableCell>
                     <TableCell className="text-right text-fg/60">{customer.orders_count}</TableCell>
@@ -219,44 +223,6 @@ export default function CustomersPage() {
 
       <CustomerFormModal open={formOpen} onOpenChange={setFormOpen} customer={editingCustomer} />
       <CustomerDeleteModal customer={deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }} />
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="divide-y divide-border">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-center gap-4 px-5 py-3.5">
-          <div className="h-4 w-40 animate-pulse rounded-xs bg-bg-2" />
-          <div className="h-4 w-24 animate-pulse rounded-xs bg-bg-2" />
-          <div className="ml-auto h-4 w-10 animate-pulse rounded-xs bg-bg-2" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({ search, onNew }: { search: string; onNew: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-xs border border-border bg-bg-2">
-        <Users className="h-8 w-8 text-fg/30" />
-      </div>
-      <div>
-        <p className="font-medium text-fg">{search ? "No customers found" : "No customers yet"}</p>
-        <p className="mt-1 text-sm text-fg/50">
-          {search ? `No results for "${search}". Try a different term` : "Create your first customer to get started"}
-        </p>
-      </div>
-      {!search && (
-        <Can permission={PERMISSIONS.customers.create}>
-          <Button variant="primary" size="sm" className="mt-1 gap-1.5" onClick={onNew}>
-            <Plus className="h-3.5 w-3.5" />
-            New Customer
-          </Button>
-        </Can>
-      )}
     </div>
   );
 }

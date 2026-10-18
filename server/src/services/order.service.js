@@ -4,7 +4,6 @@ const crypto = require("crypto");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
-const Customer = require("../models/Customer");
 const Payment = require("../models/Payment");
 const Counter = require("../models/Counter");
 const Refund = require("../models/Refund");
@@ -45,7 +44,7 @@ const {
   releaseRedemption,
   releaseOrderRedemption,
 } = require("./discount-pricing.service");
-const { upsertStorefrontCustomer } = require("./customer.service");
+const { upsertStorefrontCustomer, getCustomerForOrder } = require("./customer.service");
 const { getCompanyProfile } = require("./tenant-settings.service");
 const notificationService = require("./notification.service");
 const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shipping-quote.service");
@@ -233,7 +232,7 @@ async function createManualOrder(
   },
   tenant,
 ) {
-  const customer = await Customer.findOne({ _id: customer_id, tenant_id: tenant._id });
+  const customer = await getCustomerForOrder(customer_id, tenant._id);
   if (!customer) {
     throw httpError("Customer not found", 400);
   }
@@ -275,11 +274,12 @@ async function createManualOrder(
     items: resolvedItems,
     customer: {
       name: customer.name,
-      company_name: customer.company_name || null,
+      company_name: customer.business?.name ?? null,
       email: customer.email || null,
       phone: customer.phone || null,
     },
     customer_id: customer._id,
+    business_id: customer.business_id,
     delivery_method,
     shipping_address: isPickup ? null : shipping_address,
     billing_address: isPickup ? null : billing_address || null,
@@ -486,6 +486,7 @@ async function createOrder(
     promo_code: discount?.code ?? null,
     customer,
     customer_id: savedCustomer._id,
+    business_id: savedCustomer.business_id ?? null,
     delivery_method,
     shipping_address: isPickup ? null : shipping_address,
     billing_address: isPickup ? null : billing_address || null,

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { deleteCustomer } from "@/lib/api/customers";
+import { BUSINESSES_QUERY_KEY } from "@/lib/api/businesses";
 import type { Customer } from "@/types/customer";
 
 interface CustomerDeleteModalProps {
@@ -27,7 +28,8 @@ export function CustomerDeleteModal({ customer, onOpenChange, onDeleted }: Custo
     mutationFn: (id: string) => deleteCustomer(id),
     onSuccess: () => {
       toast({ title: "Customer deleted", tone: "success" });
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      void queryClient.invalidateQueries({ queryKey: ["customers"] });
+      void queryClient.invalidateQueries({ queryKey: BUSINESSES_QUERY_KEY });
       onOpenChange(false);
       onDeleted?.();
     },

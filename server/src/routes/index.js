@@ -12,6 +12,7 @@ router.use("/user", require("./user.routes"));
 router.use("/attachment", require("./attachment.routes"));
 router.use("/category", require("./category.routes"));
 router.use("/customer", require("./customer.routes"));
+router.use("/business", require("./business.routes"));
 router.use("/location", require("./location.routes"));
 router.use("/product", require("./product.routes"));
 router.use("/inventory", require("./inventory.routes"));

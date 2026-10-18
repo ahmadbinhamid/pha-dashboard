@@ -1,6 +1,4 @@
-import type { Discount } from "@/types/discount";
-
-export type DiscountListFilter = "all" | "live" | "scheduled" | "inactive";
+import type { Discount, DiscountListFilter } from "@/types/discount";
 
 const INACTIVE = new Set(["paused", "ended", "exhausted"]);
 

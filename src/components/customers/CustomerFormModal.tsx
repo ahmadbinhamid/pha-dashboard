@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
 import { FormField } from "@/components/ui/FormField";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { AddressFields } from "@/components/pos/AddressFields";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/Modal";
 import { useToast } from "@/context";
 import { createCustomer, updateCustomer } from "@/lib/api/customers";
+import { BUSINESSES_QUERY_KEY, getBusinessOptions } from "@/lib/api/businesses";
 import type { CustomerPayload } from "@/lib/api/customers";
 import type { Customer } from "@/types/customer";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/validation/customer";
@@ -24,7 +26,7 @@ import { EMPTY_ADDRESS, isAddressFilled } from "@/lib/validation/address";
 
 const EMPTY_FORM: CustomerFormValues = {
   name: "",
-  companyName: "",
+  businessName: "",
   email: "",
   phone: "",
   shippingAddress: EMPTY_ADDRESS,
@@ -35,7 +37,7 @@ const EMPTY_FORM: CustomerFormValues = {
 function customerToForm(c: Customer): CustomerFormValues {
   return {
     name: c.name,
-    companyName: c.company_name ?? "",
+    businessName: c.business?.name ?? "",
     email: c.email ?? "",
     phone: c.phone ?? "",
     shippingAddress: c.shipping_address ?? EMPTY_ADDRESS,
@@ -49,14 +51,23 @@ interface CustomerFormModalProps {
   onOpenChange: (open: boolean) => void;
   // null => create mode
   customer: Customer | null;
-  // Prefills the Name field in create mode, e.g. from a customer search that came up empty.
+  // Create-mode prefill, e.g. from a customer search that came up empty.
   initialName?: string;
-  // Called with the newly created customer, in addition to the default toast/invalidate/close — lets callers (e.g. POS) auto-select it.
+  // Create-mode prefill, for adding another rep to an existing business.
+  initialBusinessName?: string;
+  // Runs after the default toast and close, e.g. so POS can auto-select it.
   onCreated?: (customer: Customer) => void;
 }
 
-// Shared create/edit form, rendered from both the customer list and profile pages so they never drift.
-export function CustomerFormModal({ open, onOpenChange, customer, initialName, onCreated }: CustomerFormModalProps) {
+// Shared by the list and profile pages so the two forms never drift.
+export function CustomerFormModal({
+  open,
+  onOpenChange,
+  customer,
+  initialName,
+  initialBusinessName,
+  onCreated,
+}: CustomerFormModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -74,16 +85,29 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
 
   const useDifferentBilling = watch("useDifferentBilling");
 
+  const { data: businessesRes } = useQuery({
+    queryKey: [...BUSINESSES_QUERY_KEY, "options"],
+    queryFn: getBusinessOptions,
+    enabled: open,
+  });
+  const businessNames = (businessesRes?.data ?? []).map((b) => b.name);
+
   useEffect(() => {
     if (open) {
-      reset(customer ? customerToForm(customer) : { ...EMPTY_FORM, name: initialName ?? "" });
+      reset(
+        customer
+          ? customerToForm(customer)
+          : { ...EMPTY_FORM, name: initialName ?? "", businessName: initialBusinessName ?? "" },
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customer]);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["customers"] });
-    if (customer) queryClient.invalidateQueries({ queryKey: ["customer", customer._id] });
+    void queryClient.invalidateQueries({ queryKey: ["customers"] });
+    void queryClient.invalidateQueries({ queryKey: BUSINESSES_QUERY_KEY });
+    // Every open profile, since a rep's change shows on fellow reps' pages.
+    void queryClient.invalidateQueries({ queryKey: ["customer"] });
   };
 
   const createMutation = useMutation({
@@ -116,7 +140,7 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
   function buildPayload(values: CustomerFormValues): CustomerPayload {
     return {
       name: values.name.trim(),
-      company_name: values.companyName.trim() || null,
+      business_name: values.businessName.trim() || null,
       email: values.email.trim() || null,
       phone: values.phone.trim() || null,
       shipping_address: isAddressFilled(values.shippingAddress) ? values.shippingAddress : null,
@@ -149,8 +173,26 @@ export function CustomerFormModal({ open, onOpenChange, customer, initialName, o
               <Input {...register("name")} placeholder="e.g. Wesley England" autoFocus />
             </FormField>
 
-            <FormField label="Company name" error={errors.companyName?.message}>
-              <Input {...register("companyName")} placeholder="e.g. Acme Pty Ltd" />
+            <FormField
+              label="Business"
+              hint="Reps of one business are separate customers and may share an email."
+              error={errors.businessName?.message}
+            >
+              <Controller
+                control={control}
+                name="businessName"
+                render={({ field }) => (
+                  <Combobox
+                    options={businessNames}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="No business"
+                    searchPlaceholder="Search or add a business…"
+                    allowCustom
+                    clearLabel="No business"
+                  />
+                )}
+              />
             </FormField>
 
             <div className="grid gap-4 sm:grid-cols-2">

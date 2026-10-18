@@ -3,6 +3,8 @@ export type DiscountScope = "storewide" | "categories";
 export type DiscountStatus = "live" | "scheduled" | "paused" | "ended" | "exhausted";
 // Form shortcut for min/max_order_number, "custom" edits them directly.
 export type OrderRule = "any" | "first" | "second" | "repeat" | "custom";
+// List filter: "inactive" groups paused, ended and used-up discounts.
+export type DiscountListFilter = "all" | "live" | "scheduled" | "inactive";
 
 export interface Discount {
   _id: string;

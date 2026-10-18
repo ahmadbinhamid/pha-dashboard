@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Package } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Image } from "@/components/ui/Image";
+import { SaleBadge } from "@/components/storefront/SaleBadge";
 import { salePrice } from "@/lib/storefront/salePricing";
 import type { Product } from "@/types/product";
 import type { PromotedSale } from "@/types/storefront";
@@ -38,9 +39,9 @@ export function SimulatorProductCard({ product, sale, onAdd }: SimulatorProductC
           </div>
         )}
         {sale ? (
-          <span className="absolute top-2 left-2 rounded-full bg-danger px-2 py-0.5 text-3xs font-bold text-danger-fg uppercase">
+          <SaleBadge theme={sale.badge_theme} bgColor={sale.badge_bg_color} textColor={sale.badge_text_color} className="absolute top-2 left-2">
             {sale.discount_type === "percent" ? `-${sale.discount_value}%` : "Sale"}
-          </span>
+          </SaleBadge>
         ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">

@@ -3,6 +3,8 @@
 const customerService = require("../services/customer.service");
 const { success, created, notFound, requestConflict, systemfailure } = require("../utils/http/response");
 
+const DUPLICATE_EMAIL_MESSAGE = "Email already in use. Only reps of the same business can share one.";
+
 exports.getStats = async (req, res) => {
   try {
     return success(res, await customerService.getCustomerStats(req.tenantId));
@@ -47,7 +49,7 @@ exports.createCustomer = async (req, res) => {
     const customer = await customerService.createCustomer(req.body, req.tenantId);
     return created(res, customer, "Customer created");
   } catch (err) {
-    if (err.code === 11000) return requestConflict(res, "A customer with this email already exists");
+    if (err.code === 11000) return requestConflict(res, DUPLICATE_EMAIL_MESSAGE);
     return systemfailure(res, err);
   }
 };
@@ -58,7 +60,7 @@ exports.updateCustomer = async (req, res) => {
     if (!customer) return notFound(res, "Customer not found");
     return success(res, customer, "Customer updated");
   } catch (err) {
-    if (err.code === 11000) return requestConflict(res, "A customer with this email already exists");
+    if (err.code === 11000) return requestConflict(res, DUPLICATE_EMAIL_MESSAGE);
     return systemfailure(res, err);
   }
 };

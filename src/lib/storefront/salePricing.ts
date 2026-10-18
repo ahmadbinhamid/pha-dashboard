@@ -21,9 +21,8 @@ export function toFeaturedDiscount(discount: Discount, categories: Category[]): 
 }
 
 /** Just the "how it's shown" settings of a promotion. */
-function promotionDisplay(f: FlashSale) {
-  const { ticker_text, ticker_speed, ticker_theme, ticker_bg_color, ticker_text_color, show_countdown, show_hero_card, show_product_badges } = f;
-  return { ticker_text, ticker_speed, ticker_theme, ticker_bg_color, ticker_text_color, show_countdown, show_hero_card, show_product_badges };
+function promotionDisplay({ active: _active, discount_id: _discountId, ...display }: FlashSale) {
+  return display;
 }
 
 /** The sale shoppers would see, or null unless featured, on, and live. */

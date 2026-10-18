@@ -1,6 +1,6 @@
 import { Gift, HeartHandshake, PartyPopper, Sparkles, Ticket, Truck } from "lucide-react";
 import type { SegmentedOption } from "@/components/ui/SegmentedControl";
-import type { DiscountScope, DiscountStatus, DiscountType, OrderRule } from "@/types/discount";
+import type { DiscountListFilter, DiscountScope, DiscountStatus, DiscountType, OrderRule } from "@/types/discount";
 import type { DiscountFormValues } from "@/lib/validation/discount";
 
 export const MAX_PERCENT_OFF = 90;
@@ -69,32 +69,12 @@ export const DISCOUNT_STATUS_CONFIG: Record<DiscountStatus, { label: string; var
 };
 
 // List filter: "inactive" groups paused, ended and used-up discounts.
-export const DISCOUNT_LIST_FILTERS: SegmentedOption<"all" | "live" | "scheduled" | "inactive">[] = [
+export const DISCOUNT_LIST_FILTERS: SegmentedOption<DiscountListFilter>[] = [
   { value: "all", label: "All" },
   { value: "live", label: "Live" },
   { value: "scheduled", label: "Scheduled" },
   { value: "inactive", label: "Inactive" },
 ];
-
-export const EMPTY_DISCOUNT_FORM: DiscountFormValues = {
-  name: "",
-  method: "code",
-  code: "",
-  discount_type: "percent",
-  discount_value: 10,
-  minimum_order: 0,
-  scope: "storewide",
-  category_ids: [],
-  starts_at: null,
-  ends_at: null,
-  limit_usage: false,
-  usage_limit: null,
-  once_per_customer: false,
-  order_rule: "any",
-  order_min: null,
-  order_max: null,
-  active: true,
-};
 
 // "New discount" starting points, each pre-fills the form, all editable.
 export const DISCOUNT_TEMPLATES = [

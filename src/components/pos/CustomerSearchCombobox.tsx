@@ -15,6 +15,11 @@ interface CustomerSearchComboboxProps {
   className?: string;
 }
 
+// Reps sharing a business inbox only differ by name, so the business is shown.
+function customerLabel(customer: Customer) {
+  return [customer.name, customer.business?.name].filter(Boolean).join(" · ");
+}
+
 // Queries the API per keystroke (unlike Combobox) so paged-out rows match.
 export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className }: CustomerSearchComboboxProps) {
   const [open, setOpen] = useState(false);
@@ -61,7 +66,7 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
           )}
         >
           <span className="truncate">
-            {value ? `${value.name}${value.email ? ` — ${value.email}` : ""}` : "Search for a customer…"}
+            {value ? [customerLabel(value), value.email].filter(Boolean).join(" · ") : "Search for a customer…"}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </button>
@@ -85,7 +90,7 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
                 variant="ghost"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, email, phone…"
+                placeholder="Search name, business, email, phone…"
                 className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none placeholder:text-fg/40 hover:bg-transparent focus-visible:border-transparent focus-visible:shadow-none"
               />
               {isFetching && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-fg/40" />}
@@ -131,7 +136,7 @@ export function CustomerSearchCombobox({ value, onSelect, onCreateNew, className
                   )}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate">{customer.name}</div>
+                    <div className="truncate">{customerLabel(customer)}</div>
                     <div className="truncate text-xs text-fg/45">
                       {customer.email || customer.phone || "No contact info"}
                     </div>

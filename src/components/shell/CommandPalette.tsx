@@ -187,7 +187,7 @@ export function CommandPalette({
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <div className="shrink-0 border-b border-border p-3">
-            {/* `!` beats globals.css :focus-visible, as in Input.tsx; glow on the box */}
+            {/* `!` beats globals.css :focus-visible (as in Input.tsx), box glows */}
             <div
               className={cn(
                 "flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2.5",
@@ -313,7 +313,7 @@ export function CommandPalette({
                       onClick={() => { close(); navigate(`/customers/${c._id}`); }}
                       onMouseEnter={() => setActiveIndex(indexOf(`customer:${c._id}`))}
                       icon={<Users className="h-4 w-4" />}
-                      title={c.company_name || c.name}
+                      title={c.business ? `${c.name} · ${c.business.name}` : c.name}
                       subtitle={c.email ?? "No email on file"}
                       trailing={`${c.orders_count} ${c.orders_count === 1 ? "order" : "orders"}`}
                     />

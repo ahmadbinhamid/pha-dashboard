@@ -1,5 +1,6 @@
 import { ArrowRight, X } from "lucide-react";
-import { ANNOUNCEMENT_ICON_OPTIONS, announcementThemeStyle } from "@/config/storefront";
+import { ANNOUNCEMENT_ICON_OPTIONS } from "@/config/storefront";
+import { announcementThemeStyle } from "@/lib/storefront/themeStyle";
 import type { Announcement } from "@/types/storefront";
 import { cn } from "@/utils/cn";
 

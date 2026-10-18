@@ -111,6 +111,8 @@ const orderSchema = buildSchema({
   },
   // Null for guests, `customer` above stays what was shown and emailed.
   customer_id: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
+  // The rep's business at sale time, so invoices stay tied to it if reps move.
+  business_id: { type: Schema.Types.ObjectId, ref: "Business", default: null },
   // eBay orders are always delivery, only the storefront offers pickup.
   delivery_method: {
     type: String,

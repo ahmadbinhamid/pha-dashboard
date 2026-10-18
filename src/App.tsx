@@ -25,6 +25,8 @@ import CategoriesPage from "@/pages/erp/CategoriesPage";
 import InventoryPage from "@/pages/erp/InventoryPage";
 import CustomersPage from "@/pages/erp/CustomersPage";
 import CustomerDetailPage from "@/pages/erp/CustomerDetailPage";
+import BusinessesPage from "@/pages/erp/BusinessesPage";
+import BusinessDetailPage from "@/pages/erp/BusinessDetailPage";
 import OrdersPage from "@/pages/erp/OrdersPage";
 import OrderDetailPage from "@/pages/erp/OrderDetailPage";
 import CreateOrderPage from "@/pages/erp/CreateOrderPage";
@@ -119,6 +121,8 @@ export default function App() {
             <Route path="/tags" element={<RequirePermission permission={PERMISSIONS.tags.view}><TagManagerPage /></RequirePermission>} />
             <Route path="/customers" element={<RequirePermission permission={PERMISSIONS.customers.view}><CustomersPage /></RequirePermission>} />
             <Route path="/customers/:id" element={<RequirePermission permission={PERMISSIONS.customers.view}><CustomerDetailPage /></RequirePermission>} />
+            <Route path="/businesses" element={<RequirePermission permission={PERMISSIONS.customers.view}><BusinessesPage /></RequirePermission>} />
+            <Route path="/businesses/:id" element={<RequirePermission permission={PERMISSIONS.customers.view}><BusinessDetailPage /></RequirePermission>} />
             <Route path="/create-order" element={<RequirePermission permission={PERMISSIONS.orders.create}><CreateOrderPage /></RequirePermission>} />
             <Route path="/orders" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrdersPage /></RequirePermission>} />
             <Route path="/orders/:id" element={<RequirePermission permission={PERMISSIONS.orders.view}><OrderDetailPage /></RequirePermission>} />

@@ -23,7 +23,7 @@ interface FulfilmentOptionProps {
   onSelect: () => void;
 }
 
-// Card-style option instead of a bare native radio input, same selectable-card pattern used elsewhere for "pick one of a few things".
+// Selectable card, not a bare radio, matching the other pick-one choices.
 function FulfilmentOption({ icon: Icon, label, description, selected, onSelect }: FulfilmentOptionProps) {
   return (
     <button
@@ -75,7 +75,7 @@ interface CustomerDeliveryStepProps {
   onContinue: () => void;
 }
 
-// Combines two formerly-separate steps (customer, pickup/delivery mode) since they're always decided together; Continue needs validation so it's exposed via ref for the header's Next button.
+// Continue validates first, so it's exposed via ref for the header's Next.
 export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepProps>(function CustomerDeliveryStep(
   { state, onChange, onContinue },
   ref,
@@ -92,7 +92,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
     setCustomerFormOpen(true);
   }
 
-  // Selecting/creating a customer with a saved address carries it over as a starting point; staff can still edit it per-order without touching the profile.
+  // A saved address prefills the order, edits never touch the profile.
   function selectCustomer(c: Customer) {
     onChange({
       customer: c,
@@ -140,7 +140,9 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
               <div className="flex items-center gap-2.5">
                 <UserCheck className="h-4 w-4 text-accent" />
                 <div>
-                  <div className="text-sm font-medium text-fg">{customer.name}</div>
+                  <div className="text-sm font-medium text-fg">
+                    {[customer.name, customer.business?.name].filter(Boolean).join(" · ")}
+                  </div>
                   <div className="text-xs text-fg/50">
                     {customer.email || "No email"} · {customer.phone || "No phone"}
                   </div>

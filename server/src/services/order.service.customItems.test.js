@@ -19,6 +19,7 @@ const Order = require("../models/Order");
 
 const notificationService = require("./notification.service");
 const orderService = require("./order.service");
+const customerService = require("./customer.service");
 const reportsService = require("./reports.service");
 const { createManualOrder: manualOrderValidation } = require("../validators/order.validation");
 
@@ -82,7 +83,7 @@ test("createManualOrder: custom lines are priced, shipped and never touch stock"
   assert.equal(freight.quantity, 1);
   assert.equal(freight.unit_price, 1250);
 
-  // 2x$20 + (3x$50 - $10) + $12.50; shipping 2x$4 + 3x$5 + 0.
+  // 2x$20 + (3x$50 - $10) + $12.50, shipping 2x$4 + 3x$5 + 0.
   assert.equal(persisted.subtotal, 4000 + 14000 + 1250);
   assert.equal(persisted.shipping_cost, 800 + 1500);
   assert.equal(persisted.total, 19250 + 2300);
@@ -125,4 +126,23 @@ test("createManualOrder validator: custom lines need a title and a price", () =>
   assert.match(validate([{ is_custom: true, name: "Labour" }]), /unit_price/);
   assert.match(validate([{ is_custom: true, name: "Labour", unit_price: 0 }]), /unit_price/);
   assert.match(validate([{ quantity: 1 }]), /product/);
+});
+
+test("createManualOrder: billing a rep snapshots that rep and their business", async (t) => {
+  const notifySpy = mock.method(notificationService, "notifyNewOrder", async () => {});
+  t.after(() => notifySpy.mock.restore());
+  const { tenant } = await createFixtures();
+  const inbox = "accounts@abcmotors.com.au";
+  await customerService.createCustomer({ name: "John Smith", business_name: "ABC Motors", email: inbox }, tenant._id);
+  const david = await customerService.createCustomer({ name: "David Smith", business_name: "ABC Motors", email: inbox }, tenant._id);
+
+  const order = await orderService.createManualOrder(
+    { customer_id: david._id, items: [{ is_custom: true, name: "Labour", unit_price: 10 }], payment_method: "cash" },
+    tenant,
+  );
+
+  assert.equal(String(order.customer_id), String(david._id));
+  assert.equal(String(order.business_id), String(david.business_id));
+  assert.equal(order.customer.name, "David Smith");
+  assert.equal(order.customer.company_name, "ABC Motors");
 });

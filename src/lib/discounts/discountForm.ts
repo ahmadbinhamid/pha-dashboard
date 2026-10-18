@@ -1,6 +1,26 @@
-import { EMPTY_DISCOUNT_FORM, ORDER_RULE_RANGES } from "@/config/discounts";
+import { ORDER_RULE_RANGES } from "@/config/discounts";
 import type { Discount, DiscountPayload, OrderRule } from "@/types/discount";
 import type { DiscountFormValues } from "@/lib/validation/discount";
+
+export const EMPTY_DISCOUNT_FORM: DiscountFormValues = {
+  name: "",
+  method: "code",
+  code: "",
+  discount_type: "percent",
+  discount_value: 10,
+  minimum_order: 0,
+  scope: "storewide",
+  category_ids: [],
+  starts_at: null,
+  ends_at: null,
+  limit_usage: false,
+  usage_limit: null,
+  once_per_customer: false,
+  order_rule: "any",
+  order_min: null,
+  order_max: null,
+  active: true,
+};
 
 /** The preset rule a range matches, else "custom". */
 function orderRuleFor(min: number | null, max: number | null): OrderRule {
