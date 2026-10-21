@@ -1,0 +1,26 @@
+{{> _header}}
+
+<div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Hi {{name}},
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Your order <strong>{{order_number}}</strong> has been delivered.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    A copy of your invoice has been attached to this email for your records.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Thank you for choosing {{app_name}}. We appreciate your business and hope to serve you again soon.
+  </p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">
+    Kind regards,<br />
+    {{app_name}}
+  </p>
+</div>
+
+{{> _footer}}

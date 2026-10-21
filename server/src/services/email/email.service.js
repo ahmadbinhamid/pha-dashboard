@@ -137,6 +137,29 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
   });
 }
 
+/** Local delivery handed over; invoice attached as with shipped orders. */
+async function sendOrderDelivered({ to, name, orderNumber, pdfBase64, pdfFilename, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    fromName: tenantFromName(companyProfile),
+    tenantId,
+    to,
+    subject: "Your Order Has Been Delivered",
+    template: "orderDelivered",
+    variables: {
+      name,
+      order_number: orderNumber,
+      ...tenantBrandVars(companyProfile),
+    },
+    attachments: [
+      {
+        filename: pdfFilename,
+        content: pdfBase64,
+        encoding: "base64",
+      },
+    ],
+  });
+}
+
 /** Invoice PDF travels as base64 since Bull payloads are JSON. */
 async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {}, companyProfile, tenantId }) {
   return enqueueEmailJob({
@@ -359,6 +382,7 @@ module.exports = {
   sendDemoRequestNotification,
   sendOrderShipped,
   sendOrderReadyForPickup,
+  sendOrderDelivered,
   sendOrderConfirmation,
   sendOrderReceivedPickup,
   sendManualOrderReceipt,

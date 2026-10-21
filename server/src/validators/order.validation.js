@@ -5,6 +5,7 @@ const {
   ORDER_STATUS,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
+  STOREFRONT_DELIVERY_METHODS,
   ORDER_FULFILLMENT_STATUS,
   ORDER_PAYMENT_STATUS,
   CUSTOM_ORDER_ITEM_NAME_MAX,
@@ -40,7 +41,7 @@ const createOrder = {
       phone: Joi.string().trim().min(1).required(),
     }).required(),
     delivery_method: Joi.string()
-      .valid(...Object.values(ORDER_DELIVERY_METHOD))
+      .valid(...STOREFRONT_DELIVERY_METHODS)
       .default(ORDER_DELIVERY_METHOD.DELIVERY),
     // Pickup has no address, forbid both rather than ignore stale form data.
     shipping_address: Joi.when("delivery_method", {
@@ -169,7 +170,7 @@ const createManualOrder = {
       .required(),
     // Dollars collected now, omitted or 0 leaves the whole invoice owing.
     amount_paid: Joi.number().min(0).default(0),
-    // Dollars, overrides the per-item shipping sum. Ignored for pickup.
+    // Dollars, overrides the per-item shipping sum. Only charged on delivery.
     shipping_cost: Joi.number().min(0),
   }),
 };

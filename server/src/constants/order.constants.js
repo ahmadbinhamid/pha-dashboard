@@ -23,7 +23,12 @@ const ORDER_CHANNEL = Object.freeze({
 const ORDER_DELIVERY_METHOD = Object.freeze({
   DELIVERY: "delivery",
   PICKUP: "pickup",
+  // Store's own driver: has an address but is never charged shipping.
+  LOCAL_DELIVERY: "local_delivery",
 });
+
+// Local delivery is arranged by staff, so checkout never offers it.
+const STOREFRONT_DELIVERY_METHODS = Object.freeze([ORDER_DELIVERY_METHOD.DELIVERY, ORDER_DELIVERY_METHOD.PICKUP]);
 
 // Order-level payment position; PAYMENT_STATUS is one Payment's lifecycle.
 const ORDER_PAYMENT_STATUS = Object.freeze({
@@ -64,6 +69,7 @@ module.exports = {
   UNPAID_ORDER_STATUSES,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
+  STOREFRONT_DELIVERY_METHODS,
   ORDER_PAYMENT_STATUS,
   ORDER_FULFILLMENT_STATUS,
 };

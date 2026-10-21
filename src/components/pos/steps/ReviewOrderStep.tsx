@@ -15,6 +15,7 @@ import { formatCurrency, formatInvoiceNumber } from "@/utils/format";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import { ORDER_PAYMENT_CHOICE_LABEL } from "@/config/paymentMethods";
 import type { CustomerDeliveryState } from "@/components/pos/steps/CustomerDeliveryStep";
+import { CHARGES_SHIPPING, DELIVERY_METHOD_LABEL, NEEDS_ADDRESS } from "@/config/deliveryMethods";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { CartItem } from "@/types/cart";
 import type { CreateManualOrderItemPayload, Order } from "@/types/orders";
@@ -87,18 +88,20 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 
   const rawSubtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0);
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0);
-  // Pickup has no freight, matching order.service.js#createManualOrder.
-  const computedShipping = deliveryMethod === "delivery" ? totalShipping : 0;
+  const chargesShipping = CHARGES_SHIPPING[deliveryMethod];
+  const needsAddress = NEEDS_ADDRESS[deliveryMethod];
+  const freeShippingLabel = DELIVERY_METHOD_LABEL[deliveryMethod].toLowerCase();
+  const computedShipping = chargesShipping ? totalShipping : 0;
   // Staff may override freight, an empty input falls back to the sum.
   const shippingTotal =
-    deliveryMethod === "delivery" && shippingCostInput.trim() !== ""
+    chargesShipping && shippingCostInput.trim() !== ""
       ? Math.max(Number(shippingCostInput) || 0, 0)
       : computedShipping;
   const total = rawSubtotal - totalDiscount + shippingTotal;
 
   // Prefill computed freight only while empty, so it never clobbers input.
   useEffect(() => {
-    if (deliveryMethod === "delivery" && shippingCostInput.trim() === "" && computedShipping > 0) {
+    if (chargesShipping && shippingCostInput.trim() === "" && computedShipping > 0) {
       onShippingCostInputChange(computedShipping.toFixed(2));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,13 +163,13 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       customer_id: customer._id,
       items: payloadItems,
       delivery_method: deliveryMethod,
-      shipping_address: deliveryMethod === "delivery" ? shippingAddress : undefined,
+      shipping_address: needsAddress ? shippingAddress : undefined,
       // Joi forbids billing_address for pickup, even null, so omit the key.
-      billing_address: deliveryMethod === "delivery" && useDifferentBilling ? billingAddress : undefined,
+      billing_address: needsAddress && useDifferentBilling ? billingAddress : undefined,
       note: orderNote.trim() || null,
       payment_method: paymentCheck.data,
       amount_paid: amountPaid || undefined,
-      shipping_cost: deliveryMethod === "delivery" && shippingCostInput.trim() !== "" ? shippingTotal : undefined,
+      shipping_cost: chargesShipping && shippingCostInput.trim() !== "" ? shippingTotal : undefined,
     });
   }
 
@@ -226,8 +229,8 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                 <span>{totalDiscount > 0 ? `-${formatCurrency(totalDiscount)}` : formatCurrency(0)}</span>
               </div>
               <div className="flex items-center justify-between text-fg/60">
-                <span>{deliveryMethod === "pickup" ? "Shipping (pickup)" : "Shipping"}</span>
-                {deliveryMethod === "delivery" ? (
+                <span>{chargesShipping ? "Shipping" : `Shipping (${freeShippingLabel})`}</span>
+                {chargesShipping ? (
                   <Input
                     type="number"
                     min={0}
@@ -242,9 +245,9 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
                   <span>{formatCurrency(shippingTotal)}</span>
                 )}
               </div>
-              {deliveryMethod === "pickup" && totalShipping > 0 && (
+              {!chargesShipping && totalShipping > 0 && (
                 <p className="text-xs text-fg/45">
-                  {formatCurrency(totalShipping)} of item shipping isn't charged on pickup. Choose Delivery
+                  {formatCurrency(totalShipping)} of item shipping isn't charged on {freeShippingLabel}. Choose Delivery
                   on the previous step to charge it.
                 </p>
               )}
@@ -342,7 +345,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
           </Card>
 
           <Card>
-            <CardHeader title={deliveryMethod === "pickup" ? "Collection" : "Delivery"} />
+            <CardHeader title={deliveryMethod === "pickup" ? "Collection" : DELIVERY_METHOD_LABEL[deliveryMethod]} />
             <CardContent className="space-y-1 text-sm">
               {deliveryMethod === "pickup" ? (
                 <div className="flex items-start gap-2">

@@ -18,7 +18,7 @@ export type OrderPaymentStatus = "pending_payment" | "partially_paid" | "paid" |
 
 export type OrderChannel = "storefront" | "ebay" | "manual";
 
-export type OrderDeliveryMethod = "delivery" | "pickup";
+export type OrderDeliveryMethod = "delivery" | "local_delivery" | "pickup";
 
 export interface OrderCustomer {
   name: string;

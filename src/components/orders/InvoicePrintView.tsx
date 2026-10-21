@@ -10,6 +10,7 @@ import {
   stripEbayAddressPrefix,
 } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
+import { CHARGES_SHIPPING, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
 import type { OrderDetail } from "@/types/orders";
 
 // Print invoice mirroring invoicePdf.js, fixed colours ignore dark mode.
@@ -313,7 +314,10 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
           )}
           <TotalRow label="Subtotal (ex GST)" value={formatCurrencyFromCents(exGstSubtotal)} />
           <TotalRow label="GST (11%)" value={formatCurrencyFromCents(gstAmount)} />
-          <TotalRow label={isPickup ? "Pickup" : "Freight"} value={formatCurrencyFromCents(order.shipping_cost)} />
+          <TotalRow
+            label={CHARGES_SHIPPING[order.delivery_method] ? "Freight" : DELIVERY_METHOD_LABEL[order.delivery_method]}
+            value={formatCurrencyFromCents(order.shipping_cost)}
+          />
 
           <div className="mt-3 flex items-center justify-between gap-4 px-4 py-3.5" style={{ background: INK }}>
             <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-white">Total inc GST</span>

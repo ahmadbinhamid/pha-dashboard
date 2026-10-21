@@ -226,7 +226,7 @@ export default function CreateOrderPage() {
 
           {/* Pinned under the header; it now sticks 16px higher (flush top). */}
           <div className="lg:sticky lg:top-40 lg:self-start">
-            <OrderSummaryPanel pickup={step === 2 && customerDelivery.deliveryMethod === "pickup"} />
+            <OrderSummaryPanel deliveryMethod={step === 2 ? customerDelivery.deliveryMethod : undefined} />
           </div>
         </div>
       ) : null}

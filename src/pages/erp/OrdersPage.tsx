@@ -18,6 +18,7 @@ import { getOrders, getOrderStats } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ORDER_STATUSES, ORDER_STATUS_LABEL } from "@/config/orderStatus";
+import { DELIVERY_METHODS, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
 import { formatCurrencyFromCents, formatInvoiceNumber } from "@/utils/format";
 import type { Order, OrderFulfillmentStatus, OrderPaymentStatus, OrderChannel, OrderDeliveryMethod } from "@/types/orders";
 import { Search, ShoppingCart, Banknote, Clock, CreditCard } from "lucide-react";
@@ -46,8 +47,7 @@ const CHANNEL_FILTERS: { label: string; value: OrderChannel | "" }[] = [
 
 const MODE_FILTERS: { label: string; value: OrderDeliveryMethod | "" }[] = [
   { label: "All Modes", value: "" },
-  { label: "Delivery", value: "delivery" },
-  { label: "Pickup", value: "pickup" },
+  ...DELIVERY_METHODS.map((value) => ({ label: DELIVERY_METHOD_LABEL[value], value })),
 ];
 
 // Order ID and Actions are structural; the rest are hideable, per browser.

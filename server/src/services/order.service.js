@@ -248,8 +248,8 @@ async function createManualOrder(
   );
 
   const isPickup = delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
-  // Pickup ships nothing, shippingCostOverride beats the per-item sum.
-  const shipping_cost = isPickup
+  // Only carrier delivery is charged; the override beats the per-item sum.
+  const shipping_cost = delivery_method !== ORDER_DELIVERY_METHOD.DELIVERY
     ? 0
     : shippingCostOverride != null
       ? Math.round(shippingCostOverride * 100)
@@ -705,11 +705,51 @@ async function updateOrderStatus(orderId, { status }, tenantId) {
     if (order.discount_id) await releaseOrderRedemption(order._id, tenantId);
   }
 
+  const completesLocalDelivery =
+    status === ORDER_FULFILLMENT_STATUS.COMPLETED &&
+    order.fulfillment_status !== ORDER_FULFILLMENT_STATUS.COMPLETED &&
+    order.delivery_method === ORDER_DELIVERY_METHOD.LOCAL_DELIVERY;
+
   order.fulfillment_status = status;
   order.status = deriveLegacyOrderStatus(order.fulfillment_status, order.payment_status);
 
   await order.save();
+  if (completesLocalDelivery) await notifyLocalDeliveryCompleted(order);
   return order;
+}
+
+// Sums all succeeded Payments, a manual sale may have deposit + follow-up.
+async function loadInvoiceContext(order) {
+  const [totalPaidCents, totalRefundedCents, companyProfile] = await Promise.all([
+    getTotalPaidForOrder(order._id),
+    getTotalRefundedForOrder(order._id),
+    getCompanyProfile(order.tenant_id),
+  ]);
+  return { totalPaidCents, totalRefundedCents, companyProfile };
+}
+
+/** Invoice PDF as the base64 attachment fields every order email takes. */
+async function buildInvoiceAttachment(order, invoiceContext) {
+  const orderNumber = formatOrderNumber(order.order_number_prefix, order.order_number);
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), invoiceContext);
+  return { orderNumber, pdfBase64: pdfBuffer.toString("base64"), pdfFilename: `${orderNumber}-invoice.pdf` };
+}
+
+// Best effort: a failed email must not undo a status change already saved.
+async function notifyLocalDeliveryCompleted(order) {
+  if (!order.customer.email) return;
+  try {
+    const invoiceContext = await loadInvoiceContext(order);
+    await emailService.sendOrderDelivered({
+      to: order.customer.email,
+      name: order.customer.name,
+      ...(await buildInvoiceAttachment(order, invoiceContext)),
+      companyProfile: invoiceContext.companyProfile,
+      tenantId: order.tenant_id,
+    });
+  } catch (err) {
+    logger.error(`[order.service] failed to email delivered order ${order.order_number}`, { error: err.message });
+  }
 }
 
 function safeTokenMatch(a, b) {
@@ -834,27 +874,20 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  // Sums all succeeded Payments, a manual sale may have deposit + follow-up.
-  const [totalPaidCents, totalRefundedCents, companyProfile] = await Promise.all([
-    getTotalPaidForOrder(order._id),
-    getTotalRefundedForOrder(order._id),
-    getCompanyProfile(order.tenant_id),
-  ]);
+  const invoiceContext = await loadInvoiceContext(order);
+  const { totalPaidCents, companyProfile } = invoiceContext;
 
   // In-person sales are complete: invoice/receipt only, no shipping framing.
   if (order.channel === ORDER_CHANNEL.MANUAL) {
     if (!order.customer.email) {
       throw httpError("This customer has no email on file. Add one before sending an invoice", 400);
     }
-    const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
     const amountDueCents = order.total - totalPaidCents;
     await emailService.sendManualOrderReceipt({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
+      ...(await buildInvoiceAttachment(order, invoiceContext)),
       amountDue: amountDueCents > 0 ? formatCentsAsDollars(amountDueCents) : null,
-      pdfBase64: pdfBuffer.toString("base64"),
-      pdfFilename: `${formatOrderNumber(order.order_number_prefix, order.order_number)}-invoice.pdf`,
       companyProfile,
       tenantId: order.tenant_id,
     });
@@ -882,19 +915,16 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     await order.save();
   }
 
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
-  const pdfBase64 = pdfBuffer.toString("base64");
-  const pdfFilename = `${formatOrderNumber(order.order_number_prefix, order.order_number)}-invoice.pdf`;
+  // Built after the tracking save so the invoice reflects it.
+  const attachment = await buildInvoiceAttachment(order, invoiceContext);
 
   if (isDelivery) {
     await emailService.sendOrderShipped({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
+      ...attachment,
       trackingNumber: order.tracking_number,
       carrierName: order.carrier_name,
-      pdfBase64,
-      pdfFilename,
       companyProfile,
       tenantId: order.tenant_id,
     });
@@ -902,9 +932,7 @@ async function sendOrderNotification(orderId, { tracking_number, carrier_name } 
     await emailService.sendOrderReadyForPickup({
       to: order.customer.email,
       name: order.customer.name,
-      orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number),
-      pdfBase64,
-      pdfFilename,
+      ...attachment,
       pickupLocation: companyProfile.pickup_location,
       companyProfile,
       tenantId: order.tenant_id,
@@ -950,12 +978,7 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  const [totalPaidCents, totalRefundedCents, companyProfile] = await Promise.all([
-    getTotalPaidForOrder(order._id),
-    getTotalRefundedForOrder(order._id),
-    getCompanyProfile(order.tenant_id),
-  ]);
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), { totalPaidCents, totalRefundedCents, companyProfile });
+  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), await loadInvoiceContext(order));
 
   return { pdfBuffer, orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number) };
 }

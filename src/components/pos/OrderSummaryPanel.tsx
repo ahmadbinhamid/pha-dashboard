@@ -4,17 +4,21 @@ import { Badge } from "@/components/ui/Badge";
 import { CartItemRow } from "@/components/pos/CartItemRow";
 import { useCart } from "@/context/cart";
 import { formatCurrency, getLineGst } from "@/utils/format";
+import { CHARGES_SHIPPING, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
+import type { OrderDeliveryMethod } from "@/types/orders";
 
 interface OrderSummaryPanelProps {
-  // Pickup chosen on step 2: freight isn't charged, matching the backend.
-  pickup?: boolean;
+  // Set on step 2 only; a free method zeroes freight, matching the backend.
+  deliveryMethod?: OrderDeliveryMethod;
   className?: string;
 }
 
 // Running order beside steps 1-2; Review keeps its own editable summary.
-export function OrderSummaryPanel({ pickup = false, className }: OrderSummaryPanelProps) {
+export function OrderSummaryPanel({ deliveryMethod, className }: OrderSummaryPanelProps) {
   const { items, totalItems, totalPrice, totalShipping } = useCart();
-  const shipping = pickup ? 0 : totalShipping;
+  const freeShipping = !!deliveryMethod && !CHARGES_SHIPPING[deliveryMethod];
+  const freeLabel = deliveryMethod ? DELIVERY_METHOD_LABEL[deliveryMethod] : "";
+  const shipping = freeShipping ? 0 : totalShipping;
 
   // AU prices include GST, so it's extracted from the items, never added.
   const gst = getLineGst(Math.round(totalPrice * 100)) / 100;
@@ -53,7 +57,7 @@ export function OrderSummaryPanel({ pickup = false, className }: OrderSummaryPan
           <span className="tabular-nums">{formatCurrency(gst)}</span>
         </div>
         <div className="flex justify-between text-fg/60">
-          <span>{pickup ? "Shipping (pickup)" : "Shipping"}</span>
+          <span>{freeShipping ? `Shipping (${freeLabel.toLowerCase()})` : "Shipping"}</span>
           <span className="tabular-nums">{formatCurrency(shipping)}</span>
         </div>
         <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-fg">
@@ -61,8 +65,8 @@ export function OrderSummaryPanel({ pickup = false, className }: OrderSummaryPan
           <span className="tabular-nums">{formatCurrency(totalPrice + shipping)}</span>
         </div>
         <p className="pt-1 text-xs text-fg/45">
-          {pickup && totalShipping > 0
-            ? "Pickup orders aren't charged shipping."
+          {freeShipping && totalShipping > 0
+            ? `${freeLabel} orders aren't charged shipping.`
             : "Discounts, freight edits and payment are set at Review."}
         </p>
       </div>

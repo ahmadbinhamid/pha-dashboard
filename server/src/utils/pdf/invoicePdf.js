@@ -405,8 +405,12 @@ function drawTotalRow(doc, label, value, x, y, width) {
   return y + 14;
 }
 
+const SHIPPING_ROW_LABEL = Object.freeze({
+  [ORDER_DELIVERY_METHOD.PICKUP]: "Pickup",
+  [ORDER_DELIVERY_METHOD.LOCAL_DELIVERY]: "Local delivery",
+});
+
 function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width) {
-  const isPickup = order.delivery_method === ORDER_DELIVERY_METHOD.PICKUP;
   // Includes legacy order-level discount, order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
   const totalDiscount = itemDiscount + (order.discount_amount || 0);
@@ -422,7 +426,8 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
   }
   cursor = drawTotalRow(doc, "Subtotal (ex GST)", formatMoney(exGstSubtotal), x, cursor, width);
   cursor = drawTotalRow(doc, "GST (11%)", formatMoney(gstAmount), x, cursor, width);
-  cursor = drawTotalRow(doc, isPickup ? "Pickup" : "Freight", formatMoney(order.shipping_cost), x, cursor, width);
+  const shippingLabel = SHIPPING_ROW_LABEL[order.delivery_method] || "Freight";
+  cursor = drawTotalRow(doc, shippingLabel, formatMoney(order.shipping_cost), x, cursor, width);
 
   // Solid ink bar, the one piece of heavy emphasis on the sheet.
   const barY = cursor + 8;

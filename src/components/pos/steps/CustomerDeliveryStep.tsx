@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { UserCheck, X, Store, Truck } from "lucide-react";
+import { UserCheck, X, Store, Truck, Car } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
@@ -9,6 +9,7 @@ import { AddressFields } from "@/components/pos/AddressFields";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { useToast } from "@/context";
 import { cn } from "@/utils/cn";
+import { NEEDS_ADDRESS } from "@/config/deliveryMethods";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import type { Customer } from "@/types/customer";
 import type { OrderAddress, OrderDeliveryMethod } from "@/types/orders";
@@ -106,7 +107,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
     const nextErrors: Record<string, string> = {};
     if (!customer) nextErrors.customer = "Select or create a customer to continue";
 
-    if (deliveryMethod === "delivery") {
+    if (NEEDS_ADDRESS[deliveryMethod]) {
       if (!shippingAddress.address.trim()) nextErrors.address = "Address is required";
       if (!shippingAddress.suburb.trim()) nextErrors.suburb = "Suburb is required";
       if (!shippingAddress.state.trim()) nextErrors.state = "State is required";
@@ -172,7 +173,7 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
       <Card>
         <CardHeader title="Fulfilment" />
         <CardContent className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <FulfilmentOption
               icon={Store}
               label="Pickup"
@@ -187,9 +188,16 @@ export const CustomerDeliveryStep = forwardRef<StepHandle, CustomerDeliveryStepP
               selected={deliveryMethod === "delivery"}
               onSelect={() => onChange({ deliveryMethod: "delivery" })}
             />
+            <FulfilmentOption
+              icon={Car}
+              label="Local delivery"
+              description="We deliver it ourselves, no delivery fee."
+              selected={deliveryMethod === "local_delivery"}
+              onSelect={() => onChange({ deliveryMethod: "local_delivery" })}
+            />
           </div>
 
-          {deliveryMethod === "delivery" && (
+          {NEEDS_ADDRESS[deliveryMethod] && (
             <div className="space-y-4 border-t border-border pt-5">
               <AddressFields
                 value={shippingAddress}
