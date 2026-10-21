@@ -5,9 +5,11 @@ const User = require("../src/models/User");
 const Location = require("../src/models/Location");
 const Category = require("../src/models/Category");
 const { USER_ROLE, USER_STATUS } = require("../src/constants/user.constants");
+const { SYSTEM_ROLE } = require("../src/constants/access.constants");
+const { seedSystemRoles } = require("../src/services/role.service");
+const { addMember } = require("../src/services/membership.service");
 
-// Every model below is tenant-scoped now; this script predates multi-tenancy and used to
-// create a bare superadmin with no tenant_id, which the schema now rejects. Seed a default tenant instead.
+// Every model is tenant-scoped, so the superadmin gets a default tenant.
 const DEFAULT_TENANT = { name: "Parts Hub Australia", slug: "parts-hub-australia", code: "PHA" };
 
 const LOCATIONS = [
@@ -27,13 +29,13 @@ const CATEGORIES = [
   { name: "Exhaust", slug: "exhaust" },
 ];
 
-// See server.js's identical comment — the try/catch/process.exit(1) below never actually rejects.
+// NOTE: the IIFE never rejects; failures exit via the catch below.
 void (async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     await User.syncIndexes();
 
-    // ── Tenant ─────────────────────────────────────────────────────────────
+    // Tenant
     let tenant = await Tenant.findOne({ slug: DEFAULT_TENANT.slug });
     if (!tenant) {
       tenant = await Tenant.create(DEFAULT_TENANT);
@@ -42,12 +44,13 @@ void (async () => {
       console.log(`Tenant already exists: ${tenant.name}`);
     }
 
-    // ── Super Admin ────────────────────────────────────────────────────────
+    // Super Admin
     const email = process.env.SUPERADMIN_EMAIL || "superadmin@xyz.com";
     const password = process.env.SUPERADMIN_PASSWORD || "dewdrops123";
     const phone = process.env.SUPERADMIN_PHONE || null;
 
-    const existing = await User.findOne({ tenant_id: tenant._id, email });
+    let user = await User.findOne({ tenant_id: tenant._id, email });
+    const existing = user;
     if (existing) {
       if (existing.status !== USER_STATUS.ACTIVE) {
         existing.status = USER_STATUS.ACTIVE;
@@ -58,7 +61,7 @@ void (async () => {
         console.log(`SuperAdmin already exists: ${email}`);
       }
     } else {
-      await User.create({
+      user = await User.create({
         tenant_id: tenant._id,
         first_name: "Super",
         last_name: "Admin",
@@ -72,7 +75,12 @@ void (async () => {
       console.log(`SuperAdmin created: ${email}`);
     }
 
-    // ── Locations ──────────────────────────────────────────────────────────
+    // Membership, not User.tenant_id, grants dashboard access.
+    const roles = await seedSystemRoles(tenant._id);
+    await addMember({ tenantId: tenant._id, userId: user._id, roleId: roles[SYSTEM_ROLE.ADMIN]._id });
+    console.log(`SuperAdmin is Admin of: ${tenant.name}`);
+
+    // Locations
     for (const loc of LOCATIONS) {
       const exists = await Location.findOne({ tenant_id: tenant._id, name: loc.name });
       if (!exists) {
@@ -83,7 +91,7 @@ void (async () => {
       }
     }
 
-    // ── Categories ─────────────────────────────────────────────────────────
+    // Categories
     for (const cat of CATEGORIES) {
       const exists = await Category.findOne({ tenant_id: tenant._id, slug: cat.slug });
       if (!exists) {

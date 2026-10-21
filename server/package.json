@@ -19,6 +19,7 @@
     "dev:worker:channels": "nodemon --exec \"node --max-old-space-size=256\" src/workers/channel.worker.js",
     "dev:worker:platform": "nodemon --exec \"node --max-old-space-size=256\" src/workers/platform.worker.js",
     "seed:superadmin": "node scripts/seedSuperAdmin.js",
+    "seed:vehicles": "node scripts/seedVehicleModels.js --confirm",
     "reindex:products": "node scripts/reindexProducts.js"
   },
   "dependencies": {

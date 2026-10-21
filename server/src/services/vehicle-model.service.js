@@ -1,10 +1,9 @@
 // services/vehicle-model.service.js
-// Hybrid catalog: every read returns shared/global entries plus this tenant's own; every
-// write is scoped to the calling tenant so a custom Combobox value never touches the shared catalog.
+// Reads: shared catalog + own tenant; writes: calling tenant only.
 
 const VehicleModel = require("../models/VehicleModel");
 
-// tenantId is passed through explicitly at every call site, rather than an easy-to-forget default.
+// tenantId is explicit at every call site; no easy-to-forget default.
 function visibleTo(tenantId) {
   return { $or: [{ tenant_id: null }, { tenant_id: tenantId }] };
 }
@@ -23,8 +22,7 @@ async function listModelCodes(make, modelName, tenantId) {
     .then((codes) => codes.sort());
 }
 
-// A tenant's own custom entry wins over a same-named global one. Two lookups instead of one
-// $or query so precedence is explicit rather than left to Mongo's return order.
+// Own entry beats a global one; two lookups keep that precedence explicit.
 async function getYears(make, modelName, modelCode, tenantId) {
   const own = tenantId
     ? await VehicleModel.findOne({ make, model: modelName, model_code: modelCode, tenant_id: tenantId })
@@ -34,8 +32,7 @@ async function getYears(make, modelName, modelCode, tenantId) {
   return { year_from: entry.year_from, year_to: entry.year_to };
 }
 
-// Persists a make/model/model_code combination, scoped to tenantId, never the shared catalog.
-// year_from is required by the schema, so entries missing it are skipped, not rejected.
+// Rows without year_from (schema-required) are skipped, not rejected.
 async function upsertVehicleModel({ make, model, model_code, year_from, year_to } = {}, tenantId) {
   const trimmedMake = (make || "").trim();
   const trimmedModel = (model || "").trim();
@@ -55,12 +52,42 @@ async function upsertVehicleModel({ make, model, model_code, year_from, year_to 
   );
 }
 
-// Same as upsertVehicleModel for a list of fitment rows; individual row failures are swallowed.
+// Per-row failures are swallowed so one bad fitment row can't block the rest.
 async function upsertVehicleModelsFromRows(rows = [], tenantId) {
   await Promise.all(rows.map((row) => upsertVehicleModel(row, tenantId).catch(() => null)));
 }
 
+const SEED_CHUNK_SIZE = 500;
+
+function globalSeedOp({ make, model, model_code = "", year_from, year_to = null }) {
+  return {
+    updateOne: {
+      filter: { tenant_id: null, make, model, model_code },
+      update: { $set: { year_from, year_to } },
+      upsert: true,
+    },
+  };
+}
+
+/** Upserts shared-catalog (tenant_id: null) entries in chunked bulk writes. */
+async function seedGlobalVehicleModels(entries = []) {
+  const totals = { inserted: 0, updated: 0 };
+  for (let i = 0; i < entries.length; i += SEED_CHUNK_SIZE) {
+    const ops = entries.slice(i, i + SEED_CHUNK_SIZE).map(globalSeedOp);
+    const res = await VehicleModel.bulkWrite(ops, { ordered: false });
+    totals.inserted += res.upsertedCount;
+    totals.updated += res.modifiedCount;
+  }
+  return totals;
+}
+
+async function countGlobalVehicleModels() {
+  return VehicleModel.countDocuments({ tenant_id: null });
+}
+
 module.exports = {
+  seedGlobalVehicleModels,
+  countGlobalVehicleModels,
   listMakes,
   listModels,
   listModelCodes,
