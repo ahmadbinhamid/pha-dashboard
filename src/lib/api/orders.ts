@@ -9,6 +9,7 @@ import type {
   OrderLineInput,
   OrderFulfillmentStatus,
   OrderStats,
+  NextOrderNumber,
 } from "@/types/orders";
 import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
@@ -30,6 +31,11 @@ export const getOrders = async (params: OrderListParams = {}) => {
 
 export const getOrderStats = async () => {
   const { data } = await apiClient.get<BeResponse<OrderStats>>("/order/stats");
+  return data;
+};
+
+export const getNextOrderNumber = async () => {
+  const { data } = await apiClient.get<BeResponse<NextOrderNumber>>("/order/next-number");
   return data;
 };
 

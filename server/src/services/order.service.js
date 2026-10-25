@@ -55,13 +55,23 @@ function httpError(message, status) {
 }
 
 // Bare number, prefix applied at render, so it never mimics a SKU.
+function padSequence(seq) {
+  return String(seq).padStart(5, "0");
+}
+
 async function nextOrderNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
     { _id: tenantCounterKey(tenantId, "order_number") },
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
-  return String(counter.seq).padStart(5, "0");
+  return padSequence(counter.seq);
+}
+
+// Read-only preview; the create still claims a number atomically.
+async function peekNextOrderNumber(tenant) {
+  const counter = await Counter.findById(tenantCounterKey(tenant._id, "order_number")).lean();
+  return { order_number: padSequence((counter?.seq ?? 0) + 1), order_number_prefix: tenant.order_number_prefix };
 }
 
 // Own sequence: invoice numbering must not assume one order = one invoice.
@@ -71,7 +81,7 @@ async function nextInvoiceNumber(tenantId) {
     { $inc: { seq: 1 } },
     { upsert: true, new: true },
   );
-  return String(counter.seq).padStart(5, "0");
+  return padSequence(counter.seq);
 }
 
 function generateGuestAccessToken() {
@@ -985,6 +995,7 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
 
 module.exports = {
   createOrder,
+  peekNextOrderNumber,
   quoteOrderDiscount,
   createManualOrder,
   recordOrderPayment,

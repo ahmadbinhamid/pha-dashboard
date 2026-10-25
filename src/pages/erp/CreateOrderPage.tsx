@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { OrderStepper } from "@/components/pos/OrderStepper";
 import { OrderSummaryPanel } from "@/components/pos/OrderSummaryPanel";
@@ -13,6 +15,9 @@ import { ReviewOrderStep } from "@/components/pos/steps/ReviewOrderStep";
 import { OrderConfirmationStep } from "@/components/pos/steps/OrderConfirmationStep";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import { useCart } from "@/context/cart";
+import { useToast } from "@/context";
+import { getNextOrderNumber } from "@/lib/api/orders";
+import { formatOrderNumber } from "@/utils/format";
 import { ORDER_DRAFT_STORAGE_KEY, clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { Order, OrderAddress } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
@@ -35,6 +40,9 @@ const STEP_DESCRIPTION: Record<number, string> = {
 
 // Steps 1-2 sit beside the live summary; 3-4 (review, receipt) are full width.
 const SUMMARY_STEPS = new Set([1, 2]);
+
+// Short, so a sale elsewhere rarely leaves the previewed number stale.
+const NEXT_NUMBER_REFETCH_MS = 30 * 1000;
 
 const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
 
@@ -91,6 +99,7 @@ function persistWizard(state: WizardStorage) {
 
 export default function CreateOrderPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { items, clearCart } = useCart();
 
   const initial = readStoredWizard();
@@ -104,6 +113,16 @@ export default function CreateOrderPage() {
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
+
+  // Under ["orders"], so the create's invalidation refreshes it too.
+  const { data: nextNumberData } = useQuery({
+    queryKey: ["orders", "next-number"],
+    queryFn: getNextOrderNumber,
+    enabled: step < 4,
+    refetchInterval: NEXT_NUMBER_REFETCH_MS,
+  });
+  const nextNumber = nextNumberData?.data;
+  const previewNumber = nextNumber ? formatOrderNumber(nextNumber.order_number_prefix, nextNumber.order_number) : null;
 
   const customerDeliveryRef = useRef<StepHandle>(null);
   const reviewOrderRef = useRef<StepHandle>(null);
@@ -139,6 +158,14 @@ export default function CreateOrderPage() {
   }
 
   function handleOrderCreated(order: Order) {
+    const savedNumber = formatOrderNumber(order.order_number_prefix, order.order_number);
+    if (previewNumber && previewNumber !== savedNumber) {
+      toast({
+        title: `Order saved as ${savedNumber}`,
+        description: `${previewNumber} was taken by another order first.`,
+        tone: "warning",
+      });
+    }
     setCreatedOrder(order);
     setStep(4);
     // Order done and cart cleared: nothing left worth resuming.
@@ -187,7 +214,15 @@ export default function CreateOrderPage() {
     <div className="space-y-6">
       {/* Title, actions and the step rail stay pinned as one block. */}
       <StickyPageHeader className="space-y-4 border-b border-border bg-bg/95 pb-4 backdrop-blur-sm">
-        <PageHeader title="Create Order" description={STEP_DESCRIPTION[step]}>
+        <PageHeader
+          title={
+            <span className="flex items-center gap-2">
+              Create Order
+              {step < 4 && previewNumber && <Badge variant="outline">{previewNumber}</Badge>}
+            </span>
+          }
+          description={STEP_DESCRIPTION[step]}
+        >
           {step < 4 && (
             <Button variant="ghost" size="sm" onClick={handleCancel}>
               Cancel

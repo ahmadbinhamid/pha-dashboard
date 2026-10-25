@@ -19,6 +19,7 @@ router.post("/discount-quote", discountQuoteLimiter, resolveGuestTenant(), valid
 
 // Must precede the guest "/:id" route, which would otherwise swallow it.
 router.get("/stats", auth(), requirePermission("orders.view"), asyncHandler(ctrl.getOrderStats));
+router.get("/next-number", auth(), requirePermission("orders.create"), asyncHandler(ctrl.getNextOrderNumber));
 
 router.get("/:id", resolveGuestTenant(), validate(v.byIdParam), asyncHandler(ctrl.getOrder));
 

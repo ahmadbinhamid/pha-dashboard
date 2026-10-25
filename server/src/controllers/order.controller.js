@@ -69,6 +69,14 @@ exports.getOrderStats = async (req, res) => {
   }
 };
 
+exports.getNextOrderNumber = async (req, res) => {
+  try {
+    return success(res, await orderService.peekNextOrderNumber(req.tenant));
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
 exports.createManualOrder = async (req, res) => {
   try {
     const order = await orderService.createManualOrder(req.body, req.tenant);
