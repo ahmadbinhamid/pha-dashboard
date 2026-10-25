@@ -3,7 +3,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { buildInvoicePdfBuffer, partyBlockLines } = require("./invoicePdf");
+const { buildInvoicePdfBuffer, partyBlockLines, itemChips, dueDateCells } = require("./invoicePdf");
 
 const SHIPPING = { address: "1 Dock Rd", suburb: "Botany", state: "NSW", postcode: "2019" };
 const BILLING = { address: "9 Office St", suburb: "Sydney", state: "NSW", postcode: "2000" };
@@ -53,4 +53,26 @@ test("a business invoice names the billed rep under the business", () => {
   const customer = { ...CUSTOMER, company_name: "ABC Motors" };
   const { shipLines } = partyBlockLines(order({ customer }));
   assert.deepEqual(shipLines, ["1 Dock Rd", "Botany NSW 2019", "Attn: Jo Fix", ...CONTACT]);
+});
+
+test("line chips show condition then authenticity, none for custom lines", () => {
+  assert.deepEqual(itemChips({ condition: "USED", authenticity: "Genuine" }), ["Used", "Genuine"]);
+  assert.deepEqual(itemChips({ condition: "NEW", authenticity: null }), ["New"]);
+  assert.deepEqual(itemChips({ condition: null, authenticity: null }), []);
+});
+
+test("account terms replace due on receipt with a dated due date", () => {
+  assert.deepEqual(dueDateCells(order()), [["Due Date", "Due on receipt"]]);
+  const cells = dueDateCells(order({ due_date: new Date("2026-01-16T00:00:00"), payment_terms_days: 14 }));
+  assert.deepEqual(cells[1], ["Terms", "14-day account"]);
+  assert.equal(cells[0][0], "Due Date");
+  assert.notEqual(cells[0][1], "Due on receipt");
+});
+
+test("the PDF renders a business account order with chipped lines", async () => {
+  const items = [{ name: "Pads", sku: "BP-1", condition: "USED", authenticity: "Genuine", unit_price: 1000, quantity: 1 }];
+  const pdf = await buildInvoicePdfBuffer(
+    order({ customer: { ...CUSTOMER, company_name: "ABC Motors" }, items, due_date: new Date(), payment_terms_days: 30 }),
+  );
+  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
 });

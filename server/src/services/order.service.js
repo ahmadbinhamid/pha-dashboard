@@ -10,7 +10,7 @@ const Refund = require("../models/Refund");
 const Tenant = require("../models/Tenant");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { buildWordSearchOr } = require("../utils/regex");
-const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
+const { excludeAbandonedCheckouts, notCancelled, awaitingPayment, overdueInvoices } = require("../utils/orderVisibility");
 const { formatCentsAsDollars } = require("../utils/currency");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
@@ -23,6 +23,7 @@ const {
 } = require("./payment.service");
 const {
   UNPAID_ORDER_STATUSES,
+  UNPAID_ORDER_PAYMENT_STATUSES,
   ORDER_STATUS,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
@@ -50,6 +51,7 @@ const { getCompanyProfile } = require("./tenant-settings.service");
 const notificationService = require("./notification.service");
 const { quoteCart, hasCalculatedShipping, findPickupOnlyTitles } = require("./shipping/shipping-quote.service");
 const { computeOrderTotals } = require("../utils/orderTotals");
+const { addDays } = require("../utils/date");
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -81,6 +83,23 @@ async function nextInvoiceNumber(tenantId) {
 
 function generateGuestAccessToken() {
   return crypto.randomBytes(32).toString("hex");
+}
+
+// Line snapshot of the product's condition chips for invoices.
+function productAttributes(product) {
+  return { condition: product.condition ?? null, authenticity: product.authenticity ?? null };
+}
+
+// Pre-snapshot lines read the current product, in one query per order.
+async function withItemAttributes(order) {
+  const stale = order.items.filter((i) => i.product && i.condition == null);
+  if (!stale.length) return order;
+  const products = await Product.find({ _id: { $in: stale.map((i) => i.product) }, tenant_id: order.tenant_id })
+    .select("condition authenticity")
+    .lean();
+  const byId = new Map(products.map((p) => [String(p._id), productAttributes(p)]));
+  const items = order.items.map((i) => (i.condition == null && i.product ? { ...i, ...byId.get(String(i.product)) } : i));
+  return { ...order, items };
 }
 
 // Re-derives price/availability from the DB, cart totals are never trusted.
@@ -121,6 +140,7 @@ async function resolveOrderItem({ product: productId, variant: variantId, quanti
     variant: variant ? variant._id : null,
     name,
     sku,
+    ...productAttributes(product),
     unit_price: Math.round(unitPriceDollars * 100), // dollars -> cents
     shipping_cost: product.shipping_cost ?? 0, // dollars, per-unit freight cost
     quantity,
@@ -179,6 +199,7 @@ async function resolveManualOrderItem(
     variant: variant ? variant._id : null,
     name,
     sku,
+    ...productAttributes(product),
     unit_price: unitPriceCents,
     shipping_cost: product.shipping_cost ?? 0, // dollars, per-unit freight cost
     quantity,
@@ -195,6 +216,8 @@ function resolveCustomOrderItem({
   quantity = 1,
   discount_amount = 0,
   note = null,
+  condition = null,
+  authenticity = null,
 }) {
   if (!Number.isInteger(quantity) || quantity < 1) {
     throw httpError("Invalid quantity", 400);
@@ -214,12 +237,20 @@ function resolveCustomOrderItem({
     is_custom: true,
     name,
     sku: null,
+    condition: condition || null,
+    authenticity: authenticity || null,
     unit_price: unitPriceCents,
     shipping_cost: shipping_cost ?? 0, // dollars, per unit
     quantity,
     discount_amount: discountCents,
     note: note || null,
   };
+}
+
+// Locks the business's account terms onto a new order.
+function paymentTermsFor(business, issuedAt = new Date()) {
+  const days = business?.payment_terms_days ?? null;
+  return { payment_terms_days: days, due_date: days ? addDays(issuedAt, days) : null };
 }
 
 // Stock drops now: goods leave with the customer whatever is paid.
@@ -286,6 +317,7 @@ async function createManualOrder(
     },
     customer_id: customer._id,
     business_id: customer.business_id,
+    ...paymentTermsFor(customer.business),
     delivery_method,
     shipping_address: isPickup ? null : shipping_address,
     billing_address: isPickup ? null : billing_address || null,
@@ -576,7 +608,7 @@ async function resolveEbayLineItem(lineItem, tenantId) {
     return null;
   }
 
-  const product = await Product.findOne({ _id: ids.productId, tenant_id: tenantId }).select("_id title sku").lean();
+  const product = await Product.findOne({ _id: ids.productId, tenant_id: tenantId }).select("_id title sku condition authenticity").lean();
   if (!product) return null;
   const variant = ids.variantId
     ? await ProductVariant.findOne({ _id: ids.variantId, tenant_id: tenantId }).select("_id sku display_name").lean()
@@ -587,6 +619,7 @@ async function resolveEbayLineItem(lineItem, tenantId) {
     variant: variant ? variant._id : null,
     name: lineItem.title || product.title,
     sku: lineItem.sku,
+    ...productAttributes(product),
     unit_price: lineItem.unitPriceCents,
     quantity: lineItem.quantity,
   };
@@ -738,7 +771,7 @@ async function loadInvoiceContext(order) {
 /** Invoice PDF as the base64 attachment fields every order email takes. */
 async function buildInvoiceAttachment(order, invoiceContext) {
   const orderNumber = formatOrderNumber(order.order_number_prefix, order.order_number);
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), invoiceContext);
+  const pdfBuffer = await buildInvoicePdfBuffer(await withItemAttributes(order.toObject()), invoiceContext);
   return { orderNumber, pdfBase64: pdfBuffer.toString("base64"), pdfFilename: `${orderNumber}-invoice.pdf` };
 }
 
@@ -795,7 +828,7 @@ async function getOrderForPaymentLink(orderId, tenantId) {
 // ── Admin ──
 
 async function listOrders(
-  { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, search } = {},
+  { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, overdue, search } = {},
   tenantId,
 ) {
   const filter = { tenant_id: tenantId, ...excludeAbandonedCheckouts() };
@@ -804,6 +837,9 @@ async function listOrders(
   if (delivery_method) filter.delivery_method = delivery_method;
   if (fulfillment_status) filter.fulfillment_status = fulfillment_status;
   if (payment_status) filter.payment_status = payment_status;
+  // Unpaid means still owed, so cancelled orders drop out unless asked for.
+  if (UNPAID_ORDER_PAYMENT_STATUSES.includes(payment_status) && !fulfillment_status) Object.assign(filter, notCancelled());
+  if (overdue) Object.assign(filter, overdueInvoices());
   if (search) {
     const tenant = await Tenant.findById(tenantId).select("order_number_prefix invoice_number_prefix").lean();
     const strippedSearch = stripOrderNumberPrefix(search, [tenant?.order_number_prefix, tenant?.invoice_number_prefix]);
@@ -842,14 +878,7 @@ async function getOrderStats(tenantId) {
           { $match: { fulfillment_status: ORDER_FULFILLMENT_STATUS.PENDING } },
           { $count: "count" },
         ],
-        unpaid: [
-          {
-            $match: {
-              payment_status: { $in: [ORDER_PAYMENT_STATUS.PENDING_PAYMENT, ORDER_PAYMENT_STATUS.PARTIALLY_PAID] },
-            },
-          },
-          { $count: "count" },
-        ],
+        unpaid: [{ $match: awaitingPayment() }, { $count: "count" }],
       },
     },
   ]);
@@ -871,7 +900,7 @@ async function getOrderDetailForAdmin(orderId, tenantId) {
     Refund.find({ order: order._id }).sort({ created_at: -1 }),
   ]);
 
-  const { payment, ...orderFields } = order.toObject();
+  const { payment, ...orderFields } = await withItemAttributes(order.toObject());
   // toObject strips __v, the client sends it back with every edit.
   return { ...orderFields, version: order.__v, payments, refunds };
 }
@@ -985,7 +1014,8 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
   const order = await Order.findOne({ _id: orderId, tenant_id: tenantId }).populate("payment");
   if (!order) throw httpError("Order not found", 404);
 
-  const pdfBuffer = await buildInvoicePdfBuffer(order.toObject(), await loadInvoiceContext(order));
+  const [orderData, invoiceContext] = await Promise.all([withItemAttributes(order.toObject()), loadInvoiceContext(order)]);
+  const pdfBuffer = await buildInvoicePdfBuffer(orderData, invoiceContext);
 
   return { pdfBuffer, orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number) };
 }

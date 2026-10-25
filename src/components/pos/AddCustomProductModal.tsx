@@ -1,12 +1,14 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import { Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription } from "@/components/ui/Modal";
 import { useCartActions } from "@/context/cart";
 import { buildCustomCartItem } from "@/lib/cart/customCartItem";
+import { OPTIONAL_AUTHENTICITY_OPTIONS, OPTIONAL_CONDITION_OPTIONS } from "@/config/productOptions";
 import { customOrderItemSchema, type CustomOrderItemFormValues } from "@/lib/validation/customOrderItem";
 
 interface AddCustomProductModalProps {
@@ -14,13 +16,21 @@ interface AddCustomProductModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const EMPTY_VALUES: CustomOrderItemFormValues = { title: "", price: "", shipping: "", discount: "" };
+const EMPTY_VALUES: CustomOrderItemFormValues = {
+  title: "",
+  price: "",
+  shipping: "",
+  discount: "",
+  condition: "",
+  authenticity: "",
+};
 
 // Order-only line: lives in the cart and this order, never in the catalogue.
 export function AddCustomProductModal({ open, onOpenChange }: AddCustomProductModalProps) {
   const { addItem } = useCartActions();
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -63,6 +73,36 @@ export function AddCustomProductModal({ open, onOpenChange }: AddCustomProductMo
               </FormField>
               <FormField label="Discount" error={errors.discount?.message}>
                 <Input {...register("discount")} type="number" min={0} step="0.01" placeholder="0.00" />
+              </FormField>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Condition" hint="Optional, shown on the invoice">
+                <Controller
+                  control={control}
+                  name="condition"
+                  render={({ field }) => (
+                    <SingleSelect
+                      options={OPTIONAL_CONDITION_OPTIONS}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  )}
+                />
+              </FormField>
+              <FormField label="Authenticity" hint="Optional, shown on the invoice">
+                <Controller
+                  control={control}
+                  name="authenticity"
+                  render={({ field }) => (
+                    <SingleSelect
+                      options={OPTIONAL_AUTHENTICITY_OPTIONS}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  )}
+                />
               </FormField>
             </div>
           </div>

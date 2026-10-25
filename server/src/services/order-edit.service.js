@@ -1,5 +1,5 @@
 // services/order-edit.service.js
-// Unpaid order edits (lines, prices, shipping), all through one engine.
+// Unpaid money edits through one engine, plus custom line detail fixes.
 
 const mongoose = require("mongoose");
 const Order = require("../models/Order");
@@ -260,6 +260,50 @@ function updateOrderShippingCost(orderId, { version, shipping_cost }, user, tena
   });
 }
 
+// Label of a chip value for the audit note, "none" when it was cleared.
+const chipText = (value) => value || "none";
+
+function describeDetailChanges(item, { name, condition, authenticity }) {
+  return [
+    name !== item.name ? `name "${item.name}" → "${name}"` : null,
+    condition !== (item.condition ?? null) ? `condition ${chipText(item.condition)} → ${chipText(condition)}` : null,
+    authenticity !== (item.authenticity ?? null)
+      ? `authenticity ${chipText(item.authenticity)} → ${chipText(authenticity)}`
+      : null,
+  ].filter(Boolean);
+}
+
+/** Custom line name and chips; no money moves, so paid orders allow it. */
+async function updateCustomItemDetails(orderId, itemId, { version, name, condition, authenticity }, user, tenantId) {
+  const order = await Order.findOne({ _id: orderId, tenant_id: tenantId });
+  if (!order) throw httpError("Order not found", 404);
+  if (version !== order.__v) throw versionConflict();
+  const item = findItem(plainItems(order), itemId);
+  if (!item.is_custom) throw httpError("Only custom products can be edited here", 400);
+
+  const changes = describeDetailChanges(item, { name, condition, authenticity });
+  if (!changes.length) return order;
+
+  // Version in the filter makes the check and the positional write atomic.
+  const updated = await Order.findOneAndUpdate(
+    { _id: order._id, tenant_id: tenantId, __v: order.__v, "items._id": item._id },
+    {
+      $set: { "items.$.name": name, "items.$.condition": condition, "items.$.authenticity": authenticity },
+      $inc: { __v: 1 },
+      $push: {
+        internal_notes: {
+          text: `Custom product ${changes.join(", ")} by ${user.name}`,
+          author: user.id ?? null,
+          created_at: new Date(),
+        },
+      },
+    },
+    { new: true, runValidators: true },
+  );
+  if (!updated) throw versionConflict();
+  return updated;
+}
+
 /** Admin detail plus edit_block_reason, the same check the edits enforce. */
 async function getEditableOrderDetail(orderId, tenantId) {
   const detail = await getOrderDetailForAdmin(orderId, tenantId);
@@ -277,4 +321,5 @@ module.exports = {
   updateOrderItemPrice,
   updateOrderItemDiscount,
   updateOrderShippingCost,
+  updateCustomItemDetails,
 };

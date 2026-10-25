@@ -1,10 +1,11 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
+import { SingleSelect } from "@/components/ui/SingleSelect";
 import {
   Modal,
   ModalContent,
@@ -17,13 +18,14 @@ import { RepresentativeFields } from "@/components/businesses/RepresentativeFiel
 import { useToast } from "@/context";
 import { BUSINESSES_QUERY_KEY, createBusiness, updateBusiness } from "@/lib/api/businesses";
 import { businessFormSchema, EMPTY_REPRESENTATIVE, type BusinessFormValues } from "@/lib/validation/business";
-import type { Business, BusinessDetail } from "@/types/business";
+import { PAYMENT_TERMS_OPTIONS } from "@/config/businessOptions";
+import type { BusinessDetail, PaymentTermsDays, UpdateBusinessPayload } from "@/types/business";
 
 interface BusinessFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   // null => create mode, which also takes the first reps
-  business: Business | null;
+  business: Pick<BusinessDetail, "_id" | "name" | "payment_terms_days"> | null;
   onCreated?: (business: BusinessDetail) => void;
 }
 
@@ -41,11 +43,16 @@ export function BusinessFormModal({ open, onOpenChange, business, onCreated }: B
     formState: { errors },
   } = useForm<BusinessFormValues>({
     resolver: zodResolver(businessFormSchema),
-    defaultValues: { name: "", representatives: [EMPTY_REPRESENTATIVE] },
+    defaultValues: { name: "", payment_terms_days: "", representatives: [EMPTY_REPRESENTATIVE] },
   });
 
   useEffect(() => {
-    if (open) reset({ name: business?.name ?? "", representatives: business ? [] : [EMPTY_REPRESENTATIVE] });
+    if (!open) return;
+    reset({
+      name: business?.name ?? "",
+      payment_terms_days: business?.payment_terms_days ? String(business.payment_terms_days) : "",
+      representatives: business ? [] : [EMPTY_REPRESENTATIVE],
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, business]);
 
@@ -66,8 +73,8 @@ export function BusinessFormModal({ open, onOpenChange, business, onCreated }: B
     onError: (err: Error) => toast({ title: "Create failed", description: err.message, tone: "danger" }),
   });
 
-  const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => updateBusiness(id, name),
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateBusinessPayload }) => updateBusiness(id, payload),
     onSuccess: () => {
       toast({ title: "Business updated", tone: "success" });
       onSaved();
@@ -75,16 +82,19 @@ export function BusinessFormModal({ open, onOpenChange, business, onCreated }: B
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, tone: "danger" }),
   });
 
-  const isSaving = createMutation.isPending || renameMutation.isPending;
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const onSubmit = (values: BusinessFormValues) => {
-    const name = values.name.trim();
+    const fields: UpdateBusinessPayload = {
+      name: values.name.trim(),
+      payment_terms_days: values.payment_terms_days ? (Number(values.payment_terms_days) as PaymentTermsDays) : null,
+    };
     if (business) {
-      renameMutation.mutate({ id: business._id, name });
+      updateMutation.mutate({ id: business._id, payload: fields });
       return;
     }
     createMutation.mutate({
-      name,
+      ...fields,
       representatives: values.representatives.map((rep) => ({
         name: rep.name.trim(),
         email: rep.email.trim() || null,
@@ -98,10 +108,10 @@ export function BusinessFormModal({ open, onOpenChange, business, onCreated }: B
       <ModalContent className="max-w-xl">
         <form onSubmit={handleSubmit(onSubmit)} className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
           <ModalHeader>
-            <ModalTitle>{isEdit ? "Rename business" : "New business"}</ModalTitle>
+            <ModalTitle>{isEdit ? "Edit business" : "New business"}</ModalTitle>
             <ModalDescription>
               {isEdit
-                ? "Past invoices keep the name they were issued under."
+                ? "Past invoices keep the name and terms they were issued under."
                 : "Each representative becomes a separate customer. They may share an email."}
             </ModalDescription>
           </ModalHeader>
@@ -109,6 +119,21 @@ export function BusinessFormModal({ open, onOpenChange, business, onCreated }: B
           <div className="space-y-4">
             <FormField label="Business name" required error={errors.name?.message}>
               <Input {...register("name")} placeholder="e.g. ABC Motors" autoFocus />
+            </FormField>
+
+            <FormField label="Account terms" hint="Sets the invoice due date on this business's orders.">
+              <Controller
+                control={control}
+                name="payment_terms_days"
+                render={({ field }) => (
+                  <SingleSelect
+                    options={PAYMENT_TERMS_OPTIONS}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              />
             </FormField>
 
             {!isEdit && (

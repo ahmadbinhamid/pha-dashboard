@@ -1,27 +1,18 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
 import type {
-  CreateManualOrderItemPayload,
+  CreateManualOrderPayload,
+  CustomItemDetailsPayload,
   Order,
-  OrderAddress,
-  OrderDeliveryMethod,
   OrderDetail,
   OrderLineInput,
   OrderFulfillmentStatus,
+  OrderListParams,
   OrderStats,
+  RecordOrderPaymentPayload,
+  SendOrderEmailPayload,
+  UpdateOrderCustomerDetailsPayload,
 } from "@/types/orders";
-import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
-
-export interface OrderListParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  channel?: string;
-  delivery_method?: string;
-  fulfillment_status?: string;
-  payment_status?: string;
-}
 
 export const getOrders = async (params: OrderListParams = {}) => {
   const { data } = await apiClient.get<BeResponse<PaginatedData<Order>>>("/order", { params });
@@ -38,11 +29,6 @@ export const getOrderDetail = async (id: string) => {
   return data;
 };
 
-export interface SendOrderEmailPayload {
-  tracking_number?: string;
-  carrier_name?: string;
-}
-
 export const sendOrderEmail = async (id: string, payload: SendOrderEmailPayload = {}) => {
   const { data } = await apiClient.post<BeResponse<Order>>(`/order/${id}/send-email`, payload);
   return data;
@@ -57,21 +43,6 @@ export const downloadInvoicePdf = async (id: string) => {
 };
 
 // Manual/in-person orders (POS)
-
-export interface CreateManualOrderPayload {
-  customer_id: string;
-  items: CreateManualOrderItemPayload[];
-  delivery_method: OrderDeliveryMethod;
-  shipping_address?: OrderAddress;
-  billing_address?: OrderAddress | null;
-  note?: string | null;
-  // Staff-entered order number, saved as reference_number.
-  reference_number?: string | null;
-  // "payment_link" collects nothing now; the Stripe link is made separately.
-  payment_method: OrderPaymentChoice;
-  amount_paid?: number; // dollars — omit/0 leaves the invoice fully outstanding
-  shipping_cost?: number; // dollars — overrides the computed per-item shipping total
-}
 
 export const createManualOrder = async (payload: CreateManualOrderPayload) => {
   const { data } = await apiClient.post<BeResponse<Order>>("/order/manual", payload);
@@ -93,11 +64,6 @@ export const updateOrderStatus = async (orderId: string, status: OrderFulfillmen
   const { data } = await apiClient.patch<BeResponse<Order>>(`/order/${orderId}/status`, { status });
   return data;
 };
-
-export interface RecordOrderPaymentPayload {
-  payment_method: PaymentMethod;
-  amount: number; // dollars
-}
 
 // Follow-up cash/transfer payment against the balance, e.g. after a deposit.
 export const recordOrderPayment = async (orderId: string, payload: RecordOrderPaymentPayload) => {
@@ -141,6 +107,19 @@ export const updateOrderItemQuantity = async (orderId: string, itemId: string, q
   return data;
 };
 
+export const updateCustomItemDetails = async (
+  orderId: string,
+  itemId: string,
+  details: CustomItemDetailsPayload,
+  version: number,
+) => {
+  const { data } = await apiClient.patch<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemId}/details`, {
+    ...details,
+    version,
+  });
+  return data;
+};
+
 export const removeOrderItem = async (orderId: string, itemId: string, version: number) => {
   const { data } = await apiClient.delete<BeResponse<OrderDetail>>(`/order/${orderId}/items/${itemId}`, {
     params: { version },
@@ -164,12 +143,6 @@ export const updateOrderItemDiscount = async (orderId: string, itemIndex: number
   });
   return data;
 };
-
-export interface UpdateOrderCustomerDetailsPayload {
-  customer?: { name?: string; email?: string | null; phone?: string | null };
-  shipping_address?: OrderAddress;
-  billing_address?: OrderAddress | null;
-}
 
 // Edits the order's own snapshot, never the linked Customer record.
 export const updateOrderCustomerDetails = async (orderId: string, payload: UpdateOrderCustomerDetailsPayload) => {

@@ -13,6 +13,7 @@ const {
 } = require("../constants/order.constants");
 const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
+const { PRODUCT_CONDITION, PRODUCT_AUTHENTICITY } = require("../constants/product.constants");
 const { promoCode } = require("./discount.validation");
 
 const addressSchema = Joi.object({
@@ -107,6 +108,8 @@ const listOrders = {
     payment_status: Joi.string()
       .valid(...Object.values(ORDER_PAYMENT_STATUS))
       .allow(""),
+    // Account invoices past their due date and not fully paid.
+    overdue: Joi.boolean(),
   }),
 };
 
@@ -125,10 +128,17 @@ const catalogueLineSchema = Joi.object({
   note: lineNoteSchema,
 });
 
+// Optional invoice chips on a custom line; null leaves the chip off.
+const customLineConditionSchema = Joi.string().valid(...Object.values(PRODUCT_CONDITION)).allow(null);
+const customLineAuthenticitySchema = Joi.string().valid(...Object.values(PRODUCT_AUTHENTICITY)).allow(null);
+const customLineNameSchema = Joi.string().trim().min(1).max(CUSTOM_ORDER_ITEM_NAME_MAX);
+
 // Order-only line typed in at POS, prices are dollars, shipping is per unit.
 const customLineSchema = Joi.object({
   is_custom: Joi.valid(true).required(),
-  name: Joi.string().trim().min(1).max(CUSTOM_ORDER_ITEM_NAME_MAX).required(),
+  name: customLineNameSchema.required(),
+  condition: customLineConditionSchema.default(null),
+  authenticity: customLineAuthenticitySchema.default(null),
   unit_price: Joi.number().greater(0).required(),
   shipping_cost: Joi.number().min(0).default(0),
   quantity: Joi.number().integer().min(1).default(1),
@@ -306,10 +316,22 @@ const removeOrderItem = {
   query: Joi.object({ version: orderVersion.required() }),
 };
 
+// Descriptive fields of a custom line, editable after payment too.
+const updateCustomItemDetails = {
+  params: orderItemParams,
+  body: Joi.object({
+    version: orderVersion.required(),
+    name: customLineNameSchema.required(),
+    condition: customLineConditionSchema.required(),
+    authenticity: customLineAuthenticitySchema.required(),
+  }),
+};
+
 module.exports = {
   addOrderItem,
   updateOrderItemQuantity,
   removeOrderItem,
+  updateCustomItemDetails,
   createOrder,
   discountQuote,
   byIdParam,

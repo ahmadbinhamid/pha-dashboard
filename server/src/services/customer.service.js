@@ -10,12 +10,13 @@ const { findBusinessIdsByName, resolveBusinessId } = require("./business.service
 
 // Other reps shown on a profile, a business rarely has more.
 const REPRESENTATIVES_LIMIT = 50;
-const BUSINESS_POPULATE = { path: "business_id", select: "name" };
+const BUSINESS_POPULATE = { path: "business_id", select: "name payment_terms_days" };
 
-// Flattens the populated ref to an id plus a { _id, name } for display.
+// Flattens the populated ref to an id plus the business's display fields.
 function withBusiness(doc) {
   const obj = typeof doc.toObject === "function" ? doc.toObject() : doc;
-  const business = obj.business_id?.name ? { _id: obj.business_id._id, name: obj.business_id.name } : null;
+  const ref = obj.business_id;
+  const business = ref?.name ? { _id: ref._id, name: ref.name, payment_terms_days: ref.payment_terms_days ?? null } : null;
   return { ...obj, business_id: business?._id ?? obj.business_id ?? null, business };
 }
 

@@ -2,11 +2,18 @@
 
 const Joi = require("joi");
 const { PHONE_PATTERN, phoneMessages } = require("./customer.validation");
+const { PAYMENT_TERMS_DAYS } = require("../constants/business.constants");
 
 const nameField = Joi.string().trim().min(1).max(200).messages({
   "string.empty": "Business name is required",
   "any.required": "Business name is required",
 });
+
+// Null clears the account, so invoices fall back to due on receipt.
+const paymentTermsField = Joi.number()
+  .valid(...PAYMENT_TERMS_DAYS)
+  .allow(null)
+  .messages({ "any.only": `Account terms must be ${PAYMENT_TERMS_DAYS.join(", ")} days` });
 
 const representativeSchema = Joi.object({
   name: Joi.string().trim().min(1).required().messages({
@@ -28,12 +35,13 @@ function noDuplicateReps(reps, helpers) {
 const createBusiness = {
   body: Joi.object({
     name: nameField.required(),
+    payment_terms_days: paymentTermsField.default(null),
     representatives: Joi.array().items(representativeSchema).max(50).default([]).custom(noDuplicateReps),
   }),
 };
 
 const updateBusiness = {
-  body: Joi.object({ name: nameField.required() }),
+  body: Joi.object({ name: nameField.required(), payment_terms_days: paymentTermsField }),
 };
 
 const byIdParam = {

@@ -10,6 +10,8 @@ export const representativeSchema = z.object({
 export const businessFormSchema = z
   .object({
     name: z.string().trim().min(1, "Business name is required"),
+    // SingleSelect value: "" for no terms, else the day count as a string.
+    payment_terms_days: z.string(),
     representatives: z.array(representativeSchema),
   })
   // Mirrors the server: one name+email pair per business, case aside.

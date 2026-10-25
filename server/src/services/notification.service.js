@@ -1,46 +1,65 @@
 // services/notification.service.js
-// Owns all Notification model access. Order-type recipients are every active admin/superadmin
-// on the tenant, matching the same role check order.routes.js gates order-reading routes behind.
+// Owns Notification access; order alerts go to the tenant's active admins.
 
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 const websocketService = require("./websocket.service");
+const { NOTIFICATION_TYPE } = require("../constants/notification.constants");
 
-async function notifyNewOrder(tenantId, order) {
-  const recipients = await User.find({
+function orderRecipients(tenantId) {
+  return User.find({
     tenant_id: tenantId,
     role: { $in: [USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN] },
     status: USER_STATUS.ACTIVE,
   }).select("_id");
+}
 
-  if (!recipients.length) return;
+const orderData = (order) => ({
+  order_id: order._id,
+  order_number: order.order_number,
+  channel: order.channel,
+  total: order.total,
+  customer_name: order.customer?.company_name || order.customer?.name || null,
+});
 
-  const data = {
-    order_id: order._id,
-    order_number: order.order_number,
-    channel: order.channel,
-    total: order.total,
-    customer_name: order.customer?.name || null,
-  };
-  const title = "New order received";
-  const message = `Order ${order.order_number} was just placed${data.customer_name ? ` by ${data.customer_name}` : ""}.`;
+/** One insert for every recipient x notification, then a live push each. */
+async function sendOrderNotifications(tenantId, notifications) {
+  const recipients = await orderRecipients(tenantId);
+  if (!recipients.length || !notifications.length) return;
 
   await Notification.insertMany(
-    recipients.map((r) => ({
-      tenant_id: tenantId,
-      user_id: r._id,
-      type: "order.new",
-      title,
-      message,
-      data,
-    })),
+    recipients.flatMap((r) => notifications.map((n) => ({ tenant_id: tenantId, user_id: r._id, ...n }))),
   );
+  const userIds = recipients.map((r) => r._id.toString());
+  notifications.forEach((n) => websocketService.emitToUsers(userIds, "notification:new", n));
+}
 
-  websocketService.emitToUsers(
-    recipients.map((r) => r._id.toString()),
-    "notification:new",
-    { type: "order.new", title, message, data },
+async function notifyNewOrder(tenantId, order) {
+  const data = orderData(order);
+  await sendOrderNotifications(tenantId, [
+    {
+      type: NOTIFICATION_TYPE.ORDER_NEW,
+      title: "New order received",
+      message: `Order ${order.order_number} was just placed${data.customer_name ? ` by ${data.customer_name}` : ""}.`,
+      data,
+    },
+  ]);
+}
+
+/** Overdue account invoices for one tenant, one notification per invoice. */
+async function notifyInvoicesOverdue(tenantId, orders) {
+  await sendOrderNotifications(
+    tenantId,
+    orders.map((order) => {
+      const data = orderData(order);
+      return {
+        type: NOTIFICATION_TYPE.ORDER_OVERDUE,
+        title: "Invoice overdue",
+        message: `Order ${order.order_number}${data.customer_name ? ` for ${data.customer_name}` : ""} is past its due date.`,
+        data,
+      };
+    }),
   );
 }
 
@@ -68,4 +87,4 @@ async function markAllAsRead(userId, tenantId) {
   );
 }
 
-module.exports = { notifyNewOrder, listNotifications, markAsRead, markAllAsRead };
+module.exports = { notifyNewOrder, notifyInvoicesOverdue, listNotifications, markAsRead, markAllAsRead };

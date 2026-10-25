@@ -16,7 +16,7 @@ import { Package, ChevronDown, ChevronRight, Globe, EyeOff } from "lucide-react"
 import { ProductRowActionsMenu } from "@/components/products/ProductRowActionsMenu";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
-import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
+import { CONDITION_LABEL, AUTHENTICITY_LABEL } from "@/config/productOptions";
 
 interface ProductRowProps {
   product: Product;
@@ -54,8 +54,8 @@ export function ProductRow({
   onTogglePublish,
 }: ProductRowProps) {
   const coverImage = product.attachments?.[0];
-  const conditionLabel = CONDITIONS.find((c) => c.value === product.condition)?.label ?? product.condition;
-  const authenticityLabel = AUTHENTICITY_OPTIONS.find((a) => a.value === product.authenticity)?.label;
+  const conditionLabel = CONDITION_LABEL[product.condition] ?? product.condition;
+  const authenticityLabel = product.authenticity ? AUTHENTICITY_LABEL[product.authenticity] : null;
 
   return (
     <>

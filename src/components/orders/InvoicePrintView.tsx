@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { TenantLogo } from "@/components/branding/TenantLogo";
 import { InvoiceRichText } from "@/components/orders/InvoiceRichText";
+import { InvoiceItemChips } from "@/components/orders/InvoiceItemChips";
 import { getTenantSettings } from "@/lib/api/tenantSettings";
 import {
   formatCurrencyFromCents,
@@ -11,6 +12,7 @@ import {
 } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import { CHARGES_SHIPPING, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
+import { PAYMENT_TERMS_LABEL } from "@/config/businessOptions";
 import type { OrderDetail } from "@/types/orders";
 
 // Print invoice mirroring invoicePdf.js, fixed colours ignore dark mode.
@@ -94,11 +96,9 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   const exGstSubtotal = order.subtotal - gstAmount;
   // Paid-then-refunded is $0 due, not a shortfall (getBalanceDue).
   const amountDue = getBalanceDue(order.total, order.payments, order.payment_status);
-  const orderDate = new Date(order.created_at).toLocaleDateString("en-AU", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const formatInvoiceDate = (date: string) =>
+    new Date(date).toLocaleDateString("en-AU", { year: "numeric", month: "short", day: "numeric" });
+  const orderDate = formatInvoiceDate(order.created_at);
   // NOTE: no billing address means no Bill To, contact moves to Ship To.
   const billingAddress = order.billing_address;
   // The business heads the block, Attn names which of its reps was billed.
@@ -120,7 +120,13 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
 
   const metaCells = [
     { label: "Invoice Date", value: orderDate },
-    { label: "Due Date", value: "Due on receipt" },
+    // Business account orders carry terms and a due date, as in invoicePdf.js.
+    ...(order.due_date && order.payment_terms_days
+      ? [
+          { label: "Due Date", value: formatInvoiceDate(order.due_date) },
+          { label: "Terms", value: PAYMENT_TERMS_LABEL[order.payment_terms_days] },
+        ]
+      : [{ label: "Due Date", value: "Due on receipt" }]),
     ...(order.reference_number ? [{ label: "Order Number", value: order.reference_number }] : []),
     { label: "Sales Channel", value: channelLabel },
   ];
@@ -246,6 +252,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
                   <div className="text-[13px] font-normal leading-snug">
                     {item.name}
                     {item.sku && ` (SKU: ${item.sku})`}
+                    <InvoiceItemChips item={item} />
                   </div>
                 </td>
                 <td className="py-3 pr-4 text-right align-top">

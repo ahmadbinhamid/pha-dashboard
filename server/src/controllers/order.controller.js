@@ -50,6 +50,7 @@ exports.listOrders = async (req, res) => {
         delivery_method: req.query.delivery_method,
         fulfillment_status: req.query.fulfillment_status,
         payment_status: req.query.payment_status,
+        overdue: req.query.overdue,
         search: req.query.search,
       },
       req.tenantId,
@@ -189,6 +190,11 @@ async function respondWithEdit(req, res, message, edit) {
 exports.updateOrderItemPrice = (req, res) =>
   respondWithEdit(req, res, "Price updated", (user) =>
     orderEditService.updateOrderItemPrice(req.params.id, req.params.itemIndex, req.body, user, req.tenantId),
+  );
+
+exports.updateCustomItemDetails = (req, res) =>
+  respondWithEdit(req, res, "Custom product updated", (user) =>
+    orderEditService.updateCustomItemDetails(req.params.id, req.params.itemId, req.body, user, req.tenantId),
   );
 
 exports.updateOrderShippingCost = (req, res) =>

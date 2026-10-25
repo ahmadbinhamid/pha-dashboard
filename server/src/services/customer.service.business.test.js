@@ -154,5 +154,5 @@ test("renaming to another business's name is a conflict", async () => {
   const tenantId = fixtureId();
   await businessService.createBusiness(tenantId, "ABC Motors");
   const xyz = await businessService.createBusiness(tenantId, "XYZ Auto Group");
-  await assert.rejects(businessService.renameBusiness(xyz._id, tenantId, "abc motors"), (err) => err.code === 11000);
+  await assert.rejects(businessService.updateBusiness(xyz._id, tenantId, { name: "abc motors" }), (err) => err.code === 11000);
 });

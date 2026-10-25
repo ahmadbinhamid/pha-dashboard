@@ -149,6 +149,8 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
         ? {
             is_custom: true,
             name: item.name,
+            condition: item.condition ?? null,
+            authenticity: item.authenticity ?? null,
             unit_price: item.unit_price,
             shipping_cost: item.shipping_cost,
             quantity: item.quantity,

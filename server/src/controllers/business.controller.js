@@ -55,7 +55,8 @@ exports.createBusiness = async (req, res) => {
 
 exports.updateBusiness = async (req, res) => {
   try {
-    const business = await businessService.renameBusiness(req.params.id, req.tenantId, req.body.name);
+    const { name, payment_terms_days } = req.body;
+    const business = await businessService.updateBusiness(req.params.id, req.tenantId, { name, payment_terms_days });
     if (!business) return notFound(res, "Business not found");
     return success(res, business, "Business updated");
   } catch (err) {

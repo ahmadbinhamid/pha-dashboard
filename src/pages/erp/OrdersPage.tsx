@@ -12,10 +12,13 @@ import { StickyTableHead, StickyTableCell } from "@/components/ui/StickyTableCol
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { OrderPaymentStatusBadge } from "@/components/orders/OrderPaymentStatusBadge";
+import { OrderOverdueBadge } from "@/components/orders/OrderOverdueBadge";
+import { isOrderOverdue } from "@/lib/orders/overdue";
 import { OrderChannelBadge } from "@/components/orders/OrderChannelBadge";
 import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu";
 import { getOrders, getOrderStats } from "@/lib/api/orders";
 import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
+import { cn } from "@/utils/cn";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ORDER_STATUSES, ORDER_STATUS_LABEL } from "@/config/orderStatus";
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
@@ -29,14 +32,18 @@ const STATUS_FILTERS: { label: string; value: OrderFulfillmentStatus | "" }[] = 
   ...ORDER_STATUSES.map((value) => ({ label: ORDER_STATUS_LABEL[value], value })),
 ];
 
+// Not a payment status: the API's overdue flag, kept in the same dropdown.
+const OVERDUE_FILTER = "overdue";
+
 // Always derived from actual payments/refunds, never admin-editable.
-const PAYMENT_STATUS_FILTERS: { label: string; value: OrderPaymentStatus | "" }[] = [
+const PAYMENT_STATUS_FILTERS: { label: string; value: OrderPaymentStatus | typeof OVERDUE_FILTER | "" }[] = [
   { label: "All Payment", value: "" },
   { label: "Unpaid", value: "pending_payment" },
   { label: "Partially Paid", value: "partially_paid" },
   { label: "Paid", value: "paid" },
   { label: "Partially Refunded", value: "partially_refunded" },
   { label: "Refunded", value: "refunded" },
+  { label: "Overdue", value: OVERDUE_FILTER },
 ];
 
 const CHANNEL_FILTERS: { label: string; value: OrderChannel | "" }[] = [
@@ -174,7 +181,8 @@ export default function OrdersPage() {
       getOrders({
         search,
         fulfillment_status: fulfillmentStatus,
-        payment_status: paymentStatus,
+        payment_status: paymentStatus === OVERDUE_FILTER ? undefined : paymentStatus,
+        overdue: paymentStatus === OVERDUE_FILTER || undefined,
         channel,
         delivery_method: deliveryMethod,
         page,
@@ -287,7 +295,8 @@ export default function OrdersPage() {
                   return (
                     <TableRow
                       key={order._id}
-                      className="group cursor-pointer"
+                      // Tinted so an overdue account invoice stands out in the list.
+                      className={cn("group cursor-pointer", isOrderOverdue(order) && "bg-danger/5 hover:bg-danger/10")}
                       onClick={() => navigate(`/orders/${order._id}`)}
                     >
                       <StickyTableCell size={36} className="truncate font-medium text-fg">
@@ -295,7 +304,13 @@ export default function OrdersPage() {
                       </StickyTableCell>
                       {isVisible("customer") && (
                         <TableCell className="max-w-52">
-                          <div className="truncate text-fg">{order.customer.name}</div>
+                          {/* Business orders lead with the business, the rep under it */}
+                          {order.customer.company_name && (
+                            <div className="truncate font-semibold text-fg">{order.customer.company_name}</div>
+                          )}
+                          <div className={order.customer.company_name ? "truncate text-xs text-fg/70" : "truncate text-fg"}>
+                            {order.customer.name}
+                          </div>
                           <div className="truncate text-xs text-fg/50">{order.customer.email}</div>
                         </TableCell>
                       )}
@@ -318,7 +333,10 @@ export default function OrdersPage() {
                       )}
                       {isVisible("payment") && (
                         <TableCell>
-                          <OrderPaymentStatusBadge status={order.payment_status} />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <OrderPaymentStatusBadge status={order.payment_status} />
+                            <OrderOverdueBadge order={order} />
+                          </div>
                         </TableCell>
                       )}
                       {isVisible("date") && (

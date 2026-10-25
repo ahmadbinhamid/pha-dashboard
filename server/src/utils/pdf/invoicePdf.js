@@ -4,6 +4,7 @@
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { ORDER_DELIVERY_METHOD } = require("../../constants/order.constants");
+const { PRODUCT_CONDITION_LABEL } = require("../../constants/product.constants");
 const { formatInvoiceNumber } = require("../orderNumberFormat");
 const { richTextToBlocks } = require("../richText");
 const { stripEbayAddressPrefix } = require("../addressFormat");
@@ -172,11 +173,20 @@ function drawLetterhead(doc, order, companyProfile) {
   return ruleY;
 }
 
+// Business account orders carry terms and a due date, the rest are on receipt.
+function dueDateCells(order) {
+  if (!order.due_date) return [["Due Date", "Due on receipt"]];
+  return [
+    ["Due Date", formatDate(order.due_date)],
+    ["Terms", `${order.payment_terms_days}-day account`],
+  ];
+}
+
 // Order Number is the customer's reference, dropped when blank.
 function drawMetaStrip(doc, order, topY) {
   const cells = [
     ["Invoice Date", formatDate(order.created_at)],
-    ["Due Date", "Due on receipt"],
+    ...dueDateCells(order),
     ...(order.reference_number ? [["Order Number", order.reference_number]] : []),
     ["Sales Channel", channelLabelFor(order)],
   ];
@@ -292,9 +302,35 @@ const ROW_PAD_BOTTOM = 9;
 // Title with its SKU in brackets on the same line, saving a row per item.
 const itemLabel = (item) => (item.sku ? `${item.name} (SKU: ${item.sku})` : item.name);
 
+// Condition then authenticity; custom lines have neither, so no chips.
+const itemChips = (item) => [PRODUCT_CONDITION_LABEL[item.condition], item.authenticity].filter(Boolean);
+
+const CHIP_SIZE = 5.5;
+const CHIP_HEIGHT = 10;
+const CHIP_PAD_X = 4;
+const CHIP_GAP = 4;
+const CHIP_ROW_GAP = 4;
+
+// pdfkit can't flow a boxed chip inline, so chips get a row under the title.
+function drawItemChips(doc, chips, x, y) {
+  let cursor = x;
+  doc.font(FONT_BOLD).fontSize(CHIP_SIZE);
+  chips.forEach((chip) => {
+    const text = chip.toUpperCase();
+    const width = doc.widthOfString(text, { characterSpacing: 0.6 }) + CHIP_PAD_X * 2;
+    doc.save().roundedRect(cursor, y, width, CHIP_HEIGHT, 2).lineWidth(0.6).strokeColor(COLORS.text).stroke().restore();
+    doc.fillColor(COLORS.text).text(text, cursor + CHIP_PAD_X, y + 2.6, { lineBreak: false, characterSpacing: 0.6 });
+    cursor += width + CHIP_GAP;
+  });
+  return y + CHIP_HEIGHT;
+}
+
+const chipRowHeight = (item) => (itemChips(item).length ? CHIP_ROW_GAP + CHIP_HEIGHT : 0);
+
 function estimateItemRowHeight(doc, item) {
   doc.font(FONT).fontSize(9.5);
-  return doc.heightOfString(itemLabel(item), { width: COLUMN_WIDTHS.item }) + ROW_PAD_TOP + ROW_PAD_BOTTOM;
+  const titleHeight = doc.heightOfString(itemLabel(item), { width: COLUMN_WIDTHS.item });
+  return titleHeight + chipRowHeight(item) + ROW_PAD_TOP + ROW_PAD_BOTTOM;
 }
 
 function drawItemRow(doc, item, index, y) {
@@ -308,8 +344,10 @@ function drawItemRow(doc, item, index, y) {
 
   doc.font(FONT).fontSize(9.5).fillColor(COLORS.text);
   const label = itemLabel(item);
-  const leftBottom = textY + doc.heightOfString(label, { width: COLUMN_WIDTHS.item });
+  let leftBottom = textY + doc.heightOfString(label, { width: COLUMN_WIDTHS.item });
   doc.text(label, PAGE_MARGIN + COLUMNS.item, textY, { width: COLUMN_WIDTHS.item });
+  const chips = itemChips(item);
+  if (chips.length) leftBottom = drawItemChips(doc, chips, PAGE_MARGIN + COLUMNS.item, leftBottom + CHIP_ROW_GAP);
 
   const discount = item.discount_amount || 0;
   const lineTotal = item.unit_price * item.quantity - discount;
@@ -610,4 +648,4 @@ function buildInvoicePdfBuffer(order, { totalPaidCents = 0, totalRefundedCents =
   });
 }
 
-module.exports = { buildInvoicePdfBuffer, partyBlockLines };
+module.exports = { buildInvoicePdfBuffer, partyBlockLines, itemChips, dueDateCells };

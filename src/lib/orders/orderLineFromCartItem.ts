@@ -11,6 +11,8 @@ export function orderLineFromCartItem(item: AddCartItemInput): OrderLineInput {
       shipping_cost: item.shipping_cost,
       quantity: item.quantity ?? 1,
       discount_amount: item.default_discount ?? 0,
+      condition: item.condition ?? null,
+      authenticity: item.authenticity ?? null,
     };
   }
   return { product: item.product_id as string, variant: item.variant_id, quantity: item.quantity ?? 1 };

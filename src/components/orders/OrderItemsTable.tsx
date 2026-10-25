@@ -12,6 +12,8 @@ import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders"
 import { useOrderEdit } from "@/hooks/useOrderEdit";
 import { OrderItemQuantityStepper } from "@/components/orders/OrderItemQuantityStepper";
 import { RemoveOrderItemButton } from "@/components/orders/RemoveOrderItemButton";
+import { EditCustomItemButton } from "@/components/orders/EditCustomItemButton";
+import { AUTHENTICITY_LABEL, CONDITION_LABEL } from "@/config/productOptions";
 import type { OrderItem } from "@/types/orders";
 import {
   editableUnitPriceFormSchema,
@@ -177,9 +179,11 @@ interface OrderItemsTableProps {
   version: number;
   // Server-decided (edit_block_reason) and the caller's orders.update.
   editable: boolean;
+  // Custom line name and chips; orders.update alone, paid orders included.
+  canEditDetails: boolean;
 }
 
-export function OrderItemsTable({ items, orderId, version, editable }: OrderItemsTableProps) {
+export function OrderItemsTable({ items, orderId, version, editable, canEditDetails }: OrderItemsTableProps) {
   const [itemColWidth, setItemColWidth] = useState<number | null>(null);
 
   return (
@@ -215,7 +219,24 @@ export function OrderItemsTable({ items, orderId, version, editable }: OrderItem
                       Custom
                     </Badge>
                   )}
+                  {item.is_custom && canEditDetails && (
+                    <EditCustomItemButton orderId={orderId} version={version} item={item} />
+                  )}
                 </div>
+                {(item.condition || item.authenticity) && (
+                  <div className="mt-1 flex gap-1">
+                    {item.condition && (
+                      <Badge variant="outline" className="px-1.5 py-0.5 text-3xs font-medium">
+                        {CONDITION_LABEL[item.condition]}
+                      </Badge>
+                    )}
+                    {item.authenticity && (
+                      <Badge variant="outline" className="px-1.5 py-0.5 text-3xs font-medium">
+                        {AUTHENTICITY_LABEL[item.authenticity]}
+                      </Badge>
+                    )}
+                  </div>
+                )}
                 {item.note && (
                   <div className="mt-1 rounded-xs bg-bg-2 px-2 py-1 text-xs text-fg/55">{item.note}</div>
                 )}

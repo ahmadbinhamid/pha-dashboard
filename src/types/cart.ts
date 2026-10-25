@@ -1,3 +1,5 @@
+import type { ProductAuthenticity, ProductCondition } from "@/types/product";
+
 export interface CartItem {
   // Dedup key: `${product_id}:${variant_id ?? "base"}`, or `custom:<uuid>`.
   key: string;
@@ -18,6 +20,9 @@ export interface CartItem {
   note: string | null;
   // Dollars; custom lines prefill the Review step's discount with this.
   default_discount: number | null;
+  // Optional invoice chips typed in for a custom line.
+  condition?: ProductCondition | null;
+  authenticity?: ProductAuthenticity | null;
 }
 
 export type AddCartItemInput = Omit<CartItem, "quantity" | "note" | "is_custom" | "default_discount"> & {

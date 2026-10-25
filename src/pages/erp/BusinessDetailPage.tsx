@@ -16,6 +16,7 @@ import { BusinessFormModal } from "@/components/businesses/BusinessFormModal";
 import { AddExistingRepresentativeModal } from "@/components/businesses/AddExistingRepresentativeModal";
 import { AddRepresentativeMenu } from "@/components/businesses/AddRepresentativeMenu";
 import { PERMISSIONS } from "@/config/permissions";
+import { NO_PAYMENT_TERMS_LABEL, PAYMENT_TERMS_LABEL } from "@/config/businessOptions";
 import { useToast } from "@/context";
 import { BUSINESSES_QUERY_KEY, deleteBusiness, getBusiness } from "@/lib/api/businesses";
 import { getCustomer, updateCustomer } from "@/lib/api/customers";
@@ -27,7 +28,7 @@ export default function BusinessDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addRepOpen, setAddRepOpen] = useState(false);
   const [newRepName, setNewRepName] = useState("");
@@ -99,14 +100,15 @@ export default function BusinessDetailPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{business.name}</h1>
           <p className="mt-1 text-sm text-fg/55">
-            {reps.length} representative{reps.length !== 1 ? "s" : ""}
+            {reps.length} representative{reps.length !== 1 ? "s" : ""} ·{" "}
+            {business.payment_terms_days ? PAYMENT_TERMS_LABEL[business.payment_terms_days] : NO_PAYMENT_TERMS_LABEL}
           </p>
         </div>
         <div className="flex gap-2 self-start">
           <Can permission={PERMISSIONS.customers.update}>
-            <Button variant="secondary" size="md" className="gap-2" onClick={() => setRenameOpen(true)}>
+            <Button variant="secondary" size="md" className="gap-2" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4" />
-              Rename
+              Edit
             </Button>
           </Can>
           <Can permission={PERMISSIONS.customers.delete}>
@@ -183,7 +185,7 @@ export default function BusinessDetailPage() {
         )}
       </Card>
 
-      <BusinessFormModal open={renameOpen} onOpenChange={setRenameOpen} business={business} />
+      <BusinessFormModal open={editOpen} onOpenChange={setEditOpen} business={business} />
       <CustomerFormModal
         open={addRepOpen}
         onOpenChange={setAddRepOpen}

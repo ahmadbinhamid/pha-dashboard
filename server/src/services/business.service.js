@@ -64,13 +64,16 @@ async function resolveBusinessId(tenantId, name) {
 }
 
 /** Throws code 11000 when the name is taken, so callers can answer 409. */
-async function createBusiness(tenantId, name) {
-  const business = await Business.create({ tenant_id: tenantId, name });
+async function createBusiness(tenantId, name, { payment_terms_days = null } = {}) {
+  const business = await Business.create({ tenant_id: tenantId, name, payment_terms_days });
   return business.toObject();
 }
 
-async function renameBusiness(id, tenantId, name) {
-  return Business.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: { name } }, { new: true }).lean();
+/** Omitted fields are left as they are; throws 11000 on a taken name. */
+async function updateBusiness(id, tenantId, { name, payment_terms_days }) {
+  const set = { name };
+  if (payment_terms_days !== undefined) set.payment_terms_days = payment_terms_days;
+  return Business.findOneAndUpdate({ _id: id, tenant_id: tenantId }, { $set: set }, { new: true, runValidators: true }).lean();
 }
 
 async function softDeleteBusiness(id, tenantId) {
@@ -92,7 +95,7 @@ module.exports = {
   findBusinessIdsByName,
   resolveBusinessId,
   createBusiness,
-  renameBusiness,
+  updateBusiness,
   softDeleteBusiness,
   removeBusiness,
 };

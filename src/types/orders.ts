@@ -1,4 +1,6 @@
-import type { PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
+import type { OrderPaymentChoice, PaymentMethod, PaymentProvider, PaymentStatus, Refund } from "@/types/payment";
+import type { ProductAuthenticity, ProductCondition } from "@/types/product";
+import type { PaymentTermsDays } from "@/types/business";
 
 // Legacy rollup, badges use OrderFulfillmentStatus/OrderPaymentStatus.
 export type OrderStatus =
@@ -45,6 +47,9 @@ export interface OrderItem {
   variant: string | null;
   name: string;
   sku: string | null;
+  // Snapshot of the product's attributes; null on custom lines.
+  condition: ProductCondition | null;
+  authenticity: ProductAuthenticity | null;
   unit_price: number; // cents, GST-inclusive
   quantity: number;
   // Per-line discount (cents), only ever set on manual/admin-created orders.
@@ -77,6 +82,8 @@ interface CatalogueOrderItemPayload {
 interface CustomOrderItemPayload {
   is_custom: true;
   name: string;
+  condition?: ProductCondition | null;
+  authenticity?: ProductAuthenticity | null;
   unit_price: number; // dollars
   shipping_cost?: number; // dollars, per unit
   quantity: number;
@@ -154,6 +161,9 @@ export interface Order {
   carrier_name: string | null;
   // Optional customer/staff reference (e.g. a PO number), not system-made.
   reference_number: string | null;
+  // Business account terms locked at creation; null means due on receipt.
+  payment_terms_days: PaymentTermsDays | null;
+  due_date: string | null;
   payment: OrderPaymentSummary | null;
   created_at: string;
   updated_at: string;
@@ -175,10 +185,72 @@ export type OrderEditConflictCode = "not_editable" | "payment_in_flight" | "paym
 // A line to add: a catalogue product/variant, or a custom order-only line.
 export type OrderLineInput =
   | { product: string; variant: string | null; quantity: number }
-  | { is_custom: true; name: string; unit_price: number; shipping_cost: number; quantity: number; discount_amount: number };
+  | {
+      is_custom: true;
+      name: string;
+      unit_price: number;
+      shipping_cost: number;
+      quantity: number;
+      discount_amount: number;
+      condition: ProductCondition | null;
+      authenticity: ProductAuthenticity | null;
+    };
+
+// Descriptive fields of a custom line, editable after payment too.
+export interface CustomItemDetailsPayload {
+  name: string;
+  condition: ProductCondition | null;
+  authenticity: ProductAuthenticity | null;
+}
 
 export interface OrderStats {
   totalRevenueCents: number;
   pendingFulfillmentCount: number;
   unpaidCount: number;
+}
+
+// Request shapes for the /order API.
+
+export interface OrderListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  channel?: string;
+  delivery_method?: string;
+  fulfillment_status?: string;
+  payment_status?: string;
+  // Account invoices past their due date and not fully paid.
+  overdue?: boolean;
+}
+
+export interface SendOrderEmailPayload {
+  tracking_number?: string;
+  carrier_name?: string;
+}
+
+export interface CreateManualOrderPayload {
+  customer_id: string;
+  items: CreateManualOrderItemPayload[];
+  delivery_method: OrderDeliveryMethod;
+  shipping_address?: OrderAddress;
+  billing_address?: OrderAddress | null;
+  note?: string | null;
+  // Staff-entered order number, saved as reference_number.
+  reference_number?: string | null;
+  // "payment_link" collects nothing now; the Stripe link is made separately.
+  payment_method: OrderPaymentChoice;
+  amount_paid?: number; // dollars — omit/0 leaves the invoice fully outstanding
+  shipping_cost?: number; // dollars — overrides the computed per-item shipping total
+}
+
+export interface RecordOrderPaymentPayload {
+  payment_method: PaymentMethod;
+  amount: number; // dollars
+}
+
+export interface UpdateOrderCustomerDetailsPayload {
+  customer?: { name?: string; email?: string | null; phone?: string | null };
+  shipping_address?: OrderAddress;
+  billing_address?: OrderAddress | null;
 }

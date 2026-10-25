@@ -20,6 +20,9 @@ const PRODUCT_AUTHENTICITY = Object.freeze({
   AFTERMARKET: "Aftermarket",
 });
 
+// Customer-facing wording, e.g. on invoices.
+const PRODUCT_CONDITION_LABEL = Object.freeze({ NEW: "New", USED: "Used" });
+
 // Brand-from-make backfill buckets; only SET is written, the rest are skips.
 const BRAND_BACKFILL_OUTCOME = Object.freeze({
   SET: "set",
@@ -58,6 +61,7 @@ module.exports = {
   PRODUCT_STATUS,
   PRODUCT_CONDITION,
   PRODUCT_AUTHENTICITY,
+  PRODUCT_CONDITION_LABEL,
   BRAND_BACKFILL_OUTCOME,
   PRODUCT_SORT,
   PRODUCT_SORT_OPTIONS,

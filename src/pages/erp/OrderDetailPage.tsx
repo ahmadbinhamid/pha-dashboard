@@ -247,7 +247,13 @@ export default function OrderDetailPage() {
                 description={`${itemCount} item${itemCount !== 1 ? "s" : ""}`}
                 right={lineEditable && <AddOrderItemsButton orderId={order._id} version={order.version} />}
               />
-              <OrderItemsTable items={order.items} orderId={order._id} version={order.version} editable={lineEditable} />
+              <OrderItemsTable
+                items={order.items}
+                orderId={order._id}
+                version={order.version}
+                editable={lineEditable}
+                canEditDetails={canUpdate}
+              />
               <div className="space-y-1.5 border-t border-border px-5 py-4 text-sm">
                 <div className="flex justify-between text-fg/60">
                   <span>Subtotal</span>

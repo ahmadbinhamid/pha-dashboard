@@ -11,6 +11,8 @@ const {
   ORDER_FULFILLMENT_STATUS,
 } = require("../constants/order.constants");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
+const { PRODUCT_CONDITION, PRODUCT_AUTHENTICITY } = require("../constants/product.constants");
+const { PAYMENT_TERMS_DAYS } = require("../constants/business.constants");
 
 const orderItemSchema = new Schema(
   {
@@ -29,6 +31,9 @@ const orderItemSchema = new Schema(
     // Snapshot at order time, so later product edits don't rewrite history.
     name: { type: String, required: true },
     sku: { type: String, default: null },
+    // Null condition means a pre-snapshot line; invoices read the product.
+    condition: { type: String, enum: [...Object.values(PRODUCT_CONDITION), null], default: null },
+    authenticity: { type: String, enum: [...Object.values(PRODUCT_AUTHENTICITY), null], default: null },
     unit_price: { type: Number, required: true }, // cents, GST-inclusive
     quantity: { type: Number, required: true, min: 1 },
     // Per-line discount (cents), editable later on eBay/manual orders.
@@ -197,6 +202,11 @@ const orderSchema = buildSchema({
   carrier_name: { type: String, default: null },
   // Free-form customer/staff reference, not the order or invoice number.
   reference_number: { type: String, default: null },
+  // Business account terms locked at creation; null means due on receipt.
+  payment_terms_days: { type: Number, enum: [...PAYMENT_TERMS_DAYS, null], default: null },
+  due_date: { type: Date, default: null },
+  // Set once the overdue alert goes out, so each invoice alerts only once.
+  overdue_notified_at: { type: Date, default: null },
 });
 
 // New orders have real item ids, or refunds would demand a migration.
@@ -219,5 +229,10 @@ orderSchema.index(
 );
 // Backs the per-tenant order list view (default sort: newest first).
 orderSchema.index({ tenant_id: 1, created_at: -1 });
+// Overdue sweep: only account orders carry a due date, so the index is small.
+orderSchema.index(
+  { overdue_notified_at: 1, due_date: 1 },
+  { partialFilterExpression: { due_date: { $type: "date" } } },
+);
 
 module.exports = model("Order", orderSchema);

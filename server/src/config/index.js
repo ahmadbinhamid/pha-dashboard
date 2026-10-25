@@ -170,6 +170,13 @@ const config = {
     digestSweepEnabled: get("INVENTORY_DIGEST_SWEEP_ENABLED", "true") === "true",
   },
 
+  orders: {
+    // How often overdue account invoices are checked for a new alert.
+    overdueSweepIntervalMinutes: getNum("ORDER_OVERDUE_SWEEP_INTERVAL_MINUTES", 60),
+    // Checked at sweep time, so flipping it takes effect without a restart.
+    overdueSweepEnabled: get("ORDER_OVERDUE_SWEEP_ENABLED", "true") === "true",
+  },
+
   stripe: {
     // BYOK: each tenant supplies its own Stripe keys; only currency is global.
     currency: get("STRIPE_CURRENCY", "aud"),

@@ -37,8 +37,8 @@ async function getBusinessWithRepresentatives(id, tenantId) {
 }
 
 /** All or nothing: a failed rep insert removes the business and its reps. */
-async function createBusinessWithRepresentatives(tenantId, { name, representatives = [] }) {
-  const business = await businessService.createBusiness(tenantId, name);
+async function createBusinessWithRepresentatives(tenantId, { name, payment_terms_days = null, representatives = [] }) {
+  const business = await businessService.createBusiness(tenantId, name, { payment_terms_days });
   try {
     await Customer.insertMany(
       representatives.map((rep) => ({

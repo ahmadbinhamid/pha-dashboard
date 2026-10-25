@@ -18,5 +18,7 @@ export function buildCustomCartItem(
     shipping_cost: values.shipping ? Number(values.shipping) : 0,
     max_quantity: null,
     default_discount: values.discount ? Number(values.discount) : null,
+    condition: values.condition || null,
+    authenticity: values.authenticity || null,
   };
 }

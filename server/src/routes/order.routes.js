@@ -73,6 +73,14 @@ router.patch(
   validate(v.updateOrderItemQuantity),
   asyncHandler(ctrl.updateOrderItemQuantity),
 );
+// Name and chips of a custom line; allowed after payment, no money moves.
+router.patch(
+  "/:id/items/:itemId/details",
+  auth(),
+  requirePermission("orders.update"),
+  validate(v.updateCustomItemDetails),
+  asyncHandler(ctrl.updateCustomItemDetails),
+);
 router.delete(
   "/:id/items/:itemId",
   auth(),

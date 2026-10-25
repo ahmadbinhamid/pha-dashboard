@@ -5,7 +5,7 @@ import { buildCustomCartItem } from "./customCartItem.ts";
 import type { CartItem } from "@/types/cart";
 
 // Identical content on purpose: rows must be told apart by key alone.
-const VALUES = { title: "Fitting labour", price: "40", shipping: "20", discount: "" };
+const VALUES = { title: "Fitting labour", price: "40", shipping: "20", discount: "", condition: "", authenticity: "" } as const;
 
 function cartWithTwoCustomLines() {
   const first = buildCustomCartItem(VALUES);

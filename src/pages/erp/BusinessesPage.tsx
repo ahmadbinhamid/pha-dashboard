@@ -15,6 +15,7 @@ import { CustomersTableSkeleton } from "@/components/customers/CustomersTableSke
 import { BusinessFormModal } from "@/components/businesses/BusinessFormModal";
 import { PERMISSIONS } from "@/config/permissions";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { PAYMENT_TERMS_LABEL } from "@/config/businessOptions";
 import { BUSINESSES_QUERY_KEY, getBusinesses } from "@/lib/api/businesses";
 
 export default function BusinessesPage() {
@@ -101,6 +102,7 @@ export default function BusinessesPage() {
               <TableHeader>
                 <TableRow>
                   <StickyTableHead size={52}>Name</StickyTableHead>
+                  <TableHead>Account Terms</TableHead>
                   <TableHead className="text-right">Representatives</TableHead>
                   <TableHead className="text-right">Created</TableHead>
                 </TableRow>
@@ -115,6 +117,9 @@ export default function BusinessesPage() {
                     <StickyTableCell size={52} className="truncate font-medium text-fg">
                       {business.name}
                     </StickyTableCell>
+                    <TableCell className="text-fg/60">
+                      {business.payment_terms_days ? PAYMENT_TERMS_LABEL[business.payment_terms_days] : "—"}
+                    </TableCell>
                     <TableCell className="text-right text-fg/60">{business.representatives_count}</TableCell>
                     <TableCell className="text-right text-fg/60">
                       {new Date(business.created_at).toLocaleDateString()}
