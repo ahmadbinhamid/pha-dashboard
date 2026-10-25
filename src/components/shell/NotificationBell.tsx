@@ -1,98 +1,36 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/ActionsMenu";
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/api/notifications";
-import { formatCurrencyFromCents } from "@/utils/format";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/Popover";
+import { NotificationPanel } from "@/components/notifications/NotificationPanel";
+import { useNotificationFeed, useNotificationReadActions } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/types/notification";
 
-// Socket push is primary; this refetch is only a fallback if the socket drops.
-const FALLBACK_REFETCH_MS = 60_000;
-
-function timeAgo(iso: string) {
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
+// Popover, not a menu: the panel holds tabs and a scrolling list.
 export function NotificationBell() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  // The "all" feed carries every unread count, for the badge and the tabs.
+  const { data } = useNotificationFeed("all");
+  const { markRead, markAllRead } = useNotificationReadActions();
+  const unreadCount = data?.data?.unread_count ?? 0;
 
-  const { data } = useQuery({
-    queryKey: ["notifications", { page: 1, limit: 10 }],
-    queryFn: () => getNotifications({ page: 1, limit: 10 }),
-    refetchInterval: FALLBACK_REFETCH_MS,
-  });
-
-  const items = data?.data.items ?? [];
-  const unreadCount = data?.data.unread_count ?? 0;
-
-  async function handleSelect(notification: AppNotification) {
-    if (!notification.read_at) {
-      // Optimistic so a stale "unread" state never lingers after the panel closes.
-      queryClient.setQueryData(["notifications", { page: 1, limit: 10 }], (prev: typeof data) =>
-        prev
-          ? {
-              ...prev,
-              data: {
-                ...prev.data,
-                unread_count: Math.max(0, prev.data.unread_count - 1),
-                items: prev.data.items.map((n) =>
-                  n._id === notification._id ? { ...n, read_at: new Date().toISOString() } : n,
-                ),
-              },
-            }
-          : prev,
-      );
-      markNotificationRead(notification._id).catch(() => {
-        queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      });
-    }
+  function handleSelect(notification: AppNotification) {
+    markRead(notification);
+    setOpen(false);
     navigate(`/orders/${notification.data.order_id}`);
   }
 
-  async function handleMarkAllRead() {
-    queryClient.setQueryData(["notifications", { page: 1, limit: 10 }], (prev: typeof data) =>
-      prev
-        ? {
-            ...prev,
-            data: {
-              ...prev.data,
-              unread_count: 0,
-              items: prev.data.items.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })),
-            },
-          }
-        : prev,
-    );
-    try {
-      await markAllNotificationsRead();
-    } finally {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="relative h-9 w-9 shrink-0"
-          aria-label="Notifications"
+          aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
           title="Notifications"
         >
           <Bell className="h-4 w-4" />
@@ -102,48 +40,16 @@ export function NotificationBell() {
             </span>
           )}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 max-w-[92vw]">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm font-semibold">Notifications</span>
-          {unreadCount > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleMarkAllRead}
-              className="h-auto px-1.5 py-0.5 text-xs font-medium text-accent hover:underline"
-            >
-              Mark all read
-            </Button>
-          )}
-        </div>
-        <DropdownMenuSeparator />
-        {items.length === 0 ? (
-          <div className="px-3 py-6 text-center text-sm text-fg/45">No notifications yet</div>
-        ) : (
-          <div className="max-h-96 overflow-y-auto">
-            {items.map((n) => (
-              <DropdownMenuItem
-                key={n._id}
-                onSelect={() => handleSelect(n)}
-                className="flex-col items-start gap-0.5 whitespace-normal py-2.5"
-              >
-                <div className="flex w-full items-start gap-2">
-                  {!n.read_at && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium">{n.title}</div>
-                    <div className="text-xs text-fg/60">
-                      {n.message} · {formatCurrencyFromCents(n.data.total)}
-                    </div>
-                    <div className="mt-0.5 text-2xs text-fg/40">{timeAgo(n.created_at)}</div>
-                  </div>
-                </div>
-              </DropdownMenuItem>
-            ))}
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 max-w-[92vw] p-0">
+        <NotificationPanel
+          unreadCount={unreadCount}
+          unreadByCategory={data?.data?.unread_by_category}
+          onSelect={handleSelect}
+          onMarkAllRead={(tab) => void markAllRead(tab)}
+          onNavigate={() => setOpen(false)}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

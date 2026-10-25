@@ -1,5 +1,5 @@
 // services/notification.service.test.js
-// notifyNewOrder recipients (active admins), push, list/mark-read. Needs Mongo.
+// Recipients and opt-outs, push, tabs, list/mark-read, prefs. Needs Mongo.
 
 const test = require("node:test");
 const { before, after, mock } = require("node:test");
@@ -199,4 +199,66 @@ test("markAllAsRead: only marks the requesting user's notifications within their
   assert.ok(a.read_at);
   assert.ok(b.read_at);
   assert.equal(c.read_at, null, "a notification under a different tenant must not be touched");
+});
+
+test("notifyNewOrder: an admin who turned that channel off gets nothing", async (t) => {
+  const emitSpy = mock.method(websocketService, "emitToUsers", () => {});
+  t.after(() => emitSpy.mock.restore());
+  const tenantId = fixtureId();
+  const optedIn = await makeUser(tenantId, { role: "admin" });
+  const optedOut = await makeUser(tenantId, { role: "admin" });
+  cleanupUsers(t, [optedIn, optedOut]);
+  cleanupNotifications(t, tenantId);
+  await notificationService.updateNotificationPreferences(optedOut._id, { events: { ebay_orders: false } });
+
+  await notificationService.notifyNewOrder(tenantId, makeFakeOrder(tenantId, { channel: "ebay" }));
+  const rows = await Notification.find({ tenant_id: tenantId }).lean();
+  assert.deepEqual(rows.map((r) => String(r.user_id)), [String(optedIn._id)]);
+
+  // Other channels still reach the opted-out admin.
+  await notificationService.notifyNewOrder(tenantId, makeFakeOrder(tenantId, { channel: "manual" }));
+  assert.equal(await Notification.countDocuments({ tenant_id: tenantId, user_id: optedOut._id }), 1);
+});
+
+test("listNotifications: a tab filters its types and unread counts split per tab", async (t) => {
+  const tenantId = fixtureId();
+  const user = await makeUser(tenantId, { role: "admin" });
+  cleanupUsers(t, [user]);
+  cleanupNotifications(t, tenantId);
+  await Notification.insertMany([
+    { tenant_id: tenantId, user_id: user._id, type: "order.new", title: "A", message: "a" },
+    { tenant_id: tenantId, user_id: user._id, type: "order.overdue", title: "B", message: "b" },
+    { tenant_id: tenantId, user_id: user._id, type: "order.overdue", title: "C", message: "c" },
+  ]);
+
+  const invoices = await notificationService.listNotifications(String(user._id), String(tenantId), {
+    page: 1, limit: 10, skip: 0, category: "invoices",
+  });
+  assert.equal(invoices.total, 2);
+  assert.equal(invoices.unread_count, 3);
+  assert.deepEqual(invoices.unread_by_category, { orders: 1, invoices: 2 });
+
+  await notificationService.markAllAsRead(user._id, tenantId, { category: "invoices" });
+  const after = await notificationService.listNotifications(user._id, tenantId, { page: 1, limit: 10, skip: 0 });
+  assert.deepEqual(after.unread_by_category, { orders: 1, invoices: 0 });
+});
+
+test("preferences: everything defaults on and updates are partial", async (t) => {
+  const tenantId = fixtureId();
+  const user = await makeUser(tenantId, { role: "admin" });
+  cleanupUsers(t, [user]);
+  // Simulates a user saved before preferences existed.
+  await User.updateOne({ _id: user._id }, { $unset: { notification_preferences: 1 } });
+
+  const defaults = await notificationService.getNotificationPreferences(user._id);
+  assert.equal(defaults.show_toasts, true);
+  assert.equal(defaults.events.overdue_invoices, true);
+
+  const updated = await notificationService.updateNotificationPreferences(user._id, {
+    events: { storefront_orders: false },
+    show_toasts: false,
+  });
+  assert.equal(updated.events.storefront_orders, false);
+  assert.equal(updated.events.ebay_orders, true);
+  assert.equal(updated.show_toasts, false);
 });

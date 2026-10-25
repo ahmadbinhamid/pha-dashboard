@@ -86,14 +86,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
     permission: PERMISSIONS.settings.view,
     label: "Notifications",
     icon: (p) => <Bell {...p} />,
-    available: false,
-    summary:
-      "Choose which events email you and your team. The in-app notification feed already runs — this is the preference layer over it.",
-    planned: [
-      "Per-event toggles for email and in-app delivery",
-      "Route low-stock and refund alerts to specific people",
-      "Daily or weekly digests instead of one email per event",
-    ],
+    available: true,
   },
   {
     id: "billing",

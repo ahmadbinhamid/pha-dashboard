@@ -1,34 +1,40 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { getToken } from "@/lib/api/client";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/context/toast";
-import type { NotificationData } from "@/types/notification";
+import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
+import { NOTIFICATIONS_QUERY_KEY } from "@/hooks/useNotifications";
+import type { NotificationData, NotificationType } from "@/types/notification";
 
-// Socket.IO connects to the bare server origin, not the REST /api/v1 base path, so strip VITE_API_URL down to just the origin. It can be absolute (dev) or relative (prod, behind a reverse proxy) — `new URL()` throws on a bare relative path with no base, so window.location.origin is passed as the base to make both forms resolve.
+// Socket.IO wants the bare origin; the base resolves a relative (prod) URL.
 function wsOrigin() {
   const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:7000/api/v1";
   try {
     return new URL(apiUrl, window.location.origin).origin;
   } catch {
-    // Last resort — never let a malformed env value crash the app; the socket just won't connect, same as a down server.
+    // A malformed env value must not crash the app; the socket just won't connect.
     return window.location.origin;
   }
 }
 
 interface NotificationPushPayload {
-  type: string;
+  type: NotificationType;
   title: string;
   message: string;
   data: NotificationData;
 }
 
-// Pushes a toast + invalidates the notifications query when websocket.service.js emits "notification:new" — NotificationBell.tsx just reads React Query; this drives it live instead of waiting on its refetchInterval fallback.
+// Live bell updates on "notification:new"; the bell's refetch is a fallback.
 export function NotificationSocketProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { preferences } = useNotificationPreferences({ enabled: isAuthenticated });
+  // A ref, so flipping the pop-up setting doesn't reconnect the socket.
+  const showToastsRef = useRef(true);
+  showToastsRef.current = preferences?.show_toasts ?? true;
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -39,8 +45,13 @@ export function NotificationSocketProvider({ children }: { children: React.React
     const socket = io(wsOrigin(), { auth: { token } });
 
     socket.on("notification:new", (payload: NotificationPushPayload) => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      toast({ title: payload.title, description: payload.message, tone: "default" });
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+      if (!showToastsRef.current) return;
+      toast({
+        title: payload.title,
+        description: payload.message,
+        tone: payload.type === "order.overdue" ? "warning" : "default",
+      });
     });
 
     return () => {

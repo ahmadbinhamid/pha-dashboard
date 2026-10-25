@@ -2,12 +2,27 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { NOTIFICATION_EVENT } = require("../constants/notification.constants");
 const passwordHashingPlugin = require("./plugins/passwordHashing.plugin");
 const { hashPassword } = require("../utils/auth/crypto");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
+const notificationPreferencesSchema = new Schema(
+  {
+    events: {
+      type: new Schema(
+        Object.fromEntries(Object.values(NOTIFICATION_EVENT).map((key) => [key, { type: Boolean, default: true }])),
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+    show_toasts: { type: Boolean, default: true },
+  },
+  { _id: false },
+);
+
 const userSchema = buildSchema({
-  // Backfilled via scripts/backfillTenantId.js; email's unique partial index below is compound with this.
+  // Backfilled by scripts/backfillTenantId.js; part of the unique email index.
   tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true },
   first_name: { type: String, required: true, trim: true },
   last_name: { type: String, required: true, trim: true },
@@ -62,6 +77,8 @@ const userSchema = buildSchema({
     type: Date,
     default: null,
   },
+  // Personal opt-outs; recipient queries treat a missing event as on.
+  notification_preferences: { type: notificationPreferencesSchema, default: () => ({}) },
 });
 
 userSchema.virtual("full_name").get(function () {

@@ -10,6 +10,7 @@ import { StoreSettingsTab } from "@/components/settings/tabs/StoreSettingsTab";
 import { IntegrationsTab } from "@/components/settings/tabs/IntegrationsTab";
 import { UsersTab } from "@/components/settings/tabs/UsersTab";
 import { RolesTab } from "@/components/settings/tabs/RolesTab";
+import { NotificationsTab } from "@/components/settings/tabs/NotificationsTab";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import { SettingsHeaderActionsProvider } from "@/context/settingsHeaderActions";
 import {
@@ -83,6 +84,8 @@ export default function SettingsPage() {
           <UsersTab />
         ) : activeTab.id === "roles" ? (
           <RolesTab />
+        ) : activeTab.id === "notifications" ? (
+          <NotificationsTab />
         ) : (
           <ComingSoonPanel title={activeTab.label} summary={activeTab.summary} planned={activeTab.planned} />
         )}
@@ -91,7 +94,11 @@ export default function SettingsPage() {
       <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-accent/20 bg-accent/5 p-4 text-xs sm:flex-row">
         <div className="flex items-center gap-2 font-medium text-fg">
           <Lock className="h-4 w-4 shrink-0 text-accent" />
-          <span>Settings are saved against your store and apply to everyone on the account.</span>
+          <span>
+            {activeTab.id === "notifications"
+              ? "Notification settings are personal and only change what you see."
+              : "Settings are saved against your store and apply to everyone on the account."}
+          </span>
         </div>
         <div className="flex items-center gap-2 text-2xs font-semibold text-accent">
           <RefreshCw className="h-3.5 w-3.5" />

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
-import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
+import { ORDER_CHANNEL_LABEL } from "@/config/orderChannels";
 import { formatCurrencyFromCents } from "@/utils/format";
 import { CATEGORICAL_COLOR_VARS as CHANNEL_COLOR_VARS } from "@/config/categoricalColors";
 import type { OrderChannel } from "@/types/orders";

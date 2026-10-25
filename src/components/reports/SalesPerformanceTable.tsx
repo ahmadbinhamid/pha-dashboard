@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { DashboardSectionLabel } from "@/components/dashboard/DashboardSectionLabel";
-import { ORDER_CHANNEL_LABEL } from "@/components/orders/OrderChannelBadge";
+import { ORDER_CHANNEL_LABEL } from "@/config/orderChannels";
 import { downloadPdf } from "@/utils/pdf";
 import { formatCurrencyFromCents } from "@/utils/format";
 import type { OrderChannel } from "@/types/orders";
