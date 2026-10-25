@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { OrderStepper } from "@/components/pos/OrderStepper";
 import { OrderSummaryPanel } from "@/components/pos/OrderSummaryPanel";
@@ -15,9 +13,6 @@ import { ReviewOrderStep } from "@/components/pos/steps/ReviewOrderStep";
 import { OrderConfirmationStep } from "@/components/pos/steps/OrderConfirmationStep";
 import type { StepHandle } from "@/components/pos/steps/StepHandle";
 import { useCart } from "@/context/cart";
-import { useToast } from "@/context";
-import { getNextOrderNumber } from "@/lib/api/orders";
-import { formatOrderNumber } from "@/utils/format";
 import { ORDER_DRAFT_STORAGE_KEY, clearOrderDraft } from "@/lib/orderDraftStorage";
 import type { Order, OrderAddress } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
@@ -41,9 +36,6 @@ const STEP_DESCRIPTION: Record<number, string> = {
 // Steps 1-2 sit beside the live summary; 3-4 (review, receipt) are full width.
 const SUMMARY_STEPS = new Set([1, 2]);
 
-// Short, so a sale elsewhere rarely leaves the previewed number stale.
-const NEXT_NUMBER_REFETCH_MS = 30 * 1000;
-
 const EMPTY_ADDRESS: OrderAddress = { address: "", suburb: "", state: "", postcode: "" };
 
 const EMPTY_CUSTOMER_DELIVERY: CustomerDeliveryState = {
@@ -59,6 +51,7 @@ interface WizardStorage {
   step: number;
   customerDelivery: CustomerDeliveryState;
   orderNote: string;
+  referenceNumber: string;
   discounts: Record<string, string>;
   paymentChoice: OrderPaymentChoice | "";
   amountPaidInput: string;
@@ -69,6 +62,7 @@ const EMPTY_WIZARD: WizardStorage = {
   step: 1,
   customerDelivery: EMPTY_CUSTOMER_DELIVERY,
   orderNote: "",
+  referenceNumber: "",
   discounts: {},
   paymentChoice: "",
   amountPaidInput: "",
@@ -99,13 +93,13 @@ function persistWizard(state: WizardStorage) {
 
 export default function CreateOrderPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { items, clearCart } = useCart();
 
   const initial = readStoredWizard();
   const [step, setStep] = useState(initial.step);
   const [customerDelivery, setCustomerDelivery] = useState<CustomerDeliveryState>(initial.customerDelivery);
   const [orderNote, setOrderNote] = useState(initial.orderNote);
+  const [referenceNumber, setReferenceNumber] = useState(initial.referenceNumber);
   const [discounts, setDiscounts] = useState<Record<string, string>>(initial.discounts);
   const [paymentChoice, setPaymentChoice] = useState<OrderPaymentChoice | "">(initial.paymentChoice);
   const [amountPaidInput, setAmountPaidInput] = useState(initial.amountPaidInput);
@@ -113,16 +107,6 @@ export default function CreateOrderPage() {
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
-
-  // Under ["orders"], so the create's invalidation refreshes it too.
-  const { data: nextNumberData } = useQuery({
-    queryKey: ["orders", "next-number"],
-    queryFn: getNextOrderNumber,
-    enabled: step < 4,
-    refetchInterval: NEXT_NUMBER_REFETCH_MS,
-  });
-  const nextNumber = nextNumberData?.data;
-  const previewNumber = nextNumber ? formatOrderNumber(nextNumber.order_number_prefix, nextNumber.order_number) : null;
 
   const customerDeliveryRef = useRef<StepHandle>(null);
   const reviewOrderRef = useRef<StepHandle>(null);
@@ -145,8 +129,17 @@ export default function CreateOrderPage() {
   useEffect(() => {
     // Never persist step 4: it would undo handleOrderCreated's clearOrderDraft.
     if (step === 4) return;
-    persistWizard({ step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput });
-  }, [step, customerDelivery, orderNote, discounts, paymentChoice, amountPaidInput, shippingCostInput]);
+    persistWizard({
+      step,
+      customerDelivery,
+      orderNote,
+      referenceNumber,
+      discounts,
+      paymentChoice,
+      amountPaidInput,
+      shippingCostInput,
+    });
+  }, [step, customerDelivery, orderNote, referenceNumber, discounts, paymentChoice, amountPaidInput, shippingCostInput]);
 
   function goToStep2() {
     if (items.length === 0) return;
@@ -158,14 +151,6 @@ export default function CreateOrderPage() {
   }
 
   function handleOrderCreated(order: Order) {
-    const savedNumber = formatOrderNumber(order.order_number_prefix, order.order_number);
-    if (previewNumber && previewNumber !== savedNumber) {
-      toast({
-        title: `Order saved as ${savedNumber}`,
-        description: `${previewNumber} was taken by another order first.`,
-        tone: "warning",
-      });
-    }
     setCreatedOrder(order);
     setStep(4);
     // Order done and cart cleared: nothing left worth resuming.
@@ -175,6 +160,7 @@ export default function CreateOrderPage() {
   function startNewOrder() {
     setCustomerDelivery(EMPTY_CUSTOMER_DELIVERY);
     setOrderNote("");
+    setReferenceNumber("");
     setDiscounts({});
     setPaymentChoice("");
     setAmountPaidInput("");
@@ -215,12 +201,7 @@ export default function CreateOrderPage() {
       {/* Title, actions and the step rail stay pinned as one block. */}
       <StickyPageHeader className="space-y-4 border-b border-border bg-bg/95 pb-4 backdrop-blur-sm">
         <PageHeader
-          title={
-            <span className="flex items-center gap-2">
-              Create Order
-              {step < 4 && previewNumber && <Badge variant="outline">{previewNumber}</Badge>}
-            </span>
-          }
+          title="Create Order"
           description={STEP_DESCRIPTION[step]}
         >
           {step < 4 && (
@@ -272,6 +253,8 @@ export default function CreateOrderPage() {
           customerDelivery={customerDelivery}
           orderNote={orderNote}
           onOrderNoteChange={setOrderNote}
+          referenceNumber={referenceNumber}
+          onReferenceNumberChange={setReferenceNumber}
           discounts={discounts}
           onDiscountsChange={setDiscounts}
           paymentChoice={paymentChoice}

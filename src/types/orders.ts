@@ -177,12 +177,6 @@ export type OrderLineInput =
   | { product: string; variant: string | null; quantity: number }
   | { is_custom: true; name: string; unit_price: number; shipping_cost: number; quantity: number; discount_amount: number };
 
-// Preview of the number a new order will likely get; not reserved.
-export interface NextOrderNumber {
-  order_number: string;
-  order_number_prefix: string;
-}
-
 export interface OrderStats {
   totalRevenueCents: number;
   pendingFulfillmentCount: number;

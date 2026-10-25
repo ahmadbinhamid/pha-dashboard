@@ -9,6 +9,7 @@ const {
   ORDER_FULFILLMENT_STATUS,
   ORDER_PAYMENT_STATUS,
   CUSTOM_ORDER_ITEM_NAME_MAX,
+  ORDER_REFERENCE_NUMBER_MAX,
 } = require("../constants/order.constants");
 const { ORDER_PAYMENT_CHOICE, PAYMENT_METHOD } = require("../constants/payment.constants");
 const { ADDRESS_TYPE } = require("../constants/shipping.constants");
@@ -144,6 +145,9 @@ const orderLineSchema = Joi.alternatives().conditional(isCustomLine, {
 // The order __v the client loaded, a mismatch is a 409.
 const orderVersion = Joi.number().integer().min(0);
 
+// Staff-entered order number; blank or null clears it.
+const referenceNumberSchema = Joi.string().trim().max(ORDER_REFERENCE_NUMBER_MAX).allow("", null);
+
 // Counter sale for a known customer: line discounts and an amount paid.
 const createManualOrder = {
   body: Joi.object({
@@ -164,6 +168,7 @@ const createManualOrder = {
     }),
     // Customer-facing note for the whole order.
     note: Joi.string().trim().allow("", null).default(null),
+    reference_number: referenceNumberSchema.default(null),
     // payment_link collects nothing now, cash/transfer may record an amount.
     payment_method: Joi.string()
       .valid(...Object.values(ORDER_PAYMENT_CHOICE))
@@ -247,11 +252,10 @@ const updateOrderItemDiscount = {
   }),
 };
 
-// Optional: blank or null clears it.
 const updateOrderReferenceNumber = {
   params: Joi.object({ id: Joi.string().hex().length(24).required() }),
   body: Joi.object({
-    reference_number: Joi.string().trim().allow("", null),
+    reference_number: referenceNumberSchema,
   }),
 };
 

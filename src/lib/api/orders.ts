@@ -9,7 +9,6 @@ import type {
   OrderLineInput,
   OrderFulfillmentStatus,
   OrderStats,
-  NextOrderNumber,
 } from "@/types/orders";
 import type { OrderPaymentChoice, PaymentMethod } from "@/types/payment";
 
@@ -31,11 +30,6 @@ export const getOrders = async (params: OrderListParams = {}) => {
 
 export const getOrderStats = async () => {
   const { data } = await apiClient.get<BeResponse<OrderStats>>("/order/stats");
-  return data;
-};
-
-export const getNextOrderNumber = async () => {
-  const { data } = await apiClient.get<BeResponse<NextOrderNumber>>("/order/next-number");
   return data;
 };
 
@@ -71,6 +65,8 @@ export interface CreateManualOrderPayload {
   shipping_address?: OrderAddress;
   billing_address?: OrderAddress | null;
   note?: string | null;
+  // Staff-entered order number, saved as reference_number.
+  reference_number?: string | null;
   // "payment_link" collects nothing now; the Stripe link is made separately.
   payment_method: OrderPaymentChoice;
   amount_paid?: number; // dollars — omit/0 leaves the invoice fully outstanding

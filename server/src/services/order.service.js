@@ -69,12 +69,6 @@ async function nextOrderNumber(tenantId) {
   return padSequence(counter.seq);
 }
 
-// Read-only preview; the create still claims a number atomically.
-async function peekNextOrderNumber(tenant) {
-  const counter = await Counter.findById(tenantCounterKey(tenant._id, "order_number")).lean();
-  return { order_number: padSequence((counter?.seq ?? 0) + 1), order_number_prefix: tenant.order_number_prefix };
-}
-
 // Own sequence: invoice numbering must not assume one order = one invoice.
 async function nextInvoiceNumber(tenantId) {
   const counter = await Counter.findOneAndUpdate(
@@ -237,6 +231,7 @@ async function createManualOrder(
     shipping_address,
     billing_address,
     note,
+    reference_number,
     amount_paid = 0,
     payment_method,
     shipping_cost: shippingCostOverride,
@@ -295,6 +290,7 @@ async function createManualOrder(
     shipping_address: isPickup ? null : shipping_address,
     billing_address: isPickup ? null : billing_address || null,
     note: note || null,
+    reference_number: reference_number || null,
     subtotal,
     shipping_cost,
     tax_amount,
@@ -996,7 +992,6 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
 
 module.exports = {
   createOrder,
-  peekNextOrderNumber,
   quoteOrderDiscount,
   createManualOrder,
   recordOrderPayment,

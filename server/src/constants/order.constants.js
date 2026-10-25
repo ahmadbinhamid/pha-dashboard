@@ -54,6 +54,9 @@ const UNPAID_ORDER_STATUSES = Object.freeze([ORDER_STATUS.PENDING_PAYMENT, ORDER
 // Title cap for custom (order-only) lines entered at POS.
 const CUSTOM_ORDER_ITEM_NAME_MAX = 200;
 
+// Cap on the staff-entered order number (reference_number), not unique.
+const ORDER_REFERENCE_NUMBER_MAX = 100;
+
 // jsonerr.code on a 409 from an order edit, so the client can explain it.
 const ORDER_EDIT_CONFLICT = Object.freeze({
   NOT_EDITABLE: "not_editable",
@@ -66,6 +69,7 @@ module.exports = {
   ORDER_EDIT_CONFLICT,
   ORDER_STATUS,
   CUSTOM_ORDER_ITEM_NAME_MAX,
+  ORDER_REFERENCE_NUMBER_MAX,
   UNPAID_ORDER_STATUSES,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,

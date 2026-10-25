@@ -21,11 +21,14 @@ import type { CartItem } from "@/types/cart";
 import type { CreateManualOrderItemPayload, Order } from "@/types/orders";
 import type { OrderPaymentChoice } from "@/types/payment";
 import { paymentChoiceSchema } from "@/lib/validation/reviewOrder";
+import { ORDER_REFERENCE_NUMBER_MAX } from "@/config/orderItems";
 
 interface ReviewOrderStepProps {
   customerDelivery: CustomerDeliveryState;
   orderNote: string;
   onOrderNoteChange: (note: string) => void;
+  referenceNumber: string;
+  onReferenceNumberChange: (value: string) => void;
   discounts: Record<string, string>;
   onDiscountsChange: (discounts: Record<string, string>) => void;
   paymentChoice: OrderPaymentChoice | "";
@@ -49,6 +52,8 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
     customerDelivery,
     orderNote,
     onOrderNoteChange,
+    referenceNumber,
+    onReferenceNumberChange,
     discounts,
     onDiscountsChange,
     paymentChoice,
@@ -167,6 +172,7 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
       // Joi forbids billing_address for pickup, even null, so omit the key.
       billing_address: needsAddress && useDifferentBilling ? billingAddress : undefined,
       note: orderNote.trim() || null,
+      reference_number: referenceNumber.trim() || null,
       payment_method: paymentCheck.data,
       amount_paid: amountPaid || undefined,
       shipping_cost: chargesShipping && shippingCostInput.trim() !== "" ? shippingTotal : undefined,
@@ -207,13 +213,26 @@ export const ReviewOrderStep = forwardRef<StepHandle, ReviewOrderStepProps>(func
 
           <Card>
             <CardHeader title="Customer Note" description="Visible to the customer on their invoice" />
-            <CardContent>
-              <Textarea
-                value={orderNote}
-                onChange={(e) => onOrderNoteChange(e.target.value)}
-                placeholder="Add a note for this order…"
-                size="sm"
-              />
+            <CardContent className="space-y-4">
+              <FormField label="Order Number" htmlFor="review-order-number" hint="Optional, e.g. the customer's PO number">
+                <Input
+                  id="review-order-number"
+                  value={referenceNumber}
+                  onChange={(e) => onReferenceNumberChange(e.target.value)}
+                  placeholder="Add order number"
+                  maxLength={ORDER_REFERENCE_NUMBER_MAX}
+                  size="sm"
+                />
+              </FormField>
+              <FormField label="Note" htmlFor="review-order-note">
+                <Textarea
+                  id="review-order-note"
+                  value={orderNote}
+                  onChange={(e) => onOrderNoteChange(e.target.value)}
+                  placeholder="Add a note for this order…"
+                  size="sm"
+                />
+              </FormField>
             </CardContent>
           </Card>
 
