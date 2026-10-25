@@ -10,6 +10,7 @@ const Refund = require("../models/Refund");
 const Tenant = require("../models/Tenant");
 const { tenantCounterKey } = require("../utils/tenantCounterKey");
 const { buildWordSearchOr } = require("../utils/regex");
+const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
 const { formatCentsAsDollars } = require("../utils/currency");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
 const { getTotalStockForProductVariant, resolveSkuToIds } = require("./inventory.service");
@@ -801,7 +802,7 @@ async function listOrders(
   { page = 1, limit = 20, skip = 0, status, channel, delivery_method, fulfillment_status, payment_status, search } = {},
   tenantId,
 ) {
-  const filter = { tenant_id: tenantId };
+  const filter = { tenant_id: tenantId, ...excludeAbandonedCheckouts() };
   if (status) filter.status = status;
   if (channel) filter.channel = channel;
   if (delivery_method) filter.delivery_method = delivery_method;
@@ -834,7 +835,7 @@ async function listOrders(
 // One $facet round-trip, revenue excludes cancelled orders.
 async function getOrderStats(tenantId) {
   const [result] = await Order.aggregate([
-    { $match: { tenant_id: tenantId } },
+    { $match: { tenant_id: tenantId, ...excludeAbandonedCheckouts() } },
     {
       $facet: {
         revenue: [

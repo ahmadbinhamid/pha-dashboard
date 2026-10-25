@@ -16,6 +16,7 @@ const {
 } = require("../constants/marketplace.constants");
 const { buildWordSearchOr } = require("../utils/regex");
 const { formatOrderNumber, stripOrderNumberPrefix } = require("../utils/orderNumberFormat");
+const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
 
 // Orders still awaiting settlement — what the dashboard means by "pending".
 const PENDING_ORDER_STATUSES = [ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.PARTIALLY_PAID];
@@ -97,7 +98,7 @@ async function getStockCounts(tenantId, lowStockThreshold) {
 }
 
 async function getPendingOrdersStats(tenantId) {
-  const pendingOrders = await Order.find({ tenant_id: tenantId, status: { $in: PENDING_ORDER_STATUSES } })
+  const pendingOrders = await Order.find({ tenant_id: tenantId, status: { $in: PENDING_ORDER_STATUSES }, ...excludeAbandonedCheckouts() })
     .select("created_at")
     .lean();
 
@@ -225,6 +226,7 @@ async function getOrderVolumeTrend(tenantId, { days = 7, from, to } = {}) {
     tenant_id: tenantId,
     created_at: { $gte: previousSinceUtc, $lt: exclusiveUntilUtc },
     status: { $ne: ORDER_STATUS.CANCELLED },
+    ...excludeAbandonedCheckouts(),
   })
     .select("created_at total items channel")
     .lean();
@@ -312,7 +314,7 @@ async function findRecentStockEvents(tenantId, limit) {
 
 async function getRecentActivity(tenantId, limit = 10) {
   const [recentOrders, recentStockChanges] = await Promise.all([
-    Order.find({ tenant_id: tenantId })
+    Order.find({ tenant_id: tenantId, ...excludeAbandonedCheckouts() })
       .sort({ created_at: -1 })
       .limit(limit)
       .select("order_number order_number_prefix channel status total created_at customer")
@@ -339,7 +341,7 @@ async function listActivity(tenantId, { page = 1, limit = 20, type = "", from, t
   const includeOrders = type !== "stock";
   const includeStock = type !== "order";
 
-  const orderFilter = { tenant_id: tenantId };
+  const orderFilter = { tenant_id: tenantId, ...excludeAbandonedCheckouts() };
   if (hasDateFilter) orderFilter.created_at = dateFilter;
   let strippedSearch = search;
   if (search) {
@@ -408,7 +410,7 @@ async function getActivityAnalytics(tenantId, { from, to } = {}) {
   const dateFilter = { $gte: rangeFrom, $lte: rangeTo };
 
   const [orders, stockChanges] = await Promise.all([
-    Order.find({ tenant_id: tenantId, created_at: dateFilter }).select("created_at").lean(),
+    Order.find({ tenant_id: tenantId, created_at: dateFilter, ...excludeAbandonedCheckouts() }).select("created_at").lean(),
     InventoryHistory.aggregate([
       { $match: { created_at: dateFilter } },
       { $lookup: { from: "products", localField: "product", foreignField: "_id", as: "product" } },

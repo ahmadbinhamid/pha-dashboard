@@ -16,11 +16,14 @@ import { Package, ChevronDown, ChevronRight, Globe, EyeOff } from "lucide-react"
 import { ProductRowActionsMenu } from "@/components/products/ProductRowActionsMenu";
 import { AddToCartButton } from "@/components/pos/AddToCartButton";
 import { STOCK_STATUS_CONFIG } from "@/config/stockStatus";
+import { CONDITIONS, AUTHENTICITY_OPTIONS } from "@/config/productOptions";
 
 interface ProductRowProps {
   product: Product;
   channels: ChannelSummary[];
   listings?: AnyMarketplaceListing[];
+  isVisible: (column: string) => boolean;
+  columnCount: number;
   expanded: boolean;
   onToggleExpand: () => void;
   onOpenChannel: (platform: string) => void;
@@ -37,6 +40,8 @@ export function ProductRow({
   product,
   channels,
   listings = [],
+  isVisible,
+  columnCount,
   expanded,
   onToggleExpand,
   onOpenChannel,
@@ -49,14 +54,13 @@ export function ProductRow({
   onTogglePublish,
 }: ProductRowProps) {
   const coverImage = product.attachments?.[0];
+  const conditionLabel = CONDITIONS.find((c) => c.value === product.condition)?.label ?? product.condition;
+  const authenticityLabel = AUTHENTICITY_OPTIONS.find((a) => a.value === product.authenticity)?.label;
 
   return (
     <>
       <TableRow onClick={onClick} className="group cursor-pointer">
-        {/* Product — sticky so it stays readable while the rest scrolls on narrow screens.
-            max-w caps the column so a very long title truncates instead of blowing out the table.
-            Width is user-resizable from any row's own drag handle, not just the
-            header's — see StickyTableColumn. */}
+        {/* Sticky and resizable from any row's handle, not just the header */}
         <StickyTableCell size={64} width={columnWidth} onResize={onColumnResize}>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xs border border-border bg-bg-2">
@@ -87,78 +91,99 @@ export function ProductRow({
           </div>
         </StickyTableCell>
 
-        {/* Status */}
-        <TableCell className="whitespace-nowrap">
-          <Badge variant={product.status === "active" ? "ok" : "muted"}>
-            {product.status === "active" ? "Active" : "Draft"}
-          </Badge>
-        </TableCell>
+        {isVisible("status") && (
+          <TableCell className="whitespace-nowrap">
+            <Badge variant={product.status === "active" ? "ok" : "muted"}>
+              {product.status === "active" ? "Active" : "Draft"}
+            </Badge>
+          </TableCell>
+        )}
 
-        {/* Online */}
-        <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex h-auto w-auto items-center gap-1 rounded-full px-0 py-0 text-fg/40 hover:bg-transparent hover:text-fg/40 data-[state=open]:bg-transparent data-[state=open]:text-fg/40">
-              <Badge variant={product.is_published_online ? "ok" : "muted"} className="cursor-pointer">
-                {product.is_published_online ? "Published" : "Hidden"}
-                <ChevronDown className="h-3 w-3" />
-              </Badge>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onSelect={() => onTogglePublish(true)}>
-                <Globe className="h-3.5 w-3.5 text-fg/50" />
-                Publish
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onTogglePublish(false)}>
-                <EyeOff className="h-3.5 w-3.5 text-fg/50" />
-                Hide
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </TableCell>
+        {isVisible("storefront") && (
+          <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-auto w-auto items-center gap-1 rounded-full px-0 py-0 text-fg/40 hover:bg-transparent hover:text-fg/40 data-[state=open]:bg-transparent data-[state=open]:text-fg/40">
+                <Badge variant={product.is_published_online ? "ok" : "muted"} className="cursor-pointer">
+                  {product.is_published_online ? "Published" : "Hidden"}
+                  <ChevronDown className="h-3 w-3" />
+                </Badge>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => onTogglePublish(true)}>
+                  <Globe className="h-3.5 w-3.5 text-fg/50" />
+                  Publish
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onTogglePublish(false)}>
+                  <EyeOff className="h-3.5 w-3.5 text-fg/50" />
+                  Hide
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TableCell>
+        )}
 
-        {/* Stock */}
-        <TableCell className="whitespace-nowrap">
-          <Badge variant={STOCK_STATUS_CONFIG[product.stock_status]?.variant ?? "muted"}>
-            {STOCK_STATUS_CONFIG[product.stock_status]?.label ?? product.stock_status}
-          </Badge>
-        </TableCell>
+        {isVisible("stock") && (
+          <TableCell className="whitespace-nowrap">
+            <Badge variant={STOCK_STATUS_CONFIG[product.stock_status]?.variant ?? "muted"}>
+              {STOCK_STATUS_CONFIG[product.stock_status]?.label ?? product.stock_status}
+            </Badge>
+          </TableCell>
+        )}
 
-        {/* Channels — expand/collapse control lives here (stopPropagation,
-            independent of the row's own click-to-edit behaviour). */}
-        <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-          {channels.length > 0 ? (
-            <button
-              type="button"
-              onClick={onToggleExpand}
-              className="flex items-center gap-1 rounded-xs px-1 py-0.5 -mx-1 hover:bg-bg-2"
-            >
-              {expanded ? (
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-fg/40" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg/40" />
-              )}
-              <ProductChannelDots channels={channels} listings={listings} />
-            </button>
-          ) : (
-            <span className="text-xs text-fg/35">—</span>
-          )}
-        </TableCell>
+        {isVisible("condition") && (
+          <TableCell className="whitespace-nowrap">
+            <Badge variant={product.condition === "NEW" ? "default" : "muted"}>{conditionLabel}</Badge>
+          </TableCell>
+        )}
 
-        {/* Price */}
-        <TableCell className="whitespace-nowrap text-right font-medium tabular-nums text-sm">
-          {formatCurrency(product.price)}
-        </TableCell>
+        {isVisible("authenticity") && (
+          <TableCell className="whitespace-nowrap">
+            {authenticityLabel ? (
+              <Badge variant="outline">{authenticityLabel}</Badge>
+            ) : (
+              <span className="text-xs text-fg/35">—</span>
+            )}
+          </TableCell>
+        )}
 
-        {/* Created */}
-        <TableCell className="whitespace-nowrap text-right text-xs text-fg/45">
-          {new Date(product.created_at).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </TableCell>
+        {/* Expand toggle stops propagation so it doesn't trigger row click-to-edit */}
+        {isVisible("channels") && (
+          <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+            {channels.length > 0 ? (
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                className="flex items-center gap-1 rounded-xs px-1 py-0.5 -mx-1 hover:bg-bg-2"
+              >
+                {expanded ? (
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-fg/40" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg/40" />
+                )}
+                <ProductChannelDots channels={channels} listings={listings} />
+              </button>
+            ) : (
+              <span className="text-xs text-fg/35">—</span>
+            )}
+          </TableCell>
+        )}
 
-        {/* Actions */}
+        {isVisible("price") && (
+          <TableCell className="whitespace-nowrap text-right font-medium tabular-nums text-sm">
+            {formatCurrency(product.price)}
+          </TableCell>
+        )}
+
+        {isVisible("created") && (
+          <TableCell className="whitespace-nowrap text-right text-xs text-fg/45">
+            {new Date(product.created_at).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </TableCell>
+        )}
+
         <TableCell className="w-px whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-end gap-1">
             <AddToCartButton product={product} display="icon" />
@@ -167,9 +192,9 @@ export function ProductRow({
         </TableCell>
       </TableRow>
 
-      {expanded && channels.length > 0 && (
+      {expanded && isVisible("channels") && channels.length > 0 && (
         <TableRow className="bg-bg-2/50 hover:bg-bg-2/50">
-          <TableCell colSpan={8} className="p-0">
+          <TableCell colSpan={columnCount} className="p-0">
             <div className="px-5 py-2">
               <ProductChannelDetail
                 channels={channels}

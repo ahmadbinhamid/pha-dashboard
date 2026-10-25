@@ -5,6 +5,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { ORDER_STATUS, ORDER_CHANNEL } = require("../constants/order.constants");
+const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
 const { getInventoryValue, getInventoryValueByCategory } = require("./dashboard.service");
 
 function startOfUtcDay(date) {
@@ -38,6 +39,7 @@ async function fetchRangeOrdersWithProductInfo(tenantId, { exclusiveUntilUtc, pr
     tenant_id: tenantId,
     status: { $ne: ORDER_STATUS.CANCELLED },
     created_at: { $gte: previousSinceUtc, $lt: exclusiveUntilUtc },
+    ...excludeAbandonedCheckouts(),
   })
     .select("created_at channel total items")
     .lean();

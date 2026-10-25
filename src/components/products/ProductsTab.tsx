@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SingleSelect } from "@/components/ui/SingleSelect";
+import { ManageColumns } from "@/components/ui/ManageColumns";
+import { useColumnVisibility, type ColumnDef } from "@/hooks/useColumnVisibility";
 import { ProductRow } from "@/components/products/ProductRow";
 import { ProductSearchField } from "@/components/products/ProductSearchField";
 import { ProductVehicleChips } from "@/components/products/ProductVehicleChips";
@@ -53,12 +55,28 @@ const STOCK_FILTERS = [
   { label: "Out of Stock", value: "out_of_stock" },
 ];
 
+// Product and Actions are structural; the rest are hideable, per browser.
+const PRODUCT_COLUMNS: ColumnDef[] = [
+  { key: "product", label: "Product", alwaysVisible: true },
+  { key: "status", label: "Status" },
+  { key: "storefront", label: "Storefront" },
+  { key: "stock", label: "Stock" },
+  { key: "condition", label: "Condition" },
+  { key: "authenticity", label: "Authenticity" },
+  { key: "channels", label: "Channels" },
+  { key: "price", label: "Price" },
+  { key: "created", label: "Created" },
+];
+
 // Channel set comes from GET /channels, never hardcoded, so new adapters show
 export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { visibility, toggleColumn, isVisible } = useColumnVisibility("products", PRODUCT_COLUMNS);
+  // Optional visible columns plus the structural Product and Actions columns.
+  const columnCount = PRODUCT_COLUMNS.filter((c) => !c.alwaysVisible && isVisible(c.key)).length + 2;
 
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
@@ -297,6 +315,9 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
               searchPlaceholder="Search categories…"
               className="w-48"
             />
+            {view === "list" && (
+              <ManageColumns columns={PRODUCT_COLUMNS} visibility={visibility} onToggle={toggleColumn} />
+            )}
           </div>
         </div>
 
@@ -329,33 +350,37 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                   >
                     Product
                   </StickyTableHead>
-                  <TableHead>Status</TableHead>
+                  {isVisible("status") && <TableHead>Status</TableHead>}
                   {/* "Storefront": published on own shop differs from listed on channels */}
-                  <TableHead>Storefront</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1.5">
-                      Channels ({channels.length})
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-fg/35 hover:text-fg/60" aria-label="What the channel dots mean">
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-56 normal-case">
-                          <p className="font-semibold text-fg">One dot per sales channel</p>
-                          <ul className="mt-1.5 space-y-1">
-                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-ok" />Live</li>
-                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warn" />Needs a push, or on sale</li>
-                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-danger" />Error</li>
-                            <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-fg/20" />Not listed</li>
-                          </ul>
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
-                  </TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Created</TableHead>
+                  {isVisible("storefront") && <TableHead>Storefront</TableHead>}
+                  {isVisible("stock") && <TableHead>Stock</TableHead>}
+                  {isVisible("condition") && <TableHead>Condition</TableHead>}
+                  {isVisible("authenticity") && <TableHead>Authenticity</TableHead>}
+                  {isVisible("channels") && (
+                    <TableHead>
+                      <span className="inline-flex items-center gap-1.5">
+                        Channels ({channels.length})
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="text-fg/35 hover:text-fg/60" aria-label="What the channel dots mean">
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-56 normal-case">
+                            <p className="font-semibold text-fg">One dot per sales channel</p>
+                            <ul className="mt-1.5 space-y-1">
+                              <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-ok" />Live</li>
+                              <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warn" />Needs a push, or on sale</li>
+                              <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-danger" />Error</li>
+                              <li className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-fg/20" />Not listed</li>
+                            </ul>
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
+                    </TableHead>
+                  )}
+                  {isVisible("price") && <TableHead className="text-right">Price</TableHead>}
+                  {isVisible("created") && <TableHead className="text-right">Created</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -366,6 +391,8 @@ export function ProductsTab({ channels }: { channels: ChannelSummary[] }) {
                     product={product}
                     channels={channels}
                     listings={listingsByProduct.get(product._id) ?? []}
+                    isVisible={isVisible}
+                    columnCount={columnCount}
                     expanded={expandedIds.has(product._id)}
                     onToggleExpand={() => toggleExpanded(product._id)}
                     onOpenChannel={(platform) => handleOpenChannel(product, platform)}

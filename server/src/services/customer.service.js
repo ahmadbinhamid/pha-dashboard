@@ -3,6 +3,7 @@
 const Customer = require("../models/Customer");
 const Order = require("../models/Order");
 const { UNPAID_ORDER_STATUSES } = require("../constants/order.constants");
+const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
 const { buildWordSearchOr } = require("../utils/regex");
 const { CUSTOMER_SOURCE } = require("../constants/customer.constants");
 const { findBusinessIdsByName, resolveBusinessId } = require("./business.service");
@@ -23,7 +24,7 @@ async function getOrderStatsByCustomer(customerIds) {
   if (!customerIds.length) return new Map();
 
   const stats = await Order.aggregate([
-    { $match: { customer_id: { $in: customerIds } } },
+    { $match: { customer_id: { $in: customerIds }, ...excludeAbandonedCheckouts() } },
     {
       $group: {
         _id: "$customer_id",
@@ -62,7 +63,7 @@ async function getCustomerStats(tenantId) {
       },
     ]),
     Order.aggregate([
-      { $match: { tenant_id: tenantId, customer_id: { $ne: null }, status: { $in: UNPAID_ORDER_STATUSES } } },
+      { $match: { tenant_id: tenantId, customer_id: { $ne: null }, status: { $in: UNPAID_ORDER_STATUSES }, ...excludeAbandonedCheckouts() } },
       { $group: { _id: "$customer_id" } },
       { $count: "customers" },
     ]),
@@ -139,7 +140,7 @@ async function getCustomerById(id, tenantId) {
   const shaped = withBusiness(customer);
 
   const [orders, statsMap, representatives] = await Promise.all([
-    Order.find({ customer_id: customer._id, tenant_id: tenantId })
+    Order.find({ customer_id: customer._id, tenant_id: tenantId, ...excludeAbandonedCheckouts() })
       .sort({ created_at: -1 })
       .populate("payment", "status amount amount_refunded card_brand card_last4 paid_at"),
     getOrderStatsByCustomer([customer._id]),
