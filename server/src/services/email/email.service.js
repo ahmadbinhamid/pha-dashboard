@@ -284,6 +284,17 @@ async function sendProductInfo({ to, name, productTitle, productSku, attachments
   );
 }
 
+/** Store's own inbox, always from the platform mailbox (never BYOK SMTP). */
+async function sendNewOrderToMerchant({ to, order, companyProfile }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `New order ${order.number} — ${order.total} from ${order.customer_name}`,
+    template: "newOrderMerchant",
+    variables: { ...order, ...tenantBrandVars(companyProfile), platform_name: config.emailBrand.appName },
+  });
+}
+
 /** Always from the platform mailbox (never BYOK SMTP); items is never empty. */
 async function sendLowStockDigest({ to, items, companyProfile, pdfBase64, pdfFilename }) {
   return enqueueEmailJob({
@@ -389,4 +400,5 @@ module.exports = {
   sendPaymentLink,
   sendProductInfo,
   sendLowStockDigest,
+  sendNewOrderToMerchant,
 };

@@ -19,7 +19,10 @@ export const markNotificationRead = async (id: string) => {
 };
 
 export const markAllNotificationsRead = async (category?: NotificationCategory) => {
-  const { data } = await apiClient.patch<BeResponse<null>>("/notification/read-all", null, { params: { category } });
+  // No body: axios would send null as "null", which strict express.json rejects.
+  const { data } = await apiClient.patch<BeResponse<null>>("/notification/read-all", undefined, {
+    params: { category },
+  });
   return data;
 };
 

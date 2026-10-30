@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api/notifications";
+import { useToast } from "@/context";
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_PAGE_SIZE, NOTIFICATION_TYPE_CATEGORY } from "@/config/notifications";
 import type { BeResponse } from "@/lib/api/base";
 import type {
@@ -70,6 +71,7 @@ function markTabRead(cache: FeedCache, tab: NotificationTab): FeedCache {
 // Optimistic, so a stale "unread" state never lingers after the panel closes.
 export function useNotificationReadActions() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const refetch = () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
 
   function markRead(notification: AppNotification) {
@@ -82,6 +84,9 @@ export function useNotificationReadActions() {
     queryClient.setQueriesData<FeedCache>({ queryKey: NOTIFICATIONS_QUERY_KEY }, (c) => markTabRead(c, tab));
     try {
       await markAllNotificationsRead(categoryOf(tab));
+    } catch (err) {
+      // The refetch below restores the real state; say why it bounced back.
+      toast({ title: "Couldn't mark notifications read", description: (err as Error).message, tone: "danger" });
     } finally {
       void refetch();
     }

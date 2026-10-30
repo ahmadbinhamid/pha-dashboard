@@ -27,6 +27,13 @@ const ORDER_DELIVERY_METHOD = Object.freeze({
   LOCAL_DELIVERY: "local_delivery",
 });
 
+// Human wording for emails and notices.
+const ORDER_DELIVERY_METHOD_LABEL = Object.freeze({
+  [ORDER_DELIVERY_METHOD.DELIVERY]: "Delivery",
+  [ORDER_DELIVERY_METHOD.PICKUP]: "Pickup",
+  [ORDER_DELIVERY_METHOD.LOCAL_DELIVERY]: "Local delivery",
+});
+
 // Local delivery is arranged by staff, so checkout never offers it.
 const STOREFRONT_DELIVERY_METHODS = Object.freeze([ORDER_DELIVERY_METHOD.DELIVERY, ORDER_DELIVERY_METHOD.PICKUP]);
 
@@ -75,6 +82,7 @@ module.exports = {
   ORDER_REFERENCE_NUMBER_MAX,
   UNPAID_ORDER_STATUSES,
   UNPAID_ORDER_PAYMENT_STATUSES,
+  ORDER_DELIVERY_METHOD_LABEL,
   ORDER_CHANNEL,
   ORDER_DELIVERY_METHOD,
   STOREFRONT_DELIVERY_METHODS,
