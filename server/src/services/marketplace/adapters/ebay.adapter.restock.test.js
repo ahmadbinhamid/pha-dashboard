@@ -272,3 +272,20 @@ test("live-looking offer but eBay says the item ended: rebuilt under the same SK
   assert.equal(result.external_offer_id, "O-FRESH");
   assert.equal(result.external_listing_id, "L-NEW");
 });
+
+test("offer deleted on eBay (25713 'not available'): a fresh offer is published", async () => {
+  getOffer.mock.mockImplementation(async () => {
+    throw new ebayApiService.EbayApiError("getOffer failed: 404", {
+      status: 404,
+      body: JSON.stringify({ errors: [{ errorId: EBAY_ERROR_CODE.OFFER_NOT_AVAILABLE, message: "This Offer is not available." }] }),
+    });
+  });
+  const onOfferCreated = mock.fn(async () => {});
+  const result = await ebayAdapter.update(resolvedFor(3), SETTINGS, { onOfferCreated });
+  assert.equal(createOffer.mock.callCount(), 1);
+  assert.equal(publishOffer.mock.callCount(), 1);
+  assert.deepEqual(onOfferCreated.mock.calls[0].arguments, ["O-FRESH"]);
+  assert.equal(result.external_offer_id, "O-FRESH");
+  assert.equal(result.external_listing_id, "L-NEW");
+});
+

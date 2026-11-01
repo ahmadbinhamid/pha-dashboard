@@ -155,12 +155,15 @@ function isPriceLockedBySaleError(err) {
   return err instanceof EbayApiError && err.hasErrorId(EBAY_ERROR_CODE.PRICE_LOCKED_BY_ACTIVE_SALE);
 }
 
-// Stale/deleted offer id; see EBAY_ERROR_CODE for why two codes mean this.
+// eBay reports a stale or deleted offer id under any of these codes.
+const OFFER_MISSING_CODES = Object.freeze([
+  EBAY_ERROR_CODE.OFFER_NOT_FOUND_INPUT,
+  EBAY_ERROR_CODE.OFFER_NOT_FOUND_RESOURCE,
+  EBAY_ERROR_CODE.OFFER_NOT_AVAILABLE,
+]);
+
 function isOfferMissingError(err) {
-  return (
-    err instanceof EbayApiError &&
-    (err.hasErrorId(EBAY_ERROR_CODE.OFFER_NOT_FOUND_INPUT) || err.hasErrorId(EBAY_ERROR_CODE.OFFER_NOT_FOUND_RESOURCE))
-  );
+  return err instanceof EbayApiError && OFFER_MISSING_CODES.some((code) => err.hasErrorId(code));
 }
 
 // Soft-skips 25019 (offer in an active sale); resolves once the sale ends.

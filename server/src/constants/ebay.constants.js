@@ -22,6 +22,8 @@ const EBAY_ERROR_CODE = Object.freeze({
   // Stored offer id eBay no longer knows (validation error or 404): recreate.
   OFFER_NOT_FOUND_INPUT: 25604,
   OFFER_NOT_FOUND_RESOURCE: 25710,
+  // "This Offer is not available": a 404 for an offer deleted on eBay's side.
+  OFFER_NOT_AVAILABLE: 25713,
 });
 
 // eBay's definitive "this listing ended", even when the offer still says live.
