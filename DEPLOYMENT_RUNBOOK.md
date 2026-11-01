@@ -54,9 +54,9 @@ CLIENT_URL=<real production dashboard URL>
 ```
 Currently `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET` still hold the **sandbox** keyset (`SBX-...`) — fine while testing, but swap to the production keyset (and get a separate production `EBAY_REDIRECT_URI`/RuName for it) before any tenant needs real eBay listings to go live.
 
-**Domain migration (`partshubaustralia.com.au` → `autopartspro.au`), dashboard only:** the project's domain going forward is `autopartspro.au` — `app.` for the dashboard, `payment.`/`*.` for payment links. `CLIENT_URL`/`UPLOADS_URL`/`PAYMENT_LINK_DOMAIN` now point at `autopartspro.au`, and `nginx.conf` has a new `app.autopartspro.au` server block.
+**Domain and brand (`Parts Manager`, `partsmanager.com.au`):** `app.` serves the dashboard and API, `payment.` and `<store-slug>.` serve payment links, and the bare domain plus `www.` serve the marketing site (`autopartspro-web`). The storefront stays on `partshubaustralia.com.au`. The old `app.autopartspro.au` host only serves `/uploads/` (for eBay descriptions, feeds and emails sent before the move) and 301-redirects everything else; remove that block once every channel listing has been re-synced.
 
-⚠️ **`admin.partshubaustralia.com.au` has been fully removed** — its nginx block, cert references, and `CORS_ALLOWED_ORIGINS` entry are gone. **This breaks `pha-storefront`'s API calls immediately on deploy** — that separate repo still has `VITE_API_URL` hardcoded to `https://admin.partshubaustralia.com.au/api/v1`, which now resolves to nothing (the redirect block no longer lists that hostname, and no server block presents a cert for it). Rebuild and redeploy `pha-storefront` with `VITE_API_URL=https://app.autopartspro.au/api/v1` **before or immediately after** this deploy — the storefront checkout/product-browsing flow is down until then. The storefront's own domain (`partshubaustralia.com.au`/`www.`) was not touched and keeps working for anything that isn't an API call.
+Image URLs are never stored with a domain: uploads are saved as file names and built from `UPLOADS_URL` on read, so a future domain change is `.env` only. `scripts/normalizeUploadRefs.js` converts any legacy full URLs, and `scripts/retargetStripeWebhooks.js` moves every store's Stripe webhook to `CLIENT_URL` (both dry-run by default, `--confirm` to write).
 
 **New this deploy — confirm these explicitly:**
 ```
@@ -65,7 +65,7 @@ JWT_EXPIRES_IN=2h          # was 1d; shrinks token exposure window. No refresh-t
 STRIPE_DEV_WEBHOOK_SECRET=  # LEAVE UNSET/BLANK in production. Dev-only fallback for testing
                             # webhooks locally with `stripe listen` — must never be set here,
                             # or it becomes a second valid signature production would accept.
-PAYMENT_LINK_DOMAIN=autopartspro.au  # apex domain payment links are built under
+PAYMENT_LINK_DOMAIN=partsmanager.com.au  # apex domain payment links are built under
                             # (payment.<this>, or <tenant-slug>.<this> per tenant, see
                             # Tenant.payment_domain_mode). Requires the DNS + cert work below
                             # BEFORE this deploy's nginx rebuild, or nginx won't start at all.
@@ -77,16 +77,12 @@ ALERTS_TO=                  # Still blank — set to whatever inbox should get p
                             # MongoDB connection failure (the only thing that triggers it).
 ```
 
-**Payment link domain — DNS + cert. Status: done, both certs issued, deploy already happened.**
-DNS: GoDaddy zone for `autopartspro.au` has `A @`, `A app`, `A payment`, and `A *` all pointed at `34.116.109.117`.
-
-Certs issued 2026-08-03, both expire **2026-11-01**:
-- `app.autopartspro.au` — issued via `certbot certonly --standalone` (had to `docker compose stop nginx` first to free port 80, then `docker compose up -d nginx` after).
-- `wildcard.autopartspro.au` (covers `payment.` + `*.`) — issued via `certbot certonly --manual --preferred-challenges dns`, two `_acme-challenge` TXT records added manually in GoDaddy.
-
-⚠️ **Neither cert auto-renews as issued** — confirmed via `certbot renew --dry-run` (fails on both: standalone needs port 80 free, which docker nginx permanently occupies; manual needs `--manual-auth-hook`, none provided). The `certbot-dns-godaddy` plugin is already installed on the server (`pip3 show certbot-dns-godaddy` confirms it, `certbot plugins` lists `dns-godaddy`) but not yet wired up with real GoDaddy API credentials or used to reissue either cert. **To do before ~October 2026:** get a GoDaddy Production API key ([developer.godaddy.com/keys](https://developer.godaddy.com/keys)), save to `/etc/letsencrypt/godaddy/credentials.ini`, then reissue both via `certbot certonly --dns-godaddy --dns-godaddy-credentials ... --force-renewal` (same `--cert-name`s as above) — this makes both fully unattended via the existing certbot systemd timer. Until then, redoing the manual DNS-01 dance by hand before expiry is the fallback.
-
-The bare `autopartspro.au` apex (landing page) has its DNS `A` record but **no nginx server block** — out of scope, not part of the dashboard.
+**DNS and certificates (VentraIP DNS, server `34.116.109.117`):**
+- DNS: `A app`, `A payment`, `A *`, `A @` and `A www` all point at the server.
+- The shared proxy (`~/autopartspro-proxy`) runs a `certbot` container from `docker-compose.override.yml`. It renews every webroot certificate automatically every 12h, and nginx reloads itself every 6h.
+- Webroot certificates, renewing automatically: `partsmanager.com.au` (app + payment), `site.partsmanager.com.au` (bare + www), `partshubaustralia.com.au` (storefront) and `app.autopartspro.au` (legacy uploads).
+- `*.partsmanager.com.au` (per-store payment links) needs a DNS-01 challenge, which VentraIP can't automate. Move the zone to Cloudflare and use `certbot-dns-cloudflare` to issue and renew it.
+- `nginx/nginx.conf` is a single-file bind mount: edit it in place (`cat new > nginx/nginx.conf`), never `mv` over it, or the container keeps reading the old file.
 
 **Leave unchanged:** `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (platform mailbox, still used for OTP/password-reset/alerts).
 

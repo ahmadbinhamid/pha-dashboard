@@ -5,7 +5,7 @@ const { runScript } = require("../src/utils/scriptCli");
 const { registerTenantWithAdmin } = require("../src/services/tenant.service");
 const { findAllUsersByEmail } = require("../src/services/user.service");
 
-const DEFAULT_COMPANY = "AutoPartsPro Demo";
+const DEFAULT_COMPANY = "Parts Manager Demo";
 
 function flag(name) {
   return process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) || null;

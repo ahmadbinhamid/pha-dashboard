@@ -33,7 +33,7 @@ test("resolveProductUrl: a verified default Domain wins over the linkDomain fall
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -58,7 +58,7 @@ test("resolveProductUrl: for a platform WITHOUT requiresStorefront, falls back t
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -67,7 +67,7 @@ test("resolveProductUrl: for a platform WITHOUT requiresStorefront, falls back t
   const tenant = await makeTenant(suffix);
 
   const url = await resolveProductUrl(tenant._id, `widget-${suffix}`, `SKU-${suffix}`, "ebay");
-  const expectedHost = `${tenant.slug.replace(/-/g, "")}.autopartspro.au`;
+  const expectedHost = `${tenant.slug.replace(/-/g, "")}.partsmanager.com.au`;
   assert.equal(url, `https://${expectedHost}/product/widget-${suffix}`);
 });
 
@@ -76,7 +76,7 @@ test("resolveProductUrl: TASK 2 — a platform WITH requiresStorefront refuses t
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -100,7 +100,7 @@ test("resolveProductUrl: a non-default active Domain does NOT count — falls ba
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -116,7 +116,7 @@ test("resolveProductUrl: a non-default active Domain does NOT count — falls ba
   });
 
   const url = await resolveProductUrl(tenant._id, `widget-${suffix}`, `SKU-${suffix}`, "ebay");
-  const expectedHost = `${tenant.slug.replace(/-/g, "")}.autopartspro.au`;
+  const expectedHost = `${tenant.slug.replace(/-/g, "")}.partsmanager.com.au`;
   assert.equal(url, `https://${expectedHost}/product/widget-${suffix}`);
 });
 
@@ -125,7 +125,7 @@ test("resolveProductUrl: a non-default active Domain still doesn't count for a r
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -200,7 +200,7 @@ test("resolveProductUrl: an unregistered/unknown platform is treated as having n
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });
@@ -209,7 +209,7 @@ test("resolveProductUrl: an unregistered/unknown platform is treated as having n
   const tenant = await makeTenant(suffix);
 
   const url = await resolveProductUrl(tenant._id, `widget-${suffix}`, `SKU-${suffix}`, "some-future-unregistered-platform");
-  const expectedHost = `${tenant.slug.replace(/-/g, "")}.autopartspro.au`;
+  const expectedHost = `${tenant.slug.replace(/-/g, "")}.partsmanager.com.au`;
   assert.equal(url, `https://${expectedHost}/product/widget-${suffix}`);
 });
 
@@ -218,7 +218,7 @@ test("resolveProductUrl: the generated path is exactly /product/<slug> (singular
   t.after(() => mongoose.disconnect());
 
   const originalLinkDomain = config.payment.linkDomain;
-  config.payment.linkDomain = "autopartspro.au";
+  config.payment.linkDomain = "partsmanager.com.au";
   t.after(() => {
     config.payment.linkDomain = originalLinkDomain;
   });

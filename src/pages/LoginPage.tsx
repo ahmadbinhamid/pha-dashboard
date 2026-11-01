@@ -3,13 +3,11 @@ import { LoginCard } from "@/components/auth/LoginCard";
 
 const HIGHLIGHTS = ["Inventory", "Pricing", "Orders"];
 
-// Split layout: brand panel (left, reading-order convention) + form panel, the standard B2B login shape.
-// Below `lg`, collapses to a stacked layout: a short brand header (logo + headline only) plus a full-bleed form sheet pulled up over it, the "brand header + bottom sheet" mobile pattern. LoginCard's own logo is never shown since the page's header already carries the mark.
-// The dark panel's ink/white colors are literal, not tokens — same exception CLAUDE.md carves out for full-bleed dark overlays, confirmed here because `bg-bg`/`text-fg` resolve through a `:root`-substituted alias that a nested `.dark` class can't override (only `<html>.dark` can). `--accent` is exempt since it's identical in both themes.
+// Literal dark colours: tokens resolve via :root, so a nested .dark can't flip.
 export default function LoginPage() {
   return (
     <main className="min-h-dvh bg-bg lg:grid lg:grid-cols-2">
-      {/* Full brand panel — lg and up. Three flex zones (logo/headline/copyright), headline as the only flex-1, keeps the logo pinned top and copyright pinned bottom at any viewport height. */}
+      {/* Brand panel (lg+): only the headline flexes, pinning logo and copyright. */}
       <div className="relative hidden overflow-hidden bg-[hsl(220_20%_6%)] lg:flex lg:flex-col lg:p-12 xl:p-20">
         <div
           className="pointer-events-none absolute inset-0"
@@ -19,7 +17,7 @@ export default function LoginPage() {
               "radial-gradient(900px 560px at 12% 8%, hsl(var(--accent) / 0.38), transparent 60%), radial-gradient(760px 520px at 88% 92%, hsl(var(--accent) / 0.20), transparent 55%)",
           }}
         />
-        {/* Faint graph-paper grid instead of dot noise — reads more "product/dashboard", less generic marketing bg. */}
+        {/* Graph-paper grid reads as product UI, not generic marketing noise. */}
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           aria-hidden="true"
@@ -65,11 +63,11 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 text-xs text-white/40">
-          © {new Date().getFullYear()} Auto Parts Pro
+          © {new Date().getFullYear()} Parts Manager
         </div>
       </div>
 
-      {/* Compact brand header — below `lg` only. Same dark/grid treatment, logo + headline only; sized to ~30% of a phone viewport so the form stays above the fold. */}
+      {/* Below lg: compact header, ~30% of a phone, so the form stays in view. */}
       <div className="relative overflow-hidden bg-[hsl(220_20%_6%)] px-6 pb-10 pt-[max(2rem,env(safe-area-inset-top))] lg:hidden">
         <div
           className="pointer-events-none absolute inset-0"
@@ -104,7 +102,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Form. Below `lg` a full-bleed sheet pulled up over the header (rounded top corners on LoginCard's Card); at `lg`+ a centered floating card. */}
+      {/* Below lg a sheet over the header; lg and up a centred floating card. */}
       <div className="relative -mt-6 min-w-0 lg:mt-0 lg:flex lg:min-h-dvh lg:items-center lg:justify-center lg:overflow-y-auto lg:px-10 lg:py-10">
         <LoginCard />
       </div>

@@ -157,7 +157,7 @@ export function LoginCard() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@autopartspro.com.au"
+                    placeholder="you@partsmanager.com.au"
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

@@ -1,14 +1,5 @@
 // services/google/google.datasource.service.test.js
-//
-// Coverage for the GCP_NOT_REGISTERED auto-recovery added to
-// createDataSource: Google requires a one-time developerRegistration.
-// registerGcp call before a fresh GCP project's Merchant API calls are
-// trusted by any Merchant Center account — found live (see this file's own
-// module comment) as a real 401 on a brand-new project's first connect.
-//
-// No Mongo/Redis needed — pure fetch stubbing.
-//
-// Run with: node --test src/services/google/google.datasource.service.test.js
+// createDataSource's GCP_NOT_REGISTERED recovery; fetch is stubbed only.
 
 const test = require("node:test");
 const { mock } = require("node:test");
@@ -32,13 +23,7 @@ const ALREADY_REGISTERED_BODY = {
 };
 
 test("createDataSource: on GCP_NOT_REGISTERED, registers the GCP project and throws a distinct 'pending' error — does NOT retry create synchronously", async (t) => {
-  // Registration itself is real, but Google's own error message says
-  // propagation can take up to 5 minutes ("try calling the API again in 5
-  // minutes") — found live, an immediate retry (fired ~300ms after a
-  // successful registerGcp call) failed with the exact same
-  // GCP_NOT_REGISTERED error. So createDataSource must register and then
-  // surface a clear "try again shortly" error, never attempt a same-request
-  // retry that's essentially guaranteed to fail on the very first registration.
+  // Registration takes ~5 min to apply, so a same-request retry would fail.
   const calls = [];
   mock.method(global, "fetch", async (url) => {
     calls.push(String(url));
@@ -53,7 +38,7 @@ test("createDataSource: on GCP_NOT_REGISTERED, registers the GCP project and thr
         merchantId: "123",
         feedLabel: "AU",
         contentLanguage: "en",
-        displayName: "Auto Parts Pro — AU",
+        displayName: "Parts Manager — AU",
       }),
     (err) => {
       assert.equal(err.code, "GCP_REGISTRATION_PENDING");
@@ -81,7 +66,7 @@ test("createDataSource: a GCP project already registered to a DIFFERENT merchant
         merchantId: "999",
         feedLabel: "AU",
         contentLanguage: "en",
-        displayName: "Auto Parts Pro — AU",
+        displayName: "Parts Manager — AU",
       }),
     (err) => {
       assert.equal(err.code, "GCP_REGISTRATION_CONFLICT");
@@ -109,7 +94,7 @@ test("createDataSource: an ordinary 401 (not GCP_NOT_REGISTERED) is never treate
         merchantId: "123",
         feedLabel: "AU",
         contentLanguage: "en",
-        displayName: "Auto Parts Pro — AU",
+        displayName: "Parts Manager — AU",
       }),
     /401/,
   );
@@ -128,19 +113,13 @@ test("createDataSource: a 409 (data source already exists) still returns null wi
     merchantId: "123",
     feedLabel: "AU",
     contentLanguage: "en",
-    displayName: "Auto Parts Pro — AU",
+    displayName: "Parts Manager — AU",
   });
   assert.equal(result, null);
   assert.equal(fetchCalls, 1);
 });
 
-// TASK 3 (server/scripts/registerGoogleGcp.js): registerGcp gained an
-// optional third `developerEmail` argument — Google's own documented
-// request body for this method is `{ developerEmail }` (confirmed against
-// https://developers.google.com/merchant/api/guides/quickstart/direct-api-calls's
-// own example). Must stay backward compatible: the pre-existing
-// auto-recovery call from createDataSource above never passes one and has
-// run live against the real API without it.
+// registerGcp's optional developerEmail must not change the no-email call.
 test("registerGcp: includes developerEmail in the request body when provided", async (t) => {
   let sentBody = null;
   mock.method(global, "fetch", async (url, opts) => {
@@ -193,4 +172,27 @@ test("getAccountForGcpRegistration: a non-ok response throws with status/body at
       return true;
     },
   );
+});
+
+test("ensureDataSource: a feed made under the old app name is still found on reconnect", async (t) => {
+  mock.method(global, "fetch", async (url, init = {}) => {
+    if (init.method === "POST") return jsonResponse(400, { error: { code: 400, status: "ALREADY_EXISTS" } });
+    return jsonResponse(200, { dataSources: [{ displayName: "Auto Parts Pro — AU", name: "accounts/123/dataSources/42" }] });
+  });
+  t.after(() => mock.restoreAll());
+
+  const id = await datasourceService.ensureDataSource("tok", { merchantId: "123", feedLabel: "AU", contentLanguage: "en" });
+  assert.equal(id, "42");
+});
+
+test("ensureDataSource: new feeds are created under the Parts Manager name", async (t) => {
+  let body = null;
+  mock.method(global, "fetch", async (url, init = {}) => {
+    body = JSON.parse(init.body);
+    return jsonResponse(200, { name: "accounts/123/dataSources/7" });
+  });
+  t.after(() => mock.restoreAll());
+
+  assert.equal(await datasourceService.ensureDataSource("tok", { merchantId: "123", feedLabel: "AU", contentLanguage: "en" }), "7");
+  assert.equal(body.displayName, "Parts Manager — AU");
 });
