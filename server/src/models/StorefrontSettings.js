@@ -3,6 +3,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { toUploadRef } = require("../utils/uploadUrl");
 const c = require("../constants/storefront.constants");
 
 const hex = (fallback) => ({ type: String, default: fallback, match: c.HEX_COLOR_PATTERN });
@@ -16,9 +17,10 @@ const heroSlideSchema = new Schema({
   cta_url: { type: String, default: "", trim: true },
   secondary_cta_label: { type: String, default: "", trim: true },
   secondary_cta_url: { type: String, default: "", trim: true },
-  image_url: { type: String, required: true, trim: true },
+  // Upload file names only; storefront.service adds the host on read.
+  image_url: { type: String, required: true, trim: true, set: toUploadRef },
   // Optional portrait crop for phones, falls back to image_url.
-  mobile_image_url: { type: String, default: "", trim: true },
+  mobile_image_url: { type: String, default: "", trim: true, set: toUploadRef },
   image_focus: { type: String, enum: Object.values(c.HERO_IMAGE_FOCUS), default: c.HERO_IMAGE_FOCUS.CENTER },
   align: { type: String, enum: Object.values(c.HERO_ALIGN), default: c.HERO_ALIGN.LEFT },
   vertical: { type: String, enum: Object.values(c.HERO_VERTICAL), default: c.HERO_VERTICAL.CENTER },

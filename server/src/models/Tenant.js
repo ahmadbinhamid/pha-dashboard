@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { toUploadRef } = require("../utils/uploadUrl");
 const {
   TENANT_STATUS,
   CONNECTION_STATUS,
@@ -63,9 +64,9 @@ const tenantSchema = buildSchema({
     default: PAYMENT_DOMAIN_MODE.DEFAULT,
   },
 
-  // Invoice/storefront/email branding, as URLs from the /attachment endpoint.
-  logo_url: { type: String, default: null },
-  favicon_url: { type: String, default: null },
+  // Upload file names only; toUploadUrl adds UPLOADS_URL's host on read.
+  logo_url: { type: String, default: null, set: toUploadRef },
+  favicon_url: { type: String, default: null, set: toUploadRef },
   brand_colour: { type: String, default: "#000000" },
   accent_colour: { type: String, default: "#FFFFFF" },
 

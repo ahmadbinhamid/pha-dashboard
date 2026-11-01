@@ -7,6 +7,7 @@ const stripeKeysService = require("./stripe/stripe.keys.service");
 const smtpKeysService = require("./email/smtp.keys.service");
 const { buildPaymentBaseUrl } = require("./stripe/stripe.payment.service");
 const { PAYMENT_DOMAIN_MODE } = require("../constants/tenant.constants");
+const { toUploadUrl } = require("../utils/uploadUrl");
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -89,6 +90,12 @@ async function getDefaultBrand(tenantId) {
   return tenant?.default_brand?.trim() || null;
 }
 
+/** Tenant as the API returns it: stored image refs become current URLs. */
+function toTenantResponse(tenant) {
+  const obj = typeof tenant.toObject === "function" ? tenant.toObject() : tenant;
+  return { ...obj, logo_url: toUploadUrl(obj.logo_url), favicon_url: toUploadUrl(obj.favicon_url) };
+}
+
 // Branding for PDFs/emails; nulls on a missing tenant, as it's best effort.
 async function getCompanyProfile(tenantId) {
   const tenant = await Tenant.findById(tenantId);
@@ -97,7 +104,7 @@ async function getCompanyProfile(tenantId) {
     abn: tenant?.abn || null,
     phone: tenant?.phone || null,
     email: tenant?.email || null,
-    logo_url: tenant?.logo_url || null,
+    logo_url: toUploadUrl(tenant?.logo_url),
     bank_details: tenant?.bank_details || {},
     pickup_location: tenant?.pickup_location || {},
     warranty_text: tenant?.warranty_text || null,
@@ -135,6 +142,7 @@ async function getSmtpStatus(tenantId) {
 module.exports = {
   getTenant,
   getCompanyProfile,
+  toTenantResponse,
   getDefaultBrand,
   getPaymentLinkPreview,
   updateTenantProfile,

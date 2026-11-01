@@ -5,6 +5,7 @@ const { omit } = require("lodash");
 const StorefrontSettings = require("../models/StorefrontSettings");
 const { getDiscountSummary, upsertDiscountByCode } = require("./discount.service");
 const { httpError } = require("../utils/http/httpError");
+const { toUploadUrl } = require("../utils/uploadUrl");
 const { DISCOUNT_STATUS } = require("../constants/discount.constants");
 
 const ANNOUNCEMENT_FIELDS = [
@@ -65,7 +66,12 @@ const SLIDE_DEFAULTS = omit(new StorefrontSettings({ hero_slides: [{ title: "-",
 
 function withDefaults(doc) {
   return {
-    hero_slides: (doc?.hero_slides ?? []).map((s) => ({ ...SLIDE_DEFAULTS, ...s })),
+    hero_slides: (doc?.hero_slides ?? []).map((s) => ({
+      ...SLIDE_DEFAULTS,
+      ...s,
+      image_url: toUploadUrl(s.image_url),
+      mobile_image_url: toUploadUrl(s.mobile_image_url) || "",
+    })),
     hero_settings: { ...BLANK.hero_settings, ...doc?.hero_settings },
     announcement: { ...BLANK.announcement, ...doc?.announcement },
     flash_sale: { ...BLANK.flash_sale, ...doc?.flash_sale },

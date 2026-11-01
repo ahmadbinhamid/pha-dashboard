@@ -3,6 +3,7 @@
 
 const { Types } = require("mongoose");
 const Membership = require("../models/Membership");
+const { toUploadUrl } = require("../utils/uploadUrl");
 const Role = require("../models/Role");
 const {
   MEMBERSHIP_STATUS,
@@ -23,12 +24,15 @@ function toObjectId(id) {
 
 /** The members of one organisation, with their user and role resolved. */
 async function listMembers(tenantId) {
-  return Membership.find({ tenant_id: tenantId })
+  const members = await Membership.find({ tenant_id: tenantId })
     .populate("user_id", "first_name last_name email phone profile_image status verified_at last_login_at")
     .populate("role_id", "name description is_system permissions")
     .populate("invited_by", "first_name last_name email")
     .sort({ joined_at: 1 })
     .lean();
+  return members.map((m) =>
+    m.user_id ? { ...m, user_id: { ...m.user_id, profile_image: toUploadUrl(m.user_id.profile_image) } } : m,
+  );
 }
 
 /** One person's membership of one organisation, with its role resolved. */
@@ -47,7 +51,10 @@ function activeMembershipsQuery(userId) {
 }
 
 async function listUserMemberships(userId) {
-  return activeMembershipsQuery(userId).populate("tenant_id", "name company_name slug logo_url status");
+  const memberships = await activeMembershipsQuery(userId).populate("tenant_id", "name company_name slug logo_url status");
+  return memberships.map((m) =>
+    m.tenant_id ? { ...m, tenant_id: { ...m.tenant_id, logo_url: toUploadUrl(m.tenant_id.logo_url) } } : m,
+  );
 }
 
 /** Per-request lookup; skips the tenant populate auth loads itself. */

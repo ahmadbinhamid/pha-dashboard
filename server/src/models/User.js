@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { toUploadRef } = require("../utils/uploadUrl");
 const { NOTIFICATION_EVENT } = require("../constants/notification.constants");
 const passwordHashingPlugin = require("./plugins/passwordHashing.plugin");
 const { hashPassword } = require("../utils/auth/crypto");
@@ -40,7 +41,8 @@ const userSchema = buildSchema({
   },
 
   password: { type: String, required: true, minlength: 6, select: false },
-  profile_image: { type: String, default: null },
+  // Upload file name only; toUploadUrl adds the host on read.
+  profile_image: { type: String, default: null, set: toUploadRef },
   role: {
     type: String,
     enum: Object.values(USER_ROLE),

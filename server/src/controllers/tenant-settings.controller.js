@@ -7,7 +7,7 @@ exports.getSettings = async (req, res) => {
   try {
     const tenant = await tenantSettingsService.getTenant(req.tenantId);
     const payment_link_preview = tenantSettingsService.getPaymentLinkPreview(tenant);
-    return success(res, { ...tenant.toObject(), payment_link_preview });
+    return success(res, { ...tenantSettingsService.toTenantResponse(tenant), payment_link_preview });
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     return systemfailure(res, err);
@@ -18,7 +18,7 @@ exports.updateSettings = async (req, res) => {
   try {
     const tenant = await tenantSettingsService.updateTenantProfile(req.tenantId, req.body);
     const payment_link_preview = tenantSettingsService.getPaymentLinkPreview(tenant);
-    return success(res, { ...tenant.toObject(), payment_link_preview }, "Settings updated");
+    return success(res, { ...tenantSettingsService.toTenantResponse(tenant), payment_link_preview }, "Settings updated");
   } catch (err) {
     if (err.status === 404) return notFound(res, err.message);
     if (err.status) return requestfailure(res, err);
@@ -26,14 +26,12 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-// The one shared webhook URL every tenant's Stripe account delivers to, identity carried only
-// in the opaque ?wt= token, mirroring ebay.controller.js's webhook URL construction.
+// One shared webhook URL for every tenant; the opaque ?wt= token says which.
 function buildWebhookUrl(req, webhookToken) {
   return `${req.protocol}://${req.get("host")}/api/v1/payment/webhook?wt=${webhookToken}`;
 }
 
-// BYOK: saves the tenant's Stripe keys (validated against Stripe) and best-effort auto-registers
-// the webhook endpoint on their account.
+// BYOK: keys are checked against Stripe; webhook auto-registers best-effort.
 exports.updateStripeKeys = async (req, res) => {
   try {
     const webhookToken = await tenantSettingsService.ensureStripeWebhookToken(req.tenantId);
@@ -58,8 +56,7 @@ exports.getStripeStatus = async (req, res) => {
   }
 };
 
-// Manual fallback for when automatic webhook registration failed; the tenant creates the
-// endpoint themselves and pastes back the signing secret.
+// Manual fallback when auto-registration failed: tenant pastes the secret.
 exports.updateStripeWebhookSecret = async (req, res) => {
   try {
     const status = await tenantSettingsService.updateStripeWebhookSecret(req.tenantId, req.body.webhook_secret);
@@ -71,8 +68,7 @@ exports.updateStripeWebhookSecret = async (req, res) => {
   }
 };
 
-// BYOK: saves the tenant's own SMTP credentials (a real connection+auth handshake is attempted
-// before persisting) so order email sends from their own mailbox.
+// BYOK SMTP: a real login is tried first, so order email uses their mailbox.
 exports.updateSmtpCredentials = async (req, res) => {
   try {
     const status = await tenantSettingsService.updateSmtpCredentials(req.tenantId, req.body);

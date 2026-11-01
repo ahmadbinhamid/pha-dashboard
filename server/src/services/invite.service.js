@@ -8,6 +8,7 @@ const Membership = require("../models/Membership");
 const User = require("../models/User");
 const Role = require("../models/Role");
 const membershipService = require("./membership.service");
+const { toUploadUrl } = require("../utils/uploadUrl");
 const { INVITE_STATUS, SYSTEM_ROLE } = require("../constants/access.constants");
 const { USER_ROLE, USER_STATUS } = require("../constants/user.constants");
 
@@ -236,7 +237,7 @@ async function getInvitePreview(token) {
     email: populated.email,
     status: populated.status,
     expires_at: populated.expires_at,
-    organisation: populated.tenant_id,
+    organisation: populated.tenant_id && { ...populated.tenant_id, logo_url: toUploadUrl(populated.tenant_id.logo_url) },
     role: populated.role_id,
     invited_by: populated.invited_by
       ? { name: `${populated.invited_by.first_name} ${populated.invited_by.last_name}`.trim() }
