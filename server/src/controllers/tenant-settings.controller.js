@@ -26,9 +26,9 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-// One shared webhook URL for every tenant; the opaque ?wt= token says which.
+// The host this request came in on, so the URL matches the live domain.
 function buildWebhookUrl(req, webhookToken) {
-  return `${req.protocol}://${req.get("host")}/api/v1/payment/webhook?wt=${webhookToken}`;
+  return tenantSettingsService.buildStripeWebhookUrl(`${req.protocol}://${req.get("host")}`, webhookToken);
 }
 
 // BYOK: keys are checked against Stripe; webhook auto-registers best-effort.

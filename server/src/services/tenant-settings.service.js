@@ -121,6 +121,10 @@ async function getStripeStatus(tenantId) {
   return stripeKeysService.getStripeStatus(tenantId);
 }
 
+function buildStripeWebhookUrl(baseUrl, webhookToken) {
+  return stripeKeysService.buildWebhookUrl(baseUrl, webhookToken);
+}
+
 async function updateStripeWebhookSecret(tenantId, webhookSecret) {
   await stripeKeysService.updateWebhookSecret(tenantId, webhookSecret);
   return stripeKeysService.getStripeStatus(tenantId);
@@ -148,6 +152,7 @@ module.exports = {
   updateTenantProfile,
   updateStripeKeys,
   getStripeStatus,
+  buildStripeWebhookUrl,
   updateStripeWebhookSecret,
   ensureStripeWebhookToken,
   updateSmtpCredentials,

@@ -1,6 +1,5 @@
 // services/stripe/stripe.keys.service.js
-// The only place that touches a tenant's encrypted Stripe credentials directly; every consumer
-// goes through getDecryptedSecretKey/getStripeClient below instead.
+// Sole owner of tenants' encrypted Stripe keys; others use getStripeClient.
 
 const crypto = require("crypto");
 const Tenant = require("../../models/Tenant");
@@ -13,13 +12,30 @@ const SECRET_KEY_FIELDS = "+stripe_secret_key_ciphertext +stripe_secret_key_iv +
 const WEBHOOK_SECRET_FIELDS =
   "+stripe_webhook_secret_ciphertext +stripe_webhook_secret_iv +stripe_webhook_secret_tag";
 
-// Every event stripe.webhook.service.js handles; kept in sync with its switch statement.
+// Every event stripe.webhook.service.js handles; keep in sync with its switch.
 const WEBHOOK_ENABLED_EVENTS = [
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
   "charge.refunded",
   "charge.refund.updated",
 ];
+
+const WEBHOOK_PATH = "/api/v1/payment/webhook";
+
+/** One shared webhook URL for all tenants; the ?wt= token says which. */
+function buildWebhookUrl(baseUrl, webhookToken) {
+  return `${String(baseUrl).replace(/\/+$/, "")}${WEBHOOK_PATH}?wt=${webhookToken}`;
+}
+
+// Ours, for this tenant: our webhook path carrying this tenant's own token.
+function isTenantEndpoint(endpoint, webhookToken) {
+  try {
+    const url = new URL(endpoint.url);
+    return url.pathname === WEBHOOK_PATH && url.searchParams.get("wt") === webhookToken;
+  } catch {
+    return false;
+  }
+}
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -47,15 +63,13 @@ async function getDecryptedSecretKey(tenantId) {
   return decryptSecretKey(tenant);
 }
 
-// Every other Stripe-calling service uses this, never stripe.client.service directly.
+// Every other Stripe-calling service uses this, not stripe.client.service.
 async function getStripeClient(tenantId) {
   const secretKey = await getDecryptedSecretKey(tenantId);
   return getStripeClientForTenant(tenantId, secretKey);
 }
 
-// Registers our shared webhook URL directly on the tenant's Stripe account. Best-effort: a
-// restricted API key without webhook_endpoints:write fails here without blocking key save,
-// leaving webhook_configured false for manual completion via updateWebhookSecret.
+// Best-effort: a restricted key can't write webhooks; save still succeeds.
 async function registerWebhookEndpoint(tenantId, stripe, webhookUrl) {
   if (!webhookUrl) return;
   try {
@@ -72,8 +86,7 @@ async function registerWebhookEndpoint(tenantId, stripe, webhookUrl) {
   }
 }
 
-// Validates the key against Stripe (a cheap read-only call) before persisting, catching a
-// typo'd/revoked key at save time. `webhookUrl`, if provided, triggers automatic webhook registration.
+// Checks the key with a cheap Stripe read first; webhookUrl auto-registers.
 async function updateStripeKeys(tenantId, { secret_key, publishable_key }, webhookUrl) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant) throw httpError("Tenant not found", 404);
@@ -152,13 +165,54 @@ async function updateWebhookSecret(tenantId, webhookSecret) {
   logger.info("[stripe.keys] Webhook secret updated", { tenantId: String(tenantId) });
 }
 
-// Resolves the tenant/webhook-secret pair purely from the opaque URL token, mirroring
-// ebay.settings.service.js#findByWebhookToken.
+// Tenant and webhook secret from the opaque URL token, as eBay's lookup does.
 async function findByWebhookToken(webhookToken) {
   if (!webhookToken) return null;
   const tenant = await Tenant.findOne({ stripe_webhook_token: webhookToken }).select(WEBHOOK_SECRET_FIELDS);
   if (!tenant) return null;
   return { tenant, webhookSecret: decryptWebhookSecret(tenant) };
+}
+
+/** Points one tenant's endpoint(s) at baseUrl; same id, so the secret stays. */
+async function retargetTenantEndpoints(tenant, baseUrl, { dryRun, clientFor }) {
+  const target = buildWebhookUrl(baseUrl, tenant.stripe_webhook_token);
+  const stripe = clientFor(decryptSecretKey(tenant));
+  const endpoints = await stripe.webhookEndpoints.list({ limit: 100 }).autoPagingToArray({ limit: 1000 });
+  const ours = endpoints.filter((ep) => isTenantEndpoint(ep, tenant.stripe_webhook_token));
+  if (!ours.length) return [{ status: "no_endpoint", to: target }];
+
+  const results = [];
+  for (const endpoint of ours) {
+    if (endpoint.url === target) {
+      results.push({ status: "already_current", endpoint: endpoint.id, from: endpoint.url });
+      continue;
+    }
+    if (!dryRun) await stripe.webhookEndpoints.update(endpoint.id, { url: target });
+    results.push({ status: dryRun ? "would_update" : "updated", endpoint: endpoint.id, from: endpoint.url, to: target });
+  }
+  return results;
+}
+
+/** Every tenant with keys; one tenant's Stripe error never stops the rest. */
+async function retargetWebhookEndpoints({ baseUrl, dryRun = true, tenantId = null, onResult, clientFor = buildStripeClient }) {
+  const filter = { stripe_webhook_token: { $ne: null }, stripe_secret_key_ciphertext: { $ne: null } };
+  if (tenantId) filter._id = tenantId;
+  const tenants = Tenant.find(filter).select(`${SECRET_KEY_FIELDS} stripe_webhook_token company_name name`).cursor();
+
+  const summary = {};
+  for await (const tenant of tenants) {
+    let results;
+    try {
+      results = await retargetTenantEndpoints(tenant, baseUrl, { dryRun, clientFor });
+    } catch (err) {
+      results = [{ status: "error", error: err.message }];
+    }
+    for (const result of results) {
+      summary[result.status] = (summary[result.status] ?? 0) + 1;
+      onResult?.({ tenantId: tenant._id, tenantName: tenant.company_name || tenant.name, ...result });
+    }
+  }
+  return summary;
 }
 
 async function getStripeStatus(tenantId) {
@@ -183,4 +237,6 @@ module.exports = {
   updateWebhookSecret,
   findByWebhookToken,
   getStripeStatus,
+  buildWebhookUrl,
+  retargetWebhookEndpoints,
 };
