@@ -32,7 +32,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex items-center gap-3">
           <img src="/branding/logo-mark.png" alt="" className="h-16 w-auto shrink-0" />
           <span className="text-4xl font-extrabold leading-none tracking-tight text-white">
-            AutoParts<span className="text-accent">Pro</span>
+            Parts<span className="text-accent">Manager</span>
           </span>
         </div>
 
@@ -90,7 +90,7 @@ export default function LoginPage() {
         <div className="relative z-10 mb-6 flex items-center gap-2.5">
           <img src="/branding/logo-mark.png" alt="" className="h-10 w-auto shrink-0" />
           <span className="text-2xl font-extrabold leading-none tracking-tight text-white">
-            AutoParts<span className="text-accent">Pro</span>
+            Parts<span className="text-accent">Manager</span>
           </span>
         </div>
         <p className="relative z-10 text-4xl font-extrabold leading-[1.1] tracking-tight text-white">

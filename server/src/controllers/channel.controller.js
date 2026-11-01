@@ -3,7 +3,7 @@
 const registry = require("../services/marketplace/registry");
 const channelService = require("../services/marketplace/channel.service");
 const mongoose = require("mongoose");
-const { success, notFound, badRequest, systemfailure } = require("../utils/http/response");
+const { success, notFound, badRequest, requestfailure, systemfailure } = require("../utils/http/response");
 const { CHANNEL_SYNC_LOG_STATUS } = require("../constants/channel.constants");
 
 exports.listChannels = async (req, res) => {
@@ -41,6 +41,18 @@ exports.retryLog = async (req, res) => {
     if (!result) return notFound(res, "Log entry not found");
     return success(res, result, "Retry enqueued");
   } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
+exports.resyncAll = async (req, res) => {
+  try {
+    const { platform } = req.params;
+    if (!registry.has(platform)) return notFound(res, `Unknown platform: ${platform}`);
+    const result = await channelService.resyncAllListings(req.tenantId, platform);
+    return success(res, result, `Queued ${result.listings} listing(s) for re-sync`);
+  } catch (err) {
+    if (err.status) return requestfailure(res, err);
     return systemfailure(res, err);
   }
 };

@@ -8,7 +8,9 @@ const ChannelSyncLog = require("../../models/ChannelSyncLog");
 const MarketplaceListing = require("../../models/MarketplaceListing");
 const { enqueueChannelJob } = require("../../queues/channel.queue");
 const { CHANNEL_CONNECTION_STATUS, CHANNEL_JOB, CHANNEL_STATUS_REASON } = require("../../constants/channel.constants");
-const { LISTING_SYNC_STATUS } = require("../../constants/marketplace.constants");
+const { LISTING_SYNC_STATUS, LISTING_STATE } = require("../../constants/marketplace.constants");
+const circuitBreaker = require("./circuitBreaker");
+const { httpError } = require("../../utils/http/httpError");
 const { withStaticOptions } = require("./fieldSchema");
 const {
   findUnmetPrerequisite,
@@ -163,4 +165,42 @@ async function enqueueFullSync(platform, tenantId) {
   }
 }
 
-module.exports = { listChannelsForTenant, getChannelLogs, retryChannelLog, checkStorefrontRequirement, enqueueFullSync };
+// Why a whole-channel re-sync can't start now, or null when it can.
+async function resyncBlockReason(adapter, tenantId, platform) {
+  const settings = typeof adapter.loadSettings === "function" ? await adapter.loadSettings(tenantId) : null;
+  if (settings === null) return "isn't connected";
+  if (await circuitBreaker.isOpen(tenantId, platform)) return "is paused after repeated errors; resume it first";
+  return null;
+}
+
+/** Queues every active listing on a channel for a fresh push. */
+async function resyncAllListings(tenantId, platform) {
+  const adapter = registry.getAdapter(platform);
+  const blocked = await resyncBlockReason(adapter, tenantId, platform);
+  if (blocked) throw httpError(`${adapter.manifest?.name ?? platform} ${blocked}`, 409);
+
+  const filter = { tenant_id: tenantId, platform, state: LISTING_STATE.ACTIVE };
+  // Feed channels take the whole catalogue as one cursor-chunked batch job.
+  if (adapter.capabilities?.batch === true) {
+    const listings = await MarketplaceListing.countDocuments(filter);
+    await enqueueChannelJob(platform, CHANNEL_JOB.SYNC_BATCH, { tenantId: String(tenantId) }, { timeout: FULL_SYNC_TIMEOUT_MS });
+    return { listings, jobs: 1 };
+  }
+
+  // Worker concurrency paces the calls; the debounce drops queued duplicates.
+  let listings = 0;
+  for await (const { _id } of MarketplaceListing.find(filter).select("_id").lean().cursor()) {
+    await enqueueChannelJob(platform, CHANNEL_JOB.SYNC_LISTING, { listingId: String(_id), seq: null });
+    listings += 1;
+  }
+  return { listings, jobs: listings };
+}
+
+module.exports = {
+  listChannelsForTenant,
+  getChannelLogs,
+  retryChannelLog,
+  checkStorefrontRequirement,
+  enqueueFullSync,
+  resyncAllListings,
+};

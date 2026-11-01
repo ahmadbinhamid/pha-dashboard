@@ -10,5 +10,7 @@ const ctrl = require("../controllers/channel.controller");
 router.get("/", auth(), requirePermission("listings.view"), asyncHandler(ctrl.listChannels));
 router.get("/:platform/logs", auth(), requirePermission("listings.view"), pagination(), asyncHandler(ctrl.getLogs));
 router.post("/:platform/retry/:logId", auth(), requirePermission("listings.update"), asyncHandler(ctrl.retryLog));
+// Re-pushes every active listing on the channel, e.g. after a domain change.
+router.post("/:platform/resync-all", auth(), requirePermission("listings.update"), asyncHandler(ctrl.resyncAll));
 
 module.exports = router;

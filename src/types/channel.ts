@@ -116,3 +116,9 @@ export interface ChannelSyncLog {
   duration_ms: number | null;
   created_at: string;
 }
+
+// POST /channels/:platform/resync-all: listings queued and jobs created.
+export interface ChannelResyncResult {
+  listings: number;
+  jobs: number;
+}
