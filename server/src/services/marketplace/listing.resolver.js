@@ -2,6 +2,7 @@
 // Merges Product/Variant content with listing overrides; adapters read this.
 
 const { httpError } = require("../../utils/http/httpError");
+const { toAbsoluteUploadLinks } = require("../../utils/uploadUrl");
 const { resolveCondition, resolveBrand, resolveAuthenticity, resolveFitment, resolvePackage, fitmentFromVehicle } = require("./productFallbacks");
 const { CHANNEL_PREREQUISITE_ERROR_CODE, CHANNEL_STATUS_REASON, CHANNEL_REMEDY_LOCATION } = require("../../constants/channel.constants");
 
@@ -46,7 +47,7 @@ function resolveListing(listing, product, variant = null) {
   return {
     sku: resolveSku(listing, product, variant),
     title: listing.title_override || product.title,
-    description: listing.description_override || product.description || product.title,
+    description: toAbsoluteUploadLinks(listing.description_override) || product.description || product.title,
     price: resolvePrice(listing, product, variant),
     brand,
     // BRAND_SOURCE value or null; drives the panel's "from …" label.

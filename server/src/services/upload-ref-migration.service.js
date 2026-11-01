@@ -4,7 +4,8 @@
 const Tenant = require("../models/Tenant");
 const User = require("../models/User");
 const StorefrontSettings = require("../models/StorefrontSettings");
-const { toUploadRef } = require("../utils/uploadUrl");
+const MarketplaceListing = require("../models/MarketplaceListing");
+const { toUploadRef, toRelativeUploadLinks } = require("../utils/uploadUrl");
 
 const BATCH_SIZE = 500;
 // Only rows still holding a URL with our /uploads/ path need rewriting.
@@ -31,6 +32,11 @@ function slideUpdates(doc) {
   return changed ? { hero_slides: slides } : null;
 }
 
+function descriptionUpdates(doc) {
+  const html = toRelativeUploadLinks(doc.description_override);
+  return html !== doc.description_override ? { description_override: html } : null;
+}
+
 /** Cursor over matches, writing one bulk batch at a time unless dry run. */
 async function rewrite(Model, filter, toSet, { dryRun, onChange }) {
   let ops = [];
@@ -51,7 +57,7 @@ async function rewrite(Model, filter, toSet, { dryRun, onChange }) {
   return changed;
 }
 
-/** Tenant logos and favicons, storefront hero slides, user avatars. */
+/** Logos, favicons, hero slides, avatars and channel description HTML. */
 async function normalizeStoredUploadRefs({ dryRun = true, tenantId = null, onChange } = {}) {
   const scope = tenantId ? { tenant_id: tenantId } : {};
   const opts = { dryRun, onChange };
@@ -73,7 +79,13 @@ async function normalizeStoredUploadRefs({ dryRun = true, tenantId = null, onCha
     (doc) => refUpdates(doc, ["profile_image"]),
     opts,
   );
-  return { tenants, storefronts, users };
+  const listings = await rewrite(
+    MarketplaceListing,
+    { ...scope, description_override: /https?:\/\/[^"\s]*\/uploads\// },
+    descriptionUpdates,
+    opts,
+  );
+  return { tenants, storefronts, users, listings };
 }
 
 module.exports = { normalizeStoredUploadRefs };

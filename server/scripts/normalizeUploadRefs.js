@@ -8,9 +8,10 @@ void runScript(async ({ dryRun, tenantId }, log) => {
   const counts = await normalizeStoredUploadRefs({
     dryRun,
     tenantId,
-    onChange: (model, id, set) => log(`  ${model} ${id}: ${JSON.stringify(set)}`),
+    // Descriptions are long HTML, so only their id is listed.
+    onChange: (model, id, set) => log(`  ${model} ${id}: ${set.description_override ? "description links" : JSON.stringify(set)}`),
   });
   log(`== ${dryRun ? "Would rewrite" : "Rewrote"}: ${counts.tenants} tenant(s), ` +
-    `${counts.storefronts} storefront(s), ${counts.users} user(s)`);
+    `${counts.storefronts} storefront(s), ${counts.users} user(s), ${counts.listings} listing(s)`);
   if (dryRun) log("== Re-run with --confirm to write.");
 });

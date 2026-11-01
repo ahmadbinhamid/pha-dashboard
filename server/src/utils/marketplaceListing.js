@@ -2,6 +2,7 @@
 // Public-safe listing subset for the storefront; eBay-shaped for now.
 
 const { resolveBrand } = require("../services/marketplace/productFallbacks");
+const { toAbsoluteUploadLinks } = require("./uploadUrl");
 
 function toPublicListing(listing) {
   const aspects =
@@ -12,7 +13,7 @@ function toPublicListing(listing) {
   return {
     platform: listing.platform,
     title_override: listing.title_override,
-    description_override: listing.description_override,
+    description_override: toAbsoluteUploadLinks(listing.description_override),
     price_override: listing.price_override,
     photos: (listing.photo_overrides || []).map((a) => a.url).filter(Boolean),
     condition: listing.condition ?? null,

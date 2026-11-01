@@ -10,6 +10,7 @@ const config = require("../config");
 const { trackFixtureTenant } = require("../testUtils/fixtureTenants");
 const Tenant = require("../models/Tenant");
 const StorefrontSettings = require("../models/StorefrontSettings");
+const MarketplaceListing = require("../models/MarketplaceListing");
 const { normalizeStoredUploadRefs } = require("./upload-ref-migration.service");
 const { getCompanyProfile } = require("./tenant-settings.service");
 const storefrontService = require("./storefront.service");
@@ -34,17 +35,23 @@ async function legacyTenant() {
     tenant_id: tenant._id,
     hero_slides: [{ _id: new mongoose.Types.ObjectId(), title: "Sale", image_url: `https://app.autopartspro.au/uploads/${HERO}`, mobile_image_url: "" }],
   });
+  await MarketplaceListing.collection.insertOne({
+    tenant_id: tenant._id,
+    platform: "ebay",
+    description_override: `<h1>Arm</h1><img src="https://app.autopartspro.au/uploads/${HERO}">`,
+  });
   return tenant;
 }
 
 test("legacy rows read on today's domain before and after the migration", async (t) => {
   const tenant = await legacyTenant();
   t.after(() => StorefrontSettings.deleteMany({ tenant_id: tenant._id }));
+  t.after(() => MarketplaceListing.collection.deleteMany({ tenant_id: tenant._id }));
 
   assert.equal((await getCompanyProfile(tenant._id)).logo_url, `${config.uploads.url}/${LOGO}`);
 
   const dry = await normalizeStoredUploadRefs({ dryRun: true, tenantId: tenant._id });
-  assert.deepEqual(dry, { tenants: 1, storefronts: 1, users: 0 });
+  assert.deepEqual(dry, { tenants: 1, storefronts: 1, users: 0, listings: 1 });
   assert.match((await Tenant.findById(tenant._id).lean()).logo_url, /^https:/, "dry run wrote nothing");
 
   await normalizeStoredUploadRefs({ dryRun: false, tenantId: tenant._id });
@@ -53,11 +60,13 @@ test("legacy rows read on today's domain before and after the migration", async 
   assert.equal(stored.favicon_url, "https://cdn.example.com/f.ico", "external links untouched");
   const slide = (await StorefrontSettings.findOne({ tenant_id: tenant._id }).lean()).hero_slides[0];
   assert.equal(slide.image_url, HERO);
+  const listing = await MarketplaceListing.collection.findOne({ tenant_id: tenant._id });
+  assert.equal(listing.description_override, `<h1>Arm</h1><img src="/uploads/${HERO}">`, "text kept, host dropped");
 
   assert.equal((await getCompanyProfile(tenant._id)).logo_url, `${config.uploads.url}/${LOGO}`);
   const { hero_slides } = await storefrontService.getSettings(tenant._id);
   assert.equal(hero_slides[0].image_url, `${config.uploads.url}/${HERO}`);
-  assert.deepEqual(await normalizeStoredUploadRefs({ dryRun: false, tenantId: tenant._id }), { tenants: 0, storefronts: 0, users: 0 });
+  assert.deepEqual(await normalizeStoredUploadRefs({ dryRun: false, tenantId: tenant._id }), { tenants: 0, storefronts: 0, users: 0, listings: 0 });
 });
 
 test("saving a full URL through the model stores only the file name", async () => {

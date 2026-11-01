@@ -4,6 +4,7 @@
 const { model, Schema } = require("mongoose");
 const softDeletePlugin = require("./plugins/softDelete.plugin");
 const { stripInternalFields } = require("./base.model");
+const { toRelativeUploadLinks } = require("../utils/uploadUrl");
 const {
   MARKETPLACE_PLATFORM,
   LISTING_STATE,
@@ -30,7 +31,8 @@ const baseSchema = new Schema(
 
     // Per-channel overrides; null/empty => inherit from Product at publish time
     title_override: { type: String, default: null },
-    description_override: { type: String, default: null },
+    // Our image links saved host-less; resolveListing adds UPLOADS_URL on push.
+    description_override: { type: String, default: null, set: toRelativeUploadLinks },
     price_override: { type: Number, default: null },
     photo_overrides: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
 
