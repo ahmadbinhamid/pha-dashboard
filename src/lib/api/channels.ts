@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 import type { BeResponse, PaginatedData } from "./base";
-import type { ChannelResyncResult, ChannelSummary, ChannelSyncLog, ChannelSyncLogStatus } from "@/types/channel";
+import type { ChannelSummary, ChannelSyncLog, ChannelSyncLogStatus } from "@/types/channel";
 
 // Every adapter's manifest plus this tenant's connection/health.
 export const getChannels = async () => {
@@ -25,11 +25,5 @@ export const retryChannelLog = async (platform: string, logId: string) => {
   const { data } = await apiClient.post<BeResponse<{ requeued: boolean; listingId: string }>>(
     `/channels/${platform}/retry/${logId}`,
   );
-  return data;
-};
-
-// Queues every active listing on the channel for a fresh push.
-export const resyncChannelListings = async (platform: string) => {
-  const { data } = await apiClient.post<BeResponse<ChannelResyncResult>>(`/channels/${platform}/resync-all`);
   return data;
 };

@@ -14,7 +14,6 @@ import { SyncBadge } from "@/components/listings/SyncBadge";
 import { ListingRowActionsMenu } from "@/components/listings/ListingRowActionsMenu";
 import { ListingSyncLogSheet } from "@/components/listings/ListingSyncLogSheet";
 import { ListingRetryResultCard } from "@/components/listings/ListingRetryResultCard";
-import { ResyncChannelButton } from "@/components/listings/ResyncChannelButton";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { PLATFORM_LABEL } from "@/config/marketplacePlatforms";
 import { LISTING_FAILURES_STATUS, LISTING_STATUS_FILTER_ALL, LISTING_SYNC_STATUS_CONFIG } from "@/config/listingStatus";
@@ -155,7 +154,6 @@ export function ChannelSyncTable({ channels }: { channels: ChannelSummary[] }) {
                 <RefreshCw className={retryMutation.isPending ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
                 {retryMutation.isPending ? "Retrying…" : `Retry selected${selectedListings.length ? ` (${selectedListings.length})` : ""}`}
               </Button>
-              <ResyncChannelButton channel={channels.find((c) => c.key === platform)} />
             </Can>
             <SingleSelect size="sm" options={platformFilters} value={platform} onChange={(v) => updateParams({ platform: v || null })} />
             <SingleSelect
