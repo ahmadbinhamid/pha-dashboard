@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyFromCents, getExclusiveUnitPrice, getLineGst } from "@/utils/format";
+import { GST_LABEL } from "@/config/tax";
 import { updateOrderItemPrice, updateOrderItemDiscount } from "@/lib/api/orders";
 import { useOrderEdit } from "@/hooks/useOrderEdit";
 import { OrderItemQuantityStepper } from "@/components/orders/OrderItemQuantityStepper";
@@ -201,7 +202,7 @@ export function OrderItemsTable({ items, orderId, version, editable, canEditDeta
             </StickyTableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header">SKU</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Unit Price (ex GST)</TableHead>
-            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">GST (11%)</TableHead>
+            <TableHead className="sticky top-0 z-2 sticky-col-header text-right">{GST_LABEL}</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Qty</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Discount</TableHead>
             <TableHead className="sticky top-0 z-2 sticky-col-header text-right">Total (inc GST)</TableHead>

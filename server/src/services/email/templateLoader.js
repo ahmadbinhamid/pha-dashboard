@@ -37,7 +37,7 @@ function render(templateName, vars) {
   let templates = loadTemplates();
   let t = templates[templateName];
 
-  // A .hbs file added after the worker started was invisible until restart — re-scan once on a miss.
+  // A .hbs added after the worker started is unseen; re-scan once on a miss.
   if (!t) {
     compiled = null;
     templates = loadTemplates();
@@ -52,4 +52,16 @@ function render(templateName, vars) {
   return t({ ...defaults, ...vars });
 }
 
-module.exports = { render };
+// Spam filters penalise bare HTML fragments with no doctype, head or title.
+const documentShell = Handlebars.compile(
+  '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    "<title>{{title}}</title></head><body style=\"margin:0;padding:0;\">{{{body}}}</body></html>",
+);
+
+/** Renders a template as a complete HTML document titled with the subject. */
+function renderDocument(templateName, vars, title) {
+  return documentShell({ title, body: render(templateName, vars) });
+}
+
+module.exports = { render, renderDocument };

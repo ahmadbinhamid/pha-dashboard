@@ -1,8 +1,7 @@
 // services/ebay/ebay.order.mapper.js
-// Pure transform: raw eBay Order resource -> the shape order.service.js needs, no DB access.
-// eBay masks/omits buyer PII (Managed Payments) — email/phone fall back to placeholders, never fail.
+// Pure eBay Order -> order.service shape; masked buyer PII gets placeholders.
 
-const GST_DIVISOR = 11; // AU GST is 1/11 of a GST-inclusive price — same convention order.service.js uses
+const { gstFromInclusive } = require("../../utils/orderTotals");
 
 function toCents(value) {
   const n = Number(value);
@@ -17,7 +16,7 @@ function mapCustomer(rawOrder, shipTo) {
   const username = rawOrder.buyer?.username || null;
   return {
     name: shipTo?.fullName || username || "eBay buyer",
-    // eBay rarely exposes a real email under Managed Payments — use a marked placeholder instead.
+    // Managed Payments rarely exposes a real email; use a marked placeholder.
     email: shipTo?.email || (username ? `${username}@ebay.marketplace` : "unknown@ebay.marketplace"),
     phone: shipTo?.primaryPhone?.phoneNumber || shipTo?.phoneNumber || "Not provided",
   };
@@ -34,7 +33,7 @@ function mapShippingAddress(shipTo) {
   };
 }
 
-// Prefer the line's own total (covers qty > 1), then per-unit cost, then 0 flagged for review.
+// Line total (covers qty > 1), then unit cost, else 0 flagged for review.
 function mapLineItem(item) {
   const quantity = Number(item.quantity) || 1;
   const lineTotalRaw = item.total?.value;
@@ -58,8 +57,7 @@ function mapLineItem(item) {
   };
 }
 
-// Some Motors freight listings fold shipping into lineItems[].total; reconcile against the
-// authoritative pricingSummary.priceSubtotal whenever they disagree by more than rounding.
+// Motors freight can fold shipping into line totals; trust priceSubtotal.
 function reconcileLineItemTotals(lineItems, subtotalCents) {
   if (!lineItems.length || subtotalCents == null) return;
 
@@ -75,7 +73,7 @@ function reconcileLineItemTotals(lineItems, subtotalCents) {
     return;
   }
 
-  // Multiple items: prorate the authoritative subtotal across items by their reported totals.
+  // Multiple items: prorate the subtotal by each item's reported total.
   let allocated = 0;
   lineItems.forEach((li, idx) => {
     const isLast = idx === lineItems.length - 1;
@@ -87,7 +85,7 @@ function reconcileLineItemTotals(lineItems, subtotalCents) {
   });
 }
 
-// Maps eBay's status fields to ORDER_STATUS; refunds/disputes are out of scope for now.
+// Maps eBay status to ORDER_STATUS; refunds and disputes are not mapped.
 function mapStatus(rawOrder, { ORDER_STATUS }) {
   if (rawOrder.orderFulfillmentStatus === "FULFILLED") return ORDER_STATUS.FULFILLED;
   return ORDER_STATUS.PAID;
@@ -110,9 +108,13 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
   const totalCents = pricing.total?.value != null
     ? toCents(pricing.total.value)
     : subtotalCents + shippingCents;
-  const taxCents = pricing.tax?.value != null ? toCents(pricing.tax.value) : Math.round(subtotalCents / GST_DIVISOR);
+  // eBay-reported tax is kept as is; the fallback adds freight GST too.
+  const ebayTax = pricing.tax?.value != null;
+  const taxCents = ebayTax
+    ? toCents(pricing.tax.value)
+    : gstFromInclusive(subtotalCents) + gstFromInclusive(shippingCents);
 
-  // Previously hardcoded to "aud" in order.service.js; now read directly from the eBay payload.
+  // Falls back to the tenant marketplace currency in order.service.js.
   const currency = pricing.total?.currency || pricing.priceSubtotal?.currency || null;
 
   return {
@@ -124,6 +126,7 @@ function mapEbayOrder(rawOrder, { ORDER_STATUS }) {
     subtotalCents,
     shippingCents,
     taxCents,
+    gstIncludesShipping: !ebayTax,
     totalCents,
     currency,
     status: mapStatus(rawOrder, { ORDER_STATUS }),

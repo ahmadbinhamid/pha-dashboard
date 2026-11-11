@@ -7,6 +7,13 @@ const defaultFrom = () =>
 // Name only; the address depends on which SMTP account mailer.js picks.
 const tenantFromName = (companyProfile) => companyProfile?.company_name || null;
 
+// Replies reach the store's own inbox even when sent via the platform mailbox.
+const tenantSender = (companyProfile, tenantId) => ({
+  fromName: tenantFromName(companyProfile),
+  replyTo: companyProfile?.email || undefined,
+  tenantId,
+});
+
 // The app's --accent (hsl 24 95% 53%); email clients can't read CSS vars.
 const EMAIL_PRIMARY_COLOR = "#f97316";
 
@@ -115,10 +122,9 @@ async function sendDemoRequestNotification({ fullName, businessName, phone, work
 /** Invoice PDF travels as base64 since Bull payloads are JSON. */
 async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrierName, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: "Your Order Has Been Shipped",
+    subject: `Your order ${orderNumber} has shipped`,
     template: "orderShipped",
     variables: {
       name,
@@ -140,10 +146,9 @@ async function sendOrderShipped({ to, name, orderNumber, trackingNumber, carrier
 /** Local delivery handed over; invoice attached as with shipped orders. */
 async function sendOrderDelivered({ to, name, orderNumber, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: "Your Order Has Been Delivered",
+    subject: `Your order ${orderNumber} has been delivered`,
     template: "orderDelivered",
     variables: {
       name,
@@ -163,10 +168,9 @@ async function sendOrderDelivered({ to, name, orderNumber, pdfBase64, pdfFilenam
 /** Invoice PDF travels as base64 since Bull payloads are JSON. */
 async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFilename, pickupLocation = {}, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: "Your Order Is Ready for Pickup",
+    subject: `Your order ${orderNumber} is ready for pickup`,
     template: "orderReadyForPickup",
     variables: {
       name,
@@ -190,10 +194,9 @@ async function sendOrderReadyForPickup({ to, name, orderNumber, pdfBase64, pdfFi
 /** No invoice here; it goes with sendOrderShipped. */
 async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: "Order Confirmation",
+    subject: `Order ${orderNumber} confirmed`,
     template: "orderConfirmation",
     variables: {
       name,
@@ -206,10 +209,9 @@ async function sendOrderConfirmation({ to, name, orderNumber, companyProfile, te
 /** No invoice here; it goes with sendOrderReadyForPickup. */
 async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: "Your Order Has Been Received",
+    subject: `We have received your order ${orderNumber}`,
     template: "orderReceivedPickup",
     variables: {
       name,
@@ -222,10 +224,9 @@ async function sendOrderReceivedPickup({ to, name, orderNumber, companyProfile, 
 /** Manual-sale receipt: no shipped/pickup framing, just invoice and balance. */
 async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBase64, pdfFilename, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: `Your Invoice — Order ${orderNumber}`,
+    subject: `Your invoice for order ${orderNumber}`,
     template: "manualOrderReceipt",
     variables: {
       name,
@@ -246,10 +247,9 @@ async function sendManualOrderReceipt({ to, name, orderNumber, amountDue, pdfBas
 /** No invoice PDF; the customer sees it once they pay. */
 async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, companyProfile, tenantId }) {
   return enqueueEmailJob({
-    fromName: tenantFromName(companyProfile),
-    tenantId,
+    ...tenantSender(companyProfile, tenantId),
     to,
-    subject: `Complete Your Payment — Order ${orderNumber}`,
+    subject: `Payment details for order ${orderNumber}`,
     template: "paymentLink",
     variables: {
       name,
@@ -265,8 +265,7 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
   return enqueueEmailJob(
     {
-      fromName: tenantFromName(companyProfile),
-      tenantId,
+      ...tenantSender(companyProfile, tenantId),
       to,
       subject: `Product Info — ${productTitle}`,
       template: "productInfo",

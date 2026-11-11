@@ -145,7 +145,9 @@ export interface Order {
   // Order-level adjustment, separate from line discounts (already in subtotal).
   discount_amount: number; // cents
   shipping_cost: number; // cents
-  tax_amount: number; // cents, GST component of subtotal, display-only
+  tax_amount: number; // cents, GST, display-only
+  // False on legacy orders, whose tax_amount left out freight GST.
+  gst_includes_shipping?: boolean;
   total: number; // cents
   currency: string;
   status: OrderStatus;

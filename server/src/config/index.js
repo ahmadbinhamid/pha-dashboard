@@ -68,6 +68,12 @@ const config = {
     maxConnections: getNum("SMTP_MAX_CONNECTIONS", 1),
     rateLimit: getNum("SMTP_RATE_LIMIT", 1),
     rateDeltaMs: getNum("SMTP_RATE_DELTA_MS", 1000),
+    // Optional; only for an SMTP relay that does not DKIM-sign on its own.
+    dkim: {
+      domainName: get("DKIM_DOMAIN"),
+      keySelector: get("DKIM_SELECTOR"),
+      privateKey: get("DKIM_PRIVATE_KEY")?.replace(/\\n/g, "\n"),
+    },
   },
 
   emailBrand: {

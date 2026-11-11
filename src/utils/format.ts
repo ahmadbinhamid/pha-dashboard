@@ -1,3 +1,6 @@
+import { GST_DIVISOR } from "@/config/tax";
+import type { OrderDetail } from "@/types/orders";
+
 const _currencyFmts = new Map<string, Intl.NumberFormat>();
 const _compactFmt = new Intl.NumberFormat("en-AU", { notation: "compact" });
 
@@ -19,9 +22,16 @@ export function formatCurrencyFromCents(cents: number, currency: string = "AUD")
   return formatCurrency(cents / 100, currency);
 }
 
-// GST-inclusive AU pricing: GST is total/11, never added on top.
+// GST-inclusive AU pricing: GST is extracted, never added on top.
 export function getLineGst(lineTotalCents: number) {
-  return Math.round(lineTotalCents / 11);
+  return Math.round(lineTotalCents / GST_DIVISOR);
+}
+
+// Mirrors orderTotals.js#splitOrderGst; legacy orders hold no freight GST.
+export function splitOrderGst(order: Pick<OrderDetail, "tax_amount" | "shipping_cost" | "gst_includes_shipping">) {
+  const totalGst = order.tax_amount;
+  const freightGst = order.gst_includes_shipping ? getLineGst(order.shipping_cost) : 0;
+  return { totalGst, freightGst, itemsGst: totalGst - freightGst };
 }
 
 // GST-exclusive unit price, same inclusive convention as getLineGst.

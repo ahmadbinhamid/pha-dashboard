@@ -293,7 +293,7 @@ async function createManualOrder(
       : Math.round(
           resolvedItems.reduce((sum, i) => sum + i.shipping_cost * i.quantity, 0) * 100, // dollars -> cents
         );
-  const { subtotal, tax_amount, total } = computeOrderTotals(resolvedItems, { shippingCost: shipping_cost });
+  const { subtotal, tax_amount, gst_includes_shipping, total } = computeOrderTotals(resolvedItems, { shippingCost: shipping_cost });
 
   // "payment_link" collects nothing now, so any amount_paid is ignored.
   const isPaymentLink = payment_method === ORDER_PAYMENT_CHOICE.PAYMENT_LINK;
@@ -326,6 +326,7 @@ async function createManualOrder(
     subtotal,
     shipping_cost,
     tax_amount,
+    gst_includes_shipping,
     total,
     currency: "aud",
     // createRefund's admission check gates on payment_status.
@@ -511,7 +512,7 @@ async function createOrder(
     priorOrders,
   });
   const { shipping_cost, discount } = priced;
-  const { subtotal, tax_amount, total } = computeOrderTotals(priced.items, { shippingCost: shipping_cost });
+  const { subtotal, tax_amount, gst_includes_shipping, total } = computeOrderTotals(priced.items, { shippingCost: shipping_cost });
 
   return createWithRedemption(discount, { tenantId: tenant._id, customerEmail: customer.email, amount: priced.amount, orderTotal: total }, async () =>
     Order.create({
@@ -532,6 +533,7 @@ async function createOrder(
     subtotal,
     shipping_cost,
     tax_amount,
+    gst_includes_shipping,
     total,
     currency: "aud",
     status: ORDER_STATUS.PENDING_PAYMENT,
@@ -666,6 +668,7 @@ async function createOrderFromEbayOrder(rawEbayOrder, tenant, settings) {
     subtotal: mapped.subtotalCents,
     shipping_cost: mapped.shippingCents,
     tax_amount: mapped.taxCents,
+    gst_includes_shipping: mapped.gstIncludesShipping,
     total: mapped.totalCents,
     // Prefer eBay's currency, tenant marketplace currency only if absent.
     currency: (mapped.currency || currencyForMarketplace(settings?.marketplace_id)).toLowerCase(),

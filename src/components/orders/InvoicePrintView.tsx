@@ -7,12 +7,14 @@ import {
   formatCurrencyFromCents,
   getExclusiveUnitPrice,
   getLineGst,
+  splitOrderGst,
   formatInvoiceNumber,
   stripEbayAddressPrefix,
 } from "@/utils/format";
 import { getTotalPaid, getBalanceDue, getTotalRefunded } from "@/utils/paymentTotals";
 import { CHARGES_SHIPPING, DELIVERY_METHOD_LABEL } from "@/config/deliveryMethods";
 import { PAYMENT_TERMS_LABEL } from "@/config/businessOptions";
+import { GST_LABEL, GST_RATE_PERCENT } from "@/config/tax";
 import type { OrderDetail } from "@/types/orders";
 
 // Print invoice mirroring invoicePdf.js, fixed colours ignore dark mode.
@@ -91,9 +93,10 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
   // Includes legacy order-level discount, order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + i.discount_amount, 0);
   const totalDiscount = itemDiscount + order.discount_amount;
-  // order.tax_amount is the authoritative GST, same as invoicePdf.js.
-  const gstAmount = order.tax_amount;
-  const exGstSubtotal = order.subtotal - gstAmount;
+  // Stored GST is authoritative, split the same way as invoicePdf.js.
+  const { totalGst, freightGst, itemsGst } = splitOrderGst(order);
+  const exGstSubtotal = order.subtotal - itemsGst;
+  const shippingLabel = CHARGES_SHIPPING[order.delivery_method] ? "Freight" : DELIVERY_METHOD_LABEL[order.delivery_method];
   // Paid-then-refunded is $0 due, not a shortfall (getBalanceDue).
   const amountDue = getBalanceDue(order.total, order.payments, order.payment_status);
   const formatInvoiceDate = (date: string) =>
@@ -220,7 +223,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
               Unit ex GST
             </th>
             <th className="border-t border-b-2 py-2.5 pr-4 text-right whitespace-nowrap" style={{ borderTopColor: BORDER, borderBottomColor: INK }}>
-              GST 11%
+              GST {GST_RATE_PERCENT}%
             </th>
             <th className="border-t border-b-2 py-2.5 pr-4 text-right whitespace-nowrap" style={{ borderTopColor: BORDER, borderBottomColor: INK }}>
               Qty
@@ -235,7 +238,7 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
         </thead>
         <tbody>
           {order.items.map((item, i) => {
-            // GST-inclusive pricing: GST is total/11, never added on top.
+            // GST-inclusive pricing: GST is extracted, never added on top.
             const lineTotal = item.unit_price * item.quantity - item.discount_amount;
             const lineGst = getLineGst(lineTotal);
             return (
@@ -320,11 +323,11 @@ export function InvoicePrintView({ order }: { order: OrderDetail }) {
             </>
           )}
           <TotalRow label="Subtotal (ex GST)" value={formatCurrencyFromCents(exGstSubtotal)} />
-          <TotalRow label="GST (11%)" value={formatCurrencyFromCents(gstAmount)} />
           <TotalRow
-            label={CHARGES_SHIPPING[order.delivery_method] ? "Freight" : DELIVERY_METHOD_LABEL[order.delivery_method]}
-            value={formatCurrencyFromCents(order.shipping_cost)}
+            label={order.gst_includes_shipping ? `${shippingLabel} (ex GST)` : shippingLabel}
+            value={formatCurrencyFromCents(order.shipping_cost - freightGst)}
           />
+          <TotalRow label={GST_LABEL} value={formatCurrencyFromCents(totalGst)} />
 
           <div className="mt-3 flex items-center justify-between gap-4 px-4 py-3.5" style={{ background: INK }}>
             <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-white">Total inc GST</span>

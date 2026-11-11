@@ -9,8 +9,7 @@ const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 const config = require("../config");
 
 const { emailQueue } = require("../queues/email.queue");
-const { render } = require("../services/email/templateLoader");
-const { sendEmail } = require("../services/email/mailer");
+const { processEmailJob } = require("../services/email/mailer");
 const inventoryDigestService = require("../services/inventory-digest.service");
 
 const { searchQueue } = require("../queues/search.queue");
@@ -32,20 +31,17 @@ ensureProductsCollection().catch((err) => {
 
 // ── email ──
 
-// NOTE: use the *named* processor: 'send'
-emailQueue.process("send", 5, async (job) => {
-  const { to, subject, template, variables, from, fromName, tenantId, text, attachments } = job.data;
-
-  const html = render(template, variables);
-  const ok = await sendEmail({ from, fromName, tenantId, to, subject, html, text, attachments });
-  if (!ok) throw new Error("Failed to send email");
-
-  return true;
-});
+// NOTE: named processor "send"; enqueueEmailJob adds jobs under that name.
+emailQueue.process("send", 5, processEmailJob);
 
 emailQueue.isReady().then(() => logger.info("[emailQueue] ready"));
 emailQueue.on("completed", (job) => logger.info(`[emailQueue] completed ${job.id}`));
-emailQueue.on("failed", (job, err) => logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`));
+emailQueue.on("failed", (job, err) =>
+  logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`, {
+    template: job?.data?.template,
+    attemptsMade: job?.attemptsMade,
+  }),
+);
 
 // ── low stock digest: its own job name on emailQueue ──
 

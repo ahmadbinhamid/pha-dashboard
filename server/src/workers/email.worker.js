@@ -4,8 +4,7 @@ require("dotenv").config();
 const { connectMongo } = require("../loaders/mongoose");
 require("../models/index"); // register all schemas before any populate() calls
 const { emailQueue } = require("../queues/email.queue");
-const { render } = require("../services/email/templateLoader");
-const { sendEmail } = require("../services/email/mailer");
+const { processEmailJob } = require("../services/email/mailer");
 const { logger } = require("../loaders/logging");
 const { installGracefulShutdown } = require("../utils/gracefulShutdown");
 
@@ -14,16 +13,8 @@ connectMongo().catch((err) => {
   process.exit(1);
 });
 
-// NOTE: use the *named* processor: 'send'
-emailQueue.process("send", 5, async (job) => {
-  const { to, subject, template, variables, from, fromName, tenantId, text, attachments } = job.data;
-
-  const html = render(template, variables);
-  const ok = await sendEmail({ from, fromName, tenantId, to, subject, html, text, attachments });
-  if (!ok) throw new Error("Failed to send email");
-
-  return true;
-});
+// NOTE: named processor "send"; enqueueEmailJob adds jobs under that name.
+emailQueue.process("send", 5, processEmailJob);
 
 // Bull's Queue never emits a "ready" event; isReady() is the real API for this.
 emailQueue.isReady().then(() => logger.info("[emailQueue] ready"));
@@ -31,7 +22,10 @@ emailQueue.on("completed", (job) =>
   logger.info(`[emailQueue] completed ${job.id}`)
 );
 emailQueue.on("failed", (job, err) =>
-  logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`)
+  logger.error(`[emailQueue] failed ${job?.id}: ${err?.message}`, {
+    template: job?.data?.template,
+    attemptsMade: job?.attemptsMade,
+  }),
 );
 
 installGracefulShutdown({ name: "emailWorker", getQueues: () => [emailQueue] });

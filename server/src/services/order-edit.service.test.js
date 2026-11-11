@@ -139,7 +139,8 @@ test("add, change quantity and remove recompute totals with creation's helper", 
 
   for (const doc of [added, changed, removed]) {
     const expected = computeOrderTotals(doc.items, { shippingCost: doc.shipping_cost, orderDiscount: doc.discount_amount });
-    assert.deepEqual({ subtotal: doc.subtotal, tax_amount: doc.tax_amount, total: doc.total }, expected);
+    const { subtotal, tax_amount, gst_includes_shipping, total } = doc;
+    assert.deepEqual({ subtotal, tax_amount, gst_includes_shipping, total }, expected);
   }
   // The same final lines created fresh give the same totals.
   const fresh = await makeOrder([line(a, 4)]);

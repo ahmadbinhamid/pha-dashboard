@@ -146,7 +146,9 @@ const orderSchema = buildSchema({
   discount_id: { type: Schema.Types.ObjectId, ref: "Discount", default: null },
   promo_code: { type: String, default: null },
   shipping_cost: { type: Number, required: true, default: 0 },
-  tax_amount: { type: Number, required: true }, // GST extracted from subtotal, display-only
+  tax_amount: { type: Number, required: true }, // GST in cents, display-only
+  // False on legacy orders, whose tax_amount left out freight GST.
+  gst_includes_shipping: { type: Boolean, default: false },
   total: { type: Number, required: true },
   currency: { type: String, required: true, default: "aud" },
 

@@ -8,6 +8,7 @@ const { PRODUCT_CONDITION_LABEL } = require("../../constants/product.constants")
 const { formatInvoiceNumber } = require("../orderNumberFormat");
 const { richTextToBlocks } = require("../richText");
 const { stripEbayAddressPrefix } = require("../addressFormat");
+const { gstFromInclusive, splitOrderGst, GST_RATE_PERCENT, GST_LABEL } = require("../orderTotals");
 
 const PAGE_WIDTH = 595.28; // A4 points
 const PAGE_HEIGHT = 841.89; // A4 points
@@ -62,12 +63,9 @@ function formatDate(date, opts) {
   return new Date(date).toLocaleDateString("en-AU", opts || { year: "numeric", month: "short", day: "numeric" });
 }
 
-// GST-inclusive pricing: per-line GST is total/11, never added on top.
-function lineGst(lineTotalCents) {
-  return Math.round(lineTotalCents / 11);
-}
+// GST-inclusive pricing: per-line GST is extracted, never added on top.
+const lineGst = gstFromInclusive;
 
-// GST-exclusive unit price for display, same convention as lineGst.
 function lineExclusiveUnitPrice(unitPriceCents) {
   return unitPriceCents - lineGst(unitPriceCents);
 }
@@ -281,7 +279,7 @@ function drawItemsTableHeader(doc, y) {
   doc.text("DESCRIPTION", PAGE_MARGIN + COLUMNS.item, headerTextY, { width: COLUMN_WIDTHS.item, ...spacing });
   const rightLabels = [
     ["UNIT EX GST", "unitPrice"],
-    ["GST 11%", "gst"],
+    [`GST ${GST_RATE_PERCENT}%`, "gst"],
     ["QTY", "qty"],
     ["DISCOUNT", "discount"],
     ["TOTAL INC GST", "total"],
@@ -452,9 +450,9 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
   // Includes legacy order-level discount, order.subtotal already nets it out.
   const itemDiscount = order.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
   const totalDiscount = itemDiscount + (order.discount_amount || 0);
-  // order.tax_amount is the stored GST, reused so totals never disagree.
-  const gstAmount = order.tax_amount || 0;
-  const exGstSubtotal = order.subtotal - gstAmount;
+  // Stored GST is reused so totals never disagree with the order record.
+  const { totalGst, freightGst, itemsGst } = splitOrderGst(order);
+  const exGstSubtotal = order.subtotal - itemsGst;
 
   let cursor = y;
   // Pre-discount subtotal and discount lines only when discounted.
@@ -463,9 +461,11 @@ function drawTotals(doc, order, totalPaidCents, totalRefundedCents, x, y, width)
     cursor = drawTotalRow(doc, "Discount", `-${formatMoney(totalDiscount)}`, x, cursor, width);
   }
   cursor = drawTotalRow(doc, "Subtotal (ex GST)", formatMoney(exGstSubtotal), x, cursor, width);
-  cursor = drawTotalRow(doc, "GST (11%)", formatMoney(gstAmount), x, cursor, width);
   const shippingLabel = SHIPPING_ROW_LABEL[order.delivery_method] || "Freight";
-  cursor = drawTotalRow(doc, shippingLabel, formatMoney(order.shipping_cost), x, cursor, width);
+  // With freight GST in the GST row, freight shows ex GST so rows add up.
+  const freightLabel = order.gst_includes_shipping ? `${shippingLabel} (ex GST)` : shippingLabel;
+  cursor = drawTotalRow(doc, freightLabel, formatMoney(order.shipping_cost - freightGst), x, cursor, width);
+  cursor = drawTotalRow(doc, GST_LABEL, formatMoney(totalGst), x, cursor, width);
 
   // Solid ink bar, the one piece of heavy emphasis on the sheet.
   const barY = cursor + 8;
