@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -6,6 +7,16 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { GuestCheckoutForm } from "@/components/payments/GuestCheckoutForm";
 import { getGuestOrder, createGuestPaymentIntent } from "@/lib/api/guestPayment";
 import { formatCurrencyFromCents, formatOrderNumber } from "@/utils/format";
+import type { GuestOrder } from "@/types/orders";
+
+// Query params Stripe appends when a redirect method returns here.
+const STRIPE_RETURN_PARAMS = ["payment_intent", "payment_intent_client_secret", "redirect_status"];
+const CONFIRM_POLL_MS = 3000;
+
+function isOrderPaid(order: GuestOrder | undefined) {
+  if (!order) return false;
+  return order.payment_status === "paid" || order.fulfillment_status === "completed" || order.amount_due <= 0;
+}
 
 // Only a 404 means a dead link; no status means the request never got through.
 function payLinkErrorMessage(error: unknown) {
@@ -22,14 +33,27 @@ function payLinkErrorMessage(error: unknown) {
 
 export default function PayOrderPage() {
   const { orderId } = useParams<{ orderId: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
+  // Read once: the params are stripped below so a retry starts clean.
+  const [redirectStatus] = useState(() => searchParams.get("redirect_status"));
+  const returnedApproved = redirectStatus === "succeeded" || redirectStatus === "processing";
+
+  useEffect(() => {
+    if (!STRIPE_RETURN_PARAMS.some((key) => searchParams.has(key))) return;
+    const next = new URLSearchParams(searchParams);
+    STRIPE_RETURN_PARAMS.forEach((key) => next.delete(key));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["guest-order", orderId, token],
     queryFn: () => getGuestOrder(orderId!, token),
     enabled: !!orderId && !!token,
     retry: false,
+    // Webhook marks the order paid shortly after the provider redirect.
+    refetchInterval: (query) =>
+      returnedApproved && !isOrderPaid(query.state.data?.data) ? CONFIRM_POLL_MS : false,
   });
   const order = data?.data;
 
@@ -60,7 +84,7 @@ export default function PayOrderPage() {
 
   // Server value: order.payment is the latest attempt, possibly a cancelled one.
   const amountDue = order.amount_due;
-  const alreadyPaid = order.payment_status === "paid" || order.fulfillment_status === "completed" || amountDue <= 0;
+  const alreadyPaid = isOrderPaid(order);
 
   return (
     <StatusShell>
@@ -72,6 +96,8 @@ export default function PayOrderPage() {
         <CardContent>
           {alreadyPaid ? (
             <p className="text-sm text-fg/65">Nothing further to pay — thank you.</p>
+          ) : returnedApproved ? (
+            <p className="text-sm text-ok">Payment received — confirming your order…</p>
           ) : intentMutation.data ? (
             <GuestCheckoutForm
               clientSecret={intentMutation.data.data.client_secret}
@@ -80,6 +106,11 @@ export default function PayOrderPage() {
             />
           ) : (
             <div className="flex flex-col gap-3">
+              {redirectStatus === "failed" && (
+                <p className="text-xs font-medium text-danger">
+                  Your payment wasn't approved. Please try again or choose another method.
+                </p>
+              )}
               <Button onClick={() => intentMutation.mutate()} disabled={intentMutation.isPending}>
                 {intentMutation.isPending ? "Preparing payment…" : "Pay now"}
               </Button>

@@ -4,12 +4,18 @@ const Payment = require("../../models/Payment");
 const Tenant = require("../../models/Tenant");
 const stripeKeysService = require("./stripe.keys.service");
 const { getAmountDueForOrder } = require("../payment.service");
-const { PAYMENT_PROVIDER, PAYMENT_STATUS } = require("../../constants/payment.constants");
-const { ORDER_STATUS } = require("../../constants/order.constants");
+const { PAYMENT_PROVIDER, PAYMENT_STATUS, BNPL_METHODS } = require("../../constants/payment.constants");
+const { ORDER_STATUS, ORDER_CHANNEL } = require("../../constants/order.constants");
 const { PAYMENT_DOMAIN_MODE } = require("../../constants/tenant.constants");
 const config = require("../../config");
 const { logger } = require("../../loaders/logging");
 const { formatOrderNumber } = require("../../utils/orderNumberFormat");
+
+// Staff payment links share the pay page, so BNPL is hidden off the storefront.
+function buildMethodRestrictions(order) {
+  if (order.channel === ORDER_CHANNEL.STOREFRONT) return {};
+  return { excluded_payment_method_types: [...BNPL_METHODS] };
+}
 
 // Bills the balance due; reuses a pending intent so reloads add no Payment.
 async function createPaymentIntentForOrder(order) {
@@ -62,6 +68,7 @@ async function createPaymentIntentForOrder(order) {
     {
       amount: remainingCents,
       currency,
+      ...buildMethodRestrictions(order),
       metadata: { order_id: order._id.toString(), order_number: formatOrderNumber(order.order_number_prefix, order.order_number) },
     },
     // Keyed by amount so a re-mint doesn't collide with the prior attempt.
