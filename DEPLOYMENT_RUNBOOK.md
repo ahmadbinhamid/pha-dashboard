@@ -93,9 +93,11 @@ ALERTS_TO=                  # Still blank — set to whatever inbox should get p
 ## 4. Rebuild and restart containers
 
 ```bash
-docker compose build backend worker-email worker-ebay worker-stripe nginx
+docker compose build backend dashboard-web
 docker compose up -d
 ```
+Only `backend` and `dashboard-web` are built; every worker (`worker-channels`, `worker-stripe`, `worker-platform`) reuses the `pha-backend:latest` image, so `backend` must be built first.
+
 `nginx`'s build already compiles the dashboard frontend (`Dockerfile.frontend` runs `npm run build`), so this picks up the new Register page automatically — no separate frontend build step needed. (The storefront, `pha-storefront`, is a separate repo/deploy; nothing from this session requires a storefront redeploy, since no storefront code changed — only backend responses it already consumes.)
 
 ## 5. Sync indexes

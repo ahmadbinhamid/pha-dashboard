@@ -8,10 +8,12 @@ services:
     networks:
       - pha-net
 
+  # Built once here; every worker below reuses this image.
   backend:
     build:
       context: ./server
       dockerfile: Dockerfile
+    image: pha-backend:latest
     hostname: backend
     env_file: ./server/.env.production
     volumes:
@@ -26,15 +28,10 @@ services:
       - default
       - pha-net
 
-  # Replaces the old worker-ebay — same container role, now runs the
-  # channel-agnostic worker (workers/channel.worker.js) covering every
-  # registered marketplace adapter, not just eBay. See
-  # server/docs/channel-architecture.md for the deploy order this depends on
-  # (code deploy must land before this rename takes effect).
+  # Every marketplace adapter; see server/docs/channel-architecture.md.
   worker-channels:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: pha-backend:latest
+    pull_policy: never
     command: node --max-old-space-size=256 src/workers/channel.worker.js
     env_file: ./server/.env.production
     volumes:
@@ -46,9 +43,8 @@ services:
     restart: unless-stopped
 
   worker-stripe:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: pha-backend:latest
+    pull_policy: never
     command: node --max-old-space-size=256 src/workers/stripe.worker.js
     env_file: ./server/.env.production
     volumes:
@@ -59,13 +55,10 @@ services:
       - redis
     restart: unless-stopped
 
-  # Replaces the old worker-email + worker-search — both are low-volume job
-  # types that don't need a dedicated container each; merged into one
-  # process (workers/platform.worker.js).
+  # Email, search and order sweeps share one low-volume process.
   worker-platform:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: pha-backend:latest
+    pull_policy: never
     command: node --max-old-space-size=256 src/workers/platform.worker.js
     env_file: ./server/.env.production
     volumes:

@@ -1,11 +1,9 @@
-# NOTE: found a FOURTH place disagreeing on Node version, beyond the three
-# named in this task (dev machine, server/Dockerfile, ci.yml) — this file
-# was also pinned to node:20-alpine, for the frontend's own build stage.
-# Same fix, same reasoning: standardise on 22.
+# syntax=docker/dockerfile:1
+# NOTE: Node 22 matches the production host, server/Dockerfile and CI.
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --no-fund
 COPY . .
 ARG VITE_API_URL=/api/v1
 ENV VITE_API_URL=$VITE_API_URL
