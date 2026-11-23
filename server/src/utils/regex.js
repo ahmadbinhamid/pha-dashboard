@@ -11,9 +11,13 @@ function buildSpacingFlexibleRegex(word) {
   return new RegExp(chars.map((c) => escapeRegex(c)).join("\\s*"), "i");
 }
 
+function splitSearchWords(searchText) {
+  return String(searchText || "").trim().split(/\s+/).filter(Boolean);
+}
+
 // Any-word OR search over fields; an unindexed scan, Typesense covers scale.
 function buildWordSearchOr(fields, searchText) {
-  const words = String(searchText || "").trim().split(/\s+/).filter(Boolean);
+  const words = splitSearchWords(searchText);
   if (!words.length) return [];
 
   const conditions = [];
@@ -26,9 +30,24 @@ function buildWordSearchOr(fields, searchText) {
   return conditions;
 }
 
+// Every word must hit some field; extraForWord adds per-word $or branches.
+function buildAllWordsSearchAnd(fields, searchText, extraForWord = () => []) {
+  return splitSearchWords(searchText).map((word, index) => {
+    const re = buildSpacingFlexibleRegex(word);
+    return { $or: [...fields.map((field) => ({ [field]: re })), ...extraForWord(word, index)] };
+  });
+}
+
 // Whole-value, case-insensitive match, e.g. "honda" matches "Honda".
 function exactMatchRegex(value) {
   return new RegExp(`^${escapeRegex(String(value).trim())}$`, "i");
 }
 
-module.exports = { escapeRegex, buildWordSearchOr, exactMatchRegex };
+module.exports = {
+  escapeRegex,
+  splitSearchWords,
+  buildSpacingFlexibleRegex,
+  buildWordSearchOr,
+  buildAllWordsSearchAnd,
+  exactMatchRegex,
+};
