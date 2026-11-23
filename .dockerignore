@@ -1,8 +1,12 @@
-node_modules
+# Frontend build context: the backend has its own image and context.
+server
+**/node_modules
 dist
 .git
+.claude
 .env
 .env.*
-logs
+**/logs
 *.log
+tsconfig.tsbuildinfo
 .DS_Store

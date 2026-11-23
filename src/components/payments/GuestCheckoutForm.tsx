@@ -46,9 +46,11 @@ function GuestPaymentForm({ onOrderChanged }: Pick<GuestCheckoutFormProps, "onOr
     setSubmitting(true);
     setErrorMessage(null);
 
+    // Afterpay/Zip leave the site to approve; Stripe returns them to this page.
     const { error } = await stripe.confirmPayment({
       elements,
       redirect: "if_required",
+      confirmParams: { return_url: window.location.href },
     });
 
     setSubmitting(false);
