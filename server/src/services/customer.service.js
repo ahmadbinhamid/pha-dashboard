@@ -4,9 +4,9 @@ const Customer = require("../models/Customer");
 const Order = require("../models/Order");
 const { UNPAID_ORDER_STATUSES } = require("../constants/order.constants");
 const { excludeAbandonedCheckouts } = require("../utils/orderVisibility");
-const { buildWordSearchOr } = require("../utils/regex");
+const { buildAllWordsSearchAnd } = require("../utils/regex");
 const { CUSTOMER_SOURCE } = require("../constants/customer.constants");
-const { findBusinessIdsByName, resolveBusinessId } = require("./business.service");
+const { findBusinessIdsPerWord, resolveBusinessId } = require("./business.service");
 
 // Other reps shown on a profile, a business rarely has more.
 const REPRESENTATIVES_LIMIT = 50;
@@ -81,10 +81,12 @@ async function listCustomers({ skip = 0, limit = 20, search = "", includeStorefr
   const filter = { tenant_id: tenantId };
   if (!includeStorefront) filter.source = { $ne: CUSTOMER_SOURCE.STOREFRONT };
   if (search) {
-    // A business name match lists every rep of that business separately.
-    const businessIds = await findBusinessIdsByName(tenantId, search);
-    filter.$or = buildWordSearchOr(["name", "email", "phone"], search);
-    if (businessIds.length) filter.$or.push({ business_id: { $in: businessIds } });
+    // All words must match, else "5 Star" drowns in phones containing a 5.
+    const businessIdsPerWord = await findBusinessIdsPerWord(tenantId, search);
+    const byBusiness = (_word, i) =>
+      businessIdsPerWord[i]?.length ? [{ business_id: { $in: businessIdsPerWord[i] } }] : [];
+    const wordConditions = buildAllWordsSearchAnd(["name", "email", "phone"], search, byBusiness);
+    if (wordConditions.length) filter.$and = wordConditions;
   }
 
   const [items, total] = await Promise.all([
