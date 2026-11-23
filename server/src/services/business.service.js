@@ -2,7 +2,7 @@
 
 const Business = require("../models/Business");
 const { NAME_COLLATION } = require("../models/Business");
-const { buildWordSearchOr } = require("../utils/regex");
+const { buildWordSearchOr, splitSearchWords, buildSpacingFlexibleRegex } = require("../utils/regex");
 
 // Picker options and search-match caps, a tenant's business list stays small.
 const BUSINESS_OPTIONS_LIMIT = 500;
@@ -34,15 +34,18 @@ async function getBusinessById(id, tenantId) {
   return Business.findOne({ _id: id, tenant_id: tenantId }).lean();
 }
 
-/** Ids of businesses whose name matches any word of `search`. */
-async function findBusinessIdsByName(tenantId, search) {
-  const or = buildWordSearchOr(["name"], search);
-  if (!or.length) return [];
-  const rows = await Business.find({ tenant_id: tenantId, $or: or })
-    .select("_id")
+/** Per word of `search`, ids of businesses whose name matches it; one query. */
+async function findBusinessIdsPerWord(tenantId, search) {
+  const words = splitSearchWords(search);
+  if (!words.length) return [];
+  const rows = await Business.find({ tenant_id: tenantId, $or: buildWordSearchOr(["name"], search) })
+    .select("_id name")
     .limit(SEARCH_MATCH_LIMIT)
     .lean();
-  return rows.map((b) => b._id);
+  return words.map((word) => {
+    const re = buildSpacingFlexibleRegex(word);
+    return rows.filter((b) => re.test(b.name)).map((b) => b._id);
+  });
 }
 
 /** Existing business by case-insensitive name, created on first use. */
@@ -92,7 +95,7 @@ module.exports = {
   listBusinessOptions,
   listBusinessesPage,
   getBusinessById,
-  findBusinessIdsByName,
+  findBusinessIdsPerWord,
   resolveBusinessId,
   createBusiness,
   updateBusiness,

@@ -67,6 +67,20 @@ test("search finds reps by name, and every rep by business name", async () => {
   assert.deepEqual(byBusiness.items.map((c) => c.name).sort(), ["David Smith", "John Smith"]);
 });
 
+test("multi-word search needs every word, so digits don't swamp results", async () => {
+  const tenantId = fixtureId();
+  await customerService.createCustomer({ name: "Fred", business_name: "5 Star Panels" }, tenantId);
+  for (let i = 0; i < 20; i += 1) {
+    await customerService.createCustomer({ name: `Rep ${i}`, phone: `04135724${String(i).padStart(2, "0")}` }, tenantId);
+  }
+
+  const result = await customerService.listCustomers({ search: "5 STAR", limit: 15 }, tenantId);
+  assert.deepEqual(result.items.map((c) => c.name), ["Fred"]);
+
+  const joined = await customerService.listCustomers({ search: "5star", limit: 15 }, tenantId);
+  assert.deepEqual(joined.items.map((c) => c.name), ["Fred"]);
+});
+
 test("a rep's profile lists the other reps of the business", async () => {
   const tenantId = fixtureId();
   const john = await customerService.createCustomer({ name: "John Smith", business_name: "ABC Motors", email: INBOX }, tenantId);
