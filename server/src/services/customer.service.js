@@ -213,7 +213,21 @@ async function deleteCustomer(id, tenantId) {
   return customer;
 }
 
+/** Opted-in customers with an email, streamed for the campaign contact sync. */
+function cursorMarketingOptInCustomers(tenantId) {
+  const filter = { tenant_id: tenantId, marketing_opt_in: true, email: { $nin: [null, ""] } };
+  return Customer.find(filter).select("_id email name").lean().cursor();
+}
+
+/** A campaign unsubscribe withdraws the matching customer's consent too. */
+async function revokeMarketingOptIn(tenantId, email) {
+  const filter = { tenant_id: tenantId, email, marketing_opt_in: true };
+  await Customer.updateMany(filter, { $set: { marketing_opt_in: false } });
+}
+
 module.exports = {
+  cursorMarketingOptInCustomers,
+  revokeMarketingOptIn,
   getCustomerStats,
   listCustomers,
   upsertStorefrontCustomer,

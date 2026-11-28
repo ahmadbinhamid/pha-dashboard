@@ -1,5 +1,5 @@
 // services/storefront.service.js
-// Storefront content: hero slides, announcement strip and the featured sale.
+// Storefront content: hero, announcement, featured sale and signup popup.
 
 const { omit } = require("lodash");
 const StorefrontSettings = require("../models/StorefrontSettings");
@@ -7,6 +7,7 @@ const { getDiscountSummary, upsertDiscountByCode } = require("./discount.service
 const { httpError } = require("../utils/http/httpError");
 const { toUploadUrl } = require("../utils/uploadUrl");
 const { DISCOUNT_STATUS } = require("../constants/discount.constants");
+const signupOffer = require("./signup-offer.service");
 
 const ANNOUNCEMENT_FIELDS = [
   "enabled",
@@ -22,6 +23,23 @@ const ANNOUNCEMENT_FIELDS = [
   "starts_at",
   "ends_at",
 ];
+const SIGNUP_POPUP_FIELDS = [
+  "enabled",
+  "delay_seconds",
+  "headline",
+  "body",
+  "button_label",
+  "success_message",
+  "image_url",
+  "collect_first_name",
+  "list_name",
+  "frequency_days",
+  "placement",
+  "starts_at",
+  "ends_at",
+];
+// The popup's public face: everything except the code and internal ids.
+const PUBLIC_POPUP_FIELDS = SIGNUP_POPUP_FIELDS.filter((f) => !["enabled", "list_name"].includes(f));
 const HERO_SETTINGS_FIELDS = ["autoplay", "interval_seconds", "show_arrows", "show_dots", "height"];
 const PROMOTION_DISPLAY_FIELDS = [
   "ticker_speed",
@@ -64,6 +82,11 @@ const SLIDE_DEFAULTS = omit(new StorefrontSettings({ hero_slides: [{ title: "-",
   "image_url",
 ]);
 
+function withPopupDefaults(popup) {
+  const merged = { ...BLANK.signup_popup, ...popup };
+  return { ...merged, image_url: toUploadUrl(merged.image_url) || "" };
+}
+
 function withDefaults(doc) {
   return {
     hero_slides: (doc?.hero_slides ?? []).map((s) => ({
@@ -75,6 +98,7 @@ function withDefaults(doc) {
     hero_settings: { ...BLANK.hero_settings, ...doc?.hero_settings },
     announcement: { ...BLANK.announcement, ...doc?.announcement },
     flash_sale: { ...BLANK.flash_sale, ...doc?.flash_sale },
+    signup_popup: withPopupDefaults(doc?.signup_popup),
     updated_at: doc?.updated_at ?? null,
   };
 }
@@ -88,9 +112,13 @@ async function findSettings(tenantId) {
   return withDefaults(await StorefrontSettings.findOne({ tenant_id: tenantId }).lean());
 }
 
-// Admin view: the featured discount's details ride along for the preview.
+// Admin view: featured discount and popup offer ride along for the editors.
 async function withFeaturedDiscount(tenantId, settings) {
-  return { ...settings, featured_discount: await getDiscountSummary(settings.flash_sale.discount_id, tenantId) };
+  const [featured, offer] = await Promise.all([
+    getDiscountSummary(settings.flash_sale.discount_id, tenantId),
+    signupOffer.getOffer(tenantId, settings.signup_popup.discount_id),
+  ]);
+  return { ...settings, featured_discount: featured, signup_popup: { ...settings.signup_popup, offer } };
 }
 
 async function upsertSettings(tenantId, update) {
@@ -119,12 +147,23 @@ async function updateAnnouncement(tenantId, patch) {
   return upsertSettings(tenantId, { $set: sectionSet("announcement", ANNOUNCEMENT_FIELDS, patch) });
 }
 
+/** Saves popup content and keeps its offer's discount in step. */
+async function updateSignupPopup(tenantId, { offer, ...patch }) {
+  const $set = sectionSet("signup_popup", SIGNUP_POPUP_FIELDS, patch);
+  if (offer) {
+    const current = (await findSettings(tenantId)).signup_popup;
+    $set["signup_popup.discount_id"] = await signupOffer.saveOffer(tenantId, current.discount_id, offer);
+  }
+  return upsertSettings(tenantId, { $set });
+}
+
 async function updateFlashSale(tenantId, patch) {
   const current = (await findSettings(tenantId)).flash_sale;
   const discountId = patch.discount_id !== undefined ? patch.discount_id : current.discount_id;
-  if (patch.discount_id && !(await getDiscountSummary(patch.discount_id, tenantId))) {
-    throw httpError("Discount not found", 422);
-  }
+  const picked = patch.discount_id ? await getDiscountSummary(patch.discount_id, tenantId) : null;
+  if (patch.discount_id && !picked) throw httpError("Discount not found", 422);
+  // Per-email signup codes have no public code to advertise.
+  if (picked?.unique_codes) throw httpError("The signup popup offer can't be featured as a sale", 422);
   if ((patch.active ?? current.active) && !discountId) throw httpError("Pick a discount to feature first", 422);
   return upsertSettings(tenantId, { $set: sectionSet("flash_sale", FLASH_SALE_FIELDS, patch) });
 }
@@ -146,6 +185,29 @@ async function publicSale(tenantId, flashSale) {
   return { ...fields, ...display, ticker_text: flashSale.ticker_text };
 }
 
+
+function isPopupLive(popup) {
+  return popup.enabled && Boolean(popup.headline) && isInWindow(popup);
+}
+
+// Offer summary only; the code is handed out by the newsletter signup.
+async function publicPopup(tenantId, popup) {
+  if (!isPopupLive(popup)) return null;
+  const discount = await signupOffer.liveOffer(tenantId, popup.discount_id);
+  const offer = discount
+    ? { discount_type: discount.discount_type, discount_value: discount.discount_value, minimum_order: discount.minimum_order }
+    : null;
+  return { ...Object.fromEntries(PUBLIC_POPUP_FIELDS.map((f) => [f, popup[f]])), offer };
+}
+
+/** List tag and this email's own code; null when the popup is off. */
+async function getPopupSignupReward(tenantId, email) {
+  const { signup_popup: popup } = await findSettings(tenantId);
+  if (!isPopupLive(popup)) return null;
+  const issued = await signupOffer.claimOffer(tenantId, popup.discount_id, email);
+  return { list_name: popup.list_name || null, offer: issued };
+}
+
 /** Inside an optional [starts_at, ends_at) window. */
 function isInWindow({ starts_at, ends_at }, now = new Date()) {
   return (!starts_at || new Date(starts_at) <= now) && (!ends_at || new Date(ends_at) > now);
@@ -153,13 +215,14 @@ function isInWindow({ starts_at, ends_at }, now = new Date()) {
 
 /** What the storefront renders: live content only, nothing switched off. */
 async function getPublicStorefront(tenantId) {
-  const { hero_slides, hero_settings, announcement, flash_sale } = await findSettings(tenantId);
+  const { hero_slides, hero_settings, announcement, flash_sale, signup_popup } = await findSettings(tenantId);
   const showBanner = announcement.enabled && announcement.message && isInWindow(announcement);
   return {
     hero_slides: hero_slides.filter((s) => s.active && isInWindow(s)),
     hero_settings,
     announcement: showBanner ? announcement : null,
     flash_sale: await publicSale(tenantId, flash_sale),
+    signup_popup: await publicPopup(tenantId, signup_popup),
   };
 }
 
@@ -168,6 +231,8 @@ module.exports = {
   updateHeroSlides,
   updateHeroSettings,
   updateAnnouncement,
+  updateSignupPopup,
+  getPopupSignupReward,
   updateFlashSale,
   launchFlashSale,
   getPublicStorefront,

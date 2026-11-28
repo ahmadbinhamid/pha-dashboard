@@ -10,6 +10,7 @@ const { httpError } = require("../utils/http/httpError");
 const { duplicateKeyField } = require("../utils/duplicateKey");
 const { DISCOUNT_TYPE, DISCOUNT_SCOPE, DISCOUNT_STATUS } = require("../constants/discount.constants");
 const { orderRangeLabel } = require("../utils/orderRange");
+const { findIssuedCode } = require("./discount-code.service");
 
 const normalizeCode = (code) => String(code).trim().toUpperCase();
 const normalizeEmail = (email) => String(email).trim().toLowerCase();
@@ -136,8 +137,18 @@ function notApplicableMessage(discount) {
     : "This code doesn't apply to the items in your cart";
 }
 
+/** A shared promo code, else a per-email issued code (carrying its code). */
+async function findCodeDiscount(tenantId, code, customerEmail) {
+  const shared = await Discount.findOne({ ...liveFilter(tenantId), code }).lean();
+  if (shared) return shared;
+  const issued = await findIssuedCode(tenantId, code, customerEmail);
+  if (!issued) return null;
+  const parent = await Discount.findOne({ ...liveFilter(tenantId), _id: issued.discount_id, unique_codes: true }).lean();
+  return parent ? { ...parent, code: issued.code } : null;
+}
+
 async function resolveCodeDiscount(tenantId, code, ctx) {
-  const discount = await Discount.findOne({ ...liveFilter(tenantId), code: normalizeCode(code) }).lean();
+  const discount = await findCodeDiscount(tenantId, normalizeCode(code), ctx.customerEmail);
   if (!discount) throw httpError("This promo code is not valid or has expired", 400);
   if (!orderAllows(discount, ctx.priorOrders)) throw httpError(orderRangeMessage(discount, ctx.priorOrders), 400);
   if ((await redeemedDiscountIds([discount], ctx.customerEmail)).size) {

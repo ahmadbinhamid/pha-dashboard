@@ -7,13 +7,15 @@ const fs = require("fs");
 const config = require("../config");
 const { badRequest } = require("../utils/http/response");
 const { httpError } = require("../utils/http/httpError");
-const { fileMatchesSignature } = require("../utils/fileSignature");
+const { fileMatchesSignature, matchesSignature } = require("../utils/fileSignature");
 const {
   UPLOAD_TYPES,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_FILES,
   UPLOAD_TYPE_ERROR,
+  SPREADSHEET_TYPES,
 } = require("../constants/upload.constants");
+const { IMPORT_MAX_BYTES } = require("../constants/campaign.constants");
 
 const uploadsDir = config.uploads.dir;
 if (!fs.existsSync(uploadsDir)) {
@@ -80,4 +82,36 @@ function uploadFiles(field, maxCount = MAX_UPLOAD_FILES) {
 
 const uploadMultiple = uploadFiles("files");
 
-module.exports = { upload, uploadFiles, uploadMultiple, verifyUploadedFiles };
+const extensionOf = (name) => String(name || "").toLowerCase().match(/\.[a-z0-9]+$/)?.[0] ?? "";
+
+const spreadsheetFilter = (_req, file, cb) => {
+  const type = SPREADSHEET_TYPES[extensionOf(file.originalname)];
+  if (type?.mimes.includes(file.mimetype)) return cb(null, true);
+  return cb(httpError("Upload an .xlsx or .csv spreadsheet", 400), false);
+};
+
+// CSV has no magic bytes; a NUL in the head means it is really binary.
+function spreadsheetBytesOk(file) {
+  const { signature } = SPREADSHEET_TYPES[extensionOf(file.originalname)];
+  const head = file.buffer.subarray(0, 16);
+  return signature ? matchesSignature(signature, head) : !head.includes(0);
+}
+
+function verifySpreadsheet(req, res, next) {
+  if (!req.file) return badRequest(res, "Attach a spreadsheet to import");
+  if (!spreadsheetBytesOk(req.file)) return badRequest(res, `${req.file.originalname} is not a valid spreadsheet.`);
+  return next();
+}
+
+const spreadsheetUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: spreadsheetFilter,
+  limits: { fileSize: IMPORT_MAX_BYTES, files: 1 },
+});
+
+/** One in-memory spreadsheet under `field`, content-checked like uploads. */
+function uploadSpreadsheet(field = "file") {
+  return [withBadRequestErrors(spreadsheetUpload.single(field)), verifySpreadsheet];
+}
+
+module.exports = { upload, uploadFiles, uploadMultiple, uploadSpreadsheet, verifyUploadedFiles };

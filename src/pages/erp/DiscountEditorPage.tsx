@@ -1,6 +1,7 @@
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BreadcrumbNav } from "@/components/ui/BreadcrumbNav";
+import { InlineNotice } from "@/components/ui/InlineNotice";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DiscountForm } from "@/components/discounts/DiscountForm";
@@ -9,6 +10,7 @@ import { DiscountStatusBadge } from "@/components/discounts/DiscountStatusBadge"
 import { DiscountUsageStats } from "@/components/discounts/DiscountUsageStats";
 import { DISCOUNTS_BASE_PATH } from "@/config/discounts";
 import { PERMISSIONS } from "@/config/permissions";
+import { SIGNUP_POPUP_TAB_PATH } from "@/config/storefront";
 import { useToast } from "@/context";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import { getCategories } from "@/lib/api/categories";
@@ -28,11 +30,12 @@ export default function DiscountEditorPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { can } = useMyAccess();
-  const canEdit = can(isNew ? PERMISSIONS.discounts.create : PERMISSIONS.discounts.update);
 
   const { data, isLoading } = useQuery({ queryKey: discountQueryKey(id ?? ""), queryFn: () => getDiscount(id!), enabled: !isNew });
   const { data: categoriesRes } = useQuery({ queryKey: ["categories", "all"], queryFn: () => getCategories({ limit: 100 }) });
   const discount = data?.data ?? null;
+  const isSignupOffer = Boolean(discount?.unique_codes);
+  const canEdit = can(isNew ? PERMISSIONS.discounts.create : PERMISSIONS.discounts.update) && !isSignupOffer;
 
   const mutation = useMutation({
     mutationFn: (values: DiscountFormValues) =>
@@ -60,6 +63,15 @@ export default function DiscountEditorPage() {
         <SkeletonText lines={10} />
       ) : (
         <>
+          {isSignupOffer ? (
+            <InlineNotice variant="warn">
+              Each signup gets their own code, so this discount is managed with the{" "}
+              <Link to={SIGNUP_POPUP_TAB_PATH} className="font-medium underline">
+                signup popup
+              </Link>
+              .
+            </InlineNotice>
+          ) : null}
           {discount ? <DiscountUsageStats usage={discount.usage} /> : null}
           <DiscountForm
             discount={discount}

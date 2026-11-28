@@ -1,7 +1,7 @@
 import { FormField } from "@/components/ui/FormField";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
-// FormField + RichTextEditor, so a rich-text field is declared the same way as an Input/Textarea instead of each form wiring the editor up itself.
+// FormField + RichTextEditor, declared like an Input instead of hand-wired.
 export function RichTextField({
   label,
   hint,
@@ -12,6 +12,8 @@ export function RichTextField({
   minHeight,
   disabled,
   className,
+  enableLinks,
+  enableImages,
 }: {
   label?: string;
   hint?: string;
@@ -23,6 +25,8 @@ export function RichTextField({
   /** Renders read-only — the toolbar is hidden rather than greyed out. */
   disabled?: boolean;
   className?: string;
+  enableLinks?: boolean;
+  enableImages?: boolean;
 }) {
   return (
     <FormField label={label} hint={hint} error={error} className={className}>
@@ -32,6 +36,8 @@ export function RichTextField({
         placeholder={placeholder}
         minHeight={minHeight}
         readOnly={disabled}
+        enableLinks={enableLinks}
+        enableImages={enableImages}
       />
     </FormField>
   );

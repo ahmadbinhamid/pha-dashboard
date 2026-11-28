@@ -183,6 +183,19 @@ const config = {
     overdueSweepEnabled: get("ORDER_OVERDUE_SWEEP_ENABLED", "true") === "true",
   },
 
+  campaigns: {
+    // This API's public origin; unsubscribe links in campaign mail point here.
+    publicApiUrl: get("API_PUBLIC_URL", `http://localhost:${getNum("PORT", 7000)}`),
+    sweepIntervalMinutes: getNum("CAMPAIGN_SWEEP_INTERVAL_MINUTES", 1),
+    sweepEnabled: get("CAMPAIGN_SWEEP_ENABLED", "true") === "true",
+    // Low on purpose: mailer transports already rate-limit per connection.
+    sendConcurrency: getNum("CAMPAIGN_SEND_CONCURRENCY", 2),
+    // Plain SMTP mailboxes cap daily volume; a bulk provider lifts this.
+    maxRecipients: getNum("CAMPAIGN_MAX_RECIPIENTS", 500),
+    // Follow-ups are due by the day, so a frequent sweep isn't needed.
+    followUpSweepIntervalMinutes: getNum("FOLLOW_UP_SWEEP_INTERVAL_MINUTES", 15),
+  },
+
   stripe: {
     // BYOK: each tenant supplies its own Stripe keys; only currency is global.
     currency: get("STRIPE_CURRENCY", "aud"),

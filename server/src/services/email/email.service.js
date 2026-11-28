@@ -261,6 +261,44 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
   });
 }
 
+/** A popup subscriber's own code, so it survives closing the popup. */
+async function sendSignupOfferCode({ to, code, offerLabel, minimumOrder, expiresOn, shopUrl, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    ...tenantSender(companyProfile, tenantId),
+    to,
+    subject: `Your ${offerLabel} code: ${code}`,
+    template: "signupOfferCode",
+    variables: {
+      email: to,
+      code,
+      offer_label: offerLabel,
+      minimum_order: minimumOrder || null,
+      expires_on: expiresOn || null,
+      shop_url: shopUrl,
+      ...tenantBrandVars(companyProfile),
+    },
+  });
+}
+
+/** To the store: a customer rated something low, worth a follow-up. */
+async function sendLowRatingAlert({ to, feedback, companyProfile }) {
+  return enqueueEmailJob({
+    from: defaultFrom(),
+    to,
+    subject: `[Feedback] ${feedback.rating}★ for ${feedback.product_name}`,
+    template: "lowRatingAlert",
+    variables: {
+      rating: feedback.rating,
+      product_name: feedback.product_name,
+      customer_name: feedback.customer_name || "A customer",
+      customer_email: feedback.customer_email,
+      comment: feedback.comment || null,
+      inbox_url: `${config.emailBrand.clientUrl.replace(/\/$/, "")}/campaigns?tab=feedback`,
+      ...tenantBrandVars(companyProfile),
+    },
+  });
+}
+
 /** Images attach by disk path, relying on the shared uploads volume. */
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
   return enqueueEmailJob(
@@ -381,6 +419,8 @@ async function sendTeamAdded({ to, firstName, organisationName, inviterName, log
 }
 
 module.exports = {
+  sendLowRatingAlert,
+  sendSignupOfferCode,
   sendTeamInvite,
   sendTeamSetPassword,
   sendTeamAdded,

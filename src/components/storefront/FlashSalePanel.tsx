@@ -42,7 +42,8 @@ export function FlashSalePanel({ sale, featuredDiscount, categories, canEdit, on
   const queryClient = useQueryClient();
   const { can } = useMyAccess();
   const { data: discountsRes } = useQuery({ queryKey: DISCOUNTS_QUERY_KEY, queryFn: getDiscounts, enabled: can(PERMISSIONS.discounts.view) });
-  const discounts = useMemo(() => discountsRes?.data ?? [], [discountsRes]);
+  // Per-email signup codes have nothing public to feature.
+  const discounts = useMemo(() => (discountsRes?.data ?? []).filter((d) => !d.unique_codes), [discountsRes]);
 
   const formValues = useMemo(() => toFormValues(sale), [sale]);
   const form = useForm<FlashSaleFormValues>({ resolver: zodResolver(flashSaleFormSchema), defaultValues: formValues });

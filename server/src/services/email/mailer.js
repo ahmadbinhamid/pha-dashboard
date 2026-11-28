@@ -62,8 +62,8 @@ async function resolveSender({ from, fromName, tenantId }) {
   return { transporter: platformTransporter, from: `"${name}" <${config.emailBrand.fromEmail}>`, via: "platform" };
 }
 
-/** Sends one message; returns { ok, permanent } and never throws. */
-async function sendEmail({ from, fromName, replyTo, to, subject, html, text, attachments, tenantId, template }) {
+/** Sends one message; returns { ok, permanent, … } and never throws. */
+async function sendEmail({ from, fromName, replyTo, to, subject, html, text, attachments, headers, tenantId, template }) {
   const sender = await resolveSender({ from, fromName, tenantId });
   const mail = {
     from: sender.from,
@@ -73,6 +73,7 @@ async function sendEmail({ from, fromName, replyTo, to, subject, html, text, att
     html,
     text: text || (html ? htmlToPlainText(html) : undefined),
     attachments,
+    headers,
   };
   const meta = {
     template,
@@ -93,7 +94,7 @@ async function sendEmail({ from, fromName, replyTo, to, subject, html, text, att
       response: info.response,
     });
     const rejected = Boolean(info.rejected?.length);
-    return { ok: !rejected, permanent: rejected };
+    return { ok: !rejected, permanent: rejected, recipientRejected: rejected, response: info.response };
   } catch (err) {
     const permanent = isPermanentFailure(err);
     logger.error("[mailer] send failed", {
@@ -105,7 +106,7 @@ async function sendEmail({ from, fromName, replyTo, to, subject, html, text, att
       command: err.command,
       permanent,
     });
-    return { ok: false, permanent };
+    return { ok: false, permanent, responseCode: err.responseCode, response: err.response };
   }
 }
 

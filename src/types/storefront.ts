@@ -1,4 +1,4 @@
-import type { DiscountPayload, FeaturedDiscount } from "@/types/discount";
+import type { DiscountPayload, DiscountType, FeaturedDiscount } from "@/types/discount";
 
 export type HeroAlign = "left" | "center" | "right";
 export type HeroVertical = "top" | "center" | "bottom";
@@ -115,11 +115,45 @@ export interface FlashSalePreset {
 // Body of POST /storefront/settings/flash-sale/launch.
 export type FlashSaleLaunchPayload = FlashSalePreset["sale"] & { category_ids: string[]; ends_at: string };
 
+// Each signup gets its own code, usable once and only with that email.
+export interface SignupOffer {
+  enabled: boolean;
+  discount_type: DiscountType;
+  discount_value: number;
+  minimum_order: number;
+  code_prefix: string;
+  // Days each code stays valid; null never expires.
+  code_valid_days: number | null;
+  issued_count: number;
+  redeemed_count: number;
+}
+
+export type SignupOfferPayload = Omit<SignupOffer, "issued_count" | "redeemed_count">;
+
+export interface SignupPopup {
+  enabled: boolean;
+  delay_seconds: number;
+  headline: string;
+  body: string;
+  button_label: string;
+  success_message: string;
+  image_url: string;
+  collect_first_name: boolean;
+  offer: SignupOffer;
+  // Contact list every popup signup is tagged with.
+  list_name: string;
+  frequency_days: number;
+  placement: BannerPlacement;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
 export interface StorefrontSettings {
   hero_slides: HeroSlide[];
   hero_settings: HeroSettings;
   announcement: Announcement;
   flash_sale: FlashSale;
+  signup_popup: SignupPopup;
   // The discount flash_sale.discount_id points at, null if unset or deleted.
   featured_discount: FeaturedDiscount | null;
   updated_at: string | null;
@@ -134,4 +168,4 @@ export interface StorefrontPreviewContent {
   sale: PromotedSale | null;
 }
 
-export type StorefrontTab = "hero" | "announcement" | "flash-sale" | "discounts";
+export type StorefrontTab = "hero" | "announcement" | "popup" | "flash-sale" | "discounts";

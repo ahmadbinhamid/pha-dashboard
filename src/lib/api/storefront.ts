@@ -1,6 +1,15 @@
 import { apiClient } from "./client";
 import type { BeResponse } from "./base";
-import type { Announcement, FlashSale, FlashSaleLaunchPayload, HeroSettings, HeroSlide, StorefrontSettings } from "@/types/storefront";
+import type {
+  Announcement,
+  FlashSale,
+  FlashSaleLaunchPayload,
+  HeroSettings,
+  HeroSlide,
+  SignupPopup,
+  SignupOfferPayload,
+  StorefrontSettings,
+} from "@/types/storefront";
 
 export const STOREFRONT_SETTINGS_QUERY_KEY = ["storefront-settings"] as const;
 
@@ -21,6 +30,11 @@ export const updateHeroSettings = async (payload: Partial<HeroSettings>) => {
 
 export const updateAnnouncement = async (payload: Partial<Announcement>) => {
   const { data } = await apiClient.patch<BeResponse<StorefrontSettings>>("/storefront/settings/announcement", payload);
+  return data;
+};
+
+export const updateSignupPopup = async (payload: Partial<Omit<SignupPopup, "offer">> & { offer?: SignupOfferPayload }) => {
+  const { data } = await apiClient.patch<BeResponse<StorefrontSettings>>("/storefront/settings/signup-popup", payload);
   return data;
 };
 

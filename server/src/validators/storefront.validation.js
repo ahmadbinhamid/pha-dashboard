@@ -4,6 +4,7 @@ const Joi = require("joi");
 const config = require("../config");
 const c = require("../constants/storefront.constants");
 const { discountFields, promoCode } = require("./discount.validation");
+const { DISCOUNT_TYPE, UNIQUE_CODE } = require("../constants/discount.constants");
 
 const objectId = Joi.string().hex().length(24);
 // Relative storefront paths ("/category/brakes") or absolute http(s) links.
@@ -92,6 +93,33 @@ const updateFlashSale = {
   }).min(1),
 };
 
+const updateSignupPopup = {
+  body: Joi.object({
+    enabled: Joi.boolean(),
+    delay_seconds: Joi.number().integer().min(c.POPUP_DELAY_SECONDS.MIN).max(c.POPUP_DELAY_SECONDS.MAX),
+    headline: Joi.string().trim().max(80).allow(""),
+    body: Joi.string().trim().max(300).allow(""),
+    button_label: Joi.string().trim().min(1).max(30),
+    success_message: Joi.string().trim().max(160).allow(""),
+    image_url: heroImage.allow(""),
+    collect_first_name: Joi.boolean(),
+    offer: Joi.object({
+      enabled: Joi.boolean().required(),
+      discount_type: Joi.string().valid(...Object.values(DISCOUNT_TYPE)),
+      discount_value: Joi.number().min(0).max(100000),
+      minimum_order: Joi.number().min(0).max(1000000),
+      code_prefix: Joi.string().trim().uppercase().pattern(UNIQUE_CODE.PREFIX_PATTERN)
+        .messages({ "string.pattern.base": "Prefix must be 2-10 letters or numbers" }),
+      code_valid_days: Joi.number().integer().min(1).max(UNIQUE_CODE.MAX_VALID_DAYS).allow(null),
+    }),
+    list_name: Joi.string().trim().max(60).allow(""),
+    frequency_days: Joi.number().integer().min(c.POPUP_FREQUENCY_DAYS.MIN).max(c.POPUP_FREQUENCY_DAYS.MAX),
+    placement: oneOf(c.BANNER_PLACEMENT),
+    starts_at: optionalDate,
+    ends_at: optionalDate,
+  }).min(1),
+};
+
 // A preset's discount fields plus the ticker line to feature it with.
 const launchFlashSale = {
   body: Joi.object({
@@ -103,4 +131,11 @@ const launchFlashSale = {
   }),
 };
 
-module.exports = { updateHeroSlides, updateHeroSettings, updateAnnouncement, updateFlashSale, launchFlashSale };
+module.exports = {
+  updateHeroSlides,
+  updateHeroSettings,
+  updateAnnouncement,
+  updateSignupPopup,
+  updateFlashSale,
+  launchFlashSale,
+};

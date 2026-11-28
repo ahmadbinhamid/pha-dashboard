@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Images, Megaphone, TicketPercent, Zap } from "lucide-react";
+import { Images, MailPlus, Megaphone, TicketPercent, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { DISCOUNTS_QUERY_KEY, getDiscounts } from "@/lib/api/discounts";
@@ -21,7 +21,7 @@ function saleSummary(discount: StorefrontSettings["featured_discount"]) {
 
 /** At-a-glance state of each section, doubles as the section switcher. */
 export function StorefrontStatusCards({ settings, active, onSelect, showDiscounts }: StorefrontStatusCardsProps) {
-  const { hero_slides, announcement, flash_sale, featured_discount } = settings;
+  const { hero_slides, announcement, signup_popup, flash_sale, featured_discount } = settings;
   const liveSlides = hero_slides.filter((s) => s.active).length;
   const saleLive = !!toPromotedSale(flash_sale, featured_discount);
   const { data: discountsRes } = useQuery({ queryKey: DISCOUNTS_QUERY_KEY, queryFn: getDiscounts, enabled: showDiscounts });
@@ -30,7 +30,7 @@ export function StorefrontStatusCards({ settings, active, onSelect, showDiscount
   const scheduled = discounts.filter((d) => d.status === "scheduled").length;
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
       <StatCard
         icon={Images}
         label="Hero carousel"
@@ -48,6 +48,15 @@ export function StorefrontStatusCards({ settings, active, onSelect, showDiscount
         aside={<Badge variant={announcement.enabled ? "ok" : "muted"}>{announcement.enabled ? "On" : "Off"}</Badge>}
       >
         {announcement.message || "No message"}
+      </StatCard>
+      <StatCard
+        icon={MailPlus}
+        label="Signup popup"
+        active={active === "popup"}
+        onClick={() => onSelect("popup")}
+        aside={<Badge variant={signup_popup.enabled ? "ok" : "muted"}>{signup_popup.enabled ? "On" : "Off"}</Badge>}
+      >
+        {signup_popup.enabled ? `Opens after ${signup_popup.delay_seconds}s` : "Not showing"}
       </StatCard>
       {showDiscounts ? (
         <StatCard

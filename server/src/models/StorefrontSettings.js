@@ -1,5 +1,5 @@
 // models/StorefrontSettings.js
-// Per-tenant storefront content: hero slides, announcement strip, flash sale.
+// Per-tenant storefront content: hero, announcement, flash sale, signup popup.
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
@@ -92,6 +92,37 @@ const flashSaleSchema = new Schema(
   { _id: false },
 );
 
+// Timed newsletter modal; the linked discount's code shows only after signup.
+const signupPopupSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    delay_seconds: {
+      type: Number,
+      min: c.POPUP_DELAY_SECONDS.MIN,
+      max: c.POPUP_DELAY_SECONDS.MAX,
+      default: c.POPUP_DELAY_SECONDS.DEFAULT,
+    },
+    headline: { type: String, default: "Sign up and get 10% off", trim: true },
+    body: { type: String, default: "Join our newsletter for deals, new arrivals and tips.", trim: true },
+    button_label: { type: String, default: "Get my discount", trim: true },
+    success_message: { type: String, default: "You're in! Here's your code.", trim: true },
+    image_url: { type: String, default: "", trim: true, set: toUploadRef },
+    collect_first_name: { type: Boolean, default: false },
+    discount_id: { type: Schema.Types.ObjectId, ref: "Discount", default: null },
+    list_name: { type: String, default: c.POPUP_DEFAULT_LIST, trim: true },
+    frequency_days: {
+      type: Number,
+      min: c.POPUP_FREQUENCY_DAYS.MIN,
+      max: c.POPUP_FREQUENCY_DAYS.MAX,
+      default: c.POPUP_FREQUENCY_DAYS.DEFAULT,
+    },
+    placement: { type: String, enum: Object.values(c.BANNER_PLACEMENT), default: c.BANNER_PLACEMENT.ALL_PAGES },
+    starts_at: { type: Date, default: null },
+    ends_at: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const storefrontSettingsSchema = buildSchema(
   {
     tenant_id: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, unique: true },
@@ -99,6 +130,7 @@ const storefrontSettingsSchema = buildSchema(
     hero_settings: { type: heroSettingsSchema, default: () => ({}) },
     announcement: { type: announcementSchema, default: () => ({}) },
     flash_sale: { type: flashSaleSchema, default: () => ({}) },
+    signup_popup: { type: signupPopupSchema, default: () => ({}) },
   },
   { softDelete: false },
 );

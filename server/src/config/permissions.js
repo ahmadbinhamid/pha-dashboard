@@ -99,6 +99,31 @@ const PERMISSION_GROUPS = [
     actions: { view: "View storefront content", update: "Edit storefront content and launch sales" },
   },
   {
+    key: "seo",
+    label: "SEO & Content",
+    description: "Blog articles, custom pages, redirects and search settings for the website.",
+    actions: {
+      view: "View articles, pages and SEO settings",
+      create: "Write articles and pages, add redirects",
+      update: "Edit content, product SEO and site SEO settings",
+      delete: "Delete articles, pages and redirects",
+      publish: "Publish and unpublish articles and pages",
+    },
+  },
+  {
+    key: "campaigns",
+    label: "Campaigns",
+    description: "Email campaigns, newsletters and the contacts they go to.",
+    actions: {
+      view: "View campaigns and contacts",
+      create: "Create campaigns, add and import contacts",
+      update: "Edit campaigns and contacts",
+      delete: "Delete campaigns and contacts",
+      send: "Send, schedule and pause campaigns",
+      export: "Export contacts",
+    },
+  },
+  {
     key: "settings",
     label: "Store Settings",
     description: "Trading identity, invoice setup, policies and branding.",

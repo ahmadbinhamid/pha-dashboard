@@ -2,6 +2,7 @@
 
 const { model, Schema } = require("mongoose");
 const { buildSchema } = require("./base.model");
+const { seoMetaSchema } = require("./schemas/seoMeta.schema");
 const {
   PRODUCT_TYPE,
   PRODUCT_STATUS,
@@ -108,6 +109,7 @@ const productSchema = buildSchema({
     default: null,
   },
   internal_notes: { type: [internalNoteSchema], default: [] },
+  seo: { type: seoMetaSchema, default: () => ({}) },
 });
 
 productSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });

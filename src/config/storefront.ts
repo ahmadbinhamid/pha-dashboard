@@ -34,9 +34,10 @@ import type {
   StorefrontTab,
   TickerSpeed,
   PromoTheme,
+  SignupPopup,
 } from "@/types/storefront";
 
-export const STOREFRONT_TABS: readonly StorefrontTab[] = ["hero", "announcement", "flash-sale", "discounts"];
+export const STOREFRONT_TABS: readonly StorefrontTab[] = ["hero", "announcement", "popup", "flash-sale", "discounts"];
 
 export const MAX_HERO_SLIDES = 10;
 
@@ -50,6 +51,39 @@ export const EMPTY_ANNOUNCEMENT: Announcement = {
   text_color: "#ffffff",
   icon: "sparkles",
   dismissible: false,
+  placement: "all_pages",
+  starts_at: null,
+  ends_at: null,
+};
+
+// Signup-offer discounts are edited with the popup they belong to.
+export const SIGNUP_POPUP_TAB_PATH = "/storefront?tab=popup";
+
+// Mirrors the server's POPUP_* limits in storefront.constants.js.
+export const POPUP_DELAY_SECONDS = { min: 3, max: 60 } as const;
+export const POPUP_FREQUENCY_DAYS = { min: 1, max: 365 } as const;
+
+export const EMPTY_SIGNUP_POPUP: SignupPopup = {
+  enabled: false,
+  delay_seconds: 8,
+  headline: "Sign up and get 10% off",
+  body: "Join our newsletter for deals, new arrivals and tips.",
+  button_label: "Get my discount",
+  success_message: "You're in! Here's your code.",
+  image_url: "",
+  collect_first_name: false,
+  offer: {
+    enabled: false,
+    discount_type: "percent",
+    discount_value: 10,
+    minimum_order: 0,
+    code_prefix: "WELCOME",
+    code_valid_days: 30,
+    issued_count: 0,
+    redeemed_count: 0,
+  },
+  list_name: "Website popup",
+  frequency_days: 7,
   placement: "all_pages",
   starts_at: null,
   ends_at: null,

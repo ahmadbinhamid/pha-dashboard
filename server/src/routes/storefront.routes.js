@@ -35,6 +35,13 @@ router.patch(
   asyncHandler(ctrl.updateAnnouncement),
 );
 router.patch(
+  "/settings/signup-popup",
+  auth(),
+  requirePermission("storefront.update"),
+  validate(v.updateSignupPopup),
+  asyncHandler(ctrl.updateSignupPopup),
+);
+router.patch(
   "/settings/flash-sale",
   auth(),
   requirePermission("storefront.update"),

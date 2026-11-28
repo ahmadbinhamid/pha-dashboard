@@ -36,6 +36,14 @@ exports.updateAnnouncement = async (req, res) => {
   }
 };
 
+exports.updateSignupPopup = async (req, res) => {
+  try {
+    return success(res, await storefrontService.updateSignupPopup(req.tenantId, req.body), "Signup popup saved");
+  } catch (err) {
+    return systemfailure(res, err);
+  }
+};
+
 exports.updateFlashSale = async (req, res) => {
   try {
     return success(res, await storefrontService.updateFlashSale(req.tenantId, req.body), "Flash sale saved");

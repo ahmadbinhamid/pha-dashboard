@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { HERO_AUTOPLAY_SECONDS, HERO_OVERLAY } from "@/config/storefront";
+import { MAX_PERCENT_OFF } from "@/config/discounts";
+import { HERO_AUTOPLAY_SECONDS, HERO_OVERLAY, POPUP_DELAY_SECONDS, POPUP_FREQUENCY_DAYS } from "@/config/storefront";
 
 // Storefront-relative paths or absolute http(s) links, mirroring the server.
 const link = z
@@ -66,6 +67,46 @@ export const announcementFormSchema = z
   .refine(endsAfterStart, { path: ["ends_at"], message: "Must be after the start" });
 
 export type AnnouncementFormValues = z.infer<typeof announcementFormSchema>;
+
+export const signupPopupFormSchema = z
+  .object({
+    enabled: z.boolean(),
+    delay_seconds: z.number().int().min(POPUP_DELAY_SECONDS.min).max(POPUP_DELAY_SECONDS.max),
+    headline: z.string().trim().min(1, "Add a headline").max(80),
+    body: z.string().trim().max(300),
+    button_label: z.string().trim().min(1, "Add button text").max(30),
+    success_message: z.string().trim().max(160),
+    image_url: imageUrl.or(z.literal("")),
+    collect_first_name: z.boolean(),
+    offer: z
+      .object({
+        enabled: z.boolean(),
+        discount_type: z.enum(["percent", "fixed", "free_shipping"]),
+        discount_value: z.number({ message: "Enter an amount" }).min(0),
+        minimum_order: z.number({ message: "Enter 0 for no minimum" }).min(0),
+        code_prefix: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,10}$/, "2-10 letters or numbers"),
+        code_valid_days: z.number().int().min(1).max(365).nullable(),
+        issued_count: z.number(),
+        redeemed_count: z.number(),
+      })
+      .superRefine((o, ctx) => {
+        if (!o.enabled) return;
+        if (o.discount_type === "percent" && (o.discount_value < 1 || o.discount_value > MAX_PERCENT_OFF)) {
+          ctx.addIssue({ code: "custom", path: ["discount_value"], message: `Between 1% and ${MAX_PERCENT_OFF}%` });
+        }
+        if (o.discount_type === "fixed" && !(o.discount_value > 0)) {
+          ctx.addIssue({ code: "custom", path: ["discount_value"], message: "Enter a dollar amount" });
+        }
+      }),
+    list_name: z.string().trim().max(60),
+    frequency_days: z.number().int().min(POPUP_FREQUENCY_DAYS.min).max(POPUP_FREQUENCY_DAYS.max),
+    placement: z.enum(["all_pages", "home_only"]),
+    starts_at: optionalDate,
+    ends_at: optionalDate,
+  })
+  .refine(endsAfterStart, { path: ["ends_at"], message: "Must be after the start" });
+
+export type SignupPopupFormValues = z.infer<typeof signupPopupFormSchema>;
 
 export const flashSaleFormSchema = z.object({
   discount_id: z.string().nullable(),

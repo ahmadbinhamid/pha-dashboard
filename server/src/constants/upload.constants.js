@@ -45,7 +45,14 @@ const MAX_UPLOAD_FILES = 20;
 const UPLOAD_TYPE_ERROR =
   "File type not allowed. Allowed types: jpeg, jpg, png, webp, gif, mp4, mov, webm, avi, pdf, doc, docx, zip";
 
+// Contact imports: parsed in memory, never stored. Windows labels csv as Excel.
+const SPREADSHEET_TYPES = Object.freeze({
+  ".xlsx": { mimes: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"], signature: "zip" },
+  ".csv": { mimes: ["text/csv", "application/vnd.ms-excel", "text/plain", "application/csv"], signature: null },
+});
+
 module.exports = {
+  SPREADSHEET_TYPES,
   UPLOAD_KIND,
   UPLOAD_TYPES,
   SIGNATURE_BY_EXTENSION,

@@ -1,0 +1,25 @@
+{{> _header}}
+
+<div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">Thanks for joining {{app_name}}!</p>
+
+  <p style="color: #666; font-size: 16px; line-height: 1.5;">Here's your welcome offer: <strong>{{offer_label}}</strong>.</p>
+
+  <div style="text-align: center; margin: 24px 0; padding: 20px; border: 2px dashed {{primary_color}}; border-radius: 8px;">
+    <div style="color: #999; font-size: 13px; margin-bottom: 6px;">Your personal code</div>
+    <div style="color: {{primary_color}}; font-size: 26px; font-weight: bold; letter-spacing: 3px;">{{code}}</div>
+  </div>
+
+  <p style="color: #666; font-size: 14px; line-height: 1.5;">
+    It works once, at checkout with <strong>{{email}}</strong>{{#if minimum_order}}, on orders over {{minimum_order}}{{/if}}.
+    {{#if expires_on}}Use it by <strong>{{expires_on}}</strong>.{{/if}}
+  </p>
+
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="{{shop_url}}" style="background-color: {{primary_color}}; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px; display: inline-block;">
+      Start shopping
+    </a>
+  </div>
+</div>
+
+{{> _footer}}

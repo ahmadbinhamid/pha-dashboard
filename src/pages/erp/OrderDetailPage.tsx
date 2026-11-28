@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { saveBlob } from "@/utils/download";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Printer, Mail, Pencil, PackageX, Download, ChevronDown, Banknote, CreditCard, Package } from "lucide-react";
@@ -109,16 +110,7 @@ export default function OrderDetailPage() {
 
   const downloadPdfMutation = useMutation({
     mutationFn: () => downloadInvoicePdf(id!),
-    onSuccess: ({ blob, filename }) => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    },
+    onSuccess: ({ blob, filename }) => saveBlob(blob, filename),
     onError: (err: Error) => {
       toast({ title: "Couldn't download invoice", description: err.message, tone: "danger" });
     },
