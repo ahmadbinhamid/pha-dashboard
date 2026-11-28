@@ -17,6 +17,10 @@ const { ensureProductsCollection } = require("../services/search/product.search.
 const { indexProduct, deleteProductFromIndex } = require("../services/search/product.search.service");
 const { findProductByIdForIndexing } = require("../services/product.service");
 
+const { campaignQueue } = require("../queues/campaign.queue");
+const campaignService = require("../services/campaign/campaign.service");
+const { CAMPAIGN_JOB } = require("../constants/campaign.constants");
+
 const { orderQueue } = require("../queues/order.queue");
 const { sweepOverdueInvoices } = require("../services/order-overdue.service");
 
@@ -113,4 +117,26 @@ orderQueue.isReady().then(() =>
 orderQueue.on("completed", (job) => logger.info(`[orderQueue] completed job ${job.id} (${job.name})`));
 orderQueue.on("failed", (job, err) => logger.error(`[orderQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`));
 
-installGracefulShutdown({ name: "platformWorker", getQueues: () => [emailQueue, searchQueue, orderQueue] });
+// ── campaigns ──
+
+campaignQueue.process(CAMPAIGN_JOB.FANOUT, 1, campaignService.processFanoutJob);
+campaignQueue.process(CAMPAIGN_JOB.SEND, config.campaigns.sendConcurrency, campaignService.processSendJob);
+campaignQueue.process(CAMPAIGN_JOB.TEST, 1, campaignService.processTestJob);
+campaignQueue.process(CAMPAIGN_JOB.SWEEP, 1, async () => {
+  if (!config.campaigns.sweepEnabled) return { skipped: true };
+  return campaignService.sweepDueCampaigns();
+});
+
+campaignQueue.isReady().then(() =>
+  scheduleRepeatable(campaignQueue, CAMPAIGN_JOB.SWEEP, config.campaigns.sweepIntervalMinutes),
+);
+campaignQueue.on("failed", (job, err) =>
+  logger.error(`[campaignQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`, {
+    attemptsMade: job?.attemptsMade,
+  }),
+);
+
+installGracefulShutdown({
+  name: "platformWorker",
+  getQueues: () => [emailQueue, searchQueue, orderQueue, campaignQueue],
+});

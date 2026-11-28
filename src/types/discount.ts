@@ -12,6 +12,10 @@ export interface Discount {
   // Null for automatic discounts.
   code: string | null;
   is_automatic: boolean;
+  // Signup-offer discounts hand each email its own code instead.
+  unique_codes?: boolean;
+  code_prefix?: string | null;
+  code_valid_days?: number | null;
   discount_type: DiscountType;
   // Percent or dollars by discount_type, 0 for free shipping.
   discount_value: number;

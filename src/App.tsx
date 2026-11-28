@@ -39,6 +39,11 @@ import ActivityLogPage from "@/pages/erp/ActivityLogPage";
 import ProfilePage from "@/pages/erp/ProfilePage";
 import SettingsPage from "@/pages/erp/SettingsPage";
 import StorefrontPage from "@/pages/erp/StorefrontPage";
+import CampaignsPage from "@/pages/erp/CampaignsPage";
+import SeoPage from "@/pages/erp/SeoPage";
+import ArticleEditorPage from "@/pages/erp/ArticleEditorPage";
+import ContentPageEditorPage from "@/pages/erp/ContentPageEditorPage";
+import CampaignEditorPage from "@/pages/erp/CampaignEditorPage";
 import DiscountEditorPage from "@/pages/erp/DiscountEditorPage";
 import InvitePage from "@/pages/InvitePage";
 import PayOrderPage from "@/pages/PayOrderPage";
@@ -132,6 +137,14 @@ export default function App() {
             <Route path="/storefront/discounts/new" element={<RequirePermission permission={PERMISSIONS.discounts.create}><DiscountEditorPage /></RequirePermission>} />
             <Route path="/storefront/discounts/:id" element={<RequirePermission permission={PERMISSIONS.discounts.view}><DiscountEditorPage /></RequirePermission>} />
             <Route path="/storefront" element={<RequirePermission permission={PERMISSIONS.storefront.view}><StorefrontPage /></RequirePermission>} />
+            <Route path="/seo" element={<RequirePermission permission={PERMISSIONS.seo.view}><SeoPage /></RequirePermission>} />
+            <Route path="/seo/articles/new" element={<RequirePermission permission={PERMISSIONS.seo.create}><ArticleEditorPage /></RequirePermission>} />
+            <Route path="/seo/articles/:id" element={<RequirePermission permission={PERMISSIONS.seo.view}><ArticleEditorPage /></RequirePermission>} />
+            <Route path="/seo/pages/new" element={<RequirePermission permission={PERMISSIONS.seo.create}><ContentPageEditorPage /></RequirePermission>} />
+            <Route path="/seo/pages/:id" element={<RequirePermission permission={PERMISSIONS.seo.view}><ContentPageEditorPage /></RequirePermission>} />
+            <Route path="/campaigns" element={<RequirePermission permission={PERMISSIONS.campaigns.view}><CampaignsPage /></RequirePermission>} />
+            <Route path="/campaigns/new" element={<RequirePermission permission={PERMISSIONS.campaigns.create}><CampaignEditorPage /></RequirePermission>} />
+            <Route path="/campaigns/:id" element={<RequirePermission permission={PERMISSIONS.campaigns.view}><CampaignEditorPage /></RequirePermission>} />
             <Route path="/reports" element={<RequirePermission permission={PERMISSIONS.reports.view}><ReportsPage /></RequirePermission>} />
             <Route path="/listings/new" element={<RequirePermission permission={PERMISSIONS.listings.create}><ListingCreatePage /></RequirePermission>} />
             <Route path="/listings/:id/edit" element={<RequirePermission permission={PERMISSIONS.listings.update}><ListingEditPage /></RequirePermission>} />

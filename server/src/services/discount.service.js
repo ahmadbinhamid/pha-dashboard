@@ -14,6 +14,7 @@ const {
   DISCOUNT_SCOPE,
   MAX_PERCENT_OFF,
   RECENT_REDEMPTIONS_LIMIT,
+  UNIQUE_CODE,
 } = require("../constants/discount.constants");
 
 const EDITABLE_FIELDS = [
@@ -32,6 +33,9 @@ const EDITABLE_FIELDS = [
   "min_order_number",
   "max_order_number",
   "active",
+  "unique_codes",
+  "code_prefix",
+  "code_valid_days",
 ];
 
 const ORDER_SUMMARY_FIELDS = "order_number order_number_prefix status total customer created_at";
@@ -41,7 +45,8 @@ const withStatus = (discount) => ({ ...discount, status: discountStatus(discount
 /** Derived fields that must follow from others, e.g. automatic => no code. */
 function normalize(fields) {
   const next = { ...fields };
-  if (next.is_automatic) next.code = null;
+  if (next.unique_codes) next.is_automatic = false;
+  if (next.is_automatic || next.unique_codes) next.code = null;
   else if (next.code) next.code = normalizeCode(next.code);
   if (next.discount_type === DISCOUNT_TYPE.FREE_SHIPPING) next.discount_value = 0;
   // Promo codes are always one use per email.
@@ -51,7 +56,10 @@ function normalize(fields) {
 }
 
 function assertRules(d) {
-  if (!d.is_automatic && !d.code) throw httpError("Add a promo code or make the discount automatic", 422);
+  if (!d.is_automatic && !d.code && !d.unique_codes) throw httpError("Add a promo code or make the discount automatic", 422);
+  if (d.unique_codes && !UNIQUE_CODE.PREFIX_PATTERN.test(d.code_prefix || "")) {
+    throw httpError("Code prefix must be 2-10 letters or numbers", 422);
+  }
   if (d.discount_type !== DISCOUNT_TYPE.FREE_SHIPPING && !(d.discount_value > 0)) {
     throw httpError("Enter a discount amount", 422);
   }

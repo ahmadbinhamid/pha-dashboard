@@ -41,5 +41,7 @@ router.use("/tags", require("./tag.routes"));
 router.use("/shipping", require("./shipping.routes"));
 router.use("/storefront", require("./storefront.routes"));
 router.use("/discounts", require("./discount.routes"));
+router.use("/campaigns", require("./campaign.routes"));
+router.use("/seo", require("./seo.routes"));
 
 module.exports = router;

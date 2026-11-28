@@ -41,6 +41,12 @@ const PROMO_THEME = Object.freeze({ BRAND: "brand", CRIMSON: "crimson", CARBON: 
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
+const POPUP_DELAY_SECONDS = Object.freeze({ MIN: 3, MAX: 60, DEFAULT: 8 });
+const POPUP_FREQUENCY_DAYS = Object.freeze({ MIN: 1, MAX: 365, DEFAULT: 7 });
+const POPUP_DEFAULT_LIST = "Website popup";
+// Newsletter `source` values; only the popup changes what a signup does.
+const SIGNUP_SOURCE = Object.freeze({ FOOTER: "footer", POPUP: "popup" });
+
 module.exports = {
   HERO_ALIGN,
   HERO_VERTICAL,
@@ -56,4 +62,8 @@ module.exports = {
   TICKER_SPEED,
   PROMO_THEME,
   HEX_COLOR_PATTERN,
+  POPUP_DELAY_SECONDS,
+  POPUP_FREQUENCY_DAYS,
+  POPUP_DEFAULT_LIST,
+  SIGNUP_SOURCE,
 };

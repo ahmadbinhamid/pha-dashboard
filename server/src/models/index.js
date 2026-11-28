@@ -26,4 +26,13 @@ module.exports = {
   StorefrontSettings: require("./StorefrontSettings"),
   Discount: require("./Discount"),
   DiscountRedemption: require("./DiscountRedemption"),
+  DiscountCode: require("./DiscountCode"),
+  Contact: require("./Contact"),
+  Campaign: require("./Campaign"),
+  CampaignRun: require("./CampaignRun"),
+  CampaignTemplate: require("./CampaignTemplate"),
+  Article: require("./Article"),
+  ContentPage: require("./ContentPage"),
+  Redirect: require("./Redirect"),
+  SeoSettings: require("./SeoSettings"),
 };

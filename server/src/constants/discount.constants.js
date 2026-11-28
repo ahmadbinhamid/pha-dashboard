@@ -26,6 +26,16 @@ const PROMO_CODE_PATTERN = /^[A-Z0-9._-]{3,24}$/;
 
 const MAX_PERCENT_OFF = 90;
 
+const UNIQUE_CODE = Object.freeze({
+  // No 0/O or 1/I, so a code read off a phone is typed right first time.
+  ALPHABET: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+  LENGTH: 6,
+  PREFIX_PATTERN: /^[A-Z0-9]{2,10}$/,
+  DEFAULT_PREFIX: "WELCOME",
+  MAX_VALID_DAYS: 365,
+  ISSUE_ATTEMPTS: 5,
+});
+
 const RECENT_REDEMPTIONS_LIMIT = 50;
 
 module.exports = {
@@ -35,5 +45,6 @@ module.exports = {
   DISCOUNT_STATUS,
   PROMO_CODE_PATTERN,
   MAX_PERCENT_OFF,
+  UNIQUE_CODE,
   RECENT_REDEMPTIONS_LIMIT,
 };

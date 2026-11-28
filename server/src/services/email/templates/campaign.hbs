@@ -1,0 +1,30 @@
+<style>
+  a { color: {{layout.link_color}}; }
+  @media only screen and (max-width: 620px) {
+    .container { width: 100% !important; }
+    .col { display: block !important; width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; }
+  }
+</style>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{preheader}}</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{{layout.background_color}};">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" class="container" width="{{layout.content_width}}" cellpadding="0" cellspacing="0" border="0"
+        style="width:{{layout.content_width}}px;max-width:100%;background:{{layout.content_background}};border-radius:8px;font-family:{{layout.font_family}};color:{{layout.text_color}};">
+        <tr>
+          <td>{{{body_html}}}</td>
+        </tr>
+        <tr>
+          <td style="padding:16px 24px 24px;border-top:1px solid #eeeeee;color:#888888;font-size:12px;line-height:1.5;text-align:center;">
+            You're receiving this because you subscribed to emails from {{app_name}}.
+            {{#if support_email}}Questions? Reply or email <a href="mailto:{{support_email}}" style="color:#888888;">{{support_email}}</a>.{{/if}}
+            <br />
+            {{#if sender_details}}{{sender_details}}<br />{{/if}}
+            <a href="{{unsubscribe_url}}" style="color:#888888;">Unsubscribe</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

@@ -10,6 +10,7 @@ import { AnnouncementPanel } from "@/components/storefront/AnnouncementPanel";
 import { FlashSalePanel } from "@/components/storefront/FlashSalePanel";
 import { HeroCarouselSettingsCard } from "@/components/storefront/HeroCarouselSettingsCard";
 import { HeroSlidesPanel } from "@/components/storefront/HeroSlidesPanel";
+import { SignupPopupPanel } from "@/components/storefront/SignupPopupPanel";
 import { DiscountsPanel } from "@/components/discounts/DiscountsPanel";
 import { StorefrontPreviewDialog } from "@/components/storefront/StorefrontPreviewDialog";
 import { StorefrontStatusCards } from "@/components/storefront/StorefrontStatusCards";
@@ -73,7 +74,7 @@ export default function StorefrontPage() {
     <div className="space-y-6">
       <PageHeader
         title="Storefront"
-        description="Everything shoppers see on your website: hero carousel, announcement strip, discounts and their promotion."
+        description="Everything shoppers see on your website: hero carousel, announcement strip, signup popup, discounts and their promotion."
       >
         <Button variant="secondary" onClick={() => setPreviewOpen(true)} disabled={!settings}>
           <Eye className="h-4 w-4" />
@@ -97,6 +98,9 @@ export default function StorefrontPage() {
             </TabsContent>
             <TabsContent value="announcement" forceMount className="data-[state=inactive]:hidden">
               <AnnouncementPanel announcement={settings.announcement} canEdit={canEdit} onDraftChange={setAnnouncementDraft} />
+            </TabsContent>
+            <TabsContent value="popup" forceMount className="data-[state=inactive]:hidden">
+              <SignupPopupPanel popup={settings.signup_popup} canEdit={canEdit} />
             </TabsContent>
             {canSeeDiscounts ? (
               <TabsContent value="discounts">

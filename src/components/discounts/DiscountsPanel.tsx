@@ -18,6 +18,7 @@ import { useToast } from "@/context";
 import { DISCOUNTS_QUERY_KEY, deleteDiscount, getDiscounts, updateDiscount } from "@/lib/api/discounts";
 import { duplicateFormValues, templateFormValues } from "@/lib/discounts/discountForm";
 import { filterDiscounts, overlappingAutomaticCount } from "@/lib/discounts/discountFilters";
+import { SIGNUP_POPUP_TAB_PATH } from "@/config/storefront";
 import type { Discount, DiscountListFilter } from "@/types/discount";
 
 /** Storefront › Discounts: every promo code and automatic deal, one list. */
@@ -102,7 +103,7 @@ export function DiscountsPanel({ promotedId }: { promotedId: string | null }) {
               key={d._id}
               discount={d}
               promoted={d._id === promotedId}
-              onOpen={() => navigate(`${DISCOUNTS_BASE_PATH}/${d._id}`)}
+              onOpen={() => navigate(d.unique_codes ? SIGNUP_POPUP_TAB_PATH : `${DISCOUNTS_BASE_PATH}/${d._id}`)}
               onDuplicate={() => navigate(`${DISCOUNTS_BASE_PATH}/new`, { state: { initialValues: duplicateFormValues(d) } })}
               onToggleActive={() => toggleMutation.mutate(d)}
               onDelete={() => setDeleting(d)}

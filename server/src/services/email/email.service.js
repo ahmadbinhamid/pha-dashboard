@@ -261,6 +261,25 @@ async function sendPaymentLink({ to, name, orderNumber, amountDue, paymentUrl, c
   });
 }
 
+/** A popup subscriber's own code, so it survives closing the popup. */
+async function sendSignupOfferCode({ to, code, offerLabel, minimumOrder, expiresOn, shopUrl, companyProfile, tenantId }) {
+  return enqueueEmailJob({
+    ...tenantSender(companyProfile, tenantId),
+    to,
+    subject: `Your ${offerLabel} code: ${code}`,
+    template: "signupOfferCode",
+    variables: {
+      email: to,
+      code,
+      offer_label: offerLabel,
+      minimum_order: minimumOrder || null,
+      expires_on: expiresOn || null,
+      shop_url: shopUrl,
+      ...tenantBrandVars(companyProfile),
+    },
+  });
+}
+
 /** Images attach by disk path, relying on the shared uploads volume. */
 async function sendProductInfo({ to, name, productTitle, productSku, attachments = [], companyProfile, tenantId }) {
   return enqueueEmailJob(
@@ -381,6 +400,7 @@ async function sendTeamAdded({ to, firstName, organisationName, inviterName, log
 }
 
 module.exports = {
+  sendSignupOfferCode,
   sendTeamInvite,
   sendTeamSetPassword,
   sendTeamAdded,

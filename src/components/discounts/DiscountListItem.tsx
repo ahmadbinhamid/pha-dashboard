@@ -40,6 +40,11 @@ export function DiscountListItem({ discount: d, promoted, onOpen, onDuplicate, o
               {d.code}
             </Badge>
           ) : null}
+          {d.unique_codes ? (
+            <Badge variant="outline" className="text-2xs">
+              Signup popup · <span className="font-mono">{d.code_prefix}-…</span> per email
+            </Badge>
+          ) : null}
           {promoted ? (
             <Badge variant="ok" className="gap-1 text-2xs">
               <Megaphone className="h-3 w-3" />

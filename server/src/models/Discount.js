@@ -28,6 +28,11 @@ const discountSchema = buildSchema({
   min_order_number: { type: Number, default: null, min: 1, max: MAX_ORDER_NUMBER },
   max_order_number: { type: Number, default: null, min: 1, max: MAX_ORDER_NUMBER },
   active: { type: Boolean, default: true },
+  // Issued codes, one per email (DiscountCode), instead of one shared code.
+  unique_codes: { type: Boolean, default: false },
+  code_prefix: { type: String, default: null, trim: true, uppercase: true },
+  // Days each issued code stays valid; null never expires.
+  code_valid_days: { type: Number, default: null, min: 1 },
 });
 
 discountSchema.index({ tenant_id: 1, code: 1 });

@@ -13,6 +13,8 @@ import {
   BarChart2,
   Tags,
   Store,
+  Megaphone,
+  SearchCheck,
 } from "lucide-react";
 import { PERMISSIONS, type Permission } from "@/config/permissions";
 
@@ -37,6 +39,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Orders", href: "/orders", icon: (p) => <ShoppingCart {...p} />, permission: PERMISSIONS.orders.view },
   { label: "Payments", href: "/payments", icon: (p) => <CreditCard {...p} />, permission: PERMISSIONS.payments.view },
   { label: "Storefront", href: "/storefront", icon: (p) => <Store {...p} />, permission: PERMISSIONS.storefront.view },
+  { label: "SEO & Content", href: "/seo", icon: (p) => <SearchCheck {...p} />, permission: PERMISSIONS.seo.view },
+  { label: "Campaigns", href: "/campaigns", icon: (p) => <Megaphone {...p} />, permission: PERMISSIONS.campaigns.view },
   { label: "Reports", href: "/reports", icon: (p) => <BarChart2 {...p} />, permission: PERMISSIONS.reports.view },
   { label: "Channel sync", href: "/channel-sync", icon: (p) => <RefreshCw {...p} />, permission: PERMISSIONS.listings.view },
   { label: "Activity Log", href: "/activity-log", icon: (p) => <History {...p} />, permission: PERMISSIONS.activity.view },
