@@ -34,6 +34,6 @@ const PAYMENT_STATUS = Object.freeze({
 });
 
 // Stripe buy-now-pay-later types; offered on storefront orders only.
-const BNPL_METHODS = Object.freeze(["afterpay_clearpay", "zip"]);
+const BNPL_METHODS = Object.freeze(["afterpay_clearpay", "zip", "klarna"]);
 
 module.exports = { PAYMENT_PROVIDER, PAYMENT_METHOD, ORDER_PAYMENT_CHOICE, PAYMENT_STATUS, BNPL_METHODS };
