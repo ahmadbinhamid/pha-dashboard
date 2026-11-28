@@ -35,4 +35,7 @@ module.exports = {
   ContentPage: require("./ContentPage"),
   Redirect: require("./Redirect"),
   SeoSettings: require("./SeoSettings"),
+  FollowUp: require("./FollowUp"),
+  FollowUpSend: require("./FollowUpSend"),
+  Feedback: require("./Feedback"),
 };

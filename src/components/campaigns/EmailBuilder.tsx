@@ -20,7 +20,7 @@ import { EmailBlockInspector } from "@/components/campaigns/EmailBlockInspector"
 import { EmailBlockPreview } from "@/components/campaigns/EmailBlockPreview";
 import { EmailBuilderPalette } from "@/components/campaigns/EmailBuilderPalette";
 import { EmailDesignSettingsPanel } from "@/components/campaigns/EmailDesignSettingsPanel";
-import { EmailPreviewModal } from "@/components/campaigns/EmailPreviewModal";
+import { EmailPreviewModal, type PreviewFn } from "@/components/campaigns/EmailPreviewModal";
 import { EmailSortableBlock } from "@/components/campaigns/EmailSortableBlock";
 import { SaveTemplateModal } from "@/components/campaigns/SaveTemplateModal";
 import { BLOCK_LABEL, DESIGN_FONT_OPTIONS, DESIGN_LIMITS } from "@/config/emailBuilder";
@@ -37,6 +37,7 @@ interface EmailBuilderProps {
   subject: string;
   preheader: string;
   templateName: string;
+  preview?: PreviewFn;
 }
 
 const CANVAS_ID = "email-canvas";
@@ -47,7 +48,7 @@ function parentOf(design: EmailDesign, id: string) {
   return parent?.id ?? null;
 }
 
-export function EmailBuilder({ value: design, onChange, disabled, subject, preheader, templateName }: EmailBuilderProps) {
+export function EmailBuilder({ value: design, onChange, disabled, subject, preheader, templateName, preview }: EmailBuilderProps) {
   const { can } = useMyAccess();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragLabel, setDragLabel] = useState<string | null>(null);
@@ -235,7 +236,14 @@ export function EmailBuilder({ value: design, onChange, disabled, subject, prehe
           setSelectedId(null);
         }}
       />
-      <EmailPreviewModal open={previewOpen} onOpenChange={setPreviewOpen} design={design} subject={subject} preheader={preheader} />
+      <EmailPreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        design={design}
+        subject={subject}
+        preheader={preheader}
+        preview={preview}
+      />
       <SaveTemplateModal open={saveOpen} onOpenChange={setSaveOpen} design={design} defaultName={templateName} />
     </DndContext>
   );

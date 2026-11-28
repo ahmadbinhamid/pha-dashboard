@@ -6,8 +6,11 @@ import { Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle } from "
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { PREVIEW_WIDTHS } from "@/config/emailBuilder";
+import type { BeResponse } from "@/lib/api/base";
 import { previewCampaign } from "@/lib/api/campaigns";
-import type { EmailDesign } from "@/types/campaign";
+import type { CampaignPreview, EmailDesign } from "@/types/campaign";
+
+export type PreviewFn = (payload: { design: EmailDesign; subject: string; preheader: string }) => Promise<BeResponse<CampaignPreview>>;
 
 interface EmailPreviewModalProps {
   open: boolean;
@@ -15,6 +18,8 @@ interface EmailPreviewModalProps {
   design: EmailDesign;
   subject: string;
   preheader: string;
+  // Follow-ups preview through their own endpoint to show the rating stars.
+  preview?: PreviewFn;
 }
 
 type Device = keyof typeof PREVIEW_WIDTHS;
@@ -24,16 +29,16 @@ const DEVICE_OPTIONS = [
   { value: "mobile" as const, label: "Phone", icon: Smartphone },
 ];
 
-export function EmailPreviewModal({ open, onOpenChange, design, subject, preheader }: EmailPreviewModalProps) {
+export function EmailPreviewModal({ open, onOpenChange, design, subject, preheader, preview = previewCampaign }: EmailPreviewModalProps) {
   const [device, setDevice] = useState<Device>("desktop");
-  const mutation = useMutation({ mutationFn: () => previewCampaign({ design, subject, preheader }) });
+  const mutation = useMutation({ mutationFn: () => preview({ design, subject, preheader }) });
   const { mutate } = mutation;
 
   useEffect(() => {
     if (open) mutate();
   }, [open, mutate]);
 
-  const preview = mutation.data?.data;
+  const result = mutation.data?.data;
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -42,7 +47,7 @@ export function EmailPreviewModal({ open, onOpenChange, design, subject, prehead
           <ModalTitle>Preview</ModalTitle>
           <ModalDescription>
             Exactly what a subscriber receives, with sample names in the merge tags.
-            {preview ? <span className="mt-1 block font-medium text-fg">Subject: {preview.subject || "(no subject yet)"}</span> : null}
+            {result ? <span className="mt-1 block font-medium text-fg">Subject: {result.subject || "(no subject yet)"}</span> : null}
           </ModalDescription>
         </ModalHeader>
         <SegmentedControl options={DEVICE_OPTIONS} value={device} onChange={setDevice} ariaLabel="Device" size="sm" />
@@ -53,10 +58,10 @@ export function EmailPreviewModal({ open, onOpenChange, design, subject, prehead
             </div>
           ) : mutation.isError ? (
             <InlineNotice variant="danger">{(mutation.error as Error).message}</InlineNotice>
-          ) : preview ? (
+          ) : result ? (
             <iframe
               title="Email preview"
-              srcDoc={preview.html}
+              srcDoc={result.html}
               sandbox=""
               className="h-[65vh] rounded-lg border-0 bg-card transition-all"
               style={{ width: PREVIEW_WIDTHS[device] }}

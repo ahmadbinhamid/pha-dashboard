@@ -14,6 +14,7 @@ router.get("/unsubscribe/:token", validate(v.unsubscribe), asyncHandler(ctrl.uns
 router.post("/unsubscribe/:token", validate(v.unsubscribe), asyncHandler(ctrl.unsubscribe));
 
 router.use("/contacts", require("./contact.routes"));
+router.use("/", require("./follow-up.routes"));
 
 const canView = requirePermission("campaigns.view");
 const canSend = requirePermission("campaigns.send");

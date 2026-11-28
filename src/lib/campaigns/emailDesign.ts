@@ -28,6 +28,12 @@ export const cloneDesign = (design: EmailDesign): EmailDesign => ({
 
 export const emptyDesign = (): EmailDesign => ({ settings: { ...DEFAULT_DESIGN_SETTINGS }, blocks: [] });
 
+/** Fills settings a saved or API-made design left out, keeping its ids. */
+export const normalizeDesign = (design: Partial<EmailDesign> | null | undefined): EmailDesign => ({
+  settings: { ...DEFAULT_DESIGN_SETTINGS, ...design?.settings },
+  blocks: design?.blocks ?? [],
+});
+
 /** Campaigns written before the builder become one text block. */
 export function designFromHtml(html: string): EmailDesign {
   const design = emptyDesign();

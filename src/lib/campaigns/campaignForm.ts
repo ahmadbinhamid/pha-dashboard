@@ -1,5 +1,5 @@
 import { DEFAULT_CAMPAIGN_TIMEZONE, FREQUENCY_OPTIONS, WEEKDAY_OPTIONS } from "@/config/campaigns";
-import { designFromHtml } from "@/lib/campaigns/emailDesign";
+import { designFromHtml, normalizeDesign } from "@/lib/campaigns/emailDesign";
 import type { CampaignFormValues } from "@/lib/validation/campaign";
 import type { Campaign, CampaignDetail, CampaignPayload, CampaignRun } from "@/types/campaign";
 
@@ -10,7 +10,7 @@ export function campaignToFormValues(campaign: CampaignDetail | null): CampaignF
     kind: campaign?.kind ?? "one_time",
     subject: campaign?.subject ?? "",
     preheader: campaign?.preheader ?? "",
-    design: campaign?.design ?? designFromHtml(campaign?.body_html ?? ""),
+    design: campaign?.design ? normalizeDesign(campaign.design) : designFromHtml(campaign?.body_html ?? ""),
     audience_type: campaign?.audience.type ?? "all",
     audience_lists: campaign?.audience.lists ?? [],
     audience_contact_ids: campaign?.audience.contact_ids ?? [],

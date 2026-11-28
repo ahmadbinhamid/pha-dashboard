@@ -19,6 +19,7 @@ const { findProductByIdForIndexing } = require("../services/product.service");
 
 const { campaignQueue } = require("../queues/campaign.queue");
 const campaignService = require("../services/campaign/campaign.service");
+const followUpService = require("../services/followup/follow-up.service");
 const { CAMPAIGN_JOB } = require("../constants/campaign.constants");
 
 const { orderQueue } = require("../queues/order.queue");
@@ -122,14 +123,20 @@ orderQueue.on("failed", (job, err) => logger.error(`[orderQueue] failed job ${jo
 campaignQueue.process(CAMPAIGN_JOB.FANOUT, 1, campaignService.processFanoutJob);
 campaignQueue.process(CAMPAIGN_JOB.SEND, config.campaigns.sendConcurrency, campaignService.processSendJob);
 campaignQueue.process(CAMPAIGN_JOB.TEST, 1, campaignService.processTestJob);
+campaignQueue.process(CAMPAIGN_JOB.FOLLOW_UP_SEND, config.campaigns.sendConcurrency, followUpService.processFollowUpSendJob);
+campaignQueue.process(CAMPAIGN_JOB.FOLLOW_UP_SWEEP, 1, async () => {
+  if (!config.campaigns.sweepEnabled) return { skipped: true };
+  return followUpService.sweepFollowUps();
+});
 campaignQueue.process(CAMPAIGN_JOB.SWEEP, 1, async () => {
   if (!config.campaigns.sweepEnabled) return { skipped: true };
   return campaignService.sweepDueCampaigns();
 });
 
-campaignQueue.isReady().then(() =>
-  scheduleRepeatable(campaignQueue, CAMPAIGN_JOB.SWEEP, config.campaigns.sweepIntervalMinutes),
-);
+campaignQueue.isReady().then(async () => {
+  await scheduleRepeatable(campaignQueue, CAMPAIGN_JOB.SWEEP, config.campaigns.sweepIntervalMinutes);
+  await scheduleRepeatable(campaignQueue, CAMPAIGN_JOB.FOLLOW_UP_SWEEP, config.campaigns.followUpSweepIntervalMinutes);
+});
 campaignQueue.on("failed", (job, err) =>
   logger.error(`[campaignQueue] failed job ${job?.id} (${job?.name}): ${err?.message}`, {
     attemptsMade: job?.attemptsMade,

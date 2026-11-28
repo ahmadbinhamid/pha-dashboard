@@ -284,6 +284,30 @@ async function markContactEmailed(contactId) {
   await Contact.updateOne({ _id: contactId }, { $set: { last_emailed_at: new Date() } });
 }
 
+/** Of `emails`, those that unsubscribed or bounced, in one query. */
+async function findSuppressedEmails(tenantId, emails) {
+  if (!emails.length) return new Set();
+  const rows = await Contact.find({ tenant_id: tenantId, email: { $in: emails }, status: { $ne: CONTACT_STATUS.SUBSCRIBED } })
+    .select("email")
+    .lean();
+  return new Set(rows.map((r) => r.email));
+}
+
+/** Opt-out from a follow-up: recorded as a contact so every email stops. */
+async function optOutEmail(tenantId, rawEmail) {
+  const email = String(rawEmail).trim().toLowerCase();
+  const now = new Date();
+  await Contact.updateOne(
+    { tenant_id: tenantId, email },
+    {
+      $set: { status: CONTACT_STATUS.UNSUBSCRIBED, unsubscribed_at: now },
+      $setOnInsert: { source: CONTACT_SOURCE.CUSTOMER, subscribed_at: now, unsubscribe_token: Contact.newUnsubscribeToken() },
+    },
+    { upsert: true },
+  );
+  await revokeMarketingOptIn(tenantId, email);
+}
+
 /** A dead mailbox stops getting campaigns; a fresh signup clears it. */
 async function markContactBounced(contactId, reason) {
   await Contact.updateOne(
@@ -335,6 +359,8 @@ module.exports = {
   findContactForDelivery,
   markContactEmailed,
   markContactBounced,
+  findSuppressedEmails,
+  optOutEmail,
   findContactByUnsubscribeToken,
   unsubscribeByToken,
 };

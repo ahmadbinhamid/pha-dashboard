@@ -43,5 +43,6 @@ router.use("/storefront", require("./storefront.routes"));
 router.use("/discounts", require("./discount.routes"));
 router.use("/campaigns", require("./campaign.routes"));
 router.use("/seo", require("./seo.routes"));
+router.use("/feedback", require("./feedback.routes"));
 
 module.exports = router;

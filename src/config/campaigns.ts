@@ -14,7 +14,7 @@ import type {
 type BadgeVariant = "default" | "ok" | "warn" | "danger" | "muted" | "outline";
 
 export const CAMPAIGNS_BASE_PATH = "/campaigns";
-export const CAMPAIGNS_TABS: readonly CampaignsTab[] = ["campaigns", "contacts"];
+export const CAMPAIGNS_TABS: readonly CampaignsTab[] = ["campaigns", "follow-ups", "feedback", "contacts"];
 
 export const CAMPAIGN_STATUS_BADGE: Record<CampaignStatus, { label: string; variant: BadgeVariant }> = {
   draft: { label: "Draft", variant: "muted" },

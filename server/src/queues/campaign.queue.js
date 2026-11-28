@@ -51,6 +51,16 @@ async function enqueueSends(runId, contactIds) {
   return ensureCampaignQueue().addBulk(jobs);
 }
 
+/** jobId per send record, so a re-run sweep can't email an order twice. */
+async function enqueueFollowUpSends(sendIds) {
+  const jobs = sendIds.map((id) => ({
+    name: CAMPAIGN_JOB.FOLLOW_UP_SEND,
+    data: { sendId: String(id) },
+    opts: { ...SEND_JOB_OPTS, jobId: `follow-up:${id}` },
+  }));
+  return ensureCampaignQueue().addBulk(jobs);
+}
+
 async function enqueueTestSend(campaignId, tenantId, to) {
   const data = { campaignId: String(campaignId), tenantId: String(tenantId), to };
   return withDeadline(ensureCampaignQueue().add(CAMPAIGN_JOB.TEST, data, { attempts: 2, removeOnComplete: true }));
@@ -63,4 +73,5 @@ module.exports = {
   enqueueFanout,
   enqueueSends,
   enqueueTestSend,
+  enqueueFollowUpSends,
 };

@@ -134,7 +134,7 @@ export interface CampaignPayload {
   recurrence?: CampaignRecurrence;
 }
 
-export type CampaignsTab = "campaigns" | "contacts";
+export type CampaignsTab = "campaigns" | "contacts" | "follow-ups" | "feedback";
 
 // Email builder, mirroring server/src/validators/campaign-design.validation.
 

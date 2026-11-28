@@ -192,6 +192,8 @@ const config = {
     sendConcurrency: getNum("CAMPAIGN_SEND_CONCURRENCY", 2),
     // Plain SMTP mailboxes cap daily volume; a bulk provider lifts this.
     maxRecipients: getNum("CAMPAIGN_MAX_RECIPIENTS", 500),
+    // Follow-ups are due by the day, so a frequent sweep isn't needed.
+    followUpSweepIntervalMinutes: getNum("FOLLOW_UP_SWEEP_INTERVAL_MINUTES", 15),
   },
 
   stripe: {

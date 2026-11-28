@@ -168,6 +168,8 @@ const orderSchema = buildSchema({
     enum: Object.values(ORDER_FULFILLMENT_STATUS),
     default: ORDER_FULFILLMENT_STATUS.PENDING,
   },
+  // When it was shipped or handed over; follow-up emails count from here.
+  fulfilled_at: { type: Date, default: null },
 
   // Item ids are persisted, Mongoose invents in-memory ids, so check this.
   item_ids_migrated_at: { type: Date, default: null },
@@ -219,6 +221,15 @@ orderSchema.pre("save", function (next) {
   next();
 });
 
+// Stamped on every path into completed; reopening clears it for a re-stamp.
+orderSchema.pre("save", function (next) {
+  if (!this.isModified("fulfillment_status")) return next();
+  const completed = this.fulfillment_status === ORDER_FULFILLMENT_STATUS.COMPLETED;
+  if (completed && !this.fulfilled_at) this.fulfilled_at = new Date();
+  if (!completed) this.fulfilled_at = null;
+  next();
+});
+
 orderSchema.index({ "customer.email": 1 });
 orderSchema.index({ customer_id: 1 });
 orderSchema.index({ status: 1 });
@@ -229,6 +240,8 @@ orderSchema.index(
   { tenant_id: 1, external_order_id: 1 },
   { unique: true, partialFilterExpression: { external_order_id: { $type: "string" } } },
 );
+// Follow-up sweep: completed orders by when they shipped or were collected.
+orderSchema.index({ tenant_id: 1, fulfillment_status: 1, fulfilled_at: 1 });
 // Backs the per-tenant order list view (default sort: newest first).
 orderSchema.index({ tenant_id: 1, created_at: -1 });
 // Overdue sweep: only account orders carry a due date, so the index is small.

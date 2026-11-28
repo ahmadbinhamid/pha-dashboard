@@ -1023,7 +1023,35 @@ async function getInvoicePdfForOrder(orderId, tenantId) {
   return { pdfBuffer, orderNumber: formatOrderNumber(order.order_number_prefix, order.order_number) };
 }
 
+const FOLLOW_UP_ORDER_FIELDS = "tenant_id order_number order_number_prefix customer items delivery_method fulfilled_at status";
+
+/** Orders whose follow-up is due: completed, waited out, not refunded. */
+function cursorOrdersDueForFollowUp({ tenantId, channels, since, shippedBefore, handoverBefore }) {
+  return Order.find({
+    tenant_id: tenantId,
+    channel: { $in: channels },
+    fulfillment_status: ORDER_FULFILLMENT_STATUS.COMPLETED,
+    status: { $nin: [ORDER_STATUS.REFUNDED, ORDER_STATUS.CANCELLED] },
+    "customer.email": { $nin: [null, ""] },
+    fulfilled_at: { $gte: since },
+    $or: [
+      { delivery_method: ORDER_DELIVERY_METHOD.DELIVERY, fulfilled_at: { $lte: shippedBefore } },
+      { delivery_method: { $ne: ORDER_DELIVERY_METHOD.DELIVERY }, fulfilled_at: { $lte: handoverBefore } },
+    ],
+  })
+    .select("_id customer.email")
+    .lean()
+    .cursor();
+}
+
+/** What a follow-up email needs from one order, null if it's gone. */
+async function getOrderForFollowUp(orderId) {
+  return Order.findById(orderId).select(FOLLOW_UP_ORDER_FIELDS).populate("items.product", "slug attachments").lean();
+}
+
 module.exports = {
+  cursorOrdersDueForFollowUp,
+  getOrderForFollowUp,
   createOrder,
   quoteOrderDiscount,
   createManualOrder,

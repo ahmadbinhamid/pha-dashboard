@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { CampaignsPanel } from "@/components/campaigns/CampaignsPanel";
 import { ContactsPanel } from "@/components/campaigns/ContactsPanel";
+import { FeedbackPanel } from "@/components/campaigns/FeedbackPanel";
+import { FollowUpsPanel } from "@/components/campaigns/FollowUpsPanel";
 import { CAMPAIGNS_TABS } from "@/config/campaigns";
 import type { CampaignsTab } from "@/types/campaign";
 
@@ -30,10 +32,18 @@ export default function CampaignsPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
+          <TabsTrigger value="follow-ups">Follow-ups</TabsTrigger>
+          <TabsTrigger value="feedback">Feedback</TabsTrigger>
           <TabsTrigger value="contacts">Contacts</TabsTrigger>
         </TabsList>
         <TabsContent value="campaigns">
           <CampaignsPanel />
+        </TabsContent>
+        <TabsContent value="follow-ups">
+          <FollowUpsPanel />
+        </TabsContent>
+        <TabsContent value="feedback">
+          <FeedbackPanel />
         </TabsContent>
         <TabsContent value="contacts">
           <ContactsPanel />

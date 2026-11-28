@@ -59,6 +59,8 @@ const CAMPAIGN_JOB = Object.freeze({
   SEND: "campaign_send",
   TEST: "campaign_test",
   SWEEP: "campaign_schedule_sweep",
+  FOLLOW_UP_SWEEP: "follow_up_sweep",
+  FOLLOW_UP_SEND: "follow_up_send",
 });
 
 // Day 29-31 doesn't exist every month, so monthly sends cap at the 28th.

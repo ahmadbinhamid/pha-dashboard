@@ -44,6 +44,7 @@ import SeoPage from "@/pages/erp/SeoPage";
 import ArticleEditorPage from "@/pages/erp/ArticleEditorPage";
 import ContentPageEditorPage from "@/pages/erp/ContentPageEditorPage";
 import CampaignEditorPage from "@/pages/erp/CampaignEditorPage";
+import FollowUpEditorPage from "@/pages/erp/FollowUpEditorPage";
 import DiscountEditorPage from "@/pages/erp/DiscountEditorPage";
 import InvitePage from "@/pages/InvitePage";
 import PayOrderPage from "@/pages/PayOrderPage";
@@ -143,6 +144,8 @@ export default function App() {
             <Route path="/seo/pages/new" element={<RequirePermission permission={PERMISSIONS.seo.create}><ContentPageEditorPage /></RequirePermission>} />
             <Route path="/seo/pages/:id" element={<RequirePermission permission={PERMISSIONS.seo.view}><ContentPageEditorPage /></RequirePermission>} />
             <Route path="/campaigns" element={<RequirePermission permission={PERMISSIONS.campaigns.view}><CampaignsPage /></RequirePermission>} />
+            <Route path="/campaigns/follow-ups/new" element={<RequirePermission permission={PERMISSIONS.campaigns.create}><FollowUpEditorPage /></RequirePermission>} />
+            <Route path="/campaigns/follow-ups/:id" element={<RequirePermission permission={PERMISSIONS.campaigns.view}><FollowUpEditorPage /></RequirePermission>} />
             <Route path="/campaigns/new" element={<RequirePermission permission={PERMISSIONS.campaigns.create}><CampaignEditorPage /></RequirePermission>} />
             <Route path="/campaigns/:id" element={<RequirePermission permission={PERMISSIONS.campaigns.view}><CampaignEditorPage /></RequirePermission>} />
             <Route path="/reports" element={<RequirePermission permission={PERMISSIONS.reports.view}><ReportsPage /></RequirePermission>} />
