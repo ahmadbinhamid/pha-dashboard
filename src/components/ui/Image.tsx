@@ -7,6 +7,8 @@ type BaseProps = {
   /** true → loading="eager", false/omitted → loading="lazy" */
   priority?: boolean;
   objectFit?: "cover" | "contain" | "fill" | "none";
+  // For sizes chosen at runtime, e.g. a user's width in an email design.
+  style?: React.CSSProperties;
 };
 
 type FillProps = BaseProps & {
@@ -26,7 +28,7 @@ type SizedProps = BaseProps & {
 export type ImageProps = FillProps | SizedProps;
 
 export function Image(props: ImageProps) {
-  const { src, alt, className, priority, objectFit } = props;
+  const { src, alt, className, priority, objectFit, style } = props;
   const loading = priority ? "eager" : "lazy";
 
   const fitClass =
@@ -41,6 +43,7 @@ export function Image(props: ImageProps) {
         src={src}
         alt={alt}
         loading={loading}
+        style={style}
         className={cn("absolute inset-0 h-full w-full", fitClass, className)}
       />
     );
@@ -53,7 +56,8 @@ export function Image(props: ImageProps) {
       width={props.width}
       height={props.height}
       loading={loading}
-      // only apply objectFit class when explicitly requested; let className handle layout otherwise
+      style={style}
+      // objectFit only when asked for; otherwise className owns the layout.
       className={cn(props.objectFit && fitClass, className)}
     />
   );

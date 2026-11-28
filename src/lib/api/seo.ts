@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { BeResponse } from "./base";
+import type { BeResponse, PaginatedData } from "./base";
 import type {
   Article,
   ArticlePayload,
@@ -17,13 +17,6 @@ import type {
   SeoSettingsPayload,
 } from "@/types/seo";
 
-interface Paged<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
 
 export const SEO_QUERY_KEY = ["seo"] as const;
 export const articleQueryKey = (id: string) => [...SEO_QUERY_KEY, "article", id] as const;
@@ -40,7 +33,7 @@ export const updateSeoSettings = async (payload: SeoSettingsPayload) =>
 // Articles
 
 export const getArticles = async (params: { page: number; limit: number; search?: string; status?: ContentStatus; tag?: string }) =>
-  (await apiClient.get<BeResponse<Paged<Article>>>("/seo/articles", { params })).data;
+  (await apiClient.get<BeResponse<PaginatedData<Article>>>("/seo/articles", { params })).data;
 
 export const getArticleTags = async () => (await apiClient.get<BeResponse<ArticleTag[]>>("/seo/articles/tags")).data;
 
@@ -74,7 +67,7 @@ export const deleteContentPage = async (id: string) =>
 // Redirects
 
 export const getRedirects = async (params: { page: number; limit: number; search?: string }) =>
-  (await apiClient.get<BeResponse<Paged<Redirect>>>("/seo/redirects", { params })).data;
+  (await apiClient.get<BeResponse<PaginatedData<Redirect>>>("/seo/redirects", { params })).data;
 
 export const createRedirect = async (payload: RedirectPayload) =>
   (await apiClient.post<BeResponse<Redirect>>("/seo/redirects", payload)).data;
@@ -90,13 +83,13 @@ export const deleteRedirect = async (id: string) =>
 type CatalogParams = { page: number; limit: number; search?: string; missing?: boolean };
 
 export const getProductSeo = async (params: CatalogParams) =>
-  (await apiClient.get<BeResponse<Paged<ProductSeoRow>>>("/seo/catalog/products", { params })).data;
+  (await apiClient.get<BeResponse<PaginatedData<ProductSeoRow>>>("/seo/catalog/products", { params })).data;
 
 export const updateProductSeo = async (id: string, seo: Partial<SeoMeta>) =>
   (await apiClient.patch<BeResponse<ProductSeoRow>>(`/seo/catalog/products/${id}`, seo)).data;
 
 export const getCategorySeo = async (params: CatalogParams) =>
-  (await apiClient.get<BeResponse<Paged<CategorySeoRow>>>("/seo/catalog/categories", { params })).data;
+  (await apiClient.get<BeResponse<PaginatedData<CategorySeoRow>>>("/seo/catalog/categories", { params })).data;
 
 export const updateCategorySeo = async (id: string, seo: Partial<SeoMeta>) =>
   (await apiClient.patch<BeResponse<CategorySeoRow>>(`/seo/catalog/categories/${id}`, seo)).data;

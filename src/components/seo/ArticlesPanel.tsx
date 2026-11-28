@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { Newspaper, Plus, Search, Trash2 } from "lucide-react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
+import { Image } from "@/components/ui/Image";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -14,9 +15,9 @@ import { SingleSelect } from "@/components/ui/SingleSelect";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { ContentStateBadge } from "@/components/seo/ContentStateBadge";
-import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { DEFAULT_PAGE_SIZE, SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import { PERMISSIONS } from "@/config/permissions";
-import { CONTENT_STATUS_FILTER_OPTIONS, SEO_BASE_PATH, SEO_SEARCH_DEBOUNCE_MS } from "@/config/seo";
+import { CONTENT_STATUS_FILTER_OPTIONS, SEO_BASE_PATH } from "@/config/seo";
 import { useToast } from "@/context";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { SEO_QUERY_KEY, deleteArticle, getArticleTags, getArticles } from "@/lib/api/seo";
@@ -31,7 +32,7 @@ export function ArticlesPanel() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const [input, setInput] = useState("");
-  const search = useDebouncedValue(input.trim(), SEO_SEARCH_DEBOUNCE_MS);
+  const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
   const [status, setStatus] = useState(ALL);
   const [tag, setTag] = useState(ALL);
   const [deleting, setDeleting] = useState<Article | null>(null);
@@ -113,7 +114,7 @@ export function ArticlesPanel() {
                 <TableRow key={a._id} className="cursor-pointer" onClick={() => navigate(`${SEO_BASE_PATH}/articles/${a._id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      {a.cover_image ? <img src={a.cover_image} alt="" className="h-10 w-14 shrink-0 rounded object-cover" /> : null}
+                      {a.cover_image ? <Image src={a.cover_image} alt="" className="h-10 w-14 shrink-0 rounded object-cover" /> : null}
                       <div className="min-w-0">
                         <div className="truncate font-medium text-fg">{a.title}</div>
                         <div className="truncate text-xs text-fg/50">/blog/{a.slug}</div>

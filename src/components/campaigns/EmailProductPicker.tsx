@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Image } from "@/components/ui/Image";
 import { Input } from "@/components/ui/Input";
 import { DESIGN_LIMITS } from "@/config/emailBuilder";
 import { getProducts } from "@/lib/api/products";
 import { moveItem } from "@/lib/campaigns/emailDesign";
 import { formatCurrency } from "@/utils/format";
 import type { ProductItem } from "@/types/campaign";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import type { Product } from "@/types/product";
 
 interface EmailProductPickerProps {
@@ -15,7 +18,6 @@ interface EmailProductPickerProps {
   onChange: (items: ProductItem[]) => void;
 }
 
-const SEARCH_DEBOUNCE_MS = 350;
 const RESULTS_LIMIT = 8;
 
 // A snapshot, so the email stays as designed if the product changes later.
@@ -29,12 +31,8 @@ const toItem = (p: Product): ProductItem => ({
 
 export function EmailProductPicker({ items, onChange }: EmailProductPickerProps) {
   const [input, setInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
 
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(input.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [input]);
 
   const { data, isFetching } = useQuery({
     queryKey: ["products", "email-picker", search],
@@ -50,7 +48,7 @@ export function EmailProductPicker({ items, onChange }: EmailProductPickerProps)
         <ul className="space-y-1.5">
           {items.map((item, i) => (
             <li key={`${item.product_id}-${i}`} className="flex items-center gap-2 rounded-lg border border-border p-1.5">
-              {item.image ? <img src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" /> : null}
+              {item.image ? <Image src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" /> : null}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-medium text-fg">{item.title}</div>
                 <div className="text-2xs text-fg/50">{item.price_label}</div>
@@ -85,7 +83,7 @@ export function EmailProductPicker({ items, onChange }: EmailProductPickerProps)
       <ul className="max-h-64 space-y-1 overflow-y-auto">
         {results.map((p) => (
           <li key={p._id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-bg-2">
-            {p.attachments?.[0]?.url ? <img src={p.attachments[0].url} alt="" className="h-8 w-8 shrink-0 rounded object-cover" /> : null}
+            {p.attachments?.[0]?.url ? <Image src={p.attachments[0].url} alt="" className="h-8 w-8 shrink-0 rounded object-cover" /> : null}
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs text-fg">{p.title}</div>
               <div className="text-2xs text-fg/50">{formatCurrency(p.price)}</div>

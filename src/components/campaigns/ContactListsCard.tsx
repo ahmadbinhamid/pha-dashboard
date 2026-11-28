@@ -78,11 +78,20 @@ export function ContactListsCard({ active, onSelect }: ContactListsCardProps) {
                   active === l.name ? "border-accent bg-accent/10 text-fg" : "border-border text-fg/80 hover:bg-bg-2",
                 )}
               >
-                <button type="button" className="flex items-center gap-1.5" onClick={() => onSelect(active === l.name ? null : l.name)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={active === l.name}
+                  className="h-auto gap-1.5 rounded-full p-0 font-normal hover:bg-transparent"
+                  onClick={() => onSelect(active === l.name ? null : l.name)}
+                >
                   <Tags className="h-3.5 w-3.5 text-fg/45" />
                   {l.name}
-                  <span className="text-xs text-fg/50">{l.subscribed}/{l.total}</span>
-                </button>
+                  <span className="text-xs text-fg/50">
+                    {l.subscribed}/{l.total}
+                  </span>
+                </Button>
                 {canManage ? (
                   <DropdownMenu>
                     <ActionsMenuTrigger className="h-6 w-6" />

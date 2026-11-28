@@ -2,6 +2,7 @@ import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Search, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { Image } from "@/components/ui/Image";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -11,16 +12,17 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
-import { SeoMetaModal, type SeoMetaTarget } from "@/components/seo/SeoMetaModal";
-import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { SeoMetaModal } from "@/components/seo/SeoMetaModal";
+import { SeoStatusBadge } from "@/components/seo/SeoStatusBadge";
+import { DEFAULT_PAGE_SIZE, SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import { PERMISSIONS } from "@/config/permissions";
-import { META_LIMITS, SEO_SEARCH_DEBOUNCE_MS } from "@/config/seo";
+import { META_LIMITS } from "@/config/seo";
 import { useToast } from "@/context";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import { SEO_QUERY_KEY, getCategorySeo, getProductSeo, updateCategorySeo, updateProductSeo } from "@/lib/api/seo";
 import { stripHtml } from "@/lib/seo/seoText";
-import type { SeoMeta } from "@/types/seo";
+import type { SeoMeta, SeoMetaTarget } from "@/types/seo";
 
 interface CatalogSeoPanelProps {
   kind: "products" | "categories";
@@ -63,13 +65,6 @@ async function fetchRows(kind: CatalogSeoPanelProps["kind"], params: CatalogPara
   return { rows, total: data.total, totalPages: data.totalPages };
 }
 
-function seoBadge(seo: SeoMeta) {
-  if (seo.noindex) return <Badge variant="muted">Hidden from Google</Badge>;
-  if (!seo.meta_description) return <Badge variant="warn">No description</Badge>;
-  if (seo.meta_description.length > META_LIMITS.description) return <Badge variant="warn">Description too long</Badge>;
-  return <Badge variant="ok">Ready</Badge>;
-}
-
 export function CatalogSeoPanel({ kind }: CatalogSeoPanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -78,7 +73,7 @@ export function CatalogSeoPanel({ kind }: CatalogSeoPanelProps) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const [input, setInput] = useState("");
-  const search = useDebouncedValue(input.trim(), SEO_SEARCH_DEBOUNCE_MS);
+  const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
   const [missing, setMissing] = useState(false);
   const [editing, setEditing] = useState<SeoMetaTarget | null>(null);
   const isProducts = kind === "products";
@@ -151,7 +146,7 @@ export function CatalogSeoPanel({ kind }: CatalogSeoPanelProps) {
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setEditing({ ...r, fallbackDescription: r.description })}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      {r.image ? <img src={r.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" /> : null}
+                      {r.image ? <Image src={r.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" /> : null}
                       <div className="min-w-0">
                         <div className="truncate font-medium text-fg">{r.name}</div>
                         <div className="truncate text-xs text-fg/50">{r.path}</div>
@@ -159,7 +154,9 @@ export function CatalogSeoPanel({ kind }: CatalogSeoPanelProps) {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs truncate text-fg/60">{r.seo.meta_title || <span className="text-fg/40">Uses the name</span>}</TableCell>
-                  <TableCell>{seoBadge(r.seo)}</TableCell>
+                  <TableCell>
+                    <SeoStatusBadge seo={r.seo} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" aria-label={`Edit SEO for ${r.name}`}>
                       <Pencil className="h-3.5 w-3.5" />

@@ -12,15 +12,7 @@ import {
   Stamp,
   Type,
 } from "lucide-react";
-import type { ComponentType } from "react";
-import type { BlockType, DesignBlock, DesignFont, DesignSettings, LeafBlockType, SocialNetwork } from "@/types/campaign";
-
-export interface PaletteItem {
-  type: BlockType;
-  label: string;
-  hint: string;
-  icon: ComponentType<{ className?: string }>;
-}
+import type { BlockType, DesignBlock, DesignFont, DesignSettings, LeafBlockType, PaletteItem, SocialNetwork } from "@/types/campaign";
 
 export const BLOCK_PALETTE: PaletteItem[] = [
   { type: "logo", label: "Logo", hint: "Your store logo", icon: Stamp },

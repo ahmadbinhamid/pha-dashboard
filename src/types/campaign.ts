@@ -1,5 +1,8 @@
 // Email campaigns and their contacts, mirroring server/src/models.
 
+import type { ComponentType } from "react";
+import type { BeResponse } from "@/lib/api/base";
+
 export type ContactStatus = "subscribed" | "unsubscribed" | "bounced";
 export type ContactSource = "newsletter" | "import" | "customer" | "manual";
 
@@ -277,3 +280,13 @@ export interface CampaignPreview {
   subject: string;
   html: string;
 }
+
+export interface PaletteItem {
+  type: BlockType;
+  label: string;
+  hint: string;
+  icon: ComponentType<{ className?: string }>;
+}
+
+// Builder previews: campaigns and follow-ups render through their own API.
+export type PreviewFn = (payload: { design: EmailDesign; subject: string; preheader: string }) => Promise<BeResponse<CampaignPreview>>;

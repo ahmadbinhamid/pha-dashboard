@@ -1,7 +1,7 @@
 // services/followup/feedback.service.js
 // Ratings from follow-up emails: the public form, the inbox and alerts.
 
-const mongoose = require("mongoose");
+const { toObjectId } = require("../../utils/objectId");
 const Feedback = require("../../models/Feedback");
 const FollowUp = require("../../models/FollowUp");
 const FollowUpSend = require("../../models/FollowUpSend");
@@ -17,7 +17,6 @@ const { formatOrderNumber } = require("../../utils/orderNumberFormat");
 const { logger } = require("../../loaders/logging");
 const { FOLLOW_UP_SEND_STATUS, RATING } = require("../../constants/followup.constants");
 
-const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 
 async function findSendByToken(token) {
   const send = await FollowUpSend.findOne({ token }).lean();
@@ -143,7 +142,8 @@ async function getFeedbackStats(tenantId) {
   const [dist, sent, answered] = await Promise.all([
     Feedback.aggregate([{ $match: { tenant_id: tid } }, { $group: { _id: "$rating", n: { $sum: 1 } } }]),
     FollowUpSend.countDocuments({ tenant_id: tid, status: FOLLOW_UP_SEND_STATUS.SENT }),
-    Feedback.distinct("follow_up_send_id", { tenant_id: tid }),
+    // Counted in the database, never pulled into memory as a list of ids.
+    Feedback.aggregate([{ $match: { tenant_id: tid } }, { $group: { _id: "$follow_up_send_id" } }, { $count: "n" }]),
   ]);
   const distribution = Object.fromEntries(Array.from({ length: RATING.MAX }, (_, i) => [i + 1, 0]));
   let count = 0;
@@ -159,7 +159,7 @@ async function getFeedbackStats(tenantId) {
     distribution,
     low: distribution[1] + distribution[2],
     emails_sent: sent,
-    response_rate: sent ? Math.round((answered.length / sent) * 100) : null,
+    response_rate: sent ? Math.round(((answered[0]?.n ?? 0) / sent) * 100) : null,
   };
 }
 

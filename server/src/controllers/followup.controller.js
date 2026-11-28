@@ -2,18 +2,9 @@
 
 const followUpService = require("../services/followup/follow-up.service");
 const feedbackService = require("../services/followup/feedback.service");
-const { success, created, systemfailure } = require("../utils/http/response");
+const { systemfailure } = require("../utils/http/response");
+const { handle, toPage } = require("../utils/http/handle");
 const { renderSimplePage } = require("../utils/http/htmlPage");
-
-/** Wraps a service call in the usual success/failure envelope. */
-const handle = (run, { message = "OK", status = "ok" } = {}) => async (req, res) => {
-  try {
-    const data = await run(req);
-    return status === "created" ? created(res, data, message) : success(res, data, message);
-  } catch (err) {
-    return systemfailure(res, err);
-  }
-};
 
 exports.listFollowUps = handle((req) => followUpService.listFollowUps(req.tenantId));
 exports.getFollowUp = handle((req) => followUpService.getFollowUp(req.params.id, req.tenantId));
@@ -31,10 +22,9 @@ exports.deleteFollowUp = handle((req) => followUpService.deleteFollowUp(req.para
 exports.previewFollowUp = handle((req) => followUpService.previewFollowUp(req.tenantId, req.body));
 
 exports.listFeedback = handle(async (req) => {
-  const { page, limit, skip } = req.pagination;
+  const { limit, skip } = req.pagination;
   const { search, rating, max_rating: maxRating } = req.query;
-  const { items, total } = await feedbackService.listFeedback(req.tenantId, { skip, limit, search, rating, maxRating });
-  return { items, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) };
+  return toPage(req.pagination, await feedbackService.listFeedback(req.tenantId, { skip, limit, search, rating, maxRating }));
 });
 exports.getFeedbackStats = handle((req) => feedbackService.getFeedbackStats(req.tenantId));
 

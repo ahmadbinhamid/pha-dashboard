@@ -1,7 +1,7 @@
 // services/campaign/contact.service.js
 // Campaign contacts: CRUD, signups, imports, audiences and unsubscribes.
 
-const mongoose = require("mongoose");
+const { toObjectId } = require("../../utils/objectId");
 const Contact = require("../../models/Contact");
 const { cursorMarketingOptInCustomers, revokeMarketingOptIn } = require("../customer.service");
 const { httpError } = require("../../utils/http/httpError");
@@ -20,7 +20,6 @@ const LIST_FIELDS =
   "email first_name last_name status source lists subscribed_at unsubscribed_at bounced_at bounce_reason last_emailed_at created_at";
 const BOUNCE_REASON_MAX = 300;
 
-const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 
 /** "Jane van Dyke" -> first "Jane", last "van Dyke". */
 function splitName(name) {

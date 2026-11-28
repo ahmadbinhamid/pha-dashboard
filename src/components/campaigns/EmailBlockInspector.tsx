@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Image } from "@/components/ui/Image";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -88,7 +89,7 @@ export function EmailBlockInspector({ block, onChange, onSelect, parentId }: Ema
           <>
             <FormField label="Image" hint="Upload one, or paste an https:// link">
               <div className="space-y-2">
-                {block.props.src ? <img src={block.props.src} alt="" className="max-h-32 w-full rounded-md object-contain bg-bg-2" /> : null}
+                {block.props.src ? <Image src={block.props.src} alt="" className="max-h-32 w-full rounded-md object-contain bg-bg-2" /> : null}
                 <ImageUploadButton onUploaded={(url) => set({ src: url })} maxBytes={IMAGE_MAX_BYTES} size="sm" label={block.props.src ? "Replace" : "Upload image"} />
                 <Input size="sm" value={block.props.src} onChange={(e) => set({ src: e.target.value })} placeholder="https://…" />
               </div>

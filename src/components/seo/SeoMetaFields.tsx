@@ -1,4 +1,5 @@
 import { Disclosure } from "@/components/ui/Disclosure";
+import { Image } from "@/components/ui/Image";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
@@ -65,7 +66,7 @@ export function SeoMetaFields({ value, onChange, fallbackTitle, fallbackDescript
         <div className="space-y-4">
           <FormField label="Social share image" hint="Shown on Facebook, WhatsApp and similar. 1200 × 630 works best.">
             <div className="space-y-2">
-              {value.og_image ? <img src={value.og_image} alt="" className="max-h-32 rounded-md border border-border object-cover" /> : null}
+              {value.og_image ? <Image src={value.og_image} alt="" className="max-h-32 rounded-md border border-border object-cover" /> : null}
               <div className="flex gap-2">
                 <Input value={value.og_image} onChange={(e) => set({ og_image: e.target.value })} placeholder="https://…" disabled={disabled} />
                 <ImageUploadButton

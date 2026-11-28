@@ -53,10 +53,16 @@ export function EmailColumnsEditor({ props, onChange, onSelectChild }: EmailColu
             <ul className="space-y-1">
               {col.blocks.map((child, i) => (
                 <li key={child.id} className="flex items-center gap-1 rounded-md bg-bg-2 px-2 py-1">
-                  <button type="button" className="min-w-0 flex-1 truncate text-left text-xs text-fg hover:text-accent" onClick={() => onSelectChild(child.id)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto min-w-0 flex-1 justify-start truncate px-0 py-0 text-left text-xs font-normal hover:bg-transparent hover:text-accent"
+                    onClick={() => onSelectChild(child.id)}
+                  >
                     <span className="font-medium">{BLOCK_LABEL[child.type]}</span>
-                    <span className="text-fg/50"> {childSummary(child)}</span>
-                  </button>
+                    <span className="truncate text-fg/50">{childSummary(child)}</span>
+                  </Button>
                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6" aria-label="Move up" disabled={i === 0} onClick={() => setColumn(ci, moveItem(col.blocks, i, i - 1))}>
                     <ChevronUp className="h-3.5 w-3.5" />
                   </Button>

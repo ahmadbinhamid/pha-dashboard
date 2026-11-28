@@ -3,15 +3,16 @@
 const contactService = require("../services/campaign/contact.service");
 const { parseContactSheet, writeContactsWorkbook } = require("../services/campaign/contact-sheet.service");
 const { success, created, systemfailure } = require("../utils/http/response");
+const { toPage } = require("../utils/http/handle");
 const { logger } = require("../loaders/logging");
 
 const filtersFrom = (query) => ({ search: query.search, status: query.status, list: query.list, source: query.source });
 
 exports.listContacts = async (req, res) => {
   try {
-    const { page, limit, skip } = req.pagination;
-    const { items, total } = await contactService.listContacts(req.tenantId, { skip, limit, ...filtersFrom(req.query) });
-    return success(res, { items, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
+    const { limit, skip } = req.pagination;
+    const result = await contactService.listContacts(req.tenantId, { skip, limit, ...filtersFrom(req.query) });
+    return success(res, toPage(req.pagination, result));
   } catch (err) {
     return systemfailure(res, err);
   }

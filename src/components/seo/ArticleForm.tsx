@@ -3,6 +3,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Image } from "@/components/ui/Image";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { RichTextField } from "@/components/ui/RichTextField";
@@ -131,7 +132,7 @@ export function ArticleForm({ article, canEdit, canPublish, saving, onSubmit, on
               <CardContent className="space-y-4">
                 <FormField label="Cover image" hint="Shown on the blog list and at the top of the article">
                   <div className="space-y-2">
-                    {v.cover_image ? <img src={v.cover_image} alt="" className="aspect-video w-full rounded-md object-cover" /> : null}
+                    {v.cover_image ? <Image src={v.cover_image} alt="" className="aspect-video w-full rounded-md object-cover" /> : null}
                     <ImageUploadButton
                       maxBytes={SEO_IMAGE_MAX_BYTES}
                       size="sm"

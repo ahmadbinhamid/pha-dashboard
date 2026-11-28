@@ -6,29 +6,12 @@ const redirectService = require("../services/seo/redirect.service");
 const catalogSeo = require("../services/seo/catalog-seo.service");
 const seoSettings = require("../services/seo/seo-settings.service");
 const membershipService = require("../services/membership.service");
-const { success, created, systemfailure } = require("../utils/http/response");
+const { handle, toPage } = require("../utils/http/handle");
 const { httpError } = require("../utils/http/httpError");
 
 const PUBLISH_PERMISSION = "seo.publish";
 
-/** Wraps a service call in the usual success/failure envelope. */
-const handle = (run, { message = "OK", status = "ok" } = {}) => async (req, res) => {
-  try {
-    const data = await run(req);
-    return status === "created" ? created(res, data, message) : success(res, data, message);
-  } catch (err) {
-    return systemfailure(res, err);
-  }
-};
-
 const paged = (req) => ({ skip: req.pagination.skip, limit: req.pagination.limit });
-const pageEnvelope = (req, { items, total }) => ({
-  items,
-  total,
-  page: req.pagination.page,
-  limit: req.pagination.limit,
-  totalPages: Math.max(Math.ceil(total / req.pagination.limit), 1),
-});
 
 /** Going live, going dark or re-dating needs seo.publish, not just update. */
 function assertCanPublish(req, body, current = {}) {
@@ -44,7 +27,7 @@ function assertCanPublish(req, body, current = {}) {
 // ── articles ──
 
 exports.listArticles = handle(async (req) =>
-  pageEnvelope(req, await articleService.listArticles(req.tenantId, { ...paged(req), ...req.query })),
+  toPage(req.pagination, await articleService.listArticles(req.tenantId, { ...paged(req), ...req.query })),
 );
 exports.listArticleTags = handle((req) => articleService.listTags(req.tenantId));
 exports.getArticle = handle((req) => articleService.getArticle(req.params.id, req.tenantId));
@@ -87,7 +70,7 @@ exports.deletePage = handle((req) => pageService.deletePage(req.params.id, req.t
 // ── redirects ──
 
 exports.listRedirects = handle(async (req) =>
-  pageEnvelope(req, await redirectService.listRedirects(req.tenantId, { ...paged(req), search: req.query.search })),
+  toPage(req.pagination, await redirectService.listRedirects(req.tenantId, { ...paged(req), search: req.query.search })),
 );
 exports.createRedirect = handle((req) => redirectService.createRedirect(req.tenantId, req.body), {
   message: "Redirect added",
@@ -102,11 +85,11 @@ exports.deleteRedirect = handle((req) => redirectService.deleteRedirect(req.para
 
 const catalogFilters = (req) => ({ ...paged(req), search: req.query.search, missing: req.query.missing });
 
-exports.listProductSeo = handle(async (req) => pageEnvelope(req, await catalogSeo.listProductSeo(req.tenantId, catalogFilters(req))));
+exports.listProductSeo = handle(async (req) => toPage(req.pagination, await catalogSeo.listProductSeo(req.tenantId, catalogFilters(req))));
 exports.updateProductSeo = handle((req) => catalogSeo.updateProductSeo(req.params.id, req.tenantId, req.body), {
   message: "Product SEO saved",
 });
-exports.listCategorySeo = handle(async (req) => pageEnvelope(req, await catalogSeo.listCategorySeo(req.tenantId, catalogFilters(req))));
+exports.listCategorySeo = handle(async (req) => toPage(req.pagination, await catalogSeo.listCategorySeo(req.tenantId, catalogFilters(req))));
 exports.updateCategorySeo = handle((req) => catalogSeo.updateCategorySeo(req.params.id, req.tenantId, req.body), {
   message: "Category SEO saved",
 });

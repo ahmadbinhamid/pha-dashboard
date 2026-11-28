@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ListMinus, ListPlus, Plus, Search, Upload, Users } from "lucide-react";
 import { Can } from "@/components/auth/Can";
@@ -21,9 +21,10 @@ import { ContactRowActionsMenu } from "@/components/campaigns/ContactRowActionsM
 import { ContactStatCards } from "@/components/campaigns/ContactStatCards";
 import { ContactStatusBadge } from "@/components/campaigns/ContactStatusBadge";
 import { CONTACT_SOURCE_LABEL, CONTACT_STATUS_FILTER_OPTIONS } from "@/config/campaigns";
-import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { DEFAULT_PAGE_SIZE, SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import { PERMISSIONS } from "@/config/permissions";
 import { useToast } from "@/context";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import {
   CONTACTS_QUERY_KEY,
@@ -37,7 +38,6 @@ import { saveBlob } from "@/utils/download";
 import type { Contact, ContactFilters, ContactStatus } from "@/types/campaign";
 
 const ALL = "all";
-const SEARCH_DEBOUNCE_MS = 400;
 
 type PendingAction = { kind: "delete" | "unsubscribe"; contact: Contact } | null;
 
@@ -49,7 +49,7 @@ export function ContactsPanel() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(searchInput.trim(), SEARCH_DEBOUNCE_MS);
   const [status, setStatus] = useState(ALL);
   const [list, setList] = useState(ALL);
   const [formOpen, setFormOpen] = useState(false);
@@ -61,13 +61,6 @@ export function ContactsPanel() {
   const { can } = useMyAccess();
   const canBulk = can(PERMISSIONS.campaigns.update);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPage(1);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
 
   const filters: ContactFilters = {
     search: search || undefined,
@@ -142,7 +135,10 @@ export function ContactsPanel() {
               <Input
                 placeholder="Search email or name…"
                 value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                onChange={(e) => {
+                setSearchInput(e.target.value);
+                setPage(1);
+              }}
                 className="pl-9"
               />
             </div>

@@ -2,6 +2,7 @@
 // Custom storefront pages: staff CRUD, the footer list and public reads.
 
 const ContentPage = require("../../models/ContentPage");
+const { pickDefined } = require("../../utils/pickDefined");
 const { createWithUniqueSlug, saveWithUniqueSlug } = require("../../utils/slug");
 const { buildAllWordsSearchAnd } = require("../../utils/regex");
 const { httpError } = require("../../utils/http/httpError");
@@ -14,7 +15,7 @@ const EDITABLE_FIELDS = ["title", "body_html", "status", "show_in_footer", "foot
 const present = (doc) => ({ ...doc, seo: withSeoUrls(doc.seo) });
 
 const pickEditable = (input) => {
-  const fields = Object.fromEntries(EDITABLE_FIELDS.filter((f) => input[f] !== undefined).map((f) => [f, input[f]]));
+  const fields = pickDefined(input, EDITABLE_FIELDS);
   if (fields.body_html !== undefined) fields.body_html = sanitizeContentHtml(fields.body_html);
   return fields;
 };

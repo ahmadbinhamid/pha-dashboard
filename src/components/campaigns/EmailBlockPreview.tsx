@@ -1,7 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import { ImageIcon, ShoppingBag } from "lucide-react";
+import { EmailBlockPlaceholder } from "@/components/campaigns/EmailBlockPlaceholder";
 import { useOrgSettings } from "@/context/orgSettings";
 import { SOCIAL_NETWORK_OPTIONS } from "@/config/emailBuilder";
+import { Image } from "@/components/ui/Image";
 import type { DesignBlock, LeafBlock } from "@/types/campaign";
 
 interface EmailBlockPreviewProps {
@@ -14,15 +16,6 @@ const HEADING_SIZES = { 1: 30, 2: 24, 3: 19 } as const;
 const NETWORK_LABEL = Object.fromEntries(SOCIAL_NETWORK_OPTIONS.map((o) => [o.value, o.label]));
 
 // Colours here are the user's own design choices, so they are inline styles.
-function Placeholder({ icon: Icon, label }: { icon: typeof ImageIcon; label: string }) {
-  return (
-    <div className="flex h-28 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-bg-2 text-xs text-fg/50">
-      <Icon className="h-5 w-5" />
-      {label}
-    </div>
-  );
-}
-
 export function EmailBlockPreview({ block, renderChild }: EmailBlockPreviewProps) {
   const { settings: org } = useOrgSettings();
   const justify = (align: string) => ({ display: "flex", justifyContent: { left: "flex-start", center: "center", right: "flex-end" }[align] });
@@ -64,10 +57,10 @@ export function EmailBlockPreview({ block, renderChild }: EmailBlockPreviewProps
     }
     case "image": {
       const p = block.props;
-      if (!p.src) return <Placeholder icon={ImageIcon} label="Add an image in the settings panel" />;
+      if (!p.src) return <EmailBlockPlaceholder icon={ImageIcon} label="Add an image in the settings panel" />;
       return (
         <div style={justify(p.align)}>
-          <img src={p.src} alt={p.alt} style={{ width: `${p.width}%`, borderRadius: p.radius, display: "block" }} />
+          <Image src={p.src} alt={p.alt} style={{ width: `${p.width}%`, borderRadius: p.radius, display: "block" }} />
         </div>
       );
     }
@@ -76,7 +69,7 @@ export function EmailBlockPreview({ block, renderChild }: EmailBlockPreviewProps
       return (
         <div style={justify(p.align)}>
           {org.logoUrl ? (
-            <img src={org.logoUrl} alt={org.storeName} style={{ width: p.width, display: "block" }} />
+            <Image src={org.logoUrl} alt={org.storeName} style={{ width: p.width, display: "block" }} />
           ) : (
             <span style={{ fontSize: 22, fontWeight: 700 }}>{org.storeName}</span>
           )}
@@ -89,15 +82,15 @@ export function EmailBlockPreview({ block, renderChild }: EmailBlockPreviewProps
       return <div style={{ height: block.props.height }} />;
     case "products": {
       const p = block.props;
-      if (!p.items.length) return <Placeholder icon={ShoppingBag} label="Pick products in the settings panel" />;
+      if (!p.items.length) return <EmailBlockPlaceholder icon={ShoppingBag} label="Pick products in the settings panel" />;
       return (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${p.columns}, minmax(0, 1fr))`, gap: 16 }}>
           {p.items.map((item, i) => (
             <div key={`${item.title}-${i}`} style={{ fontSize: 14 }}>
               {item.image ? (
-                <img src={item.image} alt={item.title} style={{ width: "100%", borderRadius: 6, display: "block" }} />
+                <Image src={item.image} alt={item.title} style={{ width: "100%", borderRadius: 6, display: "block" }} />
               ) : (
-                <Placeholder icon={ShoppingBag} label="No photo" />
+                <EmailBlockPlaceholder icon={ShoppingBag} label="No photo" />
               )}
               <div style={{ marginTop: 8 }}>{item.title}</div>
               {p.show_price && item.price_label ? <div style={{ fontWeight: 700, margin: "4px 0 8px" }}>{item.price_label}</div> : null}

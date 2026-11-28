@@ -54,4 +54,3 @@ export const EMPTY_SEO_META: SeoMeta = {
 
 export const MAX_ARTICLE_TAGS = 15;
 export const SEO_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-export const SEO_SEARCH_DEBOUNCE_MS = 400;

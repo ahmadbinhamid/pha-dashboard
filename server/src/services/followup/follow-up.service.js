@@ -1,7 +1,8 @@
 // services/followup/follow-up.service.js
 // Follow-up setup, the sweep that finds due orders, and each send.
 
-const mongoose = require("mongoose");
+const { toObjectId } = require("../../utils/objectId");
+const { pickDefined } = require("../../utils/pickDefined");
 const FollowUp = require("../../models/FollowUp");
 const FollowUpSend = require("../../models/FollowUpSend");
 const { cursorOrdersDueForFollowUp, getOrderForFollowUp } = require("../order.service");
@@ -30,8 +31,7 @@ const EDITABLE_FIELDS = [
 ];
 const DAY_MS = 86_400_000;
 
-const pickEditable = (input) => Object.fromEntries(EDITABLE_FIELDS.filter((f) => input[f] !== undefined).map((f) => [f, input[f]]));
-const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
+const pickEditable = (input) => pickDefined(input, EDITABLE_FIELDS);
 
 async function findFollowUp(id, tenantId) {
   const followUp = await FollowUp.findOne({ _id: id, tenant_id: tenantId }).lean();

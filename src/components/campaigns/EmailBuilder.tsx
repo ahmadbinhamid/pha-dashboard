@@ -20,7 +20,7 @@ import { EmailBlockInspector } from "@/components/campaigns/EmailBlockInspector"
 import { EmailBlockPreview } from "@/components/campaigns/EmailBlockPreview";
 import { EmailBuilderPalette } from "@/components/campaigns/EmailBuilderPalette";
 import { EmailDesignSettingsPanel } from "@/components/campaigns/EmailDesignSettingsPanel";
-import { EmailPreviewModal, type PreviewFn } from "@/components/campaigns/EmailPreviewModal";
+import { EmailPreviewModal } from "@/components/campaigns/EmailPreviewModal";
 import { EmailSortableBlock } from "@/components/campaigns/EmailSortableBlock";
 import { SaveTemplateModal } from "@/components/campaigns/SaveTemplateModal";
 import { BLOCK_LABEL, DESIGN_FONT_OPTIONS, DESIGN_LIMITS } from "@/config/emailBuilder";
@@ -28,7 +28,7 @@ import { PERMISSIONS } from "@/config/permissions";
 import { useMyAccess } from "@/hooks/useMyAccess";
 import { cloneBlock, createBlock, findBlock, removeBlock, replaceBlock } from "@/lib/campaigns/emailDesign";
 import { cn } from "@/utils/cn";
-import type { BlockType, DesignBlock, EmailDesign, LeafBlock } from "@/types/campaign";
+import type { BlockType, DesignBlock, EmailDesign, LeafBlock, PreviewFn } from "@/types/campaign";
 
 interface EmailBuilderProps {
   value: EmailDesign;

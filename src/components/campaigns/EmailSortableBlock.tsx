@@ -56,16 +56,18 @@ export function EmailSortableBlock(props: EmailSortableBlockProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <span className="px-1 text-2xs font-medium text-fg/60">{BLOCK_LABEL[block.type]}</span>
-          <button
+          <Button
             ref={setActivatorNodeRef}
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label="Drag to reorder"
-            className="cursor-grab rounded p-1 text-fg/50 hover:bg-bg-2 hover:text-fg"
+            className="h-6 w-6 cursor-grab text-fg/50"
             {...attributes}
             {...listeners}
           >
             <GripVertical className="h-3.5 w-3.5" />
-          </button>
+          </Button>
             <Button aria-label="Move up" type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={isFirst} onClick={() => onMove(-1)}>
               <ChevronUp className="h-3.5 w-3.5" />
             </Button>

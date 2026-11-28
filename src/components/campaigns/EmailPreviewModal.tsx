@@ -6,11 +6,8 @@ import { Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle } from "
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { PREVIEW_WIDTHS } from "@/config/emailBuilder";
-import type { BeResponse } from "@/lib/api/base";
 import { previewCampaign } from "@/lib/api/campaigns";
-import type { CampaignPreview, EmailDesign } from "@/types/campaign";
-
-export type PreviewFn = (payload: { design: EmailDesign; subject: string; preheader: string }) => Promise<BeResponse<CampaignPreview>>;
+import type { EmailDesign, PreviewFn } from "@/types/campaign";
 
 interface EmailPreviewModalProps {
   open: boolean;

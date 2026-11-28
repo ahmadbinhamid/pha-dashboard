@@ -3,15 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from "@/components/ui/Modal";
 import { SeoMetaFields } from "@/components/seo/SeoMetaFields";
 import { EMPTY_SEO_META } from "@/config/seo";
-import type { SeoMeta } from "@/types/seo";
-
-export interface SeoMetaTarget {
-  id: string;
-  name: string;
-  path: string;
-  fallbackDescription: string;
-  seo: SeoMeta;
-}
+import type { SeoMeta, SeoMetaTarget } from "@/types/seo";
 
 interface SeoMetaModalProps {
   target: SeoMetaTarget | null;

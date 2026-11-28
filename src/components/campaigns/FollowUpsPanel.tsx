@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import Link from "@/components/ui/Link";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
 import { FOLLOW_UPS_BASE_PATH, FOLLOW_UP_CHANNEL_OPTIONS } from "@/config/followups";
@@ -80,8 +81,10 @@ export function FollowUpsPanel() {
         followUps.map((f) => (
           <Card key={f._id}>
             <CardContent className="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <button type="button" className="min-w-0 text-left" onClick={() => navigate(`${FOLLOW_UPS_BASE_PATH}/${f._id}`)}>
-                <div className="font-medium text-fg hover:text-accent">{f.name}</div>
+              <div className="min-w-0">
+                <Link href={`${FOLLOW_UPS_BASE_PATH}/${f._id}`} className="font-medium text-fg hover:text-accent">
+                  {f.name}
+                </Link>
                 <div className="mt-0.5 text-xs text-fg/55">{timing(f)}</div>
                 <div className="mt-0.5 text-xs text-fg/55">{f.channels.map((c) => CHANNEL_LABEL[c]).join(" · ")}</div>
                 <div className="mt-2 text-xs text-fg/70">
@@ -90,7 +93,7 @@ export function FollowUpsPanel() {
                   {f.sends.failed ? ` · ${f.sends.failed} failed` : ""}
                   {f.sends.skipped ? ` · ${f.sends.skipped} skipped (unsubscribed)` : ""}
                 </div>
-              </button>
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Switch
                   checked={f.enabled}

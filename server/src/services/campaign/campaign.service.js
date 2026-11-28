@@ -2,6 +2,7 @@
 // Campaign CRUD, sending, scheduling, fan-out and run bookkeeping.
 
 const Campaign = require("../../models/Campaign");
+const { pickDefined } = require("../../utils/pickDefined");
 const CampaignRun = require("../../models/CampaignRun");
 const contactService = require("./contact.service");
 const campaignDelivery = require("./campaign-delivery.service");
@@ -92,9 +93,7 @@ async function normalizeFields(tenantId, input) {
   return next;
 }
 
-function pickEditable(fields) {
-  return Object.fromEntries(EDITABLE_FIELDS.filter((f) => fields[f] !== undefined).map((f) => [f, fields[f]]));
-}
+const pickEditable = (fields) => pickDefined(fields, EDITABLE_FIELDS);
 
 async function createCampaign(tenantId, input) {
   const created = await Campaign.create({ ...pickEditable(await normalizeFields(tenantId, input)), tenant_id: tenantId });

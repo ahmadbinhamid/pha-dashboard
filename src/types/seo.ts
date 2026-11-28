@@ -135,3 +135,12 @@ export interface SeoOverview {
   redirects: number;
   products_missing_description: number;
 }
+
+// A product or category being edited in the SEO modal.
+export interface SeoMetaTarget {
+  id: string;
+  name: string;
+  path: string;
+  fallbackDescription: string;
+  seo: SeoMeta;
+}

@@ -13,10 +13,11 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { ContentStateBadge } from "@/components/seo/ContentStateBadge";
 import { PERMISSIONS } from "@/config/permissions";
-import { SEO_BASE_PATH, SEO_SEARCH_DEBOUNCE_MS } from "@/config/seo";
+import { SEO_BASE_PATH } from "@/config/seo";
 import { useToast } from "@/context";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { SEO_QUERY_KEY, deleteContentPage, getContentPages } from "@/lib/api/seo";
+import { SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import type { ContentPage } from "@/types/seo";
 
 export function PagesPanel() {
@@ -24,7 +25,7 @@ export function PagesPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
-  const search = useDebouncedValue(input.trim(), SEO_SEARCH_DEBOUNCE_MS);
+  const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
   const [deleting, setDeleting] = useState<ContentPage | null>(null);
 
   const { data, isLoading } = useQuery({

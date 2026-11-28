@@ -5,15 +5,16 @@ const contactService = require("../services/campaign/contact.service");
 const templateService = require("../services/campaign/campaign-template.service");
 const { getCompanyProfile } = require("../services/tenant-settings.service");
 const { success, created, systemfailure } = require("../utils/http/response");
+const { toPage } = require("../utils/http/handle");
 const { renderSimplePage } = require("../utils/http/htmlPage");
 const { CONTACT_STATUS } = require("../constants/campaign.constants");
 
 exports.listCampaigns = async (req, res) => {
   try {
-    const { page, limit, skip } = req.pagination;
+    const { limit, skip } = req.pagination;
     const { search, status, kind } = req.query;
-    const { items, total } = await campaignService.listCampaigns(req.tenantId, { skip, limit, search, status, kind });
-    return success(res, { items, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
+    const result = await campaignService.listCampaigns(req.tenantId, { skip, limit, search, status, kind });
+    return success(res, toPage(req.pagination, result));
   } catch (err) {
     return systemfailure(res, err);
   }

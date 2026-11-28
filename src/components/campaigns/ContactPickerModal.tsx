@@ -12,8 +12,10 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { CONTACT_SOURCE_LABEL, MAX_SELECTED_CONTACTS } from "@/config/campaigns";
 import { useToast } from "@/context";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CONTACTS_QUERY_KEY, getContactLists, getContacts, selectContactIds } from "@/lib/api/campaigns";
 import { pluralize } from "@/utils/format";
+import { SEARCH_DEBOUNCE_MS } from "@/config/pagination";
 import type { ContactFilters, ContactSource } from "@/types/campaign";
 
 interface ContactPickerModalProps {
@@ -25,7 +27,6 @@ interface ContactPickerModalProps {
 
 const ALL = "all";
 const PAGE_SIZE = 25;
-const SEARCH_DEBOUNCE_MS = 350;
 const SOURCE_OPTIONS = [
   { value: ALL, label: "All sources" },
   ...Object.entries(CONTACT_SOURCE_LABEL).map(([value, label]) => ({ value, label })),
@@ -36,7 +37,7 @@ export function ContactPickerModal({ open, onOpenChange, value, onChange }: Cont
   const [selected, setSelected] = useState<Set<string>>(new Set(value));
   const [page, setPage] = useState(1);
   const [input, setInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
   const [list, setList] = useState(ALL);
   const [source, setSource] = useState(ALL);
 
@@ -44,13 +45,6 @@ export function ContactPickerModal({ open, onOpenChange, value, onChange }: Cont
     if (open) setSelected(new Set(value));
   }, [open, value]);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSearch(input.trim());
-      setPage(1);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [input]);
 
   const filters: ContactFilters = {
     search: search || undefined,
@@ -120,7 +114,10 @@ export function ContactPickerModal({ open, onOpenChange, value, onChange }: Cont
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/40" />
-            <Input className="pl-9" placeholder="Search email or name…" value={input} onChange={(e) => setInput(e.target.value)} />
+            <Input className="pl-9" placeholder="Search email or name…" value={input} onChange={(e) => {
+                setInput(e.target.value);
+                setPage(1);
+              }} />
           </div>
           <SingleSelect options={listOptions} value={list} onChange={(v) => { setList(v); setPage(1); }} className="sm:w-44 sm:shrink-0" />
           <SingleSelect options={SOURCE_OPTIONS} value={source} onChange={(v) => { setSource(v); setPage(1); }} className="sm:w-44 sm:shrink-0" />

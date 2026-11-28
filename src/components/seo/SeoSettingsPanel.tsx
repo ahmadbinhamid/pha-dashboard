@@ -3,6 +3,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Image } from "@/components/ui/Image";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -87,7 +88,7 @@ export function SeoSettingsPanel() {
             </FormField>
             <FormField label="Default social share image" hint="Used when a page has no image of its own. 1200 × 630 works best.">
               <div className="space-y-2">
-                {v.default_og_image ? <img src={v.default_og_image} alt="" className="max-h-32 rounded-md border border-border object-cover" /> : null}
+                {v.default_og_image ? <Image src={v.default_og_image} alt="" className="max-h-32 rounded-md border border-border object-cover" /> : null}
                 <div className="flex gap-2">
                   <Input {...register("default_og_image")} placeholder="https://…" />
                   <ImageUploadButton

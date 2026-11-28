@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { BeResponse } from "./base";
+import type { BeResponse, PaginatedData } from "./base";
 import type {
   CampaignAudience,
   CampaignDetail,
@@ -19,13 +19,6 @@ import type {
   EmailDesign,
 } from "@/types/campaign";
 
-interface Paged<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
 
 export const CAMPAIGNS_QUERY_KEY = ["campaigns"] as const;
 export const campaignQueryKey = (id: string) => [...CAMPAIGNS_QUERY_KEY, id] as const;
@@ -35,7 +28,7 @@ export const TEMPLATES_QUERY_KEY = ["campaign-templates"] as const;
 // Contacts
 
 export const getContacts = async (params: ContactFilters & { page: number; limit: number }) => {
-  const { data } = await apiClient.get<BeResponse<Paged<Contact>>>("/campaigns/contacts", { params });
+  const { data } = await apiClient.get<BeResponse<PaginatedData<Contact>>>("/campaigns/contacts", { params });
   return data;
 };
 
@@ -116,7 +109,7 @@ export const getCampaigns = async (params: {
   status?: CampaignStatus;
   kind?: CampaignKind;
 }) => {
-  const { data } = await apiClient.get<BeResponse<Paged<CampaignListItem>>>("/campaigns", { params });
+  const { data } = await apiClient.get<BeResponse<PaginatedData<CampaignListItem>>>("/campaigns", { params });
   return data;
 };
 

@@ -1,7 +1,8 @@
 // services/seo/article.service.js
 // Blog articles: staff CRUD, tags, and the storefront's published views.
 
-const mongoose = require("mongoose");
+const { toObjectId } = require("../../utils/objectId");
+const { pickDefined } = require("../../utils/pickDefined");
 const Article = require("../../models/Article");
 const { createWithUniqueSlug, saveWithUniqueSlug } = require("../../utils/slug");
 const { buildAllWordsSearchAnd } = require("../../utils/regex");
@@ -15,7 +16,6 @@ const EDITABLE_FIELDS = ["title", "excerpt", "body_html", "cover_image", "cover_
 const LIST_FIELDS = "-body_html";
 const PUBLIC_CARD_FIELDS = "title slug excerpt auto_excerpt cover_image cover_alt tags author_name published_at reading_minutes";
 
-const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 
 /** Trimmed, de-duplicated (case-insensitive) and capped tags. */
 function normalizeTags(tags = []) {
@@ -48,7 +48,7 @@ function deriveFields(fields, current = {}) {
   return next;
 }
 
-const pickEditable = (input) => Object.fromEntries(EDITABLE_FIELDS.filter((f) => input[f] !== undefined).map((f) => [f, input[f]]));
+const pickEditable = (input) => pickDefined(input, EDITABLE_FIELDS);
 
 async function findArticle(id, tenantId) {
   const article = await Article.findOne({ _id: id, tenant_id: tenantId });
